@@ -9,8 +9,8 @@ from qt_manager_ui import Ui_MainWindow
 import skylog
 
 from utils import withlogger
-import skymodman_main
 import constants as const
+from collections import OrderedDict
 
 @withlogger
 class ModManagerWindow(QMainWindow, Ui_MainWindow):
@@ -20,11 +20,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     changesCanceled = pyqtSignal()
     
 
-    def __init__(self, mod_manager: 'skymodman_main.ModManager', *args, **kwargs):
+    def __init__(self, mmanager: 'manager.ModManager', *args, **kwargs):
         super(ModManagerWindow, self).__init__(*args, **kwargs)
         self.logger.debug("Initializing ModManager Window")
 
-        self._manager = mod_manager
+        self._manager = mmanager # grab a reference to the singleton Mod Manager
 
         # setup the ui
         self.setupUi(self)
@@ -42,7 +42,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.action_Install_Fomod.triggered.connect(self.loadFomod)
 
         # list of (modname, modId, modVersion) tuples
-        self.mods_list = load_mods(self._manager.Config.modsdirectory)
+        # self.mods_list = load_mods(self._manager.Config.modsdirectory)
+        # self.mods_list = self._manager.modinfo
 
         # setup table of installed mods
         self.mod_table.setColumnCount(4)
@@ -53,7 +54,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # populate from files on drive
         self.populateModTable()
         # sync in/active state of mods with saved config
-        self.syncModListWithStates()
+        # self.syncModListWithStates()
         # enable sorting AFTER population
         self.mod_table.setSortingEnabled(True)
         # let double clicking toggle the checkbox
@@ -88,14 +89,33 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # connect other signals
         self.manager_tabs.currentChanged.connect(self.updateUI)
-        self.mod_table.cellChanged.connect(self.onTableModified)
+        # self.mod_table.cellChanged.connect(self.onTableModified)
+        self.mod_table.cellChanged.connect(self.cellChanged)
 
-
-
+        # tracking modified rows; using list or ordered dict might allow for an "undo" function later
+        self._modified_cells = [] # list of point-tuples (row, column) for fields in table
 
 
         # update UI
         self.updateUI()
+
+    def cellChanged(self, row, col):
+        self.logger.debug("Cell ({}, {}) changed".format(row, col))
+
+        # only enable on first change
+        # if not self.mod_list_modified:
+
+        # if the list of changes is empty:
+        if not self._modified_cells:
+            # self.mod_list_modified = True
+            self.save_cancel_btnbox.setEnabled(True)
+
+        self._modified_cells.append((row, col))
+
+
+
+    def itemchanged(self, qlinedit):
+        self.logger.debug("Row {}: {}".format(self.mod_table.currentRow(), qlinedit.text()))
 
     @property
     def Manager(self):
@@ -111,7 +131,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         if self.save_cancel_btnbox.isVisible():
             self.save_cancel_btnbox.setEnabled(
-                (curtab == const.TAB_MODLIST and self.mod_list_modified)
+                (curtab == const.TAB_MODLIST and len(self._modified_cells)>0)
             or  (curtab == const.TAB_FILETREE and self.file_tree_modified)
             )
 
@@ -157,6 +177,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         return mbs
 
+
     @pyqtSlot()
     def saveModsList(self):
         """
@@ -167,8 +188,21 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         # amods, imods = self.modsByState()
         # Config.saveModsList(self.activeMods, self.inactiveMods)
-        self.Manager.saveModStates(self.modsByState())
-        self.mod_list_modified = False
+        # self.Manager.saveModList(self.modsByState())
+
+
+        ## TODO: delegate this process to the mod manager
+        for cell in self._modified_cells:
+            if cell[1] == const.COL_NAME:
+                ## NOTE: XXX: FIXME: TODO: remember that the "install order" (db primary key) starts at one
+                self.Manager.DB.updateField(cell[0]+1, cell[1], self.mod_table.item(cell[0], cell[1]).text())
+            else:
+                self.Manager.DB.updateField(cell[0]+1, cell[1], bool(self.mod_table.item(cell[0], cell[1]).checkState()))
+
+        self.Manager.saveModList()
+
+        self._modified_cells.clear()
+        # self.mod_list_modified = False
         # self.modListSaved.emit()
         self.updateUI()
 
@@ -214,18 +248,21 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
 
     def populateModTable(self):
+        self.mod_table.blockSignals(True)
         r=0
 
         #clear placeholder values
         self.mod_table.clearContents()
         self.mod_table.setRowCount(0)
 
-        for m in self.mods_list:
+        # for m in self.Manager.allmods():
+        for m in self.Manager.DB.conn.execute("SELECT name, modid, version, enabled FROM mods"):
             self.mod_table.insertRow(r)
-            _name, _id, _ver = m
+            _name, _id, _ver, _enabled = m
+            self.logger.debug("{} {} {} {}".format(_name, _id, _ver, _enabled))
 
             items = (QTableWidgetItem(), # first column is empty, is for the checkbox
-                QTableWidgetItem(_id),
+                QTableWidgetItem(str(_id)),
                     QTableWidgetItem(_ver),
                     QTableWidgetItem(_name),
                      )
@@ -237,9 +274,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                                               # | Qt.ItemIsDropEnabled
                                               # | Qt.DragMoveCursor
                                               )
-
-            # todo: read this from a saved state
-            items[const.COL_ENABLED].setCheckState(Qt.Checked)
+            # set check state from saved state
+            items[const.COL_ENABLED].setCheckState(Qt.Checked if _enabled else Qt.Unchecked)
 
             items[const.COL_MODID].setFlags(Qt.ItemIsSelectable
                                             | Qt.ItemIsEnabled
@@ -269,14 +305,34 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 self.mod_table.setItem(r,i,items[i])
 
             r+=1
+        self.mod_table.blockSignals(False)
 
     def syncModListWithStates(self):
-        for i in range(self.mod_table.rowCount()):
+        # TODO: this query gets them in primary-key order, right?
+        # rows = [p[0] for p in self._modified_cells]
+        # for r in rows
+        # mods_list = self.Manager.DB.conn.execute("SELECT enabled, name FROM mods WHERE iorder = ?", rows).fetchall()
 
-            if self.mod_table.item(i, const.COL_NAME).text() in self.Manager.mod_states["Active"]:
-                self.mod_table.item(i, const.COL_ENABLED).setCheckState(Qt.Checked)
-            else:
-                self.mod_table.item(i, const.COL_ENABLED).setCheckState(Qt.Unchecked)
+
+        # for i in range(len(self._modified_cells)):
+        for cell in self._modified_cells:
+            row, col = cell   # get parts of tuple
+
+            modinfo = self.Manager.DB.conn.execute("SELECT enabled, name FROM mods WHERE iorder = ?", [row]).fetchone()
+
+            if col == const.COL_ENABLED:
+                self.mod_table.item(row,
+                                    const.COL_ENABLED)\
+                    .setCheckState(Qt.Checked if modinfo[0]   ## these should sync up...unless i'm bad at math
+                                                   else Qt.Unchecked)
+            elif col == const.COL_NAME:
+                self.mod_table.item(row, const.COL_NAME).setText(modinfo[1])
+
+
+            # if self.mod_table.item(i, const.COL_ENABLED).text() in self.Manager.enabledMods:
+            #     self.mod_table.item(i, const.COL_ENABLED).setCheckState(Qt.Checked)
+            # else:
+            #     self.mod_table.item(i, const.COL_ENABLED).setCheckState(Qt.Unchecked)
 
     # SLOTS
 
@@ -295,15 +351,18 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     def onTableModified(self, row:int , col: int):
         if col in [const.COL_ENABLED, const.COL_NAME]: # checkbox or name
             self.mod_list_modified = True
-            self.updateUI()
-            # self.modListModified.emit()
+            # self.updateUI()
+            self.modListModified.emit()
 
     def resetTable(self):
         # self.table_is_resetting = True
+        self.mod_table.blockSignals(True)
         self.syncModListWithStates()
+        self._modified_cells.clear()
         # self.table_is_resetting = False
-        self.mod_list_modified = False
-        # self.disableSaveCancelButtons()
+        # self.mod_list_modified = False
+        # self.disableSaveCancelButtons(
+        self.mod_table.blockSignals(False)
         self.updateUI()
 
 
@@ -334,12 +393,12 @@ if __name__ == '__main__':
     # Config = config.ConfigManager()
     # _logger.info("got config")
     # _logger.debug(Config.modsdirectory)
+    import manager
 
     app = QApplication(sys.argv)
 
     # mlist = load_mods(sys.argv[1])
-
-    MM = skymodman_main.ModManager()
+    MM = manager.ModManager()
 
     w = ModManagerWindow(MM)
     w.resize(QGuiApplication.primaryScreen().availableSize()*3/5)

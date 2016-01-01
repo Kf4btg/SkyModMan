@@ -1,12 +1,13 @@
 import sqlite3
 from _sqlite3 import Error as sqlError
 import json
+import json.decoder
 import os
 from typing import TypeVar, List, Tuple, Union
+from pathlib import Path
 
 import constants
-import utils
-
+from utils import withlogger
 
 _iorder = int
 _modid = int
@@ -23,7 +24,7 @@ DBRow = Tuple[_iorder,
               _modenabled
              ]
 
-@utils.withlogger
+@withlogger
 class DBManager:
 
     _SCHEMA = """CREATE TABLE mods (
@@ -37,7 +38,11 @@ class DBManager:
 
     __fields = ["modid", "version", "directory", "name", "enabled"]
 
-    def __init__(self):
+    def __init__(self, manager):
+        super(DBManager, self).__init__()
+
+        self.manager = manager
+
         # create db in memory
         self._con = sqlite3.connect(":memory:")
 
@@ -168,15 +173,25 @@ class DBManager:
         populate the in-memory database
         :param json_source: path to saved info in json format
         """
-        with open(json_source, 'r') as f:
+
+        if not isinstance(json_source, Path):
+            json_source = Path(json_source)
+
+        success = True
+        with json_source.open('r') as f:
             # read from json file and convert mappings
             # to ordered tuples for sending to sqlite
-            mods = json.load(f, object_pairs_hook=self.toRowTuple)
+            try:
+                mods = json.load(f, object_pairs_hook=self.toRowTuple)
 
-            with self._con:
-                # insert the list of row-tuples into the in-memory db
-                self._con.executemany("INSERT INTO mods(modid, version, directory, name, enabled) VALUES (?, ?, ?, ?, ?)", mods)
+                with self._con:
+                    # insert the list of row-tuples into the in-memory db
+                    self._con.executemany("INSERT INTO mods(modid, version, directory, name, enabled) VALUES (?, ?, ?, ?, ?)", mods)
 
+            except json.decoder.JSONDecodeError as e:
+                self.logger.error("No mod information present in {}, or file is malformed.")
+                success = False
+        return success
 
     def saveModDB(self, json_target):
         """
@@ -186,6 +201,11 @@ class DBManager:
         :param json_target:
         :return:
         """
+
+        if not isinstance(json_target, Path):
+            json_target = Path(json_target)
+
+
         modinfo = []
         for row in self._con.execute("SELECT * FROM mods"):
             order, modid, ver, mdir, name, enabled = row
@@ -198,8 +218,47 @@ class DBManager:
                 "enabled": enabled
             })
 
-        with open(json_target, "w") as f:
+        with json_target.open('w') as f:
             json.dump(modinfo, f, indent=1)
+
+
+    def getModDataFromModDirectory(self, mods_dir):
+        """
+        scan the actual mods-directory and populate the database from there instead of a cached json file.
+        Will need to do this on first run and periodically to make sure cache is in sync.
+        TODO: Perhaps this should be run on every startup? At least to make sure it matches the stored data.
+        :return:
+        """
+        import configparser
+
+        # def modListFromDirectory(self, mod_install_dir: str) -> List[Tuple[str, str, str]] :
+        #     """
+        #     Examine the configured mods-directory and create a list of installed mods where each folder in said directory is considered a mod. If a meta.ini file (in the format used by ModOrganizer) exists in a mod's folder, extra mod details are read from it.
+        #     :param mod_install_dir:
+        #     :return: A list of tuples in the form (mod-name, mod-id, mod-version)
+        #     """
+        #
+        self.logger.info("Reading mods from mod directory")
+        #
+        configP = configparser.ConfigParser()
+
+
+        mods_list = []
+        for moddir in os.listdir(mods_dir):
+            inipath = "{}/{}/{}".format(mods_dir, moddir, "meta.ini")
+            if os.path.exists(inipath):
+                configP.read(inipath)
+                # insert tuples in form that db will expect
+                mods_list.append((configP['General']['modid'], configP['General']['version'], moddir, moddir, 1))
+            else:
+                mods_list.append((0, "", moddir, moddir, 1))
+
+        with self._con:
+            self._con.executemany("INSERT INTO mods(modid, version, directory, name, enabled) VALUES (?, ?, ?, ?, ?)",
+                                  mods_list)
+
+
+
 
     @staticmethod
     def toRowTuple(pairs):
@@ -221,7 +280,6 @@ class DBManager:
 
 def test():
 
-    from skymodman_main import ModManager
     testdb = "res/test.db"
 
     if not os.path.exists(testdb):
@@ -314,7 +372,7 @@ def testload():
 
     # con = loadDB("res/modinfo.json")
 
-    DB = DBManager()
+    DB = DBManager(ModManager())
 
     # check
     # for row in con.execute("SELECT iorder, name FROM mods WHERE enabled = 0"):
@@ -337,5 +395,7 @@ def testload():
     DB.shutdown()
 
 if __name__ == '__main__':
+    from manager import ModManager
+
     # test()
     testload()

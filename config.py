@@ -7,10 +7,9 @@ import skylog
 # from pprint import pprint
 from typing import Tuple
 
-from utils import withlogger
-
+import utils
 __myname = "skymodman"
-
+# import skymodman_main
 #
 # class LogMixin(object):
 #     @property
@@ -26,7 +25,7 @@ class Messenger:
     def __init__(self, **kwargs):
         self.__dict__ = kwargs
 
-@withlogger
+@utils.withlogger
 class ConfigManager:
 
     __MAIN_CONFIG = "skymodman.ini"
@@ -34,10 +33,22 @@ class ConfigManager:
     __PROFILES_DIRNAME = "profiles"
     __APPNAME = "skymodman"
 
+    __DEFAULT_CONFIG={
+        'General': {
+            'modsdirectory': "##DATADIR##/mods",
+            'virtualfsmountpoint': "##DATADIR##/skyrimfs",
+    },
+        'State': {
+
+        "lastprofile": __DEFAULT_PROFILE
+        }
+    }
+
     # __DEFAULT_DATADIR = os.path.join(os.getenv("XDG_DATA_HOME", os.path.expanduser("~/.local/share")),__APPNAME)
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, manager, *args, **kwargs):
         super(ConfigManager, self).__init__(*args, **kwargs)
+        self.manager = manager
         # self._file,
         self._messenger = None # type: Messenger
 
@@ -56,6 +67,10 @@ class ConfigManager:
         #     self.__dict__[k] = v
 
 
+    @property
+    def profiles_dir(self) -> Path:
+        return self._profiles_dir
+
     def ensureDefaultSetup(self):
         """
         Make sure that all the required files and directories exist,
@@ -68,7 +83,7 @@ class ConfigManager:
         user_config_dir = os.getenv("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
 
         self._config_dir = Path(user_config_dir) / self.__APPNAME
-        self._profiles_dir = self._config_dir / "profiles"
+        # self._profiles_dir = self._config_dir / "profiles"
 
         self._main_config = self._config_dir / "{}.ini".format(self.__APPNAME)
 
@@ -79,33 +94,40 @@ class ConfigManager:
             self._config_dir.mkdir(parents=True)
 
         ## check for profiles dir ##
+
+        self._profiles_dir = self._config_dir / ConfigManager.__PROFILES_DIRNAME
+
         if not self._profiles_dir.exists():
             self.logger.info("Creating profiles directory at: {}".format(self._profiles_dir))
             self._profiles_dir.mkdir(parents=True)
-            def_pro = self._profiles_dir / self.__DEFAULT_PROFILE
+
+            def_pro = self._profiles_dir / ConfigManager.__DEFAULT_PROFILE
+
+            self.logger.info("Creating directory for default profile.")
             def_pro.mkdir()
 
 
-        ## check that main config exists ##
+        ## check that main config file exists ##
         if not self._main_config.exists():
             self.logger.info("Creating default configuration file.")
+            # create it w/ default values if it doesn't
             self.create_default_config()
 
-        ## Load configuration ##
+        ## Load configuration from file ##
         config = configparser.ConfigParser()
-        config.read(str(self._config_dir))
+        config.read(str(self._main_config))
 
         # i know this isn't the right way to do this... i should get some sleep
         vals = {d: v[d] for k, v in config.items() for d in v}
         self._messenger = Messenger(**vals)
-        # print (cm.profile)
 
         #check for data dir, mods dir
         self._mods_dir = Path(config['General']['modsdirectory'])
         ## TODO: maybe we shouldn't create the mod directory by default?
         if not self._mods_dir.exists():
             # for now, only create if the location in the config is same as the default
-            if str(self._mods_dir) == os.path.join(os.getenv("XDG_DATA_HOME", os.path.expanduser("~/.local/share")),
+            if self._mods_dir.as_posix() == os.path.join(os.getenv
+                                                   ("XDG_DATA_HOME", os.path.expanduser("~/.local/share")),
                                                    self.__APPNAME,
                                                    "mods"):
                 self.logger.info("Creating new mods directory at: {}".format(self._mods_dir))
@@ -123,29 +145,30 @@ class ConfigManager:
             self.__dict__[k] = v
 
 
-
-
-
-
-        # check for mod dir
-
     def create_default_config(self):
 
 
         # default data directory
-        # TODO: will need to figure something else out if I want this to work on a Mac, too
-        default_data_dir = Path(os.getenv("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))) / self.__APPNAME
+        # TODO: will need to figure something else out if there's ever a need to get this working on a non-linux OS (e.g. OS X)
+        default_data_dir = Path(os.getenv("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))) / ConfigManager.__APPNAME
 
 
         config = configparser.ConfigParser()
-        config['General'] = {
-            'ModsDirectory': default_data_dir / "mods",
-            'VirtualFSMountPoint': default_data_dir / "skyrimfs",
-        }
 
-        config['State'] = {
-            "Profile": self.__DEFAULT_PROFILE
-        }
+        # construct the default config, replacing the placeholder with the actual data directory
+        for section,vallist in self.__DEFAULT_CONFIG.items():
+            config[section] = {}
+            for prop, value in vallist.items():
+                config[section][prop] = value.replace('##DATADIR##',str(default_data_dir))
+
+        # config['General'] = {
+        #     'modsdirectory': default_data_dir / "mods",
+        #     'VirtualFSMountPoint': default_data_dir / "skyrimfs",
+        # }
+        #
+        # config['State'] = {
+        #     "LastProfile": self.__DEFAULT_PROFILE
+        # }
 
         with self._main_config.open('w') as configfile:
             config.write(configfile)
@@ -183,42 +206,42 @@ class ConfigManager:
             assert k not in self.__dict__
             self.__dict__[k] = v
 
-    @property
-    def _current_profile_dir(self) -> str:
-        _dir = os.path.join(self.profilesdirectory, self.profile)
+    # @property
+    # def _current_profile_dir(self) -> str:
+    #     _dir = os.path.join(self.profilesdirectory, self.profile)
+    #
+    #     if not os.path.exists(_dir):
+    #         self.logger.info("Creating profile directory for {}".format(self.profile))
+    #         os.makedirs(_dir)
+    #
+    #     return _dir
 
-        if not os.path.exists(_dir):
-            self.logger.info("Creating profile directory for {}".format(self.profile))
-            os.makedirs(_dir)
-
-        return _dir
-
-    @property
-    def _installed_mods_file(self) -> str:
-        return os.path.join(self._current_profile_dir, "installed.json")
-
-
-
-    def saveModsList(self, mods_by_state: dict):
-        """
-        Saves to a config file which mods are marked as active in
-        the mod-manager
-        :param mods_by_state:
-        :return:
-        """
-
-        with open(self._installed_mods_file, 'w') as f:
-            json.dump(mods_by_state, f, indent=2)
-
-        self.logger.info("Saved mod states to {}".format(self._installed_mods_file))
+    # @property
+    # def _installed_mods_file(self) -> str:
+    #     return os.path.join(self._current_profile_dir, "installed.json")
 
 
-    def loadModsStatesList(self) -> dict:
-        with open(self._installed_mods_file) as f:
-            mdict = json.load(f)
-        self.logger.debug("Loaded mod-activated states")
 
-        return mdict
+    # def saveModsList(self, mods_by_state: dict):
+    #     """
+    #     Saves to a config file which mods are marked as active in
+    #     the mod-manager
+    #     :param mods_by_state:
+    #     :return:
+    #     """
+    #
+    #     with open(self._installed_mods_file, 'w') as f:
+    #         json.dump(mods_by_state, f, indent=2)
+    #
+    #     self.logger.info("Saved mod states to {}".format(self._installed_mods_file))
+    #
+    #
+    # def loadModsStatesList(self) -> dict:
+    #     with open(self._installed_mods_file) as f:
+    #         mdict = json.load(f)
+    #     self.logger.debug("Loaded mod-activated states")
+    #
+    #     return mdict
 
 
 
