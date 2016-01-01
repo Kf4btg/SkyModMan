@@ -1,4 +1,5 @@
 import sqlite3
+from _sqlite3 import Error as sqlError
 import json
 import os
 from typing import TypeVar, List, Tuple, Union
@@ -71,27 +72,51 @@ class DBManager:
 
 
     # db modification
-    def updateField(self, row: int, col: int, value):
+    def updateField(self, row: int, col: int, value) -> bool:
+        """
+        Modify the value of the `enabled` or `name` attribute for the mod at place `row` in the install order
+        :param row: install order (index) of mod
+        :param col: which field to modify; must be either constants.COL_ENABLED or constants.COL_NAME
+        :param value: if col==COL_ENABLED, must be either `True` or `False`. if COL_NAME, must be a string
+        :return: True or False depending on whether transaction succeeded or not
+        """
+        success = True
         if col == constants.COL_ENABLED:
             assert isinstance(value, bool)
-            with self._con:
-                self.logger.debug("Old Value for enabled: {}".format(
-                        self._con.execute("select enabled from mods where iorder = ?", (row, )).fetchall()))
 
-                self._con.execute("UPDATE mods SET enabled = ? WHERE iorder = ?", (int(value), row))
+            try:
+                with self._con:
+                    self.logger.debug("Old Value for enabled: {}".format(
+                            self._con.execute("select enabled from mods where iorder = ?", (row, )).fetchall()))
 
-                self.logger.debug("New Value for enabled: {}".format(
-                    self._con.execute("select enabled from mods where iorder = ?", (row,)).fetchall()))
+                    self._con.execute("UPDATE mods SET enabled = ? WHERE iorder = ?", (int(value), row))
+
+                    self.logger.debug("New Value for enabled: {}".format(
+                        self._con.execute("select enabled from mods where iorder = ?", (row,)).fetchall()))
+            except sqlError as e:
+                self.logger.error("SQL transaction error when updating mod enabled state: '{}'".format(e))
+                success = False
         elif col == constants.COL_NAME:
             assert isinstance(value, str)
-            with self._con:
-                self.logger.debug("Old Value for name: {}".format(
-                        self._con.execute("select name from mods where iorder = ?", (row,)).fetchall()))
 
-                self._con.execute("UPDATE mods SET name = ? WHERE iorder = ?", (value, row))
+            try:
+                with self._con:
+                    self.logger.debug("Old Value for name: {}".format(
+                            self._con.execute("select name from mods where iorder = ?", (row,)).fetchall()))
 
-                self.logger.debug("New Value for name: {}".format(
-                        self._con.execute("select name from mods where iorder = ?", (row,)).fetchall()))
+                    self._con.execute("UPDATE mods SET name = ? WHERE iorder = ?", (value, row))
+
+                    self.logger.debug("New Value for name: {}".format(
+                            self._con.execute("select name from mods where iorder = ?", (row,)).fetchall()))
+            except sqlError as e:
+                self.logger.error("SQL transaction error when updating mod name: '{}'".format(e))
+                success = False
+
+        else:
+            self.logger.error("Column {} is not a modifiable field.".format(col))
+            success = False
+
+        return success
 
 
 
@@ -133,7 +158,6 @@ class DBManager:
     def shutdown(self):
         """
         Close the db connection
-        :return:
         """
         self._con.close()
 
