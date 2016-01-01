@@ -3,6 +3,9 @@ import json
 import os
 from typing import TypeVar, List, Tuple, Union
 
+import constants
+import utils
+
 
 _iorder = int
 _modid = int
@@ -19,7 +22,7 @@ DBRow = Tuple[_iorder,
               _modenabled
              ]
 
-
+@utils.withlogger
 class DBManager:
 
     _SCHEMA = """CREATE TABLE mods (
@@ -65,6 +68,31 @@ class DBManager:
         :return:
         """
         return self.getModInfo()
+
+
+    # db modification
+    def updateField(self, row: int, col: int, value):
+        if col == constants.COL_ENABLED:
+            assert isinstance(value, bool)
+            with self._con:
+                self.logger.debug("Old Value for enabled: {}".format(
+                        self._con.execute("select enabled from mods where iorder = ?", (row, )).fetchall()))
+
+                self._con.execute("UPDATE mods SET enabled = ? WHERE iorder = ?", (int(value), row))
+
+                self.logger.debug("New Value for enabled: {}".format(
+                    self._con.execute("select enabled from mods where iorder = ?", (row,)).fetchall()))
+        elif col == constants.COL_NAME:
+            assert isinstance(value, str)
+            with self._con:
+                self.logger.debug("Old Value for name: {}".format(
+                        self._con.execute("select name from mods where iorder = ?", (row,)).fetchall()))
+
+                self._con.execute("UPDATE mods SET name = ? WHERE iorder = ?", (value, row))
+
+                self.logger.debug("New Value for name: {}".format(
+                        self._con.execute("select name from mods where iorder = ?", (row,)).fetchall()))
+
 
 
     # convenience methods
@@ -271,8 +299,12 @@ def testload():
     DB.loadModDB("res/modinfo.json")
 
     # [print(r) for r in DB.mods]
-    [print(r) for r in DB.enabledMods(True)]
+    # [print(r) for r in DB.enabledMods(True)]
     # [print(r) for r in DB.disabledMods(True)]
+
+    DB.updateField(4, constants.COL_ENABLED, True)
+
+    DB.updateField(4, constants.COL_NAME, "New name")
 
     # print(DB.disabledMods(True))
 
