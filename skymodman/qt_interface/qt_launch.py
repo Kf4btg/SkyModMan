@@ -38,10 +38,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.action_Quit.triggered.connect(quit_app)
         self.action_Install_Fomod.triggered.connect(self.loadFomod)
 
-        # list of (modname, modId, modVersion) tuples
-        # self.mods_list = load_mods(self._manager.Config.modsdirectory)
-        # self.mods_list = self._manager.modinfo
-
         # setup table of installed mods
         self.mod_table.setColumnCount(4)
         self.mod_table.setHorizontalHeaderLabels(["", "Mod ID",
@@ -87,7 +83,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # tracking modified rows; using list or ordered dict might allow for an "undo" function later
         self._modified_cells = [] # list of point-tuples (row, column) for fields in table
-
 
         # update UI
         self.updateUI()

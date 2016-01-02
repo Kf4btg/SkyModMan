@@ -1,7 +1,5 @@
-from managers import database, profiles
-
 from skymodman import utils
-from skymodman.managers import config
+from skymodman.managers import config, database, profiles
 
 
 @utils.withlogger
