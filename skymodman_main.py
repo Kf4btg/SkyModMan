@@ -1,20 +1,9 @@
 #!/usr/bin/env python3
-import sys
-from typing import List, Tuple
 import os
+import sys
 
-import utils
-
-import skylog
-from managers import ModManager
-
-
-
-
-
-
-
-
+from skymodman import skylog
+from skymodman.managers import ModManager
 
 
 def main():
@@ -29,7 +18,7 @@ if __name__ == '__main__':
     if USE_QT_GUI:
         from PyQt5.QtWidgets import QApplication
         from PyQt5.QtGui import QGuiApplication
-        from qt_launch import ModManagerWindow
+        from skymodman.qt_interface.qt_launch import ModManagerWindow
 
         app = QApplication(sys.argv)
 

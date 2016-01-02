@@ -5,16 +5,6 @@ from queue import Queue
 import threading
 
 
-# class logHandler:
-#     """
-#     Handler for delegating logging events in the listener.
-#
-#     https://gist.github.com/vsajip/2331314
-#     """
-#     def handle(self, record):
-#         logger = logging.getLogger(record.name)
-#         logger.handle(record)
-
 __logging_queue = None # type: Queue
 __listener = None # type: logging.handlers.QueueListener
 
@@ -39,7 +29,6 @@ def setupLogListener():
     global __listener
 
     q = Queue()
-    # q_handler = logging.handlers.QueueHandler(q)
 
     console_handler = Logging.StreamHandler()
     detailed_formatter = Logging.Formatter('%(asctime)s %(name)-15s %(levelname)-8s %(message)s')
@@ -48,19 +37,11 @@ def setupLogListener():
 
     q_listener = logging.handlers.QueueListener(q, console_handler)
 
-    # logging.config.dictConfig(d)
-    # root = logging.getLogger()
-    # root.setLevel('DEBUG')
-    # root.addHandler(q_handler)
-
-
-    # return root, q_listener
 
     __logging_queue = q
     __listener = q_listener
 
     q_listener.start()
-    # return q_listener
 
 def newLogger(name, config=None, level:str = "DEBUG"):
     """
@@ -96,31 +77,4 @@ def start_listener():
 
 def stop_listener():
     __listener.stop()
-
-
-
-
-
-
-
-# d = {
-    #     "version": 1,
-    #     "formatters": {
-    #         "detailed": {
-    #             "class": "logging.Formatter",
-    #             "format": '%(asctime)s %(name)-15s %(levelname)-8s %(processName)-10s %(message)s'
-    #         }
-    #     },
-    #     'handlers': {
-    #         'console': {
-    #             'class': 'logging.StreamHandler',
-    #             'level': 'DEBUG',
-    #             'formatter': "detailed"
-    #         }
-    #     },
-    #     'root': {
-    #         'level': 'DEBUG',
-    #         'handlers': ['console']
-    #     }
-    # }
 

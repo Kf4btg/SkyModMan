@@ -1,15 +1,12 @@
 import sys
-from typing import List, Tuple
 
-from PyQt5.QtWidgets import QApplication, QMainWindow, QTableWidgetItem, QFileDialog, QFileSystemModel, QDialogButtonBox
-from PyQt5.QtGui import QGuiApplication
 from PyQt5.QtCore import Qt, QStandardPaths, QDir, pyqtSignal, pyqtSlot
+from PyQt5.QtGui import QGuiApplication
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTableWidgetItem, QFileDialog, QFileSystemModel, QDialogButtonBox
 
-from qt_manager_ui import Ui_MainWindow
-import skylog
-
-from utils import withlogger
-import constants as const
+import skymodman.constants as const
+from skymodman.qt_interface.qt_manager_ui import Ui_MainWindow
+from skymodman.utils import withlogger
 # from collections import OrderedDict
 
 @withlogger
@@ -109,10 +106,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self._modified_cells.append((row, col))
 
 
-
-    # def itemchanged(self, qlinedit):
-    #     self.LOGGER.debug("Row {}: {}".format(self.mod_table.currentRow(), qlinedit.text()))
-
     @property
     def Manager(self):
         return self._manager
@@ -132,47 +125,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             )
 
         self.next_button.setVisible(curtab == const.TAB_INSTALLER)
-
-            
-    # def setButtonVisibility(self, visible, *buttons):
-    #     for b in buttons:
-    #         b.setVisible(visible)
-    #
-    # def enableButtons(self, enabled, *buttons):
-    #     for b in buttons:
-    #
-    #             b.setEnabled(enabled)
-
-
-    # @property
-    # def activeMods(self):
-    #     return sorted([self.mod_table.item(i, const.COL_NAME).text()
-    #                    for i in range(self.mod_table.rowCount())
-    #                    if self.mod_table.item(i, const.COL_ENABLED).checkState() == Qt.Checked])
-    #
-    # @property
-    # def inactiveMods(self):
-    #     return sorted([self.mod_table.item(i, const.COL_NAME).text()
-    #                    for i in range(self.mod_table.rowCount())
-    #                    if self.mod_table.item(i, const.COL_ENABLED).checkState() == Qt.Unchecked])
-
-    # def modsByState(self):
-    #     """Get both at same time to avoid looping through list twice
-    #
-    #     """
-    #     mbs = {"Active": [], "Inactive": []}
-    #     for i in range(self.mod_table.rowCount()):
-    #         if self.mod_table.item(i, const.COL_ENABLED).checkState() == Qt.Checked:
-    #             mbs["Active"].append(self.mod_table.item(i, const.COL_NAME).text())
-    #         else:
-    #             mbs["Inactive"].append(self.mod_table.item(i, const.COL_NAME).text())
-    #
-    #     # sort them, for the fun of it
-    #     mbs["Active"] = sorted(mbs["Active"])
-    #     mbs["Inactive"] = sorted(mbs["Inactive"])
-    #
-    #     return mbs
-
 
     @pyqtSlot()
     def saveModsList(self):
@@ -301,8 +253,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.mod_table.blockSignals(False)
 
     def syncModListWithStates(self):
-        # TODO: this query gets them in primary-key order, right?
-
 
         for cell in self._modified_cells:
             row, col = cell   # get parts of tuple
@@ -319,6 +269,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 self.mod_table.item(row, const.COL_NAME).setText(modinfo[1])
 
 
+    def resetTable(self):
+        self.mod_table.blockSignals(True)
+        self.syncModListWithStates()
+        self._modified_cells.clear()
+
+        # self.mod_list_modified = False
+        # self.disableSaveCancelButtons(
+        self.mod_table.blockSignals(False)
+        self.updateUI()
 
     # SLOTS
 
@@ -340,43 +299,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     #         # self.updateUI()
     #         self.modListModified.emit()
 
-    def resetTable(self):
-        # self.table_is_resetting = True
-        self.mod_table.blockSignals(True)
-        self.syncModListWithStates()
-        self._modified_cells.clear()
-        # self.table_is_resetting = False
-        # self.mod_list_modified = False
-        # self.disableSaveCancelButtons(
-        self.mod_table.blockSignals(False)
-        self.updateUI()
 
 
 def quit_app():
     skylog.stop_listener()
     QApplication.quit()
 
-# def load_mods(mods_folder: str) -> List[Tuple[str, str, str]]:
-#     import configparser
-#     import os
-#     config = configparser.ConfigParser()
-#
-#
-#     mods_list = []
-#     for moddir in os.listdir(mods_folder):
-#         inipath = "{}/{}/{}".format(mods_folder, moddir, "meta.ini")
-#         config.read(inipath)
-#         mods_list.append((moddir, config['General']['modid'], config['General']['version']))
-#
-#     return mods_list
-
-
-
 if __name__ == '__main__':
 
-
-
-    import managers
+    from skymodman import managers, skylog
 
     app = QApplication(sys.argv)
 

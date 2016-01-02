@@ -1,10 +1,7 @@
-import utils
-# import configparser
-# from typing import List, Tuple
-# import os
-# import sys
+from managers import database, profiles
 
-from managers import database, profiles, config
+from skymodman import utils
+from skymodman.managers import config
 
 
 @utils.withlogger
@@ -82,9 +79,6 @@ class ModManager:
 
     def enabledMods(self):
         yield from self.DB.enabledMods(True)
-        # self.LOGGER.debug(str(em))
-        # # return self.DB.enabledMods(True)
-        # return em
 
     def disabledMods(self):
         yield from self.DB.disabledMods(True)
@@ -93,32 +87,4 @@ class ModManager:
         self.DB.saveModDB(self.active_profile.modinfo)
 
 
-    # def modListFromDirectory(self, mod_install_dir: str) -> List[Tuple[str, str, str]] :
-    #     """
-    #     Examine the configured mods-directory and create a list of installed mods where each folder in said directory is considered a mod. If a meta.ini file (in the format used by ModOrganizer) exists in a mod's folder, extra mod details are read from it.
-    #     :param mod_install_dir:
-    #     :return: A list of tuples in the form (mod-name, mod-id, mod-version)
-    #     """
-    #
-    #     self.LOGGER.info("Reading mods from mod directory")
-    #
-    #     configP = configparser.ConfigParser()
-    #
-    #     mods_list = []
-    #     for moddir in os.listdir(mod_install_dir):
-    #         inipath = "{}/{}/{}".format(mod_install_dir, moddir, "meta.ini")
-    #         configP.read(inipath)
-    #         mods_list.append((moddir, configP['General']['modid'], configP['General']['version']))
-    #
-    #     return mods_list
-
-    # def saveModStates(self, mods_by_state):
-    #     """
-    #     call the save-mod-states function of the config
-    #     manager and update this managers's modstates property
-    #     :param mods_by_state:
-    #     :return:
-    #     """
-    #     self._mod_states = mods_by_state
-    #     self._config_manager.saveModsList(mods_by_state)
 

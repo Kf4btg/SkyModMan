@@ -1,4 +1,3 @@
-from enum import Enum
 
 TABS = (TAB_MODLIST, TAB_FILETREE, TAB_INSTALLER) = list(range(3))
 

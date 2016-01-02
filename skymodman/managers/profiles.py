@@ -1,9 +1,9 @@
-import os
-from pathlib import Path
-from typing import List, Union, Iterable, Tuple
-
-from utils import withlogger
 from enum import Enum
+from pathlib import Path
+from typing import List
+
+from skymodman import exceptions
+from skymodman.utils import withlogger
 
 
 @withlogger
@@ -23,7 +23,11 @@ class Profile:
 
         self._folder = profiles_dir / name
 
-        self.localfiles = {}
+        if not self._folder.exists():
+            # create the directory if it doesn't exist
+            self._folder.mkdir()
+
+        self.localfiles = {} # type: Dict[str, Path]
         for f in [self._folder / Profile.Files(p).value for p in Profile.Files]:
             # populate a dict with references to the files local to this profile,
             # keyed by the filenames sans extension (e.g. 'modinfo' for 'modinfo.json')
@@ -38,8 +42,12 @@ class Profile:
         self.LOGGER.debug(self.localfiles)
 
     @property
-    def name(self) -> Path:
+    def name(self) -> str:
         return self._name
+
+    @property
+    def folder(self) -> Path:
+        return self._folder
 
     @property
     def modinfo(self) -> Path:
@@ -62,11 +70,14 @@ class Profile:
 
 @withlogger
 class ProfileManager:
+    """
+    Manages loading and saving user profiles
+
+    """
 
 
     def __init__(self, manager, directory: Path):
         """
-
         :param manager: reference to ModManager
         :param directory: the application's 'profiles' storage directory
         """
@@ -74,9 +85,7 @@ class ProfileManager:
         self.manager = manager
 
         self._profiles_dir = directory
-
-        # if not isinstance(profiles_dir, Path):
-        #     self._profiles_dir = Path(profiles_dir)
+        self._current_profile = None
 
         # make sure directory exists
         if not self._profiles_dir.exists():
@@ -84,31 +93,34 @@ class ProfileManager:
 
 
         ## load profile names from folders in profiles-dir
-        self.logger.info("loading profiles from {}".format(self._profiles_dir))
+        self.LOGGER.info("loading profiles from {}".format(self._profiles_dir))
         self._available_profiles = []
 
         for p in self._profiles_dir.iterdir():
             if p.is_dir():
-                self.logger.debug("Found profile {}: appending to profiles list.".format(p.name))
+                self.LOGGER.debug("Found profile {}: appending to profiles list.".format(p.name))
                 self._available_profiles.append(p.name)
 
-        self._current_profile = self.loadProfile("default")
+        if len(self._available_profiles) == 0:
+            self.LOGGER.warning("No profiles found. Creating default profile.")
+            self._available_profiles.append("default")
+            self._current_profile = self.loadProfile("default")
 
 
     @property
     def active_profile(self) -> Profile:
+        if self._current_profile is None:
+            self._current_profile = self.loadProfile("default")
         return self._current_profile
 
 
     def loadProfile(self, profilename):
-        # pdir = self._profiles_dir / profilename # type: Path
-
-        self.logger.info("Loading profile '{}'.".format(profilename))
+        self.LOGGER.info("Loading profile '{}'.".format(profilename))
         return Profile( self._profiles_dir, profilename )
 
 
-    def setActiveProfile(self, profilename):
-        if self.active_profile.name != profilename:
+    def setActiveProfile(self, profilename: str):
+        if self._current_profile is None or self._current_profile.name != profilename:
             self._current_profile = self.loadProfile(profilename)
 
         return self._current_profile
@@ -129,35 +141,7 @@ class ProfileManager:
             yield p
 
 
-
-    # def getConfigFile(self, config_file: Union[ProfileFiles,str], profile_name: str="default") -> Path:
-    #     """
-    #     return a Path object for the requested file from the specified profile
-    #     :param profile_name:
-    #     :param config_file:
-    #     :return:
-    #     """
-    #     return self._profiles_dir / profile_name / config_file
-
-
-    def loadProfiles(self) -> List[str]:
-        """
-
-        :return: list of profile names
-        """
-
-        self.logger.info("loading profiles from {}".format(self._profiles_dir))
-        profile_list = []
-
-        for p in self._profiles_dir.iterdir():
-            if p.is_dir():
-                profile_list.append(p.name)
-
-        return profile_list
-
-
-
-    def newProfile(self, profile_name) -> Path:
+    def newProfile(self, profile_name) -> Profile:
         """
         Makes a new folder in the configured
         profiles directory and creates empty
@@ -165,28 +149,40 @@ class ProfileManager:
         :param profile_name: name of new profile. Must not already exist or a nameError will be raised
         :return: the pathlib.Path object for the newly created directory
         """
-        pdPath = Path(self._profiles_dir)
-
-
-        new_pdir = pdPath / profile_name
+        new_pdir = self._profiles_dir / profile_name
 
         if new_pdir.exists():
-            raise NameError("A profile with the name {} already exists.".format(profile_name))
+            raise exceptions.ProfileExistsError(profile_name)
 
-        self.logger.info("Creating new profile directory for {}".format(profile_name))
-        # create the new profile dir
-        new_pdir.mkdir()
 
-        # create empty config files
-        for pfile in ["installed.json", "loadorder.json", "overwrite.json", "installorder.json", "inimod.json"]:
-            fpath = new_pdir / pfile
-            fpath.touch()
-            self.logger.debug("touched {}".format(pfile))
+        return self.loadProfile(profile_name)
 
-        return new_pdir
 
-    def deleteProfile(self, profile):
-        pass
+    def deleteProfile(self, profile, confirm = False):
+        """
+        Removes the folder and all config files for the specified profile.
+        :param profile: either a Profile object or the name of an existing profile
+        :param confirm: must pass true for this to work. This option will likely be removed;
+        it's mainly to prevent me from doing stupid things during development
+        :return:
+        """
+
+        assert confirm
+        if isinstance(profile, str):
+
+            profile = Profile(self._profiles_dir, profile)
+
+        assert isinstance(profile, Profile)
+
+        if profile.name == "default":
+            raise exceptions.DeleteDefaultProfileError("default")
+
+
+        for f in profile.localfiles.values():
+            if f.exists(): f.unlink()
+
+        profile.folder.rmdir()
+
 
 
 

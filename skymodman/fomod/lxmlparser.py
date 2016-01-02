@@ -1,7 +1,8 @@
-from lxml import objectify
 from fomod import Fomod
 from fomod.elements import ModName, DependencyList, DependencyType, FileList, InstallSteps, ModImage, Pattern, DTPattern, Group, Plugin
-from fomod.enums import *
+from lxml import objectify
+
+from skymodman.fomod.enums import *
 
 
 def lxmlParse(xml) -> Fomod:

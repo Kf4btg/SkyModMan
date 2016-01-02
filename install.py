@@ -1,14 +1,13 @@
-import locale
 import sys
 import textwrap
 
+from skymodman import fomod
 from argh import arg, dispatch_command
 from dialog import Dialog
+from skymodman.fomod.installer import IModInstaller, qt5, zenity
 
-import fomod
-from fomod.installer import IModInstaller, zenity, qt5
+
 # import fomod.installer.zenity
-import fomod.installer.easy
 # import fomod.installer.qt5
 
 # According to author of pythondialog:
@@ -143,7 +142,10 @@ def main(xml, modfolder=None, useinstaller="qt5"):
     if useinstaller == "qt5":
         import asyncio
         from PyQt5.QtWidgets import QApplication
-        from quamash import QEventLoop, QThreadExecutor
+        try:
+            from quamash import QEventLoop
+        except:
+            from asyncio import get_event_loop as QEventLoop
 
         app = QApplication(sys.argv)
         loop = QEventLoop(app)
@@ -160,7 +162,7 @@ def main(xml, modfolder=None, useinstaller="qt5"):
             loop.run_until_complete(installer.InstallMod())
     else:
         if useinstaller=="zenity":
-            installer = fomod.installer.zenity.ZenityInstaller(mod.moduleName.text)
+            installer = zenity.ZenityInstaller(mod.moduleName.text)
 
 
         else:

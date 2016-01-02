@@ -1,7 +1,6 @@
 import asyncio
 
-class DependencyError(Exception):
-    pass
+from skymodman.exceptions import DependencyError
 
 class IModInstaller:
     """

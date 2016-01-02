@@ -5,9 +5,13 @@
 #   CONSTRUCTION FUNCTION JUNCTION
 #======================================
 
-from lxml import objectify
 from pprint import pprint
-from fomod import lxmlParse
+
+from lxml import objectify
+
+from skymodman.fomod import lxmlParse
+
+
 # from fomod.elements import ModName, DependencyList, DependencyType, FileList, InstallSteps, ModImage, Pattern, DTPattern, Group, Plugin
 # from fomod.enums import *
 
@@ -242,7 +246,7 @@ def test3():
 def test4():
     import sys
     from PyQt5.QtWidgets import QApplication
-    import fomod.installer.qt5 as qt
+    from skymodman import fomod as qt
 
     app = QApplication(sys.argv)
     main = qt.QTInstaller("testing")

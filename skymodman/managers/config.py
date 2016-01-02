@@ -1,13 +1,10 @@
 import configparser
-# import json
 import os
 from pathlib import Path
-# import logging
-import skylog
-# from pprint import pprint
+from skymodman import skylog, utils
+
 # from typing import Tuple
 
-import utils
 __myname = "skymodman"
 
 # Messenger Idiom shamelessly pilfered from:
@@ -25,7 +22,6 @@ class ConfigPaths:
     dir_profiles = None # type: Path
     dir_mods     = None # type: Path
     dir_vfs      = None # type: Path
-
 
 
 @utils.withlogger
@@ -77,10 +73,6 @@ class ConfigManager:
         """
         return str(getattr(self.paths, config_file_or_dir, None))
 
-    # @property
-    # def profiles_dir(self) -> Path:
-    #     return self.paths.dir_profiles
-
     @property
     def lastprofile(self) -> str:
         """
@@ -97,9 +89,6 @@ class ConfigManager:
         self.paths.dir_vfs = Path(config['General']['virtualfsmountpoint'])
         self._lastprofile = config['State']['lastprofile']
 
-        # return config
-
-
     def ensureDefaultSetup(self):
         """
         Make sure that all the required files and directories exist,
@@ -112,7 +101,6 @@ class ConfigManager:
         user_config_dir = os.getenv("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
 
         self.paths.dir_config = Path(user_config_dir) / self.__APPNAME
-        # self.paths.dir_profiles = self._config_dir / "profiles"
 
         self.paths.file_main = self.paths.dir_config / "{}.ini".format(self.__APPNAME)
 
@@ -146,9 +134,6 @@ class ConfigManager:
         self.loadConfig()
 
 
-        # i know this isn't the right way to do this... i should get some sleep
-        # vals = {d: v[d] for k, v in config.items() for d in v}
-        # self._messenger = Messenger(**vals)
         #check for data dir, mods dir
         ## TODO: maybe we shouldn't create the mod directory by default?
         if not self.paths.dir_mods.exists():
@@ -164,14 +149,13 @@ class ConfigManager:
                 self.LOGGER.error("Configured mods directory not found")
 
 
-        # make the configuration variables
-        # directly accessible on the ConfigManager
-        # for k, v in self._messenger.__dict__.items():
-        #     assert k not in self.__dict__
-        #     self.__dict__[k] = v
-
-
     def create_default_config(self):
+        """
+        Called if the main configuration file does not exist in the expected location.
+        Creates 'skymodman.ini' with default values
+        :return:
+        """
+        #TODO: perhaps just include a default config file and copy it in place.
 
 
         # default data directory
@@ -211,30 +195,6 @@ class ConfigManager:
         # also, maybe this operation should be queued?
         with self.paths.file_main.open('w') as f:
             config.write(f)
-
-        ## resync cconfig vars
-        # self._syncMessenger()
-
-    # def _syncMessenger(self):
-    #     """
-    #     (re)syncs the __dict__ of this class with the Messenger
-    #     object that holds the config variables
-    #     :return:
-    #     """
-    #
-    #     # make a copy of current messenger keys
-    #     keys = self._messenger.__dict__.keys()
-    #
-    #     # remove these keys from this obj's dict
-    #     for k in keys:
-    #         del self.__dict__[k]
-    #
-    #     vals = {d: v[d] for k,v in self._config.items() for d in v }
-    #     self._messenger = Messenger(**vals)
-    #
-    #     for k,v in self._messenger.__dict__.items():
-    #         assert k not in self.__dict__
-    #         self.__dict__[k] = v
 
 
 if __name__ == '__main__':

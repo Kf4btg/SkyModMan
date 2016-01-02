@@ -1,4 +1,5 @@
-import skylog
+from skymodman import skylog
+
 
 def withlogger(cls):
     """Class decorator to add a logger to the class"""
