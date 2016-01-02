@@ -16,6 +16,7 @@ def withlogger(cls):
 
     setattr(cls, '__init__', __init__)
     setattr(cls, 'logger', logger)
+    setattr(cls, 'LOGGER', logger)
 
     return cls
 

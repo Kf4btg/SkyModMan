@@ -91,34 +91,34 @@ class DBManager:
 
             try:
                 with self._con:
-                    self.logger.debug("Old Value for enabled: {}".format(
+                    self.LOGGER.debug("Old Value for enabled: {}".format(
                             self._con.execute("select enabled from mods where iorder = ?", (row, )).fetchall()))
 
                     self._con.execute("UPDATE mods SET enabled = ? WHERE iorder = ?", (int(value), row))
 
-                    self.logger.debug("New Value for enabled: {}".format(
+                    self.LOGGER.debug("New Value for enabled: {}".format(
                         self._con.execute("select enabled from mods where iorder = ?", (row,)).fetchall()))
             except sqlError as e:
-                self.logger.error("SQL transaction error when updating mod enabled state: '{}'".format(e))
+                self.LOGGER.error("SQL transaction error when updating mod enabled state: '{}'".format(e))
                 success = False
         elif col == constants.COL_NAME:
             assert isinstance(value, str)
 
             try:
                 with self._con:
-                    self.logger.debug("Old Value for name: {}".format(
+                    self.LOGGER.debug("Old Value for name: {}".format(
                             self._con.execute("select name from mods where iorder = ?", (row,)).fetchall()))
 
                     self._con.execute("UPDATE mods SET name = ? WHERE iorder = ?", (value, row))
 
-                    self.logger.debug("New Value for name: {}".format(
+                    self.LOGGER.debug("New Value for name: {}".format(
                             self._con.execute("select name from mods where iorder = ?", (row,)).fetchall()))
             except sqlError as e:
-                self.logger.error("SQL transaction error when updating mod name: '{}'".format(e))
+                self.LOGGER.error("SQL transaction error when updating mod name: '{}'".format(e))
                 success = False
 
         else:
-            self.logger.error("Column {} is not a modifiable field.".format(col))
+            self.LOGGER.error("Column {} is not a modifiable field.".format(col))
             success = False
 
         return success
@@ -395,7 +395,7 @@ def testload():
     DB.shutdown()
 
 if __name__ == '__main__':
-    from manager import ModManager
+    from managers import ModManager
 
     # test()
     testload()

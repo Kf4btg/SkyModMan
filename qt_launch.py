@@ -10,7 +10,7 @@ import skylog
 
 from utils import withlogger
 import constants as const
-from collections import OrderedDict
+# from collections import OrderedDict
 
 @withlogger
 class ModManagerWindow(QMainWindow, Ui_MainWindow):
@@ -20,9 +20,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     changesCanceled = pyqtSignal()
     
 
-    def __init__(self, mmanager: 'manager.ModManager', *args, **kwargs):
+    def __init__(self, mmanager: 'managers.ModManager', *args, **kwargs):
         super(ModManagerWindow, self).__init__(*args, **kwargs)
-        self.logger.debug("Initializing ModManager Window")
+        self.LOGGER.debug("Initializing ModManager Window")
 
         self._manager = mmanager # grab a reference to the singleton Mod Manager
 
@@ -79,9 +79,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # set up file-tree view and model
         self.file_tree_model = QFileSystemModel()
-        self.file_tree_model.setRootPath(self._manager.Config.modsdirectory)
+        self.file_tree_model.setRootPath(self._manager.Config['dir_mods'])
         self.filetree_tree.setModel(self.file_tree_model)
-        self.filetree_tree.setRootIndex(self.file_tree_model.index(self._manager.Config.modsdirectory))
+        self.filetree_tree.setRootIndex(self.file_tree_model.index(self._manager.Config["dir_mods"]))
 
         # connect other signals
         self.manager_tabs.currentChanged.connect(self.updateUI)
@@ -96,7 +96,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.updateUI()
 
     def cellChanged(self, row, col):
-        self.logger.debug("Cell ({}, {}) changed".format(row, col))
+        self.LOGGER.debug("Cell ({}, {}) changed".format(row, col))
 
         # only enable on first change
         # if not self.mod_list_modified:
@@ -110,8 +110,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
 
 
-    def itemchanged(self, qlinedit):
-        self.logger.debug("Row {}: {}".format(self.mod_table.currentRow(), qlinedit.text()))
+    # def itemchanged(self, qlinedit):
+    #     self.LOGGER.debug("Row {}: {}".format(self.mod_table.currentRow(), qlinedit.text()))
 
     @property
     def Manager(self):
@@ -144,34 +144,34 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     #             b.setEnabled(enabled)
 
 
-    @property
-    def activeMods(self):
-        return sorted([self.mod_table.item(i, const.COL_NAME).text()
-                       for i in range(self.mod_table.rowCount())
-                       if self.mod_table.item(i, const.COL_ENABLED).checkState() == Qt.Checked])
+    # @property
+    # def activeMods(self):
+    #     return sorted([self.mod_table.item(i, const.COL_NAME).text()
+    #                    for i in range(self.mod_table.rowCount())
+    #                    if self.mod_table.item(i, const.COL_ENABLED).checkState() == Qt.Checked])
+    #
+    # @property
+    # def inactiveMods(self):
+    #     return sorted([self.mod_table.item(i, const.COL_NAME).text()
+    #                    for i in range(self.mod_table.rowCount())
+    #                    if self.mod_table.item(i, const.COL_ENABLED).checkState() == Qt.Unchecked])
 
-    @property
-    def inactiveMods(self):
-        return sorted([self.mod_table.item(i, const.COL_NAME).text()
-                       for i in range(self.mod_table.rowCount())
-                       if self.mod_table.item(i, const.COL_ENABLED).checkState() == Qt.Unchecked])
-
-    def modsByState(self):
-        """Get both at same time to avoid looping through list twice
-
-        """
-        mbs = {"Active": [], "Inactive": []}
-        for i in range(self.mod_table.rowCount()):
-            if self.mod_table.item(i, const.COL_ENABLED).checkState() == Qt.Checked:
-                mbs["Active"].append(self.mod_table.item(i, const.COL_NAME).text())
-            else:
-                mbs["Inactive"].append(self.mod_table.item(i, const.COL_NAME).text())
-
-        # sort them, for the fun of it
-        mbs["Active"] = sorted(mbs["Active"])
-        mbs["Inactive"] = sorted(mbs["Inactive"])
-
-        return mbs
+    # def modsByState(self):
+    #     """Get both at same time to avoid looping through list twice
+    #
+    #     """
+    #     mbs = {"Active": [], "Inactive": []}
+    #     for i in range(self.mod_table.rowCount()):
+    #         if self.mod_table.item(i, const.COL_ENABLED).checkState() == Qt.Checked:
+    #             mbs["Active"].append(self.mod_table.item(i, const.COL_NAME).text())
+    #         else:
+    #             mbs["Inactive"].append(self.mod_table.item(i, const.COL_NAME).text())
+    #
+    #     # sort them, for the fun of it
+    #     mbs["Active"] = sorted(mbs["Active"])
+    #     mbs["Inactive"] = sorted(mbs["Inactive"])
+    #
+    #     return mbs
 
 
     @pyqtSlot()
@@ -252,7 +252,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         for m in self.Manager.DB.conn.execute("SELECT name, modid, version, enabled FROM mods"):
             self.mod_table.insertRow(r)
             _name, _id, _ver, _enabled = m
-            self.logger.debug("{} {} {} {}".format(_name, _id, _ver, _enabled))
+            # self.LOGGER.debug("{} {} {} {}".format(_name, _id, _ver, _enabled))
 
             items = (QTableWidgetItem(), # first column is empty, is for the checkbox
                 QTableWidgetItem(str(_id)),
@@ -325,12 +325,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     # def enableSaveCancelButtons(self):
     #     if not self.save_button.isEnabled():
-    #         self.logger.debug("Save/Cancel buttons enabled")
+    #         self.LOGGER.debug("Save/Cancel buttons enabled")
     #         self.save_button.setEnabled(True)
     #         self.cancel_button.setEnabled(True)
     #
     # def disableSaveCancelButtons(self):
-    #     self.logger.debug("Save/Cancel buttons disabled")
+    #     self.LOGGER.debug("Save/Cancel buttons disabled")
     #     self.save_button.setEnabled(False)
     #     self.cancel_button.setEnabled(False)
 
@@ -356,19 +356,19 @@ def quit_app():
     skylog.stop_listener()
     QApplication.quit()
 
-def load_mods(mods_folder: str) -> List[Tuple[str, str, str]]:
-    import configparser
-    import os
-    config = configparser.ConfigParser()
-
-
-    mods_list = []
-    for moddir in os.listdir(mods_folder):
-        inipath = "{}/{}/{}".format(mods_folder, moddir, "meta.ini")
-        config.read(inipath)
-        mods_list.append((moddir, config['General']['modid'], config['General']['version']))
-
-    return mods_list
+# def load_mods(mods_folder: str) -> List[Tuple[str, str, str]]:
+#     import configparser
+#     import os
+#     config = configparser.ConfigParser()
+#
+#
+#     mods_list = []
+#     for moddir in os.listdir(mods_folder):
+#         inipath = "{}/{}/{}".format(mods_folder, moddir, "meta.ini")
+#         config.read(inipath)
+#         mods_list.append((moddir, config['General']['modid'], config['General']['version']))
+#
+#     return mods_list
 
 
 
@@ -376,15 +376,11 @@ if __name__ == '__main__':
 
 
 
-    # Config = config.ConfigManager()
-    # _logger.info("got config")
-    # _logger.debug(Config.modsdirectory)
-    import manager
+    import managers
 
     app = QApplication(sys.argv)
 
-    # mlist = load_mods(sys.argv[1])
-    MM = manager.ModManager()
+    MM = managers.ModManager()
 
     w = ModManagerWindow(MM)
     w.resize(QGuiApplication.primaryScreen().availableSize()*3/5)

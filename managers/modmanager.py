@@ -4,10 +4,7 @@ import utils
 # import os
 # import sys
 
-import config
-import dbmanager
-import profile
-
+from managers import database, profiles, config
 
 
 @utils.withlogger
@@ -30,15 +27,13 @@ class ModManager:
 
 
     def __init__(self):
-
         self._config_manager = config.ConfigManager(self)
 
-
-        # must be created aftter config manager
-        self._profile_manager = profile.ProfileManager(self, self._config_manager.profiles_dir)
+        # must be created after config manager
+        self._profile_manager = profiles.ProfileManager(self, self._config_manager.paths.dir_profiles)
         self._profile_manager.setActiveProfile(self._config_manager.lastprofile)
 
-        self._db_manager = dbmanager.DBManager(self)
+        self._db_manager = database.DBManager(self)
 
         # try to read modinfo file
         if not self._db_manager.loadModDB(self.active_profile.modinfo):
@@ -47,31 +42,21 @@ class ModManager:
             # and [re]create the cache file
             self.saveModList()
 
-        # self._loaded_profile = self._config_manager.profile
-        # self.installed_mods = self.modListFromDirectory(self._config_manager.modsdirectory)
-
-        # self._mod_states = self._config_manager.loadModsStatesList()
-
-    # @property
-    # def mod_states(self):
-    #     return self._mod_states
-
-
 
     @property
-    def Config(self):
+    def Config(self) -> config.ConfigManager:
         return self._config_manager
 
     @property
-    def DB(self):
+    def DB(self) -> database.DBManager:
         return self._db_manager
 
     @property
-    def Profiler(self):
+    def Profiler(self) -> profiles.ProfileManager:
         return self._profile_manager
 
     @property
-    def active_profile(self) -> profile.Profile:
+    def active_profile(self) -> profiles.Profile:
         return self.Profiler.active_profile
 
 
@@ -97,7 +82,7 @@ class ModManager:
 
     def enabledMods(self):
         yield from self.DB.enabledMods(True)
-        # self.logger.debug(str(em))
+        # self.LOGGER.debug(str(em))
         # # return self.DB.enabledMods(True)
         # return em
 
@@ -105,7 +90,7 @@ class ModManager:
         yield from self.DB.disabledMods(True)
 
     def saveModList(self):
-        self._db_manager.saveModDB(self.active_profile.modinfo)
+        self.DB.saveModDB(self.active_profile.modinfo)
 
 
     # def modListFromDirectory(self, mod_install_dir: str) -> List[Tuple[str, str, str]] :
@@ -115,7 +100,7 @@ class ModManager:
     #     :return: A list of tuples in the form (mod-name, mod-id, mod-version)
     #     """
     #
-    #     self.logger.info("Reading mods from mod directory")
+    #     self.LOGGER.info("Reading mods from mod directory")
     #
     #     configP = configparser.ConfigParser()
     #
@@ -127,13 +112,13 @@ class ModManager:
     #
     #     return mods_list
 
-    def saveModStates(self, mods_by_state):
-        """
-        call the save-mod-states function of the config
-        manager and update this manager's modstates property
-        :param mods_by_state:
-        :return:
-        """
-        self._mod_states = mods_by_state
-        self._config_manager.saveModsList(mods_by_state)
+    # def saveModStates(self, mods_by_state):
+    #     """
+    #     call the save-mod-states function of the config
+    #     manager and update this managers's modstates property
+    #     :param mods_by_state:
+    #     :return:
+    #     """
+    #     self._mod_states = mods_by_state
+    #     self._config_manager.saveModsList(mods_by_state)
 

@@ -6,7 +6,7 @@ import os
 import utils
 
 import skylog
-from manager import ModManager
+from managers import ModManager
 
 
 

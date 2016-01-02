@@ -1,36 +1,62 @@
 import os
 from pathlib import Path
-from typing import List, Union, Iterable
+from typing import List, Union, Iterable, Tuple
 
 from utils import withlogger
-# from constants import ProfileFiles as _files
-
 from enum import Enum
-class ProfileFiles(str, Enum):
-    MODINFO = "modinfo.json"
-    LOADORDER = "loadorder.json"
-    INIEDITS = "iniedits.json"
-    OVERWRITE = "overwrites.json"
-
 
 
 @withlogger
 class Profile:
+    """
+    Represents a Manager profile with customized mod combinations, ini edits, loadorder, etc.
+    """
 
-    def __init__(self, name: str = "default", *files: Iterable[Path]):
+    class Files(str, Enum):
+        MODINFO   = "modinfo.json"
+        LOADORDER = "loadorder.json"
+        INIEDITS  = "iniedits.json"
+        OVERWRITE = "overwrites.json"
+
+    def __init__(self, profiles_dir: Path, name: str = "default"):
         self._name = name
 
-        for f in files:
-            if not hasattr(self, str(f.stem)):
-                setattr(self, f.stem, f)
+        self._folder = profiles_dir / name
+
+        self.localfiles = {}
+        for f in [self._folder / Profile.Files(p).value for p in Profile.Files]:
+            # populate a dict with references to the files local to this profile,
+            # keyed by the filenames sans extension (e.g. 'modinfo' for 'modinfo.json')
+
+            self.localfiles[f.stem] = f
+
             if not f.exists():
+                # if the file doesn't exist (perhaps because this is a new profile)
+                # create blank placeholders for them
                 f.touch()
 
-        self.logger.debug(str(self.__dict__))
+        self.LOGGER.debug(self.localfiles)
 
     @property
-    def name(self):
+    def name(self) -> Path:
         return self._name
+
+    @property
+    def modinfo(self) -> Path:
+        return self.localfiles['modinfo']
+
+    @property
+    def loadorder(self) -> Path:
+        return self.localfiles['loadorder']
+
+    @property
+    def iniedits(self) -> Path:
+        return self.localfiles['iniedits']
+
+    @property
+    def overwrites(self) -> Path:
+        return self.localfiles['overwrites']
+
 
 
 
@@ -38,7 +64,7 @@ class Profile:
 class ProfileManager:
 
 
-    def __init__(self, manager, directory):
+    def __init__(self, manager, directory: Path):
         """
 
         :param manager: reference to ModManager
@@ -75,12 +101,11 @@ class ProfileManager:
 
 
     def loadProfile(self, profilename):
-        pdir = self._profiles_dir / profilename # type: Path
+        # pdir = self._profiles_dir / profilename # type: Path
 
         self.logger.info("Loading profile '{}'.".format(profilename))
-        pfile = Profile( profilename, *[ pdir / ProfileFiles(p).value for p in ProfileFiles] )
+        return Profile( self._profiles_dir, profilename )
 
-        return pfile
 
     def setActiveProfile(self, profilename):
         if self.active_profile.name != profilename:
@@ -105,14 +130,14 @@ class ProfileManager:
 
 
 
-    def getConfigFile(self, config_file: Union[ProfileFiles,str], profile_name: str="default") -> Path:
-        """
-        return a Path object for the requested file from the specified profile
-        :param profile_name:
-        :param config_file:
-        :return:
-        """
-        return self._profiles_dir / profile_name / config_file
+    # def getConfigFile(self, config_file: Union[ProfileFiles,str], profile_name: str="default") -> Path:
+    #     """
+    #     return a Path object for the requested file from the specified profile
+    #     :param profile_name:
+    #     :param config_file:
+    #     :return:
+    #     """
+    #     return self._profiles_dir / profile_name / config_file
 
 
     def loadProfiles(self) -> List[str]:
