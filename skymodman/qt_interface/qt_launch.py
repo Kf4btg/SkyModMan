@@ -2,10 +2,13 @@ import sys
 
 from PyQt5.QtCore import Qt, QStandardPaths, QDir, pyqtSignal, pyqtSlot
 from PyQt5.QtGui import QGuiApplication
-from PyQt5.QtWidgets import QApplication, QMainWindow, QTableWidgetItem, QFileDialog, QFileSystemModel, QDialogButtonBox
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTableWidgetItem, \
+    QFileDialog, QFileSystemModel, QDialogButtonBox, QDialog
 
 import skymodman.constants as const
 from skymodman.qt_interface.qt_manager_ui import Ui_MainWindow
+from skymodman.qt_interface.widgets.new_profile_dialog_ui import Ui_NewProfileDialog
+from skymodman.qt_interface.widgets import custom_widgets
 from skymodman.utils import withlogger
 # from collections import OrderedDict
 
@@ -33,6 +36,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # so have to specify it by standard button type
         self.save_cancel_btnbox.button(QDialogButtonBox.Apply).clicked.connect(self.saveModsList)
         self.save_cancel_btnbox.button(QDialogButtonBox.Reset).clicked.connect(self.resetTable)
+
+        # connect up profile box
+        self.setupProfileSelector()
 
         # connect the actions
         self.action_Quit.triggered.connect(quit_app)
@@ -273,6 +279,32 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # self.disableSaveCancelButtons(
         self.mod_table.blockSignals(False)
         self.updateUI()
+
+
+    def setupProfileSelector(self):
+        ps = self.profile_selector
+        ps.clear() # clear placeholder data
+
+        for name, profile in self.Manager.getProfiles(names_only=False):
+            ps.addItem(name, profile)
+
+        self.new_profile_button.clicked.connect(self.onNewProfileClick)
+
+    def onNewProfileClick(self):
+        popup = custom_widgets.NewProfileDialog()
+        popup.comboBox.setModel(self.profile_selector.model())
+        # popup.dataReady.connect(self.newProfileData)
+
+        # display popup, wait for close and check signal
+        if popup.exec_() == popup.Accepted:
+            # add new profile if they clicked ok
+            self.Manager.newUserProfile(popup.final_name, popup.copy_from)
+            #FIXME: have this update the profile dropdown list with the new profile
+
+
+
+
+
 
     # SLOTS
 

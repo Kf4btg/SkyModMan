@@ -1,5 +1,7 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 
+from . import new_profile_dialog_ui
+
 
 class PluginPage(QtWidgets.QWidget):
 
@@ -117,5 +119,48 @@ class PluginInfoView(QtWidgets.QGroupBox):
     @property
     def image(self) -> QtWidgets.QLabel:
         return self.plugin_image_view
+
+
+
+class NewProfileDialog(QtWidgets.QDialog, new_profile_dialog_ui.Ui_NewProfileDialog):
+
+
+    def __init__(self, *args, **kwargs):
+        super(NewProfileDialog, self).__init__(*args, **kwargs)
+
+        self.setupUi(self)
+
+        self.okbutton = self.buttonBox.button(QtWidgets.QDialogButtonBox.Ok)
+        self.okbutton.setDisabled(True)
+
+        self.final_name = None
+        self.copy_from = None
+
+
+        # self.lineEdit.textChanged.connect(self.onTextChange)
+        # self.accepted.connect(self.submitData)
+
+
+    def on_lineEdit_textChanged(self, text):
+        if text and self.comboBox.findText(text, QtCore.Qt.MatchFixedString) == -1:
+            self.okbutton.setEnabled(True)
+        else:
+            self.okbutton.setDisabled(True)
+
+    def accept(self):
+        # override
+
+        # name input by user
+        self.final_name = self.lineEdit.text()
+
+        # profile to copy data from, if selected
+        if self.checkBox.isChecked():
+            self.copy_from = self.comboBox.currentData()
+
+        # call original accept()
+        super(NewProfileDialog, self).accept()
+
+
+
 
 

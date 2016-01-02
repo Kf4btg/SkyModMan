@@ -54,6 +54,16 @@ class ModManager:
     def active_profile(self) -> profiles.Profile:
         return self.Profiler.active_profile
 
+    def getProfiles(self, names_only = True):
+        if names_only:
+            yield from (n for n in self.Profiler.profile_names)
+        else:
+            yield from self.Profiler.profilesByName()
+
+    def newUserProfile(self, name: str, copy_from: profiles.Profile = None):
+        self.Profiler.newProfile(name, copy_from)
+
+
 
     def allmods(self):
         """
