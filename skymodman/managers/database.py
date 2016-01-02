@@ -224,7 +224,7 @@ class DBManager:
             json.dump(modinfo, f, indent=1)
 
 
-    def getModDataFromModDirectory(self, mods_dir):
+    def getModDataFromModDirectory(self, mods_dir: Path):
         """
         scan the actual mods-directory and populate the database from there instead of a cached json file.
         Will need to do this on first run and periodically to make sure cache is in sync.
@@ -238,17 +238,22 @@ class DBManager:
 
 
         mods_list = []
-        for moddir in os.listdir(mods_dir):
-            inipath = "{}/{}/{}".format(mods_dir, moddir, "meta.ini")
-            if os.path.exists(inipath):
-                configP.read(inipath)
+        # for moddir in os.listdir(mods_dir):
+        for moddir in mods_dir.iterdir():
+            if not moddir.is_dir(): continue
+            # inipath = "{}/{}/{}".format(mods_dir, moddir, "meta.ini")
+            inipath = moddir / "meta.ini"
+            dirname = moddir.name
+            # if os.path.exists(inipath):
+            if inipath.exists():
+                configP.read(str(inipath))
                 # insert tuples in form that db will expect;
                 # set name = directory, default value of 1 for enabled
-                mods_list.append((configP['General']['modid'], configP['General']['version'], moddir, moddir, 1))
+                mods_list.append((configP['General']['modid'], configP['General']['version'], dirname, dirname, 1))
             else:
                 # set name = directory, default value of 1 for enabled,
                 # 0 for modid, and empty str for version
-                mods_list.append((0, "", moddir, moddir, 1))
+                mods_list.append((0, "", dirname, dirname, 1))
 
         with self._con:
             self._con.executemany("INSERT INTO mods(modid, version, directory, name, enabled) VALUES (?, ?, ?, ?, ?)",

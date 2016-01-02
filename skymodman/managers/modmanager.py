@@ -33,7 +33,7 @@ class ModManager:
         # try to read modinfo file
         if not self._db_manager.loadModDB(self.active_profile.modinfo):
             # if it fails, re-read mod data from disk
-            self._db_manager.getModDataFromModDirectory(self._config_manager.modsdirectory)
+            self._db_manager.getModDataFromModDirectory(self._config_manager.paths.dir_mods)
             # and [re]create the cache file
             self.saveModList()
 

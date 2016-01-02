@@ -179,6 +179,7 @@ class ProfileManager:
         Makes a new folder in the configured
         profiles directory and creates empty
         placeholder config-files with it
+        :param copy_from: if not None, copy settings from the specified pre-existing profile to the newly created one
         :param profile_name: name of new profile. Must not already exist or a nameError will be raised
         :return: the pathlib.Path object for the newly created directory
         """
