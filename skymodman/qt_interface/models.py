@@ -26,12 +26,13 @@ class ProfileListModel(QtCore.QAbstractListModel):
             return self.profiles[index.row()].name.capitalize()
 
 
-    def insertRows(self, row=0, parent_index = None, data=None, *args, **kwargs):
+    def insertRows(self, row=0, count=1, parent_index = None, data=None, *args, **kwargs):
         """Always append"""
         # beginInsertRows(self, QModelIndex, first, last)
         # self.beginInsertRows(Qt.QModelIndex(), position, position+rows-1)
-        self.beginInsertRows(Qt.QModelIndex(), 0, 0)
+        self.beginInsertRows(Qt.QModelIndex(), self.rowCount(), self.rowCount())
         if data:
+            # self.LOGGER.debug("inserting item")
             self.profiles.append(data)
         self.endInsertRows()
         return True

@@ -196,6 +196,15 @@ class ConfigManager:
         with self.paths.file_main.open('w') as f:
             config.write(f)
 
+    def listModFolders(self) -> [str]:
+        """
+        Just get a list of all mods installed in the mod directory
+        (i.e. a list of folder names)
+        :return:
+        """
+
+        return os.listdir(str(self.paths.dir_mods))
+
 
 if __name__ == '__main__':
     # getConfig()

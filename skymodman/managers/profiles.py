@@ -18,6 +18,10 @@ class Profile:
         INIEDITS  = "iniedits.json"
         OVERWRITE = "overwrites.json"
 
+    class SyncError(Enum):
+        NOTFOUND = 0
+        NOTLISTED = 1
+
 
 
     def __init__(self, profiles_dir: Path, name: str = "default", copy_profile: 'Profile' = None):
@@ -52,6 +56,11 @@ class Profile:
                 # create blank placeholders for them
                 f.touch()
 
+        # create a container to hold any issues found during
+        # validation of this profile's mod list
+        self.syncErrors = {Profile.SyncError.NOTFOUND: [],
+                           Profile.SyncError.NOTLISTED: []}
+
         # self.LOGGER.debug(self.localfiles)
 
     @property
@@ -77,6 +86,16 @@ class Profile:
     @property
     def overwrites(self) -> Path:
         return self.localfiles['overwrites']
+
+    def recordErrors(self, error_type: SyncError, *errors):
+        """
+        Save any disk-sync errors discovered with the profile
+        to be retrieved and handled at the appropriate time.
+        Note that this method overwrites the list of errors
+        for the given type; it does not append to it.
+        :param error_type: either "not_found" or "not_listed"
+        """
+        self.syncErrors[error_type] = [e for e in errors]
 
 
 
@@ -118,7 +137,7 @@ class ProfileManager:
 
         for p in self._profiles_dir.iterdir():
             if p.is_dir():
-                self.LOGGER.debug("Found profile {}: appending to profiles list.".format(p.name))
+                # self.LOGGER.debug("Found profile {}: appending to profiles list.".format(p.name))
                 self._available_profiles.append(p.name)
 
         if len(self._available_profiles) == 0:
@@ -135,7 +154,7 @@ class ProfileManager:
 
 
     def loadProfile(self, profilename, copy_from:Profile = None):
-        self.LOGGER.info("Loading profile '{}'.".format(profilename))
+        # self.LOGGER.info("Loading profile '{}'.".format(profilename))
 
         if profilename in self.__cache:
             self.LOGGER.info("Profile {} found in cache; returning cached object.".format(profilename))

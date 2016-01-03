@@ -4,7 +4,7 @@ import os
 import sqlite3
 from _sqlite3 import Error as sqlError
 from pathlib import Path
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Iterable
 
 from skymodman import constants
 from skymodman.utils import withlogger
@@ -73,8 +73,98 @@ class DBManager:
         Return list of all mods from the mod db
         :return:
         """
-        return self.getModInfo()
+        return self.getModInfo(True).fetchall()
 
+
+    def loadModDB(self, json_source):
+        """
+        read the saved mod information from a json file and
+        populate the in-memory database
+        :param json_source: path to modinfo.json file (either pathlib.Path or string)
+        """
+
+        if not isinstance(json_source, Path):
+            json_source = Path(json_source)
+
+        success = True
+        with json_source.open('r') as f:
+            # read from json file and convert mappings
+            # to ordered tuples for sending to sqlite
+            try:
+                mods = json.load(f, object_pairs_hook=DBManager.toRowTuple)
+
+                with self._con:
+                    # insert the list of row-tuples into the in-memory db
+                    self._con.executemany(
+                        "INSERT INTO mods(modid, version, directory, name, enabled) VALUES (?, ?, ?, ?, ?)", mods)
+
+            except json.decoder.JSONDecodeError:
+                self.logger.error("No mod information present in {}, or file is malformed.")
+                success = False
+        return success
+
+    def execute_(self, query:str, *args, params: Iterable=None):
+        """
+        Execute an arbitrary SQL-query using this object's
+        database connection as a context manager
+        :param query: a valid SQL string
+        :param args: any non-keyword arguments after the query-string will be used in a tuple as the parameter-argument to a parameterized sql-query
+        :param params: If, instead of args, the `params` keyword is provided with an Iterable object, that will be used for the query parameters. Ignored if any args are present.
+        :return:
+        """
+        with self._con:
+            if args:
+                yield from self._con.execute(query, args)
+            elif params:
+                yield from self._con.execute(query, params)
+            else:
+                yield from self._con.execute(query)
+
+    def getOne(self, query, *args, params: Iterable=None):
+        """
+        Like execute_, but just returns the first result
+        :param query:
+        :param args:
+        :param params:
+        :return:
+        """
+        with self._con:
+            if args:
+                cur=self._con.execute(query, args)
+            elif params:
+                cur=self._con.execute(query, params)
+            else:
+                cur=self._con.execute(query)
+
+            return cur.fetchone()
+
+
+    def saveModDB(self, json_target):
+        """
+        Write the data from the in-memory database to a
+        json file on disk. The file will be overwritten, or
+        created if it does not exist
+        :param json_target: path to modinfo.json file
+        :return:
+        """
+
+        if not isinstance(json_target, Path):
+            json_target = Path(json_target)
+
+        modinfo = []
+        for row in self._con.execute("SELECT * FROM mods"):
+            order, modid, ver, mdir, name, enabled = row
+
+            modinfo.append({
+                "modid": modid,
+                "version": ver,
+                "directory": mdir,
+                "name": name,
+                "enabled": enabled
+            })
+
+        with json_target.open('w') as f:
+            json.dump(modinfo, f, indent=1)
 
     # db modification convenience method
     def updateField(self, row: int, col: int, value) -> bool:
@@ -125,7 +215,6 @@ class DBManager:
         return success
 
 
-
     # db-query convenience methods
     def enabledMods(self, name_only = False):
         """
@@ -149,8 +238,8 @@ class DBManager:
             return [ t[0] for t in self._con.execute("select name from mods where enabled = 0")]
         return self._con.execute("select * from mods where enabled = 0").fetchall()
 
-    def getModInfo(self, raw_cursor = False) -> Union[List[DBRow], sqlite3.Cursor]:
-        """
+    def getModInfo(self, raw_cursor = False) :
+        """-> Union[List[DBRow], sqlite3.Cursor]
         Returns all information about installed mods as a list
         of tuples.
         :param raw_cursor: If true, return the db cursor object instead of a list.
@@ -159,7 +248,7 @@ class DBManager:
         cur = self._con.execute("select * from mods")
         if raw_cursor:
             return cur
-        return cur.fetchall()
+        yield from cur
 
     def shutdown(self):
         """
@@ -167,67 +256,11 @@ class DBManager:
         """
         self._con.close()
 
-
-    def loadModDB(self, json_source):
-        """
-        read the saved mod information from a json file and
-        populate the in-memory database
-        :param json_source: path to modinfo.json file (either pathlib.Path or string)
-        """
-
-        if not isinstance(json_source, Path):
-            json_source = Path(json_source)
-
-        success = True
-        with json_source.open('r') as f:
-            # read from json file and convert mappings
-            # to ordered tuples for sending to sqlite
-            try:
-                mods = json.load(f, object_pairs_hook=DBManager.toRowTuple)
-
-                with self._con:
-                    # insert the list of row-tuples into the in-memory db
-                    self._con.executemany("INSERT INTO mods(modid, version, directory, name, enabled) VALUES (?, ?, ?, ?, ?)", mods)
-
-            except json.decoder.JSONDecodeError:
-                self.logger.error("No mod information present in {}, or file is malformed.")
-                success = False
-        return success
-
-
-    def saveModDB(self, json_target):
-        """
-        Write the data from the in-memory database to a
-        json file on disk. The file will be overwritten, or
-        created if it does not exist
-        :param json_target: path to modinfo.json file
-        :return:
-        """
-
-        if not isinstance(json_target, Path):
-            json_target = Path(json_target)
-
-
-        modinfo = []
-        for row in self._con.execute("SELECT * FROM mods"):
-            order, modid, ver, mdir, name, enabled = row
-
-            modinfo.append({
-                "modid": modid,
-                "version": ver,
-                "directory": mdir,
-                "name": name,
-                "enabled": enabled
-            })
-
-        with json_target.open('w') as f:
-            json.dump(modinfo, f, indent=1)
-
-
     def getModDataFromModDirectory(self, mods_dir: Path):
         """
         scan the actual mods-directory and populate the database from there instead of a cached json file.
         Will need to do this on first run and periodically to make sure cache is in sync.
+        :param mods_dir:
         :return:
         """
         # TODO: Perhaps this should be run on every startup? At least to make sure it matches the stored data.
@@ -238,13 +271,10 @@ class DBManager:
 
 
         mods_list = []
-        # for moddir in os.listdir(mods_dir):
         for moddir in mods_dir.iterdir():
             if not moddir.is_dir(): continue
-            # inipath = "{}/{}/{}".format(mods_dir, moddir, "meta.ini")
             inipath = moddir / "meta.ini"
             dirname = moddir.name
-            # if os.path.exists(inipath):
             if inipath.exists():
                 configP.read(str(inipath))
                 # insert tuples in form that db will expect;
@@ -258,6 +288,50 @@ class DBManager:
         with self._con:
             self._con.executemany("INSERT INTO mods(modid, version, directory, name, enabled) VALUES (?, ?, ?, ?, ?)",
                                   mods_list)
+
+    def validateModsList(self, installed_mods: List[str]):
+        """
+        Compare the database's list of mods against a list of the folders in the installed-mods directory. Handle discrepancies accordingly.
+        :param installed_mods:
+        :return:
+        """
+        # I wish there were a...lighter way to do this, but I
+        # believe only directly comparing dirnames will allow
+        # us to provide useful feedback to the user about
+        # problems with the mod installation
+
+        dblist = [t[0] for t in self._con.execute("Select directory from mods")]
+
+        not_found = []
+        not_listed = []
+
+        if len(dblist) > len(installed_mods):
+            for modname in installed_mods:
+                try:
+                    dblist.remove(modname)
+                except ValueError:
+                    # if it's not listed in the db, note that
+                    not_listed.append(modname)
+            # anything left over is missing from the disk
+            not_found = dblist
+
+        else: # len(dblist) <= len(installed_mods):
+            for modname in dblist:
+                try:
+                    installed_mods.remove(modname)
+                except ValueError:
+                    not_found.append(modname)
+            # if everything matched, this should be empty
+            not_listed = installed_mods
+
+        if not_listed or not_found:
+            from skymodman.exceptions import FilesystemDesyncError
+            raise FilesystemDesyncError(not_found, not_listed)
+
+        # maybe we should return a False value along with the lists
+        # instead of raising an error...hmmm
+        return True
+
 
 
     @staticmethod
@@ -320,24 +394,6 @@ def test():
     with open("res/modinfo.json",'w') as f:
         json.dump(modinfo, f, indent=1)
 
-
-
-
-# __fields = ["id", "version", "directory", "name", "enabled"]
-
-# def toRowTuple(pairs):
-#     """
-#     Used as object_pair_hook for json.load(). Takes the mod
-#     information loaded from the json file and converts it
-#     to a tuple containing just the field values in the
-#     correct order for feeding to the sqlite database.
-#     :param pairs:
-#     :return:
-#     """
-#
-#     d = dict(pairs)
-#
-#     return tuple(d[__fields[i]] for i in range(len(__fields)))
 
 def testload():
 
