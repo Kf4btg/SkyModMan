@@ -12,6 +12,21 @@ class ProfileListModel(QtCore.QAbstractListModel):
 
         self.profiles = [] # type: List[Profile]
 
+    def addProfile(self, new_profile):
+        """
+        implement our own API for adding stuff because the QCombobox is STUPID
+        :param new_profile:
+        :return:
+        """
+        current_rows = self.rowCount()
+        self.beginInsertRows(Qt.QModelIndex(), current_rows, current_rows)
+        self.profiles.append(new_profile)
+        self.endInsertRows()
+
+        new_index = self.createIndex(current_rows, 0)
+        self.dataChanged.emit(new_index, new_index)
+
+
     def rowCount(self, index=Qt.QModelIndex(), *args, **kwargs):
         return len(self.profiles)
 
@@ -26,13 +41,13 @@ class ProfileListModel(QtCore.QAbstractListModel):
             return self.profiles[index.row()].name.capitalize()
 
 
-    def insertRows(self, row=0, count=1, parent_index = None, data=None, *args, **kwargs):
+    def insertRows(self, row=0, count=1, parent_index = Qt.QModelIndex(), data=None, *args, **kwargs):
         """Always append"""
         # beginInsertRows(self, QModelIndex, first, last)
-        # self.beginInsertRows(Qt.QModelIndex(), position, position+rows-1)
-        self.beginInsertRows(Qt.QModelIndex(), self.rowCount(), self.rowCount())
+        # self.LOGGER.debug("begin insert rows")
+        self.beginInsertRows(parent_index, self.rowCount(), self.rowCount())
         if data:
-            # self.LOGGER.debug("inserting item")
+            # self.LOGGER.debug("inserting data {}".format(data))
             self.profiles.append(data)
         self.endInsertRows()
         return True
@@ -44,9 +59,26 @@ class ProfileListModel(QtCore.QAbstractListModel):
         except IndexError as e:
             # TODO: handle w/ messagebox
             self.LOGGER.error(str(e))
+            self.endRemoveRows()
             return False
-
+        self.endInsertRows()
         return True
+
+    # def setData(self, index: Qt.QModelIndex, data, role=None):
+    #     """
+    #     This is called by the combobox's "insertItem" method...though
+    #     I'll be damned if I could find a SINGLE place in the documentation
+    #     where that is mentioned or hinted at....
+    #     :param index:
+    #     :param data:
+    #     :param role:
+    #     """
+    #     if role==qt.UserRole:
+    #         self.profiles[index.row()] = data
+    #         self.LOGGER.debug("    self.profiles[{}] = {}".format(index.row(), data))
+    #         self.dataChanged.emit(index, index, [role])
+    #         return True
+    #     return False
 
 if __name__ == '__main__':
     from skymodman.managers.profiles import Profile

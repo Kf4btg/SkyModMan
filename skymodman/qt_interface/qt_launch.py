@@ -10,7 +10,7 @@ from skymodman.qt_interface.qt_manager_ui import Ui_MainWindow
 # from skymodman.qt_interface.widgets.new_profile_dialog_ui import Ui_NewProfileDialog
 from skymodman.qt_interface.widgets import custom_widgets
 from skymodman.qt_interface.models import ProfileListModel
-from skymodman.utils import withlogger
+from skymodman.utils import withlogger, Notifier
 # from collections import OrderedDict
 from skymodman import skylog
 
@@ -26,15 +26,26 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def __init__(self, manager: 'managers.ModManager', *args, **kwargs):
         super(ModManagerWindow, self).__init__(*args, **kwargs)
-        self.LOGGER.debug("Initializing ModManager Window")
+        self.LOGGER.info("Initializing ModManager Window")
 
-        self._manager = manager # grab a reference to the singleton Mod Manager
-        self.windowInitialized.connect(self.setupTable)
-        self.windowInitialized.connect(self.setupProfileSelector)
-        self.windowInitialized.connect(self.setupFileTree)
+        # reference to the Mod Manager
+        self._manager = manager
 
+        self.setupSlots = [self.setupTable,
+                      self.setupFileTree,
+                      self.setupProfileSelector]
 
-        # setup the ui
+        # connect the windowinit signal to the setup slots
+        for s in self.setupSlots:
+            self.windowInitialized.connect(s)
+
+        ## Notifier object for the above 'setup...' slots to
+        ## call when they've completed their setup process.
+        ## After the final call, the UI will updated and
+        ## presented to the user
+        self.SetupDone = Notifier(len(self.setupSlots), self.updateUI)
+
+        # setup the base ui
         self.setupUi(self)
 
         # connect the buttons
@@ -79,37 +90,14 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # update UI
         # self.updateUI()
-        self.__sd = None
+
+
         self.windowInitialized.emit()
 
 
     @property
     def Manager(self):
         return self._manager
-
-    def setupDone(self):
-        """Basically just waits to be called three times
-        (one for each of the three setup-calls connected
-        to the windowInitialized signal) then calls updateUI
-        """
-        if not self.__sd:
-            self.__sd = self._setup_done()
-        try:
-            next(self.__sd)
-        except StopIteration:
-            self.updateUI()
-
-    @staticmethod
-    def _setup_done():
-        #first call
-        # print("first call")
-        yield
-        # print("second call")
-        #secondcall
-        yield
-        # print("third call")
-        # third call
-
 
     def updateUI(self, *args):
         if self.loaded_fomod is None:
@@ -126,9 +114,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             )
 
         self.next_button.setVisible(curtab == const.TAB_INSTALLER)
-
-
-
 
     def loadFomod(self):
         # mimes = [m for m in QImageReader.supportedMimeTypes()]
@@ -167,7 +152,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.filetree_tree.setRootIndex(file_tree_model.index(self._manager.Config["dir_mods"]))
 
         # let setup know we're done here
-        self.setupDone()
+        self.SetupDone("setupTree")
 
     # ===================================
     # TABLE OF INSTALLED MODS FUNCTIONS
@@ -200,7 +185,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.changesCanceled.connect(self.resetTable)
 
         # let setup know we're done here
-        self.setupDone()
+        self.SetupDone("setupTable")
 
 
 
@@ -355,8 +340,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             # self.LOGGER.debug("{}: {}".format(name, profile))
             # ps.insertItem(0, name, profile)
             model.insertRows(data=profile)
-            if name==self.Manager.active_profile:
-                start_idx=model.rowCount()
+            if name==self.Manager.active_profile.name:
+                self.logger.debug("Setting {} as chosen profile".format(name))
+                start_idx=model.rowCount()-1
 
         self.profile_selector.setModel(model)
         self.profile_selector.setCurrentIndex(start_idx)
@@ -364,7 +350,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.new_profile_button.clicked.connect(self.onNewProfileClick)
 
         # let setup know we're done here
-        self.setupDone()
+        self.SetupDone("ProfileSelector")
 
 
 
@@ -377,18 +363,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         if popup.exec_() == popup.Accepted:
             # add new profile if they clicked ok
             new_profile = self.Manager.newUserProfile(popup.final_name, popup.copy_from)
-            self.LOGGER.debug("at insert item with: {}".format(new_profile))
 
-            for i in range(self.profile_selector.count()):
-                print(self.profile_selector.itemData(i))
+            self.profile_selector.model().addProfile(new_profile)
 
-            self.profile_selector.insertItem(0, new_profile.name, new_profile)
-            print("-----------------------------------")
-
-            for i in range(self.profile_selector.count()):
-                print(self.profile_selector.itemData(i))
-
-            #FIXME: have this update the profile dropdown list with the new profile
+            #todo: set new profile as active
 
     @pyqtSlot('int')
     def onProfileChange(self, index):
