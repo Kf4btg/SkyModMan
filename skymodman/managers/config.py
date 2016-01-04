@@ -1,7 +1,7 @@
 import configparser
 import os
 from pathlib import Path
-from skymodman import skylog, utils
+from skymodman import skylog, utils, exceptions
 
 # from typing import Tuple
 
@@ -10,9 +10,9 @@ __myname = "skymodman"
 # Messenger Idiom shamelessly pilfered from:
 # http://python-3-patterns-idioms-test.readthedocs.org/en/latest/Messenger.html
 # (aka "Do I need to use addict anymore?" idiom)
-class Messenger:
-    def __init__(self, **kwargs):
-        self.__dict__ = kwargs
+# class Messenger:
+#     def __init__(self, **kwargs):
+#         self.__dict__ = kwargs
 
 class ConfigPaths:
     file_main    = None # type: Path
@@ -36,8 +36,6 @@ class ConfigManager:
         'General': {
             'modsdirectory': "##DATADIR##/mods",
             'virtualfsmountpoint': "##DATADIR##/skyrimfs",
-    },
-        'State': {
             "lastprofile": __DEFAULT_PROFILE
         }
     }
@@ -87,7 +85,7 @@ class ConfigManager:
 
         self.paths.dir_mods = Path(config['General']['modsdirectory'])
         self.paths.dir_vfs = Path(config['General']['virtualfsmountpoint'])
-        self._lastprofile = config['State']['lastprofile']
+        self._lastprofile = config['General']['lastprofile']
 
     def ensureDefaultSetup(self):
         """
@@ -176,23 +174,42 @@ class ConfigManager:
             config.write(configfile)
 
 
-    def updateConfig(self, section:str, key:str, value:str):
-        assert section in ['General', 'State']
-        assert key in ['modsdirectory', 'virtualfsmountpoint', 'lastprofile']
+    def updateConfig(self, value:str, key: str, section: str="General"):
+        """
+        Update saved configuration file
+        :param value: the new value to set
+        :param key: which key will will be set to the new value
+        :param section: only valid section is 'General' for the moment
+        :return:
+        """
+        assert section in ['General']
+        # assert key in ['modsdirectory', 'virtualfsmountpoint', 'lastprofile']
 
+        # new configurator
         config = configparser.ConfigParser()
-
+        # load current values
         config.read(str(self.paths.file_main))
+
+        # validate new value
+        if key in ['modsdirectory', 'virtualfsmountpoint'] and not os.path.exists(value):
+                raise FileNotFoundError(filename=value)
+        elif key == 'lastprofile':
+            pdir = self.paths.dir_profiles / value
+            if not pdir.exists():
+                raise FileNotFoundError(filename=str(pdir))
+        else:
+            raise exceptions.InvalidConfigKeyError(key)
+
+        # now insert new value
         config[section][key] = value
 
-        # update state w/ new values
+        # update current state
         self.paths.dir_mods = Path(config['General']['modsdirectory'])
         self.paths.dir_vfs = Path(config['General']['virtualfsmountpoint'])
-        self._lastprofile = config['State']['lastprofile']
+        self._lastprofile = config['General']['lastprofile']
 
         # now write the new data to disk
-        # todo: verify data before writing
-        # also, maybe this operation should be queued?
+        # also, maybe this operation should be async? Maybe it already is?
         with self.paths.file_main.open('w') as f:
             config.write(f)
 

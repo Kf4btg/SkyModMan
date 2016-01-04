@@ -6,6 +6,15 @@ class Error(Exception):
 class DependencyError(Error):
     pass
 
+#----------------------------
+class InvalidConfigKeyError(Error):
+    def __init__(self, key: str):
+        self.key = key
+    def __str__(self):
+        return "'{}' is not a valid configuration key.".format(self.key)
+
+#---------------------------
+
 class ProfileError(Error):
     def __init__(self, profilename):
         self.profilename = profilename
