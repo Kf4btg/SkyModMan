@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'qt_manager.ui'
+# Form implementation generated from reading ui file 'skymodman/qt_interface/qt_manager.ui'
 #
 # Created by: PyQt5 UI code generator 5.5.1
 #
@@ -113,7 +113,6 @@ class Ui_MainWindow(object):
         self.mod_table.setItem(3, 3, item)
         self.mod_table.horizontalHeader().setHighlightSections(False)
         self.mod_table.horizontalHeader().setStretchLastSection(True)
-        self.mod_table.verticalHeader().setVisible(False)
         self.gridLayout_2.addWidget(self.mod_table, 6, 0, 1, 8)
         self.manager_tabs.addTab(self.installed_mods_tab, "")
         self.filetree_tab = QtWidgets.QWidget()
@@ -294,13 +293,13 @@ class Ui_MainWindow(object):
         self.profile_selector.setItemText(0, _translate("MainWindow", "Default"))
         self.profile_selector.setItemText(1, _translate("MainWindow", "Not Default"))
         item = self.mod_table.verticalHeaderItem(0)
-        item.setText(_translate("MainWindow", "New Row"))
+        item.setText(_translate("MainWindow", "1"))
         item = self.mod_table.verticalHeaderItem(1)
-        item.setText(_translate("MainWindow", "New Row"))
+        item.setText(_translate("MainWindow", "2"))
         item = self.mod_table.verticalHeaderItem(2)
-        item.setText(_translate("MainWindow", "New Row"))
+        item.setText(_translate("MainWindow", "3"))
         item = self.mod_table.verticalHeaderItem(3)
-        item.setText(_translate("MainWindow", "New Row"))
+        item.setText(_translate("MainWindow", "4"))
         item = self.mod_table.horizontalHeaderItem(1)
         item.setText(_translate("MainWindow", "Mod ID"))
         item = self.mod_table.horizontalHeaderItem(2)

@@ -165,8 +165,11 @@ class ProfileManager:
 
 
     def setActiveProfile(self, profilename: str):
-        if self._current_profile is None or self._current_profile.name != profilename:
+        if self._current_profile is None or \
+            self._current_profile.name != profilename:
+
             self._current_profile = self.loadProfile(profilename)
+
 
         return self._current_profile
 

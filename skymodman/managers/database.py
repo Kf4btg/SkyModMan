@@ -58,6 +58,13 @@ class DBManager:
         # desired by the user.
         self._con.execute(self._SCHEMA)
 
+    def reinit(self):
+        """close the current database connection and open a new one with an empty table"""
+        self._con.close()
+
+        self._con = sqlite3.connect(":memory:")
+        self._con.execute(self._SCHEMA)
+
     @property
     def conn(self) -> sqlite3.Connection:
         """
@@ -99,7 +106,7 @@ class DBManager:
                         "INSERT INTO mods(modid, version, directory, name, enabled) VALUES (?, ?, ?, ?, ?)", mods)
 
             except json.decoder.JSONDecodeError:
-                self.logger.error("No mod information present in {}, or file is malformed.")
+                self.logger.error("No mod information present in {}, or file is malformed.".format(json_source))
                 success = False
         return success
 

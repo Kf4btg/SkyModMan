@@ -33,15 +33,6 @@ class ModManager:
         # until it is requested.
         self._db_manager = database.DBManager(self)
 
-        # try to read modinfo file
-        # aaaaactually...let's wait until someone requests the modinfo to load it up...
-        # if not self._db_manager.loadModDB(self.active_profile.modinfo):
-        #     # if it fails, re-read mod data from disk
-        #     self._db_manager.getModDataFromModDirectory(self._config_manager.paths.dir_mods)
-        #     # and [re]create the cache file
-        #     self.saveModList()
-
-
 
     @property
     def Config(self) -> config.ConfigManager:
@@ -65,9 +56,11 @@ class ModManager:
         return self.Profiler.active_profile
 
     @active_profile.setter
-    def active_profile(self, profile:str):
+    def active_profile(self, profile):
         """
-        Set `profile` as currently loaded
+        To be called by external interfaces.
+        Set `profile` as currently loaded. Updates saved config file to mark this profile as the last-loaded profile,
+        and loads the data for the newly-activated profile
         :param profile:
         :return:
         """
@@ -77,6 +70,10 @@ class ModManager:
         assert isinstance(profile, str)
         self.Profiler.setActiveProfile(profile)
         self.Config.updateConfig(profile, "lastprofile")
+
+        # have to reinitialize the database
+        self.DB.reinit()
+        self.loadActiveProfileData()
 
     def getProfiles(self, names_only = True):
         """Generator that iterates over all existing profiles.
@@ -158,9 +155,9 @@ class ModManager:
 
     def basicModInfo(self):
         """Convenience method for table-display
-        :return: tuples of form (enabled-status, mod ID, version, name)
+        :return: tuples of form (order-num, enabled-status, mod ID, version, name)
         """
-        yield from self.DB.execute_("SELECT enabled, modid, version, name FROM mods")
+        yield from self.DB.execute_("SELECT iorder, enabled, modid, version, name FROM mods")
 
     def enabledMods(self):
         yield from self.DB.enabledMods(True)
