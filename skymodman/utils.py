@@ -1,5 +1,5 @@
 from skymodman import skylog
-
+from collections import namedtuple
 
 def withlogger(cls):
     """Class decorator to add a logger to the class"""
@@ -48,3 +48,6 @@ class Notifier:
         while calls < count:
             yield
             calls+=1
+
+
+ModEntry = namedtuple("ModEntry", ['order', 'name', 'id', 'version', 'enabled'])

@@ -59,10 +59,10 @@ class DBManager:
         self._con.execute(self._SCHEMA)
 
     def reinit(self):
-        """close the current database connection and open a new one with an empty table"""
-        self._con.close()
+        """Drop the current mods table and reinitialize as empty"""
 
-        self._con = sqlite3.connect(":memory:")
+        self._con.execute("DROP TABLE mods")
+
         self._con.execute(self._SCHEMA)
 
     @property
@@ -147,9 +147,9 @@ class DBManager:
         """
         with self._con:
             if params:
-                self._con.execute(sql, params)
+                return self._con.execute(sql, params)
             else:
-                self._con.execute(sql)
+                return self._con.execute(sql)
 
     def saveModDB(self, json_target):
         """

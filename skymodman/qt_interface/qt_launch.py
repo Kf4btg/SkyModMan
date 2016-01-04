@@ -5,11 +5,13 @@ from PyQt5.QtGui import QGuiApplication
 from PyQt5.QtWidgets import QApplication, QMainWindow, QTableWidgetItem, \
     QFileDialog, QFileSystemModel, QDialogButtonBox
 
+import PyQt5.QtWidgets as QtW
+
 import skymodman.constants as const
 from skymodman.qt_interface.qt_manager_ui import Ui_MainWindow
 from skymodman.qt_interface.widgets import custom_widgets
 from skymodman.qt_interface.models import ProfileListModel
-from skymodman.utils import withlogger, Notifier
+from skymodman.utils import withlogger, Notifier, ModEntry
 # from collections import OrderedDict
 from skymodman import skylog
 
@@ -21,6 +23,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     # changesCanceled = pyqtSignal()
 
     windowInitialized = pyqtSignal()
+    modNameBeingEdited = pyqtSignal(str)
     
 
     def __init__(self, manager: 'managers.ModManager', *args, **kwargs):
@@ -63,6 +66,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.file_tree_modified = False
         # tracking modified rows; using list or ordered dict might allow for an "undo" function later
         self._modified_cells = []  # list of point-tuples (row, column) for fields in table
+        self._modified_rows = {} # dict of int: ModifiedTableRow pairs
 
         # set placeholder fields
         self.loaded_fomod = None
@@ -81,6 +85,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # update UI
         # self.updateUI()
+        self.modNameBeingEdited.connect(self.beginEditModName)
+        self._saved_mod_name = None
 
         self.windowInitialized.emit()
 
@@ -187,21 +193,21 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         for m in self.Manager.basicModInfo():
             self.mod_table.insertRow(r)
-            _num, _enabled, _id, _ver, _name = m
+            # _num, _enabled, _id, _ver, _name = m
 
             items = (
                 QTableWidgetItem(), # first column is empty, is for the checkbox
-                QTableWidgetItem(str(_id)),
-                QTableWidgetItem(_ver),
-                QTableWidgetItem(_name),
+                QTableWidgetItem(str(m.id)),
+                QTableWidgetItem(m.version),
+                QTableWidgetItem(m.name),
                  )
 
             # set vert-header item to be the install order
             # Will be useful if a filter box is added so that a
             # mod's position in the install-order can still be gauged.
-            self.mod_table.setVerticalHeaderItem(r, QTableWidgetItem(str(_num)))
+            self.mod_table.setVerticalHeaderItem(r, QTableWidgetItem(str(m.order)))
 
-            if _enabled: # todo: consider just graying the text rather than entirely disabling
+            if m.enabled: # todo: consider just graying the text rather than entirely disabling
                 items[const.COL_ENABLED ].setCheckState(Qt.Checked)
                 items[const.COL_ENABLED ].setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
                 items[const.COL_MODID   ].setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
@@ -226,7 +232,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             row, col = cell   # get parts of tuple
 
             #TODO: remember! that db numbers start at 1!
-            modinfo = self.Manager.DB.getOne("SELECT enabled, name FROM mods WHERE iorder = ?", row+1)
+            modinfo = self.Manager.DB.getOne("SELECT enabled, name FROM mods WHERE iorder = ?", (row+1,))
 
             if col == const.COL_ENABLED:
                 self.handleModActiveStateChanged(row, modinfo[0])
@@ -266,6 +272,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.mod_table.blockSignals(False)
 
     def dblClickToggleMod(self, row, column):
+        if column == const.COL_NAME:
+            # catch and store the current name for tracking changes
+            self.modNameBeingEdited.emit(self.mod_table.item(row, column).text())
+            # self.logger.debug("current value for name: {}".format(self.mod_table.item(row, column).text()))
+
         if column not in const.DBLCLICK_COLS: return  # only the first 3 columns (cbox, id, ver)
 
         # grab the checkable column
@@ -280,14 +291,28 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # only enable on first change
         # (i.e. the list of changes is empty):
+        # if not self._modified_rows:
         if not self._modified_cells:
             self.save_cancel_btnbox.setEnabled(True)
+
+        # if self._modified_rows:
+        #     self.mod_table.row
+        #     if row in self._modified_rows:
+        #         currstate = tuple(o, e, i, v, n for o,e,i,v,n in )
+        #
+        # if col==const.COL_NAME:
+
 
         # if checkbox was toggled, disable/enable row fields as appropriate
         if col==const.COL_ENABLED:
             self.handleModActiveStateChanged(row)
 
         self._modified_cells.append((row, col))
+
+    def beginEditModName(self, current_name):
+        """Save the current name of the mod for tracking changes"""
+        self._saved_mod_name = current_name
+
 
     def revertTable(self):
         self.mod_table.blockSignals(True)
@@ -306,16 +331,29 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         :return:
         """
 
-        ## TODO: delegate this process to the mod manager
         for cell in self._modified_cells:
-            if cell[1] == const.COL_NAME:
-                ## NOTE: XXX: FIXME: TODO: remember that the "install order" (db primary key) starts at one
-                self.Manager.DB.updateField(cell[0] + 1, cell[1], self.mod_table.item(cell[0], cell[1]).text())
-            else:
-                self.Manager.DB.updateField(cell[0] + 1, cell[1],
-                                            bool(self.mod_table.item(cell[0], cell[1]).checkState()))
+            row, col = cell
+            item = self.mod_table.item(row, col)
+            order = self.mod_table.verticalHeaderItem(row).text()
+            if col == const.COL_NAME:
+                self.Manager.updateModName(int(order), item.text())
+            elif col==const.COL_ENABLED:
+                self.Manager.updateModState(int(order), item.checkState()==Qt.Checked)
 
-        self.Manager.saveModList()
+        # commit changes
+        # self.Manager.saveModList()
+
+
+
+                ## TODO: delegate this process to the mod manager
+        # for cell in self._modified_cells:
+        #     if cell[1] == const.COL_NAME:
+                ## NOTE: XXX: FIXME: TODO: remember that the "install order" (db primary key) starts at one
+                # self.Manager.DB.updateField(cell[0] + 1, cell[1], self.mod_table.item(cell[0], cell[1]).text())
+            # else:
+            #     self.Manager.DB.updateField(cell[0] + 1, cell[1],
+            #                                 bool(self.mod_table.item(cell[0], cell[1]).checkState()))
+
 
         self._modified_cells.clear()
         # self.modListSaved.emit()
@@ -377,6 +415,20 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             if new_profile == self.Manager.active_profile.name:
                 # somehow selected the same profile; do nothing
                 return
+
+            # check for unsaved changes to the mod-list
+            if self._modified_cells:
+                ok = QtW.QMessageBox(QtW.QMessageBox.Warning, 'Unsaved Changes', 'Your mod install-order has unsaved changes. Would you like to save them before continuing?', QtW.QMessageBox.No | QtW.QMessageBox.Yes).exec_()
+
+
+                if ok == QtW.QMessageBox.Yes:
+                    self.saveModsList()
+                else:
+                    # self.revertTable()
+                    # don't bother reverting; just clear the _modified_cells list & disable the buttons
+                    self._modified_cells.clear()
+                    self.save_cancel_btnbox.setEnabled(False)
+
             self.LOGGER.info("Activating profile '{}'".format(new_profile))
             self.Manager.active_profile = new_profile
             self.loadActiveProfile()
@@ -386,6 +438,53 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.LOGGER.debug("About to repopulate table")
         self.populateModTable()
         self.updateUI()
+
+
+class ModifiedTableRow:
+    """
+    Helper class for tracking changes to the mod-table
+    """
+    def __init__(self, row_num, new_state, old_state):
+        """
+        :param row_num: row number
+        :param new_state: tuple describing the row fields after modification
+        :param old_state: tuple describing the row fields prior to modification
+        """
+        self.row = row_num
+        self._new = new_state
+        self._old = self._initial = old_state
+
+    @property
+    def current(self):
+        return self._new
+
+    @current.setter
+    def current(self, value):
+        self._new = value
+
+    @property
+    def previous(self):
+        return self._old
+
+    @previous.setter
+    def previous(self, value):
+        self._old = value
+
+    @property
+    def initial(self):
+        return self._initial
+
+    def matchesInitial(self, state) -> bool:
+        return state == self._initial
+
+    def currentMatchesInitial(self) -> bool:
+        return self.matchesInitial(self.current)
+
+    def update(self, new_state):
+        self._old = self.current
+        self._new = new_state
+
+
 
 
 

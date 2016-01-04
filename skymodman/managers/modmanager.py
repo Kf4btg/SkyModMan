@@ -1,8 +1,9 @@
-from skymodman import utils, exceptions
+from skymodman import exceptions
+from skymodman.utils import withlogger, ModEntry
 from skymodman.managers import config, database, profiles
 
 
-@utils.withlogger
+@withlogger
 class ModManager:
     """
     Manages all the backend interaction; this includes access to the Configuration,
@@ -157,7 +158,7 @@ class ModManager:
         """Convenience method for table-display
         :return: tuples of form (order-num, enabled-status, mod ID, version, name)
         """
-        yield from self.DB.execute_("SELECT iorder, enabled, modid, version, name FROM mods")
+        yield from (ModEntry(*row) for row in self.DB.execute_("SELECT iorder, name, modid, version, enabled FROM mods"))
 
     def enabledMods(self):
         yield from self.DB.enabledMods(True)
@@ -184,7 +185,4 @@ class ModManager:
         self.LOGGER.debug("New status for mod #{}: {}".format(install_order, "Enabled" if enabled_status else "Disabled"))
         self.DB.update_("UPDATE mods SET enabled=? WHERE iorder = ?", (int(enabled_status), install_order))
         # print([t for t in self.DB.execute_("Select * from mods where iorder = ?", (install_order,))])
-
-
-
 
