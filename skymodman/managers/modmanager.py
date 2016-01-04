@@ -171,5 +171,20 @@ class ModManager:
         """Request that database manager save modinfo to disk"""
         self.DB.saveModDB(self.active_profile.modinfo)
 
+    def updateModName(self, install_order: int, new_name:str):
+        """
+        Have the DBMan update a mod's 'name' (e.g. the string that appears in the mod-table and which is customizable by the user)
+        :return:
+        """
+        self.LOGGER.debug("New name for mod #{}: {}".format(install_order, new_name))
+        self.DB.update_("UPDATE mods SET name=? WHERE iorder = ?", (new_name, install_order))
+        # print([t for t in self.DB.execute_("Select * from mods where iorder = ?", (install_order, ))])
+
+    def updateModState(self, install_order: int, enabled_status: bool):
+        self.LOGGER.debug("New status for mod #{}: {}".format(install_order, "Enabled" if enabled_status else "Disabled"))
+        self.DB.update_("UPDATE mods SET enabled=? WHERE iorder = ?", (int(enabled_status), install_order))
+        # print([t for t in self.DB.execute_("Select * from mods where iorder = ?", (install_order,))])
+
+
 
 

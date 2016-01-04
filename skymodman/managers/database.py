@@ -110,41 +110,46 @@ class DBManager:
                 success = False
         return success
 
-    def execute_(self, query:str, *args, params: Iterable=None):
+    def execute_(self, query:str, params: Iterable=None):
         """
         Execute an arbitrary SQL-query using this object's
         database connection as a context manager
         :param query: a valid SQL string
-        :param args: any non-keyword arguments after the query-string will be used in a tuple as the parameter-argument to a parameterized sql-query
-        :param params: If, instead of args, the `params` keyword is provided with an Iterable object, that will be used for the query parameters. Ignored if any args are present.
+        :param params: If the `params` keyword is provided with an Iterable object, it will be used as the parameters for a parameterized query.
         :return:
         """
         with self._con:
-            if args:
-                yield from self._con.execute(query, args)
-            elif params:
+            if params:
                 yield from self._con.execute(query, params)
             else:
                 yield from self._con.execute(query)
 
-    def getOne(self, query, *args, params: Iterable=None):
+    def getOne(self, query, params: Iterable=None):
         """
         Like execute_, but just returns the first result
         :param query:
-        :param args:
         :param params:
         :return:
         """
         with self._con:
-            if args:
-                cur=self._con.execute(query, args)
-            elif params:
+            if params:
                 cur=self._con.execute(query, params)
             else:
                 cur=self._con.execute(query)
 
             return cur.fetchone()
 
+    def update_(self, sql, params: Iterable=None):
+        """
+        As execute_, but for UPDATE and INSERT commands. Returns the cursor object that was created to execute the statement.
+        :param sql:
+        :param params:
+        """
+        with self._con:
+            if params:
+                self._con.execute(sql, params)
+            else:
+                self._con.execute(sql)
 
     def saveModDB(self, json_target):
         """
