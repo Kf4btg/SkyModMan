@@ -374,16 +374,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             # we have a problem...
             self.LOGGER.error("No profile chosen?!")
         else:
-            self.Manager.active_profile = self.profile_selector.currentText()
+            self.Manager.active_profile = self.profile_selector.currentData(Qt.UserRole).name
             self.loadActiveProfile()
 
     def loadActiveProfile(self):
-        self.mod_table.reset()
-
-
-
-
-
+        # self.mod_table.reset()
+        pass
 
     # SLOTS
 
