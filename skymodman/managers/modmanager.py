@@ -71,7 +71,12 @@ class ModManager:
         :param profile:
         :return:
         """
+        # make sure we're dealing with just the name
+        if isinstance(profile, profiles.Profile):
+            profile = profile.name
+        assert isinstance(profile, str)
         self.Profiler.setActiveProfile(profile)
+        self.Config.updateConfig(profile, "lastprofile")
 
     def getProfiles(self, names_only = True):
         """Generator that iterates over all existing profiles.
