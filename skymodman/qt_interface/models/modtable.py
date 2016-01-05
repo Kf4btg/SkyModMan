@@ -194,10 +194,14 @@ class ModTableModel(QtCore.QAbstractTableModel):
         if need_notify is not None:
             self.tableDirtyStatusChange.emit(need_notify)
 
-        # emit data changed for all fields in this row
-        # idx_start = self.index(row, 0)
-        # idx_end = self.index(row, self.columnCount())
-        # self.dataChanged.emit(idx_start, idx_end)
+    def revert(self):
+        for row, cached_mod in self.modified_rows.items():
+            self.mods[row] = cached_mod
+            self.rowDataChanged(row)
+
+        self.modified_rows.clear()
+        self.tableDirtyStatusChange.emit(False)
+
 
 
 @withlogger
@@ -242,6 +246,9 @@ class ModTableView(QtWidgets.QTableView):
     def loadData(self):
         self._model.loadData()
         self.resizeColumnsToContents()
+
+    def revertChanges(self):
+        self._model.revert()
         
     # def edit(self, index, trigger=None, event=None):
     #     if index.column() == constants.COL_NAME:

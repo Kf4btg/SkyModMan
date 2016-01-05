@@ -90,9 +90,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # update UI
         # self.updateUI()
-        self.modNameBeingEdited.connect(self.beginEditModName)
-        self._saved_mod_name = None
+        # self.modNameBeingEdited.connect(self.beginEditModName)
+        # self._saved_mod_name = None
 
+        self.table_unsaved = False
 
         self.windowInitialized.emit()
 
@@ -109,11 +110,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.save_cancel_btnbox.setVisible(curtab in [const.TAB_MODLIST, const.TAB_FILETREE])
 
-        if self.save_cancel_btnbox.isVisible():
-            self.save_cancel_btnbox.setEnabled(
-                (curtab == const.TAB_MODLIST and len(self._modified_cells)>0)
-            or  (curtab == const.TAB_FILETREE and self.file_tree_modified)
-            )
+        # if self.save_cancel_btnbox.isVisible():
+        #     self.save_cancel_btnbox.setEnabled(
+        #         (curtab == const.TAB_MODLIST and len(self._modified_cells)>0)
+        #     or  (curtab == const.TAB_FILETREE and self.file_tree_modified)
+        #     )
 
         self.next_button.setVisible(curtab == const.TAB_INSTALLER)
 
@@ -167,177 +168,183 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.mod_table.loadData()
 
-        self.mod_table.model().tableDirtyStatusChange.connect( self.save_cancel_btnbox.setEnabled)
+        self.mod_table.model().tableDirtyStatusChange.connect(self.markTableUnsaved)
 
         self.SetupDone()
 
-
-    def setupTable_widget(self):
-        # populate database with data from disk
-        self.Manager.loadActiveProfileData()
-
-        # setup table dimensions & header
-        self.mod_table.setColumnCount(4)
-        self.mod_table.setHorizontalHeaderLabels(
-                ["", "Mod ID", "Version", "Name",])
-
-        # populate from mod-info database
-        self.populateModTable()
-        # enable sorting AFTER population
-        # self.mod_table.setSortingEnabled(True) # no sorting! b/c install order matters
-
-        # let double clicking toggle the checkbox
-        self.mod_table.cellDoubleClicked.connect(self.dblClickToggleMod)
-
-        # make columns fit their contents
-        self.mod_table.resizeColumnsToContents()
-
-        # setup action to handle user-changes to table
-        self.mod_table.cellChanged.connect(self.onCellChanged)
-
-        # connect cancel action to reset method
-        # self.changesCanceled.connect(self.revertTable)
-
-        # let setup know we're done here
-        self.SetupDone("setupTable")
-
-    def populateModTable(self):
-        self.mod_table.blockSignals(True)
-        r=0
-
-        #clear previous values
-        self.mod_table.clearContents()
-        self.mod_table.setRowCount(0)
-
-        for m in self.Manager.basicModInfo():
-            self.mod_table.insertRow(r)
-            # _num, _enabled, _id, _ver, _name = m
-
-            items = (
-                QTableWidgetItem(), # first column is empty, is for the checkbox
-                QTableWidgetItem(str(m.id)),
-                QTableWidgetItem(m.version),
-                QTableWidgetItem(m.name),
-                 )
-
-            # set vert-header item to be the install order
-            # Will be useful if a filter box is added so that a
-            # mod's position in the install-order can still be gauged.
-            self.mod_table.setVerticalHeaderItem(r, QTableWidgetItem(str(m.order)))
-
-            if m.enabled: # todo: consider just graying the text rather than entirely disabling
-                items[const.COL_ENABLED ].setCheckState(Qt.Checked)
-                items[const.COL_ENABLED ].setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
-                items[const.COL_MODID   ].setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-                items[const.COL_VERSION ].setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-                items[const.COL_NAME    ].setFlags(Qt.ItemIsSelectable | Qt.ItemIsEditable | Qt.ItemIsEnabled)
-            else:
-                items[const.COL_ENABLED ].setCheckState(Qt.Unchecked)
-                items[const.COL_ENABLED ].setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
-                items[const.COL_MODID   ].setFlags(Qt.ItemIsSelectable)
-                items[const.COL_VERSION ].setFlags(Qt.ItemIsSelectable)
-                items[const.COL_NAME    ].setFlags(Qt.ItemIsSelectable | Qt.ItemIsEditable)
-
-            for i in range(4):
-                self.mod_table.setItem(r,i,items[i])
-
-            r+=1
-        self.mod_table.blockSignals(False)
-
-    def syncModListWithStates(self):
-
-        for cell in self._modified_cells:
-            row, col = cell   # get parts of tuple
-
-            #TODO: remember! that db numbers start at 1!
-            modinfo = self.Manager.DB.getOne("SELECT enabled, name FROM mods WHERE iorder = ?", (row+1,))
-
-            if col == const.COL_ENABLED:
-                self.handleModActiveStateChanged(row, modinfo[0])
-            elif col == const.COL_NAME:
-                self.mod_table.item(row, const.COL_NAME).setText(modinfo[1])
-
-    def handleModActiveStateChanged(self, row:int, is_active=None):
-        """
-        :param row: row in table
-        :param is_active:  if is_active is `None` (the default), the active-state of the mod in question will be derived from the current checkState of the mod's checkbox. This is needed in situations where this method is called as a result of the checkbox having been directly clicked; since the checkbox has already been changed to the proper new state, it does not need to be changed again, and only the enabled-status of the other fields in this row will be considered.
-        If, however, is_active is a bool, int, or anything else with a truth status, then the assumption is that this information come from a separate source, and the checkbox-state needs to be changed to match is_active, as do the flags of the other fields.
-        The tri-state quality of this parameter is intended to avoid toggling the checkbox multiple times, perhaps putting the table in an invalid state.
-        :return:
-        """
-
-        # block signals while this runs (since it's being called from a signal handler for the same signal it would emit...)
-        signals_were_blocked = self.mod_table.signalsBlocked() # but first record whether they're already blocked
-        self.mod_table.blockSignals(True)
-
-        # ref the checkbox
-        checkitem = self.mod_table.item(row, const.COL_ENABLED)
-        if is_active is None:
-            is_active = checkitem.checkState()==Qt.Checked
-        else:
-            checkitem.setCheckState(Qt.Checked if is_active else Qt.Unchecked)
-
-        # enable/disable the other fields
-        for col in const.COLUMNS[1:]:
-            item = self.mod_table.item(row, col)
-            if is_active:
-                item.setFlags(item.flags() | Qt.ItemIsEnabled) # always add the Enabled flag
-            else:
-                item.setFlags(item.flags() & ~Qt.ItemIsEnabled) # always remove the Enabled flag
-
-        # reenable signals unless they were blocked to begin with
-        if not signals_were_blocked:
-            self.mod_table.blockSignals(False)
-
-    def dblClickToggleMod(self, row, column):
-        if column == const.COL_NAME:
-            # catch and store the current name for tracking changes
-            self.modNameBeingEdited.emit(self.mod_table.item(row, column).text())
-            # self.logger.debug("current value for name: {}".format(self.mod_table.item(row, column).text()))
-
-        if column not in const.DBLCLICK_COLS: return  # only the first 3 columns (cbox, id, ver)
-
-        # grab the checkable column
-        item = self.mod_table.item(row, const.COL_ENABLED)
-
-        # Qt.Unchecked == 0, so this will toggle current status. This will also cause the cellChanged
-        # signal to be emitted and onCellChanged() activated which will then call handleActiveStateChange()
-        item.setCheckState(Qt.Unchecked if item.checkState() else Qt.Checked)
-
-    def onCellChanged(self, row, col):
-        self.LOGGER.debug("Cell ({}, {}) changed".format(row, col))
-
-        # only enable on first change
-        # (i.e. the list of changes is empty):
-        # if not self._modified_rows:
-        if not self._modified_cells:
-            self.save_cancel_btnbox.setEnabled(True)
-
-        # if self._modified_rows:
-        #     self.mod_table.row
-        #     if row in self._modified_rows:
-        #         currstate = tuple(o, e, i, v, n for o,e,i,v,n in )
-        #
-        # if col==const.COL_NAME:
+    def markTableUnsaved(self, unsaved_changes_present: bool):
+        self.table_unsaved = unsaved_changes_present
+        self.save_cancel_btnbox.setEnabled(self.table_unsaved)
 
 
-        # if checkbox was toggled, disable/enable row fields as appropriate
-        if col==const.COL_ENABLED:
-            self.handleModActiveStateChanged(row)
+    # def setupTable_widget(self):
+    #     # populate database with data from disk
+    #     self.Manager.loadActiveProfileData()
+    #
+    #     # setup table dimensions & header
+    #     self.mod_table.setColumnCount(4)
+    #     self.mod_table.setHorizontalHeaderLabels(
+    #             ["", "Mod ID", "Version", "Name",])
+    #
+    #     # populate from mod-info database
+    #     self.populateModTable()
+    #     # enable sorting AFTER population
+    #     # self.mod_table.setSortingEnabled(True) # no sorting! b/c install order matters
+    #
+    #     # let double clicking toggle the checkbox
+    #     self.mod_table.cellDoubleClicked.connect(self.dblClickToggleMod)
+    #
+    #     # make columns fit their contents
+    #     self.mod_table.resizeColumnsToContents()
+    #
+    #     # setup action to handle user-changes to table
+    #     self.mod_table.cellChanged.connect(self.onCellChanged)
+    #
+    #     # connect cancel action to reset method
+    #     # self.changesCanceled.connect(self.revertTable)
+    #
+    #     # let setup know we're done here
+    #     self.SetupDone("setupTable")
 
-        self._modified_cells.append((row, col))
+    # def populateModTable(self):
+    #     self.mod_table.blockSignals(True)
+    #     r=0
+    #
+    #     #clear previous values
+    #     self.mod_table.clearContents()
+    #     self.mod_table.setRowCount(0)
+    #
+    #     for m in self.Manager.basicModInfo():
+    #         self.mod_table.insertRow(r)
+    #         # _num, _enabled, _id, _ver, _name = m
+    #
+    #         items = (
+    #             QTableWidgetItem(), # first column is empty, is for the checkbox
+    #             QTableWidgetItem(str(m.id)),
+    #             QTableWidgetItem(m.version),
+    #             QTableWidgetItem(m.name),
+    #              )
+    #
+    #         # set vert-header item to be the install order
+    #         # Will be useful if a filter box is added so that a
+    #         # mod's position in the install-order can still be gauged.
+    #         self.mod_table.setVerticalHeaderItem(r, QTableWidgetItem(str(m.order)))
+    #
+    #         if m.enabled: # todo: consider just graying the text rather than entirely disabling
+    #             items[const.COL_ENABLED ].setCheckState(Qt.Checked)
+    #             items[const.COL_ENABLED ].setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+    #             items[const.COL_MODID   ].setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+    #             items[const.COL_VERSION ].setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+    #             items[const.COL_NAME    ].setFlags(Qt.ItemIsSelectable | Qt.ItemIsEditable | Qt.ItemIsEnabled)
+    #         else:
+    #             items[const.COL_ENABLED ].setCheckState(Qt.Unchecked)
+    #             items[const.COL_ENABLED ].setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+    #             items[const.COL_MODID   ].setFlags(Qt.ItemIsSelectable)
+    #             items[const.COL_VERSION ].setFlags(Qt.ItemIsSelectable)
+    #             items[const.COL_NAME    ].setFlags(Qt.ItemIsSelectable | Qt.ItemIsEditable)
+    #
+    #         for i in range(4):
+    #             self.mod_table.setItem(r,i,items[i])
+    #
+    #         r+=1
+    #     self.mod_table.blockSignals(False)
 
-    def beginEditModName(self, current_name):
-        """Save the current name of the mod for tracking changes"""
-        self._saved_mod_name = current_name
+    # def syncModListWithStates(self):
+    #
+    #     for cell in self._modified_cells:
+    #         row, col = cell   # get parts of tuple
+    #
+    #         #TODO: remember! that db numbers start at 1!
+    #         modinfo = self.Manager.DB.getOne("SELECT enabled, name FROM mods WHERE iorder = ?", (row+1,))
+    #
+    #         if col == const.COL_ENABLED:
+    #             self.handleModActiveStateChanged(row, modinfo[0])
+    #         elif col == const.COL_NAME:
+    #             self.mod_table.item(row, const.COL_NAME).setText(modinfo[1])
+
+    # def handleModActiveStateChanged(self, row:int, is_active=None):
+    #     """
+    #     :param row: row in table
+    #     :param is_active:  if is_active is `None` (the default), the active-state of the mod in question will be derived from the current checkState of the mod's checkbox. This is needed in situations where this method is called as a result of the checkbox having been directly clicked; since the checkbox has already been changed to the proper new state, it does not need to be changed again, and only the enabled-status of the other fields in this row will be considered.
+    #     If, however, is_active is a bool, int, or anything else with a truth status, then the assumption is that this information come from a separate source, and the checkbox-state needs to be changed to match is_active, as do the flags of the other fields.
+    #     The tri-state quality of this parameter is intended to avoid toggling the checkbox multiple times, perhaps putting the table in an invalid state.
+    #     :return:
+    #     """
+    #
+    #     # block signals while this runs (since it's being called from a signal handler for the same signal it would emit...)
+    #     signals_were_blocked = self.mod_table.signalsBlocked() # but first record whether they're already blocked
+    #     self.mod_table.blockSignals(True)
+    #
+    #     # ref the checkbox
+    #     checkitem = self.mod_table.item(row, const.COL_ENABLED)
+    #     if is_active is None:
+    #         is_active = checkitem.checkState()==Qt.Checked
+    #     else:
+    #         checkitem.setCheckState(Qt.Checked if is_active else Qt.Unchecked)
+    #
+    #     # enable/disable the other fields
+    #     for col in const.COLUMNS[1:]:
+    #         item = self.mod_table.item(row, col)
+    #         if is_active:
+    #             item.setFlags(item.flags() | Qt.ItemIsEnabled) # always add the Enabled flag
+    #         else:
+    #             item.setFlags(item.flags() & ~Qt.ItemIsEnabled) # always remove the Enabled flag
+    #
+    #     # reenable signals unless they were blocked to begin with
+    #     if not signals_were_blocked:
+    #         self.mod_table.blockSignals(False)
+    #
+    # def dblClickToggleMod(self, row, column):
+    #     if column == const.COL_NAME:
+    #         # catch and store the current name for tracking changes
+    #         self.modNameBeingEdited.emit(self.mod_table.item(row, column).text())
+    #         # self.logger.debug("current value for name: {}".format(self.mod_table.item(row, column).text()))
+    #
+    #     if column not in const.DBLCLICK_COLS: return  # only the first 3 columns (cbox, id, ver)
+    #
+    #     # grab the checkable column
+    #     item = self.mod_table.item(row, const.COL_ENABLED)
+    #
+    #     # Qt.Unchecked == 0, so this will toggle current status. This will also cause the cellChanged
+    #     # signal to be emitted and onCellChanged() activated which will then call handleActiveStateChange()
+    #     item.setCheckState(Qt.Unchecked if item.checkState() else Qt.Checked)
+
+    # def onCellChanged(self, row, col):
+    #     self.LOGGER.debug("Cell ({}, {}) changed".format(row, col))
+    #
+    #     # only enable on first change
+    #     # (i.e. the list of changes is empty):
+    #     # if not self._modified_rows:
+    #     if not self._modified_cells:
+    #         self.save_cancel_btnbox.setEnabled(True)
+    #
+    #     # if self._modified_rows:
+    #     #     self.mod_table.row
+    #     #     if row in self._modified_rows:
+    #     #         currstate = tuple(o, e, i, v, n for o,e,i,v,n in )
+    #     #
+    #     # if col==const.COL_NAME:
+    #
+    #
+    #     # if checkbox was toggled, disable/enable row fields as appropriate
+    #     if col==const.COL_ENABLED:
+    #         self.handleModActiveStateChanged(row)
+    #
+    #     self._modified_cells.append((row, col))
+
+    # def beginEditModName(self, current_name):
+    #     """Save the current name of the mod for tracking changes"""
+    #     self._saved_mod_name = current_name
 
 
     def revertTable(self):
-        self.mod_table.blockSignals(True)
-        self.syncModListWithStates()
-        self._modified_cells.clear()
+        self.mod_table.revertChanges()
 
-        self.mod_table.blockSignals(False)
+        # self.mod_table.blockSignals(True)
+        # self.syncModListWithStates()
+        # self._modified_cells.clear()
+
+        # self.mod_table.blockSignals(False)
         self.updateUI()
 
     @pyqtSlot()
