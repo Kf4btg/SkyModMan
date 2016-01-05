@@ -14,7 +14,7 @@ class ProfileListModel(QtCore.QAbstractListModel):
 
     def addProfile(self, new_profile):
         """
-        implement our own API for adding stuff because the QCombobox is STUPID
+        implement my own API for adding stuff because the QCombobox is STUPID
         :param new_profile:
         :return:
         """

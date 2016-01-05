@@ -1,6 +1,6 @@
-from PyQt5 import QtCore, QtWidgets, Qt, QtGui
+from PyQt5 import QtCore, QtWidgets, QtGui
 from PyQt5.QtWidgets import QHeaderView
-from PyQt5.QtCore import Qt as _Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from typing import List
 
 from skymodman import constants
@@ -15,7 +15,10 @@ class QModEntry(ModEntry):
 
     @property
     def checkState(self):
-        return _Qt.Checked if self.enabled else _Qt.Unchecked
+        return Qt.Checked if self.enabled else Qt.Unchecked
+
+    def __eq__(self, other):
+        return self.name == other.name and self.enabled == other.enabled
 
 
 
@@ -31,22 +34,20 @@ class ModTableModel(QtCore.QAbstractTableModel):
 
     headers = ["", "Name", "Mod ID", "Version"]
 
+    tableDirtyStatusChange = pyqtSignal(bool)
+
     def __init__(self, parent, manager: 'ModManager', *args):
         super(ModTableModel, self).__init__(parent, *args)
         self._table = parent
         self.manager = manager
 
         self.mods = [] # type: List[QModEntry]
-        # self.columns = []
         self.vheader_field = self.COL_ORDER
         self.visible_columns = []
 
+        self.modified_rows = {}
+
         self.LOGGER.debug("init ModTableModel")
-
-
-        # for i in range(len(self.columns)):
-        #     self.setHeaderData(i, _Qt.Horizontal, self.columns[i])
-
 
     def rowCount(self, parent = QtCore.QModelIndex(), *args, **kwargs):
         return len(self.mods)
@@ -54,29 +55,83 @@ class ModTableModel(QtCore.QAbstractTableModel):
     def columnCount(self, parent = QtCore.QModelIndex(), *args, **kwargs):
         return len(self.VISIBLE_COLS)
 
-    def data(self, index: QtCore.QModelIndex, role=_Qt.DisplayRole):
+    def data(self, index: QtCore.QModelIndex, role=Qt.DisplayRole):
         col = index.column()
-        if role == _Qt.DisplayRole and col != constants.COL_ENABLED:
+        if role == Qt.DisplayRole and col != constants.COL_ENABLED:
             return self.mods[index.row()][col]
-        elif role == _Qt.CheckStateRole and col == constants.COL_ENABLED:
+        elif role == Qt.CheckStateRole and col == constants.COL_ENABLED:
             return self.mods[index.row()].checkState
 
     def setData(self, index, value, role=None):
-        if role==_Qt.CheckStateRole and index.column() == constants.COL_ENABLED:
+        """Here is where we need to track changes to items to allow undo"""
+        if role==Qt.CheckStateRole and index.column() == constants.COL_ENABLED:
             self.toggleEnabledState(index.row())
-            # modrow = self.mods[index.row()]
-            # self.mods[index.row()] = modrow._replace(enabled=int(not modrow.enabled))
-            # self.dataChanged.emit(index, index, [_Qt.DisplayRole, role])
             return True
-        return False
+
+        elif role == Qt.EditRole and index.column() == constants.COL_NAME:
+            row = index.row()
+            mod = self.mods[row]
+
+            # don't bother recording if there was no change
+            if value == mod.name: return False
+            # and don't allow empty names
+            if value == "": return False
+
+            newmod = mod._replace(name=value)
+
+            need_notify = self.onModDataEdit(row, mod, newmod)
+
+            self.dataChanged.emit(index, index)
+
+            if need_notify is not None:
+                self.tableDirtyStatusChange.emit(need_notify)
 
 
 
-    def headerData(self, row_or_col, orientation, role=_Qt.DisplayRole):
+
+
+        
+        return super(ModTableModel, self).setData(index, value, role)
+
+    def onModDataEdit(self, row:int, current:QModEntry, edited: QModEntry):
+        """checks if the new value of the mod matches the value of the mod
+         at the time of the last save"""
+
+        notify_dirty = None
+
+        if row in self.modified_rows:
+            # if it has returned to its initial state,
+            # remove the row from the list of modified rows
+            if edited == self.modified_rows[row]:
+                del self.modified_rows[row]
+
+                # if that was the last item, notify that table
+                # no longer has unsaved changes.
+                if len(self.modified_rows) == 0:
+                    notify_dirty = False
+        else:
+            # store initial value
+            self.modified_rows[row] = current
+
+            # if this was the first item, notify that table
+            # now has unsaved changes
+            if len(self.modified_rows) == 1:
+                notify_dirty = True
+
+        self.mods[row] = edited # update value with edited entry
+        return notify_dirty
+
+
+
+
+
+
+
+    def headerData(self, row_or_col, orientation, role=Qt.DisplayRole):
         # self.logger.debug("Loading header data for {}:{}:{}".format(row_or_col, orientation, role))
-        if role==_Qt.DisplayRole:
+        if role==Qt.DisplayRole:
 
-            if orientation == _Qt.Horizontal:
+            if orientation == Qt.Horizontal:
                 return self.headers[row_or_col]
 
             else: # vertical header
@@ -86,23 +141,31 @@ class ModTableModel(QtCore.QAbstractTableModel):
 
     def flags(self, index: QtCore.QModelIndex):
         if index.column() == self.COL_ENABLED:
-            return _Qt.ItemIsEnabled | _Qt.ItemIsUserCheckable
+            return Qt.ItemIsEnabled | Qt.ItemIsUserCheckable
 
-        _flags = _Qt.NoItemFlags #start with nothing
+        _flags = Qt.NoItemFlags #start with nothing
 
         # if this row is enabled, start with the enabled flag
         if self.mods[index.row()].enabled:
-            _flags = _Qt.ItemIsEnabled
+            _flags = Qt.ItemIsEnabled
 
         # mod id and version are selectable
         if index.column() in [self.COL_MODID, self.COL_VERSION]:
-            return _flags | _Qt.ItemIsSelectable
+            return _flags | Qt.ItemIsSelectable
 
         # name is selectable and editable
         elif index.column() == self.COL_NAME:
-            return _flags | _Qt.ItemIsSelectable | _Qt.ItemIsEditable
+            return _flags | Qt.ItemIsSelectable | Qt.ItemIsEditable
 
         return _flags
+    
+
+    def rowDataChanged(self, row):
+        """Emits data changed for every item in this table row"""
+        idx_start = self.index(row, 0)
+        idx_end = self.index(row, self.columnCount())
+        self.dataChanged.emit(idx_start, idx_end)
+    
 
     def loadData(self):
         self.beginResetModel()
@@ -120,20 +183,21 @@ class ModTableModel(QtCore.QAbstractTableModel):
 
         self.toggleEnabledState(index.row())
 
-        # idx = self.index(index.row(), constants.COL_ENABLED)
-        # self.dataChanged.emit(idx, idx, [_Qt.DisplayRole, _Qt.CheckStateRole])
-
     def toggleEnabledState(self, row: int):
         mod = self.mods[row]
-        self.mods[row] = mod._replace(enabled=int(not mod.enabled))
-        # idx = self.index(index, constants.COL_ENABLED)
+        newmod = mod._replace(enabled=int(not mod.enabled))
 
-        # self.dataChanged.emit(idx, idx, [_Qt.DisplayRole, _Qt.CheckStateRole])
+        need_notify = self.onModDataEdit(row, mod, newmod)
+
+        self.rowDataChanged(row)
+
+        if need_notify is not None:
+            self.tableDirtyStatusChange.emit(need_notify)
 
         # emit data changed for all fields in this row
-        idx_start = self.index(row, 0)
-        idx_end = self.index(row, self.columnCount())
-        self.dataChanged.emit(idx_start, idx_end)
+        # idx_start = self.index(row, 0)
+        # idx_end = self.index(row, self.columnCount())
+        # self.dataChanged.emit(idx_start, idx_end)
 
 
 @withlogger
@@ -143,22 +207,19 @@ class ModTableView(QtWidgets.QTableView):
         self.manager = manager
         self._model = None #type: ModTableModel
         self.LOGGER.debug("Init ModTableView")
-        # self.setModel(ModTableModel(self, manager))
-
-
 
 
     def initUI(self, grid):
         self.LOGGER.debug("init ModTable UI")
         self.setSelectionBehavior(QtWidgets.QTableView.SelectRows)
         self.setObjectName("mod_table")
-        grid.addWidget(self, 6, 0, 1, 8)
+        grid.addWidget(self, 6, 0, 1, 8) # from old qtdesigner file
 
         self.setModel(ModTableModel(self, self.manager))
         hheader = self.horizontalHeader()  # type: QHeaderView
         hheader.setHighlightSections(False)
         hheader.setSectionResizeMode(constants.COL_NAME, QHeaderView.Stretch)
-        hheader.setDefaultAlignment(_Qt.AlignLeft)
+        hheader.setDefaultAlignment(Qt.AlignLeft)
 
         # f = hheader.font() #type: QtGui.QFont
         # f = QtGui.QFont('cursive')
@@ -169,7 +230,7 @@ class ModTableView(QtWidgets.QTableView):
 
         vheader = self.verticalHeader()  # type: QHeaderView
         vheader.setFont(QtGui.QFont('mono', 10))
-        vheader.setDefaultAlignment(_Qt.AlignRight)
+        vheader.setDefaultAlignment(Qt.AlignRight)
 
         self.doubleClicked.connect(self._model.on_doubleClick)
 
@@ -181,23 +242,12 @@ class ModTableView(QtWidgets.QTableView):
     def loadData(self):
         self._model.loadData()
         self.resizeColumnsToContents()
-
-
-
-# self.mod_table = QtWidgets.QTableView(self.installed_mods_tab)
-# self.mod_table.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-# self.mod_table.setDragDropOverwriteMode(False)
-# self.mod_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
-# self.mod_table.setObjectName("mod_table")
-# self.mod_table.horizontalHeader().setVisible(False)
-# self.mod_table.horizontalHeader().setHighlightSections(False)
-# self.mod_table.horizontalHeader().setSortIndicatorShown(False)
-# self.mod_table.horizontalHeader().setStretchLastSection(True)
-# self.mod_table.verticalHeader().setVisible(False)
-# self.gridLayout_2.addWidget(self.mod_table, 6, 0, 1, 8)
-
-
-
+        
+    # def edit(self, index, trigger=None, event=None):
+    #     if index.column() == constants.COL_NAME:
+    #         return super(ModTableView, self).edit(index, trigger, event)
+    #     else:
+    #         return False
 
 
 if __name__ == '__main__':

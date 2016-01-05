@@ -167,6 +167,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.mod_table.loadData()
 
+        self.mod_table.model().tableDirtyStatusChange.connect( self.save_cancel_btnbox.setEnabled)
+
         self.SetupDone()
 
 
