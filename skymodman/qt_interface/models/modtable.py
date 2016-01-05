@@ -84,6 +84,8 @@ class ModTableModel(QtCore.QAbstractTableModel):
             return self.mods[index.row()][col]
         elif role == Qt.CheckStateRole and col == constants.COL_ENABLED:
             return self.mods[index.row()].checkState
+        elif role == Qt.EditRole and col == constants.COL_NAME:
+            return self.mods[index.row()].name
 
     def setData(self, index, value:str, role=None):
         """ Qt-override.
