@@ -101,7 +101,7 @@ class ModManager:
         that will be used to provide data to the rest of the app.
         :return:
         """
-
+        self.LOGGER.debug("loading data for active profile")
         # try to read modinfo file
         if self.DB.loadModDB(self.active_profile.modinfo):
             # if successful, validate modinfo
@@ -158,7 +158,7 @@ class ModManager:
         """Convenience method for table-display
         :return: tuples of form (order-num, enabled-status, mod ID, version, name)
         """
-        yield from (ModEntry(*row) for row in self.DB.execute_("SELECT iorder, name, modid, version, enabled FROM mods"))
+        yield from (me for me in map(ModEntry._make, self.DB.execute_("SELECT enabled, name, modid, version, iorder FROM mods")))
 
     def enabledMods(self):
         yield from self.DB.enabledMods(True)

@@ -10,7 +10,7 @@ import PyQt5.QtWidgets as QtW
 import skymodman.constants as const
 from skymodman.qt_interface.qt_manager_ui import Ui_MainWindow
 from skymodman.qt_interface.widgets import custom_widgets
-from skymodman.qt_interface.models import ProfileListModel
+from skymodman.qt_interface.models import ProfileListModel, ModTableModel, ModTableView
 from skymodman.utils import withlogger, Notifier, ModEntry
 # from collections import OrderedDict
 from skymodman import skylog
@@ -33,9 +33,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # reference to the Mod Manager
         self._manager = manager
 
-        setupSlots = [self.setupTable,
-                      self.setupFileTree,
-                      self.setupProfileSelector]
+        setupSlots = [
+            self.setupProfileSelector,
+            self.setupFileTree,
+            self.setupTable,
+                      ]
 
         # connect the windowinit signal to the setup slots
         for s in setupSlots:
@@ -49,6 +51,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # setup the base ui
         self.setupUi(self)
+
+        #init mod table
+        self.mod_table = ModTableView(self, self.Manager)
 
         # connect the buttons
 
@@ -87,6 +92,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # self.updateUI()
         self.modNameBeingEdited.connect(self.beginEditModName)
         self._saved_mod_name = None
+
 
         self.windowInitialized.emit()
 
@@ -155,6 +161,16 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     # ===================================
 
     def setupTable(self):
+        self.logger.debug("setupTable begin")
+        self.Manager.loadActiveProfileData()
+        self.mod_table.initUI(self.installed_mods_layout)
+
+        self.mod_table.loadData()
+
+        self.SetupDone()
+
+
+    def setupTable_widget(self):
         # populate database with data from disk
         self.Manager.loadActiveProfileData()
 
@@ -403,7 +419,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             # set new profile as active and load data
             self.profile_selector.setCurrentIndex(self.profile_selector.findText(new_profile.name, Qt.MatchFixedString))
 
-            #todo: load new data into table
 
     @pyqtSlot('int')
     def onProfileChange(self, index):
@@ -436,7 +451,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     def loadActiveProfile(self):
         """For now, this just repopulates the mod-table. There might be more to it later"""
         self.LOGGER.debug("About to repopulate table")
-        self.populateModTable()
+        # self.populateModTable()
+        self.mod_table.loadData()
         self.updateUI()
 
 

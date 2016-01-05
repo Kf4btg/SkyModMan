@@ -61,9 +61,14 @@ class DBManager:
     def reinit(self):
         """Drop the current mods table and reinitialize as empty"""
 
-        self._con.execute("DROP TABLE mods")
+        self.LOGGER.debug("dropping mods table")
 
-        self._con.execute(self._SCHEMA)
+        with self._con:
+            self._con.execute("DROP TABLE mods")
+
+            self._con.execute(self._SCHEMA)
+
+        # print([t for t in self._con.execute("select * from mods")])
 
     @property
     def conn(self) -> sqlite3.Connection:
@@ -89,6 +94,9 @@ class DBManager:
         populate the in-memory database
         :param json_source: path to modinfo.json file (either pathlib.Path or string)
         """
+
+        self.LOGGER.debug("loading mod db from file")
+
 
         if not isinstance(json_source, Path):
             json_source = Path(json_source)
@@ -179,52 +187,52 @@ class DBManager:
             json.dump(modinfo, f, indent=1)
 
     # db modification convenience method
-    def updateField(self, row: int, col: int, value) -> bool:
-        """
-        Modify the value of the `enabled` or `name` attribute for the mod at place `row` in the install order
-        :param row: install order (index) of mod
-        :param col: which field to modify; must be either constants.COL_ENABLED or constants.COL_NAME
-        :param value: if col==COL_ENABLED, must be either `True` or `False`. if COL_NAME, must be a string
-        :return: True or False depending on whether transaction succeeded or not
-        """
-        success = True
-        if col == constants.COL_ENABLED:
-            assert isinstance(value, bool)
-
-            try:
-                with self._con:
-                    # self.LOGGER.debug("Old Value for enabled: {}".format(
-                    #         self._con.execute("select enabled from mods where iorder = ?", (row, )).fetchall()))
-
-                    self._con.execute("UPDATE mods SET enabled = ? WHERE iorder = ?", (int(value), row))
-
-                    # self.LOGGER.debug("New Value for enabled: {}".format(
-                    #     self._con.execute("select enabled from mods where iorder = ?", (row,)).fetchall()))
-            except sqlError as e:
-                self.LOGGER.error("SQL transaction error when updating mod enabled state: '{}'".format(e))
-                success = False
-
-        elif col == constants.COL_NAME:
-            assert isinstance(value, str)
-
-            try:
-                with self._con:
-                    # self.LOGGER.debug("Old Value for name: {}".format(
-                    #         self._con.execute("select name from mods where iorder = ?", (row,)).fetchall()))
-
-                    self._con.execute("UPDATE mods SET name = ? WHERE iorder = ?", (value, row))
-
-                    # self.LOGGER.debug("New Value for name: {}".format(
-                    #         self._con.execute("select name from mods where iorder = ?", (row,)).fetchall()))
-            except sqlError as e:
-                self.LOGGER.error("SQL transaction error when updating mod name: '{}'".format(e))
-                success = False
-
-        else:
-            self.LOGGER.error("Column {} is not a modifiable field.".format(col))
-            success = False
-
-        return success
+    # def updateField(self, row: int, col: int, value) -> bool:
+    #     """
+    #     Modify the value of the `enabled` or `name` attribute for the mod at place `row` in the install order
+    #     :param row: install order (index) of mod
+    #     :param col: which field to modify; must be either constants.COL_ENABLED or constants.COL_NAME
+    #     :param value: if col==COL_ENABLED, must be either `True` or `False`. if COL_NAME, must be a string
+    #     :return: True or False depending on whether transaction succeeded or not
+    #     """
+    #     success = True
+    #     if col == constants.COL_ENABLED:
+    #         assert isinstance(value, bool)
+    #
+    #         try:
+    #             with self._con:
+    #                 # self.LOGGER.debug("Old Value for enabled: {}".format(
+    #                 #         self._con.execute("select enabled from mods where iorder = ?", (row, )).fetchall()))
+    #
+    #                 self._con.execute("UPDATE mods SET enabled = ? WHERE iorder = ?", (int(value), row))
+    #
+    #                 # self.LOGGER.debug("New Value for enabled: {}".format(
+    #                 #     self._con.execute("select enabled from mods where iorder = ?", (row,)).fetchall()))
+    #         except sqlError as e:
+    #             self.LOGGER.error("SQL transaction error when updating mod enabled state: '{}'".format(e))
+    #             success = False
+    #
+    #     elif col == constants.COL_NAME:
+    #         assert isinstance(value, str)
+    #
+    #         try:
+    #             with self._con:
+    #                 # self.LOGGER.debug("Old Value for name: {}".format(
+    #                 #         self._con.execute("select name from mods where iorder = ?", (row,)).fetchall()))
+    #
+    #                 self._con.execute("UPDATE mods SET name = ? WHERE iorder = ?", (value, row))
+    #
+    #                 # self.LOGGER.debug("New Value for name: {}".format(
+    #                 #         self._con.execute("select name from mods where iorder = ?", (row,)).fetchall()))
+    #         except sqlError as e:
+    #             self.LOGGER.error("SQL transaction error when updating mod name: '{}'".format(e))
+    #             success = False
+    #
+    #     else:
+    #         self.LOGGER.error("Column {} is not a modifiable field.".format(col))
+    #         success = False
+    #
+    #     return success
 
 
     # db-query convenience methods

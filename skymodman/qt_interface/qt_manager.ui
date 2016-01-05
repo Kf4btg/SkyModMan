@@ -33,7 +33,7 @@
        <attribute name="toolTip">
         <string>Currently installed mods</string>
        </attribute>
-       <layout class="QGridLayout" name="gridLayout_2">
+       <layout class="QGridLayout" name="installed_mods_layout">
         <item row="0" column="2">
          <widget class="QToolButton" name="new_profile_button">
           <property name="toolTip">
@@ -45,19 +45,6 @@
           <property name="icon">
            <iconset theme="add">
             <normaloff>.</normaloff>.</iconset>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="0" alignment="Qt::AlignLeft">
-         <widget class="QLabel" name="profile_label">
-          <property name="text">
-           <string>Profile:</string>
-          </property>
-          <property name="textInteractionFlags">
-           <set>Qt::NoTextInteraction</set>
-          </property>
-          <property name="buddy">
-           <cstring>profile_selector</cstring>
           </property>
          </widget>
         </item>
@@ -91,6 +78,19 @@
           </property>
          </widget>
         </item>
+        <item row="0" column="0" alignment="Qt::AlignLeft">
+         <widget class="QLabel" name="profile_label">
+          <property name="text">
+           <string>Profile:</string>
+          </property>
+          <property name="textInteractionFlags">
+           <set>Qt::NoTextInteraction</set>
+          </property>
+          <property name="buddy">
+           <cstring>profile_selector</cstring>
+          </property>
+         </widget>
+        </item>
         <item row="0" column="1">
          <widget class="QComboBox" name="profile_selector">
           <item>
@@ -101,163 +101,6 @@
           <item>
            <property name="text">
             <string>Not Default</string>
-           </property>
-          </item>
-         </widget>
-        </item>
-        <item row="6" column="0" colspan="8">
-         <widget class="QTableWidget" name="mod_table">
-          <property name="selectionBehavior">
-           <enum>QAbstractItemView::SelectRows</enum>
-          </property>
-          <attribute name="horizontalHeaderHighlightSections">
-           <bool>false</bool>
-          </attribute>
-          <attribute name="horizontalHeaderStretchLastSection">
-           <bool>true</bool>
-          </attribute>
-          <row>
-           <property name="text">
-            <string>1</string>
-           </property>
-          </row>
-          <row>
-           <property name="text">
-            <string>2</string>
-           </property>
-          </row>
-          <row>
-           <property name="text">
-            <string>3</string>
-           </property>
-          </row>
-          <row>
-           <property name="text">
-            <string>4</string>
-           </property>
-          </row>
-          <column>
-           <property name="text">
-            <string/>
-           </property>
-          </column>
-          <column>
-           <property name="text">
-            <string>Mod ID</string>
-           </property>
-          </column>
-          <column>
-           <property name="text">
-            <string>Version</string>
-           </property>
-          </column>
-          <column>
-           <property name="text">
-            <string>Name</string>
-           </property>
-          </column>
-          <item row="0" column="0">
-           <property name="text">
-            <string/>
-           </property>
-           <property name="checkState">
-            <enum>Checked</enum>
-           </property>
-           <property name="flags">
-            <set>ItemIsSelectable|ItemIsDragEnabled|ItemIsDropEnabled|ItemIsUserCheckable|ItemIsEnabled</set>
-           </property>
-          </item>
-          <item row="0" column="1">
-           <property name="text">
-            <string>5878</string>
-           </property>
-          </item>
-          <item row="0" column="2">
-           <property name="text">
-            <string>d5464</string>
-           </property>
-          </item>
-          <item row="0" column="3">
-           <property name="text">
-            <string>Test Mod 1</string>
-           </property>
-          </item>
-          <item row="1" column="0">
-           <property name="text">
-            <string/>
-           </property>
-           <property name="checkState">
-            <enum>Checked</enum>
-           </property>
-           <property name="flags">
-            <set>ItemIsSelectable|ItemIsDragEnabled|ItemIsDropEnabled|ItemIsUserCheckable|ItemIsEnabled</set>
-           </property>
-          </item>
-          <item row="1" column="1">
-           <property name="text">
-            <string>46840</string>
-           </property>
-          </item>
-          <item row="1" column="2">
-           <property name="text">
-            <string>v1.0</string>
-           </property>
-          </item>
-          <item row="1" column="3">
-           <property name="text">
-            <string>Cool Mod 2</string>
-           </property>
-          </item>
-          <item row="2" column="0">
-           <property name="text">
-            <string/>
-           </property>
-           <property name="checkState">
-            <enum>Checked</enum>
-           </property>
-           <property name="flags">
-            <set>ItemIsSelectable|ItemIsDragEnabled|ItemIsDropEnabled|ItemIsUserCheckable|ItemIsEnabled</set>
-           </property>
-          </item>
-          <item row="2" column="1">
-           <property name="text">
-            <string>0</string>
-           </property>
-          </item>
-          <item row="2" column="2">
-           <property name="text">
-            <string>big bertha</string>
-           </property>
-          </item>
-          <item row="2" column="3">
-           <property name="text">
-            <string>Crappy Mod 0</string>
-           </property>
-          </item>
-          <item row="3" column="0">
-           <property name="text">
-            <string/>
-           </property>
-           <property name="checkState">
-            <enum>Checked</enum>
-           </property>
-           <property name="flags">
-            <set>ItemIsSelectable|ItemIsDragEnabled|ItemIsDropEnabled|ItemIsUserCheckable|ItemIsEnabled</set>
-           </property>
-          </item>
-          <item row="3" column="1">
-           <property name="text">
-            <string>0</string>
-           </property>
-          </item>
-          <item row="3" column="2">
-           <property name="text">
-            <string>0.0.1</string>
-           </property>
-          </item>
-          <item row="3" column="3">
-           <property name="text">
-            <string>Supercalifragilisticexpialidocious</string>
            </property>
           </item>
          </widget>
@@ -509,12 +352,12 @@
       <string>&amp;Ini Files</string>
      </property>
      <addaction name="actionSkyrim_ini"/>
+     <addaction name="actionSkyrimPrefs_ini"/>
     </widget>
     <addaction name="actionSet_As_Default"/>
     <addaction name="separator"/>
     <addaction name="actionLoad"/>
     <addaction name="actionNew"/>
-    <addaction name="actionCopy"/>
     <addaction name="actionDelete"/>
     <addaction name="separator"/>
     <addaction name="menuIni_Files"/>
@@ -600,17 +443,17 @@
     <string>&amp;Skyrim.ini</string>
    </property>
   </action>
-  <action name="actionCopy">
-   <property name="text">
-    <string>&amp;Copy</string>
-   </property>
-  </action>
   <action name="actionSet_As_Default">
    <property name="checkable">
     <bool>true</bool>
    </property>
    <property name="text">
     <string>&amp;Default</string>
+   </property>
+  </action>
+  <action name="actionSkyrimPrefs_ini">
+   <property name="text">
+    <string>SkyrimPrefs.ini</string>
    </property>
   </action>
  </widget>

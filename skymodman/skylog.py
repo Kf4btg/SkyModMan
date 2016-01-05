@@ -2,7 +2,6 @@ import logging.config
 import logging.handlers
 import logging as Logging
 from queue import Queue
-import threading
 
 
 __logging_queue = None # type: Queue

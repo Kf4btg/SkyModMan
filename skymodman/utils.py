@@ -50,4 +50,4 @@ class Notifier:
             calls+=1
 
 
-ModEntry = namedtuple("ModEntry", ['order', 'name', 'id', 'version', 'enabled'])
+ModEntry = namedtuple("ModEntry", ['enabled', 'name', 'id', 'version', 'order'])
