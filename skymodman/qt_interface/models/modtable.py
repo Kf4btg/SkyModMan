@@ -54,6 +54,10 @@ class ModTableModel(QtCore.QAbstractTableModel):
 
         self.LOGGER.debug("init ModTableModel")
 
+    @property
+    def isDirty(self):
+        return len(self.modified_rows) > 0
+
     def rowCount(self, parent = QtCore.QModelIndex(), *args, **kwargs):
         """
         Number of mods installed
@@ -237,6 +241,9 @@ class ModTableModel(QtCore.QAbstractTableModel):
         :return:
         """
         self.beginResetModel()
+        # set (or reset) the list of tracked changes
+        self.modified_rows = {}
+        # load fresh mod info
         self.mods = [QModEntry._make(e) for e in self.manager.basicModInfo()]
         self.endResetModel()
     #
