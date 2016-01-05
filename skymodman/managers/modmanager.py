@@ -2,6 +2,8 @@ from skymodman import exceptions
 from skymodman.utils import withlogger, ModEntry
 from skymodman.managers import config, database, profiles
 
+from typing import List
+
 
 @withlogger
 class ModManager:
@@ -165,6 +167,41 @@ class ModManager:
 
     def disabledMods(self):
         yield from self.DB.disabledMods(True)
+
+    # def updateMods(self, updated: List[ModEntry], old_mod_ranks:List[int]):
+    def saveUserEdits(self, changes):
+        """
+        :param changes: an iterable of 3-tuples of form (mod_name, enabled_status, iorder-rank)
+        """
+        # :param updated: the ModEntry named tuple holding the new values
+        # :param old_mod_ranks: the 'iorder' number for the mod to be replaced. If mod install-order has not
+        # changed, then this will match the order number for the updated entry.
+        # :return:
+
+        # test
+        # print([r for r in [s for c in changes for s in
+        #                    self._db_manager.conn.execute("select * from mods where iorder = ?", (c[2],))]
+        #        ])
+
+
+        # fixme: at the moment, this doesn't handle install-order changes
+        self._db_manager.updatemany_("UPDATE mods SET name=?, enabled=? WHERE iorder = ?", changes)
+
+
+        # And now save changes to disk
+        self.saveModList()
+
+
+
+        # query = "DELETE FROM mods WHERE iorder in ("
+        # for i in range(len(old_mod_ranks)-1):
+        #     query+="?, "
+        # else:
+        #     query+="?)" # finish off the group
+        #
+        #
+        # self._db_manager.update_(query, old_mod_ranks)
+        # self._db_manager.updatemany_("INSERT into mods VALUES (:")
 
 
 

@@ -61,7 +61,7 @@ class DBManager:
     def reinit(self):
         """Drop the current mods table and reinitialize as empty"""
 
-        self.LOGGER.debug("dropping mods table")
+        self.LOGGER.debug("truncating mods table")
 
         with self._con:
             self._con.execute("DROP TABLE mods")
@@ -149,7 +149,7 @@ class DBManager:
 
     def update_(self, sql, params: Iterable=None):
         """
-        As execute_, but for UPDATE and INSERT commands. Returns the cursor object that was created to execute the statement.
+        As execute_, but for UPDATE, INSERT, DELETE, etc. commands. Returns the cursor object that was created to execute the statement.
         :param sql:
         :param params:
         """
@@ -158,6 +158,18 @@ class DBManager:
                 return self._con.execute(sql, params)
             else:
                 return self._con.execute(sql)
+
+    def updatemany_(self, sql, params: Iterable=None):
+        """
+        As update_, but for multiple transactions. Returns the cursor object that was created to execute the statement.
+        :param sql:
+        :param params:
+        """
+        with self._con:
+            if params:
+                return self._con.executemany(sql, params)
+            else:
+                return self._con.executemany(sql)
 
     def saveModDB(self, json_target):
         """
@@ -445,4 +457,16 @@ if __name__ == '__main__':
     from skymodman.managers import ModManager
 
     # test()
-    testload()
+    # testload()
+    DB = DBManager(ModManager())
+    DB.loadModDB(Path(os.path.expanduser("~/.config/skymodman/profiles/default/modinfo.json")))
+
+    # print(DB.getOne("Select * from mods where iorder = 22"))
+    [ print(r) for r in DB.execute_("Select * from mods where iorder BETWEEN 20 AND 24")]
+
+    DB.conn.execute("DELETE FROM mods WHERE iorder = 22")
+    [ print(r) for r in DB.execute_("Select * from mods where iorder BETWEEN 20 AND 24")]
+
+    DB.conn.execute("INSERT into mods (name, directory, iorder) VALUES ('boogawooga', 'boogawoogadir', 22)")
+
+    [ print(r) for r in DB.execute_("Select * from mods where iorder BETWEEN 20 AND 24")]

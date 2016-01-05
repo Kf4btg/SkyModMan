@@ -355,15 +355,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         the modified status of the mods to a file
         :return:
         """
-
-        for cell in self._modified_cells:
-            row, col = cell
-            item = self.mod_table.item(row, col)
-            order = self.mod_table.verticalHeaderItem(row).text()
-            if col == const.COL_NAME:
-                self.Manager.updateModName(int(order), item.text())
-            elif col==const.COL_ENABLED:
-                self.Manager.updateModState(int(order), item.checkState()==Qt.Checked)
+        self.mod_table.saveChanges()
+        # for cell in self._modified_cells:
+        #     row, col = cell
+        #     item = self.mod_table.item(row, col)
+        #     order = self.mod_table.verticalHeaderItem(row).text()
+        #     if col == const.COL_NAME:
+        #         self.Manager.updateModName(int(order), item.text())
+        #     elif col==const.COL_ENABLED:
+        #         self.Manager.updateModState(int(order), item.checkState()==Qt.Checked)
 
         # commit changes
         # self.Manager.saveModList()
@@ -380,7 +380,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             #                                 bool(self.mod_table.item(cell[0], cell[1]).checkState()))
 
 
-        self._modified_cells.clear()
+        # self._modified_cells.clear()
         # self.modListSaved.emit()
         self.updateUI()
 
