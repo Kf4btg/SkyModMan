@@ -164,12 +164,10 @@ class ConfigManager:
         """
         #TODO: perhaps just include a default config file and copy it in place.
 
-
         # default data directory
         # TODO: will need to figure something else out if there's ever a need to get this working on a non-linux OS (e.g. OS X)
         default_data_dir = Path(os.getenv("XDG_DATA_HOME",
                                           os.path.expanduser("~/.local/share"))) / ConfigManager.__APPNAME
-
 
         config = configparser.ConfigParser()
 
@@ -236,7 +234,5 @@ if __name__ == '__main__':
     # getConfig()
 
     cm = ConfigManager()
-
-    # _logger.debug("Current profile: " + cm.profile)
 
     skylog.stop_listener()

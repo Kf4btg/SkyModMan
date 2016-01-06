@@ -1,5 +1,4 @@
 from skymodman import skylog
-# from collections import namedtuple
 
 def withlogger(cls):
     """Class decorator to add a logger to the class"""
@@ -58,5 +57,3 @@ def counter():
         return count
     return inc
 
-
-#ModEntry = namedtuple("ModEntry", ['enabled', 'name', 'id', 'version', 'ordinal'])
