@@ -84,6 +84,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.table_unsaved = False
 
+
         self.windowInitialized.emit()
 
 
@@ -157,6 +158,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.mod_table.loadData()
 
+        # when the list of modified rows changes from empty to
+        # non-empty or v.v., enabled/disable the save/cancel btns
         self.mod_table.model().tableDirtyStatusChange.connect(self.markTableUnsaved)
 
         self.SetupDone()
@@ -199,6 +202,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 self.logger.debug("Setting {} as chosen profile".format(name))
                 start_idx=model.rowCount()-1
 
+                # see if we should enable the remove-profile button
+                self.checkEnableProfileDelete(name)
+
         self.profile_selector.setModel(model)
         self.profile_selector.setCurrentIndex(start_idx)
         self.profile_selector.currentIndexChanged.connect(self.onProfileChange)
@@ -212,7 +218,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     def onNewProfileClick(self):
         popup = custom_widgets.NewProfileDialog()
         popup.comboBox.setModel(self.profile_selector.model())
-        # popup.dataReady.connect(self.newProfileData)
 
         # display popup, wait for close and check signal
         if popup.exec_() == popup.Accepted:
@@ -249,6 +254,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
             self.LOGGER.info("Activating profile '{}'".format(new_profile))
             self.Manager.active_profile = new_profile
+
+            # if this is the profile 'default', disable the remove button
+            self.checkEnableProfileDelete(new_profile)
+
             self.loadActiveProfile()
 
     def loadActiveProfile(self):
@@ -257,7 +266,19 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.mod_table.loadData()
         self.updateUI()
 
-
+    def checkEnableProfileDelete(self, profile_name):
+        """
+        If the profile name is anything other than the default profile
+        (likely 'default') enable the remove_profile button
+        :param profile_name:
+        :return:
+        """
+        if profile_name.lower() == 'default':
+            self.remove_profile_button.setEnabled(False)
+            self.remove_profile_button.setToolTip('Cannot Remove Default Profile')
+        else:
+            self.remove_profile_button.setEnabled(True)
+            self.remove_profile_button.setToolTip('Remove Profile')
 
 def quit_app():
     skylog.stop_listener()

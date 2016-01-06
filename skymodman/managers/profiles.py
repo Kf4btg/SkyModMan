@@ -236,7 +236,7 @@ class ProfileManager:
 
         assert isinstance(profile, Profile)
 
-        if profile.name == "default":
+        if profile.name.lower() == "default":
             raise exceptions.DeleteDefaultProfileError("default")
 
 
@@ -244,12 +244,4 @@ class ProfileManager:
             if f.exists(): f.unlink()
 
         profile.folder.rmdir()
-
-
-
-
-
-
-
-
 
