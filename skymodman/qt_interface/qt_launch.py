@@ -12,7 +12,6 @@ from skymodman.qt_interface.qt_manager_ui import Ui_MainWindow
 from skymodman.qt_interface.widgets import custom_widgets, message
 from skymodman.qt_interface.models import ProfileListModel, ModTableView
 from skymodman.utils import withlogger, Notifier
-# from collections import OrderedDict
 from skymodman import skylog
 
 @withlogger
@@ -20,7 +19,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     modListModified = pyqtSignal()
     modListSaved = pyqtSignal()
-    # changesCanceled = pyqtSignal()
 
     windowInitialized = pyqtSignal()
     modNameBeingEdited = pyqtSignal(str)
@@ -65,7 +63,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.save_cancel_btnbox.button(QDialogButtonBox.Reset).clicked.connect(self.revertTable)
 
         # connect the actions
-        self.action_Quit.triggered.connect(quit_app)
+        self.action_Quit.triggered.connect(self.safeQuitApp)
         self.action_Install_Fomod.triggered.connect(self.loadFomod)
 
         # keep track of changes made to mod list
@@ -81,12 +79,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # connect other signals
         self.manager_tabs.currentChanged.connect(self.updateUI)
 
-        # update UI
-        # self.updateUI()
-
-        self.table_unsaved = False
-
-
+        # Let sub-widgets know the main window is initialized
         self.windowInitialized.emit()
 
 
@@ -213,9 +206,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.new_profile_button.clicked.connect(self.onNewProfileClick)
         self.remove_profile_button.clicked.connect(self.onRemoveProfileClick)
 
-        # and if we choose to delete the profile...
-        # self.deleteProfileAction.connect()
-
         # let setup know we're done here
         self.SetupDone()
 
@@ -257,15 +247,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 return
 
             # check for unsaved changes to the mod-list
-            if self.mod_table.model().isDirty:
-                ok = QtW.QMessageBox(QtW.QMessageBox.Warning, 'Unsaved Changes', 'Your mod install-order has unsaved changes. Would you like to save them before continuing?', QtW.QMessageBox.No | QtW.QMessageBox.Yes).exec_()
-
-
-                if ok == QtW.QMessageBox.Yes:
-                    self.saveModsList()
-                else:
-                    # don't bother reverting, mods list is getting reset; just disable the buttons
-                    self.markTableUnsaved(False)
+            self.checkUnsavedChanges()
 
             self.LOGGER.info("Activating profile '{}'".format(new_profile))
             self.Manager.active_profile = new_profile
@@ -294,6 +276,38 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         else:
             self.remove_profile_button.setEnabled(True)
             self.remove_profile_button.setToolTip('Remove Profile')
+
+    def checkUnsavedChanges(self):
+        """
+        Check for unsaved changes to the mods list and show a prompt if any are found.
+        Clicking yes will save the changes and mark the table clean, while clicking no will
+        simply disable the apply/revert buttons as IF the table were clean. This is because
+        this is intended to be used right before an action like loading a new profile
+        (thus forcing a full table reset) or quitting the app.
+        """
+        # check for unsaved changes to the mod-list
+        if self.mod_table.model().isDirty:
+            ok = QtW.QMessageBox(QtW.QMessageBox.Warning, 'Unsaved Changes',
+                                 'Your mod install-order has unsaved changes. Would you like to save them before continuing?',
+                                 QtW.QMessageBox.No | QtW.QMessageBox.Yes).exec_()
+
+            if ok == QtW.QMessageBox.Yes:
+                self.saveModsList()
+            else:
+                # don't bother reverting, mods list is getting reset; just disable the buttons
+                self.markTableUnsaved(False)
+
+
+    def safeQuitApp(self):
+        """
+        Show a prompt if there are anay unsaved changes, then close the program.
+        """
+        self.checkUnsavedChanges()
+        self.Manager.DB.shutdown()
+
+        quit_app()
+
+
 
 def quit_app():
     skylog.stop_listener()
