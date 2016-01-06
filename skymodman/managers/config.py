@@ -87,6 +87,9 @@ class ConfigManager:
         self.paths.dir_vfs = Path(config['General']['virtualfsmountpoint'])
         self._lastprofile = config['General']['lastprofile']
 
+
+
+
     def ensureDefaultSetup(self):
         """
         Make sure that all the required files and directories exist,
@@ -145,6 +148,12 @@ class ConfigManager:
                 self.paths.dir_mods.mkdir(parents=True)
             else:
                 self.LOGGER.error("Configured mods directory not found")
+
+        # ensure that 'lastprofile' exists in profiles dir, or fallback to default
+        lpdir = self.paths.dir_profiles / self._lastprofile
+        if not lpdir.exists():
+            self.LOGGER.error("Directory for last-loaded profile '{}' could not be found! Falling back to default.".format(self._lastprofile))
+            self._lastprofile = self.__DEFAULT_PROFILE
 
 
     def create_default_config(self):
