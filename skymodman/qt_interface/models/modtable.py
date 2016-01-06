@@ -1,6 +1,6 @@
 from PyQt5 import QtCore, QtWidgets, QtGui
 from PyQt5.QtWidgets import QHeaderView
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QItemSelection
 from typing import List
 
 from skymodman import constants, ModEntry
@@ -208,7 +208,7 @@ class ModTableModel(QtCore.QAbstractTableModel):
         col = index.column()
 
         if col == self.COL_ENABLED:
-            return Qt.ItemIsEnabled | Qt.ItemIsUserCheckable
+            return Qt.ItemIsEnabled | Qt.ItemIsUserCheckable | Qt.ItemIsSelectable
 
         _flags = Qt.NoItemFlags #start with nothing
 
@@ -232,7 +232,6 @@ class ModTableModel(QtCore.QAbstractTableModel):
         idx_start = self.index(row, 0)
         idx_end = self.index(row, self.columnCount())
         self.dataChanged.emit(idx_start, idx_end)
-    
 
     def loadData(self):
         """
@@ -311,13 +310,16 @@ class ModTableModel(QtCore.QAbstractTableModel):
 
 
 
-
 @withlogger
 class ModTableView(QtWidgets.QTableView):
     """
     Slightly specialized QTableView to help with displaying the custom model
      (and to allow refactoring of a lot of the table-specific code out of the MainWindow class)
     """
+
+    itemsSelected = pyqtSignal()
+    selectionCleared = pyqtSignal()
+
     def __init__(self, parent, manager, *args, **kwargs):
         super(ModTableView, self).__init__(parent, *args, **kwargs)
         self.manager = manager
@@ -328,6 +330,7 @@ class ModTableView(QtWidgets.QTableView):
     def initUI(self, grid):
         self.LOGGER.debug("init ModTable UI")
         self.setSelectionBehavior(QtWidgets.QTableView.SelectRows)
+        self.setSelectionMode(QtWidgets.QAbstractItemView.ContiguousSelection)
         self.setObjectName("mod_table")
         grid.addWidget(self, 1, 0, 1, 5) # from old qtdesigner file
 
@@ -364,6 +367,20 @@ class ModTableView(QtWidgets.QTableView):
 
     def saveChanges(self):
         self._model.save()
+
+    def selectionChanged(self, selected: QItemSelection, deselected: QItemSelection):
+        # self.LOGGER.debug("Selection Changed:\n    selected: {}\n    deselected: {}".format(selected.indexes(), deselected.indexes()))
+        # self.LOGGER.debug("SelectedIndexes:\n   {}".format(self.selectedIndexes()))
+        if len(self.selectedIndexes()) > 0:
+            self.itemsSelected.emit()
+        else:
+            self.selectionCleared.emit()
+            
+            
+        super(ModTableView, self).selectionChanged(selected, deselected)
+
+
+
         
     # def edit(self, index, trigger=None, event=None):
     #     if index.column() == constants.COL_NAME:

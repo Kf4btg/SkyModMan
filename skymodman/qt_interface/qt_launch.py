@@ -14,6 +14,10 @@ from skymodman.qt_interface.models import ProfileListModel, ModTableView
 from skymodman.utils import withlogger, Notifier
 from skymodman import skylog
 
+
+from typing import List
+from PyQt5.QtCore import QModelIndex
+
 @withlogger
 class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
@@ -24,6 +28,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     modNameBeingEdited = pyqtSignal(str)
 
     deleteProfileAction = pyqtSignal(str)
+
+    moveModUp = pyqtSignal()
+    moveModDown = pyqtSignal()
     
 
     def __init__(self, manager: 'managers.ModManager', *args, **kwargs):
@@ -57,10 +64,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # connect the buttons
 
-        # use a dialog-button-box
+        # use a dialog-button-box for save/cancel
         # have to specify by standard button type
         self.save_cancel_btnbox.button(QDialogButtonBox.Apply).clicked.connect(self.saveModsList)
         self.save_cancel_btnbox.button(QDialogButtonBox.Reset).clicked.connect(self.revertTable)
+
+        # connect mod move-up/down
+        self.mod_up_button.clicked.connect(self.moveModUp.emit)
+        self.mod_down_button.clicked.connect(self.moveModDown.emit)
+
 
         # connect the actions
         self.action_Quit.triggered.connect(self.safeQuitApp)
@@ -156,12 +168,33 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # when the list of modified rows changes from empty to
         # non-empty or v.v., enabled/disable the save/cancel btns
         self.mod_table.model().tableDirtyStatusChange.connect(self.markTableUnsaved)
+        self.mod_table.itemsSelected.connect(self.onModsSelected)
+        self.mod_table.selectionCleared.connect(self.onSelectionCleared)
 
         self.SetupDone()
 
+    def onModsSelected(self):
+        """
+        Enable or disable movement buttons as needed
+        :return:
+        """
+        self.move_mod_box.setEnabled(True)
+
+        model = self.mod_table.model()
+
+        indexes = self.mod_table.selectedIndexes() #type: List[QModelIndex]
+        index1 = model.index(0,0)
+        index_last = model.index(model.rowCount()-1, 0)
+
+        self.mod_up_button.setEnabled(index1 not in indexes)
+        self.mod_down_button.setEnabled(index_last not in indexes)
+
+    def onSelectionCleared(self):
+        self.move_mod_box.setEnabled(False)
+
+
     def markTableUnsaved(self, unsaved_changes_present: bool):
-        self.table_unsaved = unsaved_changes_present
-        self.save_cancel_btnbox.setEnabled(self.table_unsaved)
+        self.save_cancel_btnbox.setEnabled(unsaved_changes_present)
 
 
     def revertTable(self):

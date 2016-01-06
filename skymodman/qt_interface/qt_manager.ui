@@ -79,6 +79,9 @@
        <layout class="QGridLayout" name="installed_mods_layout">
         <item row="0" column="3">
          <widget class="QGroupBox" name="move_mod_box">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
           <property name="title">
            <string/>
           </property>
@@ -394,7 +397,7 @@
      <x>0</x>
      <y>0</y>
      <width>800</width>
-     <height>34</height>
+     <height>26</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_File">
