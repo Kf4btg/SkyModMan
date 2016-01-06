@@ -9,14 +9,14 @@ from typing import List, Tuple, Union, Iterable
 from skymodman import constants
 from skymodman.utils import withlogger
 
-_iorder = int
+_ordinal = int
 _modid = int
 _modver = str
 _moddir = str
 _modname = str
 _modenabled = int
 
-DBRow = Tuple[_iorder,
+DBRow = Tuple[_ordinal,
               _modid,
               _modver,
               _moddir,
@@ -28,7 +28,7 @@ DBRow = Tuple[_iorder,
 class DBManager:
 
     _SCHEMA = """CREATE TABLE mods (
-            iorder    INTEGER primary key,
+            ordinal   INTEGER primary key,
             modid     INTEGER,
             version   TEXT,
             directory TEXT    unique,
@@ -47,7 +47,7 @@ class DBManager:
         self._con = sqlite3.connect(":memory:")
 
         # create the mods table
-        # NOTE: `iorder` (i.e. the mod "install-order") is not
+        # NOTE: `ordinal` (i.e. the mod's place in the "install-order") is not
         # stored on disk with the rest of the mod info; it is
         # instead inferred from the order in which the mods
         # are listed in the config file and the number auto-
@@ -185,14 +185,15 @@ class DBManager:
 
         modinfo = []
         for row in self._con.execute("SELECT * FROM mods"):
-            order, modid, ver, mdir, name, enabled = row
+            ordinal, modid, ver, mdir, name, enabled = row
 
             modinfo.append({
                 "modid": modid,
                 "version": ver,
                 "directory": mdir,
                 "name": name,
-                "enabled": enabled
+                "enabled": enabled,
+                "ordinal": ordinal,
             })
 
         with json_target.open('w') as f:
@@ -214,12 +215,12 @@ class DBManager:
     #         try:
     #             with self._con:
     #                 # self.LOGGER.debug("Old Value for enabled: {}".format(
-    #                 #         self._con.execute("select enabled from mods where iorder = ?", (row, )).fetchall()))
+    #                 #         self._con.execute("select enabled from mods where ordinal = ?", (row, )).fetchall()))
     #
-    #                 self._con.execute("UPDATE mods SET enabled = ? WHERE iorder = ?", (int(value), row))
+    #                 self._con.execute("UPDATE mods SET enabled = ? WHERE ordinal = ?", (int(value), row))
     #
     #                 # self.LOGGER.debug("New Value for enabled: {}".format(
-    #                 #     self._con.execute("select enabled from mods where iorder = ?", (row,)).fetchall()))
+    #                 #     self._con.execute("select enabled from mods where ordinal = ?", (row,)).fetchall()))
     #         except sqlError as e:
     #             self.LOGGER.error("SQL transaction error when updating mod enabled state: '{}'".format(e))
     #             success = False
@@ -230,12 +231,12 @@ class DBManager:
     #         try:
     #             with self._con:
     #                 # self.LOGGER.debug("Old Value for name: {}".format(
-    #                 #         self._con.execute("select name from mods where iorder = ?", (row,)).fetchall()))
+    #                 #         self._con.execute("select name from mods where ordinal = ?", (row,)).fetchall()))
     #
-    #                 self._con.execute("UPDATE mods SET name = ? WHERE iorder = ?", (value, row))
+    #                 self._con.execute("UPDATE mods SET name = ? WHERE ordinal = ?", (value, row))
     #
     #                 # self.LOGGER.debug("New Value for name: {}".format(
-    #                 #         self._con.execute("select name from mods where iorder = ?", (row,)).fetchall()))
+    #                 #         self._con.execute("select name from mods where ordinal = ?", (row,)).fetchall()))
     #         except sqlError as e:
     #             self.LOGGER.error("SQL transaction error when updating mod name: '{}'".format(e))
     #             success = False
@@ -408,21 +409,22 @@ def test():
 
     modinfo = []
     for row in con.execute("SELECT * FROM mods"):
-        order, mid, ver, name, active = row
+        ordinal, mid, ver, name, active = row
 
         modinfo.append({
             "id": mid,
             "version": ver,
             "directory": name,
             "name": name,
-            "enabled": active
+            "enabled": active,
+            "ordinal": ordinal
         })
 
     con.close()
 
     # dumping info as a list allows keeping the
     # correct order when reloading without having
-    # to store the order index
+    # to store the ordinal ranks
     with open("res/modinfo.json",'w') as f:
         json.dump(modinfo, f, indent=1)
 
@@ -434,7 +436,7 @@ def testload():
     DB = DBManager(ModManager())
 
     # check
-    # for row in con.execute("SELECT iorder, name FROM mods WHERE enabled = 0"):
+    # for row in con.execute("SELECT ordinal, name FROM mods WHERE enabled = 0"):
     #     print(row)
 
     DB.loadModDB("res/modinfo.json")
@@ -461,12 +463,12 @@ if __name__ == '__main__':
     DB = DBManager(ModManager())
     DB.loadModDB(Path(os.path.expanduser("~/.config/skymodman/profiles/default/modinfo.json")))
 
-    # print(DB.getOne("Select * from mods where iorder = 22"))
-    [ print(r) for r in DB.execute_("Select * from mods where iorder BETWEEN 20 AND 24")]
+    # print(DB.getOne("Select * from mods where ordinal = 22"))
+    [ print(r) for r in DB.execute_("Select * from mods where ordinal BETWEEN 20 AND 24")]
 
-    DB.conn.execute("DELETE FROM mods WHERE iorder = 22")
-    [ print(r) for r in DB.execute_("Select * from mods where iorder BETWEEN 20 AND 24")]
+    DB.conn.execute("DELETE FROM mods WHERE ordinal = 22")
+    [ print(r) for r in DB.execute_("Select * from mods where ordinal BETWEEN 20 AND 24")]
 
-    DB.conn.execute("INSERT into mods (name, directory, iorder) VALUES ('boogawooga', 'boogawoogadir', 22)")
+    DB.conn.execute("INSERT into mods (name, directory, ordinal) VALUES ('boogawooga', 'boogawoogadir', 22)")
 
-    [ print(r) for r in DB.execute_("Select * from mods where iorder BETWEEN 20 AND 24")]
+    [ print(r) for r in DB.execute_("Select * from mods where ordinal BETWEEN 20 AND 24")]

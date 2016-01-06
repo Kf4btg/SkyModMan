@@ -1,5 +1,5 @@
-from skymodman import exceptions
-from skymodman.utils import withlogger, ModEntry
+from skymodman import exceptions, ModEntry
+from skymodman.utils import withlogger
 from skymodman.managers import config, database, profiles
 
 from typing import List
@@ -150,7 +150,7 @@ class ModManager:
 
         :return:This is returned as a list of tuples with the following structure:
             (
-                Install Order (int),
+                Ordinality (int),
                 Mod-ID (int),
                 Version (str),
                 directory (str),
@@ -162,9 +162,9 @@ class ModManager:
 
     def basicModInfo(self):
         """Convenience method for table-display
-        :return: tuples of form (order-num, enabled-status, mod ID, version, name)
+        :return: tuples of form (ordinal, enabled-status, mod ID, version, name)
         """
-        yield from (me for me in map(ModEntry._make, self.DB.execute_("SELECT enabled, name, modid, version, iorder FROM mods")))
+        yield from (me for me in map(ModEntry._make, self.DB.execute_("SELECT enabled, name, modid, version, ordinal FROM mods")))
 
     def enabledMods(self):
         yield from self.DB.enabledMods(True)
@@ -175,21 +175,21 @@ class ModManager:
     # def updateMods(self, updated: List[ModEntry], old_mod_ranks:List[int]):
     def saveUserEdits(self, changes):
         """
-        :param changes: an iterable of 3-tuples of form (mod_name, enabled_status, iorder-rank)
+        :param changes: an iterable of 3-tuples of form (mod_name, enabled_status, ordinal)
         """
         # :param updated: the ModEntry named tuple holding the new values
-        # :param old_mod_ranks: the 'iorder' number for the mod to be replaced. If mod install-order has not
-        # changed, then this will match the order number for the updated entry.
+        # :param old_mod_ranks: the ordinal ranks for the mods to be replaced. If mod install-order has not
+        # changed, then this will match the ordinal number for the updated entries.
         # :return:
 
         # test
         # print([r for r in [s for c in changes for s in
-        #                    self._db_manager.conn.execute("select * from mods where iorder = ?", (c[2],))]
+        #                    self._db_manager.conn.execute("select * from mods where ordinal = ?", (c[2],))]
         #        ])
 
 
         # fixme: at the moment, this doesn't handle install-order changes
-        self._db_manager.updatemany_("UPDATE mods SET name=?, enabled=? WHERE iorder = ?", changes)
+        self._db_manager.updatemany_("UPDATE mods SET name=?, enabled=? WHERE ordinal = ?", changes)
 
 
         # And now save changes to disk
@@ -197,7 +197,7 @@ class ModManager:
 
 
 
-        # query = "DELETE FROM mods WHERE iorder in ("
+        # query = "DELETE FROM mods WHERE ordinal in ("
         # for i in range(len(old_mod_ranks)-1):
         #     query+="?, "
         # else:
@@ -213,17 +213,17 @@ class ModManager:
         """Request that database manager save modinfo to disk"""
         self.DB.saveModDB(self.active_profile.modinfo)
 
-    def updateModName(self, install_order: int, new_name:str):
+    def updateModName(self, ordinal: int, new_name:str):
         """
         Have the DBMan update a mod's 'name' (e.g. the string that appears in the mod-table and which is customizable by the user)
         :return:
         """
-        self.LOGGER.debug("New name for mod #{}: {}".format(install_order, new_name))
-        self.DB.update_("UPDATE mods SET name=? WHERE iorder = ?", (new_name, install_order))
-        # print([t for t in self.DB.execute_("Select * from mods where iorder = ?", (install_order, ))])
+        self.LOGGER.debug("New name for mod #{}: {}".format(ordinal, new_name))
+        self.DB.update_("UPDATE mods SET name=? WHERE ordinal = ?", (new_name, ordinal))
+        # print([t for t in self.DB.execute_("Select * from mods where ordinal = ?", (ordinal, ))])
 
-    def updateModState(self, install_order: int, enabled_status: bool):
-        self.LOGGER.debug("New status for mod #{}: {}".format(install_order, "Enabled" if enabled_status else "Disabled"))
-        self.DB.update_("UPDATE mods SET enabled=? WHERE iorder = ?", (int(enabled_status), install_order))
-        # print([t for t in self.DB.execute_("Select * from mods where iorder = ?", (install_order,))])
+    def updateModState(self, ordinal: int, enabled_status: bool):
+        self.LOGGER.debug("New status for mod #{}: {}".format(ordinal, "Enabled" if enabled_status else "Disabled"))
+        self.DB.update_("UPDATE mods SET enabled=? WHERE ordinal = ?", (int(enabled_status), ordinal))
+        # print([t for t in self.DB.execute_("Select * from mods where ordinal = ?", (ordinal,))])
 

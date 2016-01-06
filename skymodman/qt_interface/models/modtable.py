@@ -3,8 +3,8 @@ from PyQt5.QtWidgets import QHeaderView
 from PyQt5.QtCore import Qt, pyqtSignal
 from typing import List
 
-from skymodman import constants
-from skymodman.utils import ModEntry, withlogger
+from skymodman import constants, ModEntry
+from skymodman.utils import withlogger
 
 class QModEntry(ModEntry):
     """
@@ -47,7 +47,7 @@ class ModTableModel(QtCore.QAbstractTableModel):
         self.manager = manager # type: ModManager
 
         self.mods = [] # type: List[QModEntry]
-        self.vheader_field = self.COL_ORDER
+        self.vheader_field = constants.COL_ORDER
         self.visible_columns = []
 
         self.modified_rows = {}
@@ -182,7 +182,7 @@ class ModTableModel(QtCore.QAbstractTableModel):
                 return self.headers[section]
 
             else: # vertical header
-                return self.mods[section].order
+                return self.mods[section].ordinal
 
         return super(ModTableModel, self).headerData(section, orientation, role)
 
@@ -270,7 +270,7 @@ class ModTableModel(QtCore.QAbstractTableModel):
         This adjusts the enabled-status of all the other fields and emits a datachanged()
         signal for each one.
         :param row: the number of the mod in the table-display; also the index of the mod in
-        the model's `self.mods` list, and the effective install-order ranking of this mod.
+        the model's `self.mods` list, and the effective ordinal rank of this mod in the installation list.
         :return:
         """
         mod = self.mods[row]
@@ -301,8 +301,8 @@ class ModTableModel(QtCore.QAbstractTableModel):
         become the new base state (the state returned to when the Revert button is pressed)
         :return:
         """
-        # list of (name, enabled, order) tuples to send to modmanager
-        to_save = [(self.mods[row].name, self.mods[row].enabled, self.mods[row].order) for row in self.modified_rows]
+        # list of (name, enabled, ordinal) tuples to send to modmanager
+        to_save = [(self.mods[row].name, self.mods[row].enabled, self.mods[row].ordinal) for row in self.modified_rows]
 
         self.manager.saveUserEdits(to_save)
 

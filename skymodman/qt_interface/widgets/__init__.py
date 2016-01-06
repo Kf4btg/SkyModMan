@@ -82,7 +82,7 @@ def message(icon='question', title='', text='Are you sure?', info_text=None, but
     # http://www.qtcentre.org/threads/22298-QMessageBox-Controlling-the-width?p=113348#post113348
     # well, at least it seems to work.
     hspacer = QSpacerItem(min_width, 0, QSizePolicy.Minimum, QSizePolicy.Expanding)
-    ml = mbox.layout() #type: QGridLayout
+    ml = mbox.layout()
     ml.addItem(hspacer, ml.rowCount(), 0, 1, ml.columnCount())
 
     response =  mbox.exec_()

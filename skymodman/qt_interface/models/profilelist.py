@@ -44,7 +44,6 @@ class ProfileListModel(QtCore.QAbstractListModel):
     def insertRows(self, row=0, count=1, parent_index = Qt.QModelIndex(), data=None, *args, **kwargs):
         """Always append"""
         # beginInsertRows(self, QModelIndex, first, last)
-        # self.LOGGER.debug("begin insert rows")
         self.beginInsertRows(parent_index, self.rowCount(), self.rowCount())
         if data:
             # self.LOGGER.debug("inserting data {}".format(data))
@@ -63,22 +62,6 @@ class ProfileListModel(QtCore.QAbstractListModel):
             return False
         self.endRemoveRows()
         return True
-
-    # def setData(self, index: Qt.QModelIndex, data, role=None):
-    #     """
-    #     This is called by the combobox's "insertItem" method...though
-    #     I'll be damned if I could find a SINGLE place in the documentation
-    #     where that is mentioned or hinted at....
-    #     :param index:
-    #     :param data:
-    #     :param role:
-    #     """
-    #     if role==qt.UserRole:
-    #         self.profiles[index.row()] = data
-    #         self.LOGGER.debug("    self.profiles[{}] = {}".format(index.row(), data))
-    #         self.dataChanged.emit(index, index, [role])
-    #         return True
-    #     return False
 
 if __name__ == '__main__':
     from skymodman.managers.profiles import Profile
