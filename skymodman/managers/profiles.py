@@ -239,7 +239,6 @@ class ProfileManager:
         if profile.name.lower() == "default":
             raise exceptions.DeleteDefaultProfileError("default")
 
-
         for f in profile.localfiles.values():
             if f.exists(): f.unlink()
 

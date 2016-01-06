@@ -2,16 +2,16 @@ import sys
 
 from PyQt5.QtCore import Qt, QStandardPaths, QDir, pyqtSignal, pyqtSlot
 from PyQt5.QtGui import QGuiApplication
-from PyQt5.QtWidgets import QApplication, QMainWindow, QTableWidgetItem, \
+from PyQt5.QtWidgets import QApplication, QMainWindow, \
     QFileDialog, QFileSystemModel, QDialogButtonBox
 
 import PyQt5.QtWidgets as QtW
 
 import skymodman.constants as const
 from skymodman.qt_interface.qt_manager_ui import Ui_MainWindow
-from skymodman.qt_interface.widgets import custom_widgets
-from skymodman.qt_interface.models import ProfileListModel, ModTableModel, ModTableView
-from skymodman.utils import withlogger, Notifier, ModEntry
+from skymodman.qt_interface.widgets import custom_widgets, message
+from skymodman.qt_interface.models import ProfileListModel, ModTableView
+from skymodman.utils import withlogger, Notifier
 # from collections import OrderedDict
 from skymodman import skylog
 
@@ -24,6 +24,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     windowInitialized = pyqtSignal()
     modNameBeingEdited = pyqtSignal(str)
+
+    deleteProfileAction = pyqtSignal(str)
     
 
     def __init__(self, manager: 'managers.ModManager', *args, **kwargs):
@@ -145,14 +147,14 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.filetree_tree.setRootIndex(file_tree_model.index(self._manager.Config["dir_mods"]))
 
         # let setup know we're done here
-        self.SetupDone("setupTree")
+        self.SetupDone()
 
     # ===================================
     # TABLE OF INSTALLED MODS FUNCTIONS
     # ===================================
 
     def setupTable(self):
-        self.logger.debug("setupTable begin")
+        # self.logger.debug("setupTable begin")
         self.Manager.loadActiveProfileData()
         self.mod_table.initUI(self.installed_mods_layout)
 
@@ -209,6 +211,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.profile_selector.setCurrentIndex(start_idx)
         self.profile_selector.currentIndexChanged.connect(self.onProfileChange)
         self.new_profile_button.clicked.connect(self.onNewProfileClick)
+        self.remove_profile_button.clicked.connect(self.onRemoveProfileClick)
+
+        # and if we choose to delete the profile...
+        # self.deleteProfileAction.connect()
 
         # let setup know we're done here
         self.SetupDone()
@@ -222,12 +228,21 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # display popup, wait for close and check signal
         if popup.exec_() == popup.Accepted:
             # add new profile if they clicked ok
-            new_profile = self.Manager.newUserProfile(popup.final_name, popup.copy_from)
+            new_profile = self.Manager.newProfile(popup.final_name, popup.copy_from)
 
             self.profile_selector.model().addProfile(new_profile)
 
             # set new profile as active and load data
             self.profile_selector.setCurrentIndex(self.profile_selector.findText(new_profile.name, Qt.MatchFixedString))
+
+    def onRemoveProfileClick(self):
+        profile = self.Manager.active_profile
+
+        if message('warning', 'Confirm Delete Profile', 'Delete "'+profile.name+'"?','Choosing "Yes" below will remove this profile and all saved information within it, including customized load-orders, ini-edits, etc. Note that installed mods will not be affected. This cannot be undone. Are you sure you wish to continue?'):
+            self.Manager.deleteProfile(self.profile_selector.currentData())
+            self.profile_selector.removeItem(self.profile_selector.currentIndex())
+
+            # self.deleteProfileAction.emit(profile.name)
 
 
     @pyqtSlot('int')

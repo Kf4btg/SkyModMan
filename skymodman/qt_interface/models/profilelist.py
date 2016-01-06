@@ -55,13 +55,13 @@ class ProfileListModel(QtCore.QAbstractListModel):
     def removeRows(self, row, *args, **kwargs):
         self.beginRemoveRows(Qt.QModelIndex(), row, row)
         try:
-            self.profiles.pop(row)
+            del self.profiles[row]
         except IndexError as e:
             # TODO: handle w/ messagebox
             self.LOGGER.error(str(e))
             self.endRemoveRows()
             return False
-        self.endInsertRows()
+        self.endRemoveRows()
         return True
 
     # def setData(self, index: Qt.QModelIndex, data, role=None):

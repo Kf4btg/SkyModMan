@@ -86,7 +86,7 @@ class ModManager:
         else:
             yield from self.Profiler.profilesByName()
 
-    def newUserProfile(self, name: str, copy_from: profiles.Profile = None):
+    def newProfile(self, name: str, copy_from: profiles.Profile = None):
         """
         Create and return a new Profile object with the specified name, optionally
         copying config files from the `copy_from` Profile
@@ -95,6 +95,10 @@ class ModManager:
         :return:
         """
         return self.Profiler.newProfile(name, copy_from)
+
+    def deleteProfile(self, profile):
+        self.Profiler.deleteProfile(profile, True)
+
 
     def loadActiveProfileData(self):
         """
