@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List, Tuple, Union, Iterable
 
 from skymodman import constants
-from skymodman.utils import withlogger
+from skymodman.utils import withlogger, counter
 
 _ordinal = int
 _modid = int
@@ -24,19 +24,28 @@ DBRow = Tuple[_ordinal,
               _modenabled
              ]
 
+mcount = counter()
+
 @withlogger
 class DBManager:
 
     _SCHEMA = """CREATE TABLE mods (
-            ordinal   INTEGER primary key,
-            modid     INTEGER,
-            version   TEXT,
-            directory TEXT    unique,
-            name      TEXT,
-            enabled   INTEGER default 1
+
+            ordinal   INTEGER unique, --mod's rank in the install order
+            modid     INTEGER,        --nexus id, or 0 if none
+            version   TEXT,           --arbitrary, set by mod author
+            directory TEXT    unique, --folder on disk holding mod's files
+            name      TEXT,           --user-editable label for mod
+            enabled   INTEGER default 1  --effectively a boolean value (0,1)
         )"""
 
-    __fields = ["modid", "version", "directory", "name", "enabled"]
+    __fields = ["ordinal", "directory", "name", "modid", "version", "enabled"]
+    __defaults = {
+        "name": lambda v: v["directory"],
+        "modid": lambda v: 0,
+        "version": lambda v: "",
+        "enabled": lambda v: 1,
+    }
 
     def __init__(self, manager: 'ModManager'):
         super(DBManager, self).__init__()
@@ -58,17 +67,8 @@ class DBManager:
         # desired by the user.
         self._con.execute(self._SCHEMA)
 
-    def reinit(self):
-        """Drop the current mods table and reinitialize as empty"""
 
-        self.LOGGER.debug("truncating mods table")
 
-        with self._con:
-            self._con.execute("DROP TABLE mods")
-
-            self._con.execute(self._SCHEMA)
-
-        # print([t for t in self._con.execute("select * from mods")])
 
     @property
     def conn(self) -> sqlite3.Connection:
@@ -87,6 +87,15 @@ class DBManager:
         """
         return self.getModInfo(True).fetchall()
 
+    def reinit(self):
+        """Drop the current mods table and reinitialize as empty"""
+
+        self.LOGGER.debug("dropping mods table")
+
+        with self._con:
+            self._con.execute("DROP TABLE mods")
+
+            self._con.execute(self._SCHEMA)
 
     def loadModDB(self, json_source):
         """
@@ -94,6 +103,8 @@ class DBManager:
         populate the in-memory database
         :param json_source: path to modinfo.json file (either pathlib.Path or string)
         """
+        global mcount
+        mcount = counter()
 
         self.LOGGER.debug("loading mod db from file")
 
@@ -107,16 +118,37 @@ class DBManager:
             # to ordered tuples for sending to sqlite
             try:
                 mods = json.load(f, object_pairs_hook=DBManager.toRowTuple)
+                self.fillTable(mods)
 
-                with self._con:
+                # build insert statement from defined word order
+                # query = "INSERT INTO mods(" + ", ".join(self.__fields) + ") VALUES ("
+                # query+= ", ".join("?"*len(self.__fields)) + ")"
+                # self.LOGGER.debug(query)
+                # with self._con:
+
                     # insert the list of row-tuples into the in-memory db
-                    self._con.executemany(
-                        "INSERT INTO mods(modid, version, directory, name, enabled) VALUES (?, ?, ?, ?, ?)", mods)
+                    # self._con.executemany(query, mods)
+                        # "INSERT INTO mods(ordinal, modid, version, directory, name, enabled) VALUES (?, ?, ?, ?, ?)", mods)
 
             except json.decoder.JSONDecodeError:
                 self.logger.error("No mod information present in {}, or file is malformed.".format(json_source))
                 success = False
         return success
+
+    def fillTable(self, mod_list):
+        query = "INSERT INTO mods(" + ", ".join(self.__fields) + ") VALUES ("
+        query += ", ".join("?" * len(self.__fields)) + ")"
+
+        self.LOGGER.debug(query)
+        with self._con:
+            # insert the list of row-tuples into the in-memory db
+            self._con.executemany(query, mod_list)
+
+
+
+    ##############
+    ## wrappers ##
+    ##############
 
     def execute_(self, query:str, params: Iterable=None):
         """
@@ -183,18 +215,24 @@ class DBManager:
         if not isinstance(json_target, Path):
             json_target = Path(json_target)
 
-        modinfo = []
-        for row in self._con.execute("SELECT * FROM mods"):
-            ordinal, modid, ver, mdir, name, enabled = row
 
-            modinfo.append({
-                "modid": modid,
-                "version": ver,
-                "directory": mdir,
-                "name": name,
-                "enabled": enabled,
-                "ordinal": ordinal,
-            })
+        noord_fields = set(self.__fields) ^ {"ordinal"}
+
+        query="Select " + ", ".join(noord_fields)
+        query+=" FROM (SELECT * FROM mods ORDER BY ordinal)"
+        modinfo = []
+        # for row in self._con.execute("SELECT * FROM mods ORDER BY ordinal"):
+        for row in self._con.execute(query):
+            # ordinal, modid, ver, mdir, name, enabled = row
+
+            modinfo.append(dict(zip(noord_fields, row)))
+            #     "modid": modid,
+            #     "version": ver,
+            #     "directory": mdir,
+            #     "name": name,
+            #     "enabled": enabled,
+            #     "ordinal": ordinal,
+            # })
 
         with json_target.open('w') as f:
             json.dump(modinfo, f, indent=1)
@@ -308,19 +346,54 @@ class DBManager:
             if not moddir.is_dir(): continue
             inipath = moddir / "meta.ini"
             dirname = moddir.name
+            order = len(mods_list)+1
             if inipath.exists():
                 configP.read(str(inipath))
                 # insert tuples in form that db will expect;
                 # set name = directory, default value of 1 for enabled
-                mods_list.append((configP['General']['modid'], configP['General']['version'], dirname, dirname, 1))
+                mods_list.append(
+                    self.makeModEntry(ordinal = order,
+                                      directory = dirname,
+                                      modid = configP['General']['modid'],
+                                      version = configP['General']['version']
+                                     )
+                                )
             else:
                 # set name = directory, default value of 1 for enabled,
                 # 0 for modid, and empty str for version
-                mods_list.append((0, "", dirname, dirname, 1))
+                mods_list.append(
+                    self.makeModEntry(
+                        ordinal = order,
+                        directory=dirname,
+                    ))
+                        # (0, "", dirname, dirname, 1))
 
-        with self._con:
-            self._con.executemany("INSERT INTO mods(modid, version, directory, name, enabled) VALUES (?, ?, ?, ?, ?)",
-                                  mods_list)
+
+
+                        #
+                        # _ordinal
+                        # (configP['General']['modid'],
+                        #           configP['General']['version'],
+                        #           dirname,
+                        #           dirname,
+                        #           1))
+
+
+        self.fillTable(mods_list)
+        # with self._con:
+        #     self._con.executemany("INSERT INTO mods(modid, version, directory, name, enabled) VALUES (?, ?, ?, ?, ?)",
+        #                           mods_list)
+
+    def makeModEntry(self, **kwargs):
+        """generates a tuple representing a mod-entry by supplementing a possibly-incomplete mapping of keywords (`kwargs`) with default values for any missing fields"""
+        r = []
+
+        for f in self.__fields:
+            r.append(kwargs.get(f,
+                                self.__defaults.get(f, lambda v: "")(kwargs)
+                                )
+                     )
+        return tuple(r)
 
     def validateModsList(self, installed_mods: List[str]):
         """
@@ -372,15 +445,15 @@ class DBManager:
         """
         Used as object_pair_hook for json.load(). Takes the mod
         information loaded from the json file and converts it
-        to a tuple containing just the field values in the
+        to a tuple of just the field values in the
         correct order for feeding to the sqlite database.
         :param pairs:
         :return:
         """
 
-        d = dict(pairs)
+        return (mcount(), ) + tuple(s[1] for s in sorted(pairs, key=lambda p: DBManager.__fields.index(p[0])))
 
-        return tuple(d[DBManager.__fields[i]] for i in range(len(DBManager.__fields)))
+
 
 
 
