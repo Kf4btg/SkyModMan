@@ -15,6 +15,49 @@
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout">
+    <item row="3" column="0">
+     <spacer name="horizontalSpacer">
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>40</width>
+        <height>20</height>
+       </size>
+      </property>
+     </spacer>
+    </item>
+    <item row="3" column="2">
+     <widget class="QPushButton" name="next_button">
+      <property name="enabled">
+       <bool>false</bool>
+      </property>
+      <property name="layoutDirection">
+       <enum>Qt::LeftToRight</enum>
+      </property>
+      <property name="text">
+       <string>Next</string>
+      </property>
+      <property name="icon">
+       <iconset theme="arrow-right">
+        <normaloff>../../../.designer/backup</normaloff>../../../.designer/backup</iconset>
+      </property>
+      <property name="autoDefault">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </item>
+    <item row="3" column="1" alignment="Qt::AlignRight">
+     <widget class="QDialogButtonBox" name="save_cancel_btnbox">
+      <property name="enabled">
+       <bool>false</bool>
+      </property>
+      <property name="standardButtons">
+       <set>QDialogButtonBox::Apply|QDialogButtonBox::Reset</set>
+      </property>
+     </widget>
+    </item>
     <item row="0" column="0" colspan="4">
      <widget class="QTabWidget" name="manager_tabs">
       <property name="currentIndex">
@@ -34,75 +77,138 @@
         <string>Currently installed mods</string>
        </attribute>
        <layout class="QGridLayout" name="installed_mods_layout">
-        <item row="0" column="2">
-         <widget class="QToolButton" name="new_profile_button">
-          <property name="toolTip">
-           <string>Add Profile</string>
-          </property>
-          <property name="text">
+        <item row="0" column="3">
+         <widget class="QGroupBox" name="move_mod_box">
+          <property name="title">
            <string/>
           </property>
-          <property name="icon">
-           <iconset theme="add">
-            <normaloff>.</normaloff>.</iconset>
+          <property name="flat">
+           <bool>true</bool>
           </property>
+          <layout class="QGridLayout" name="gridLayout_2">
+           <property name="topMargin">
+            <number>0</number>
+           </property>
+           <property name="bottomMargin">
+            <number>0</number>
+           </property>
+           <item row="0" column="0">
+            <widget class="QLabel" name="move_mod_label">
+             <property name="text">
+              <string>Move Mod:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="1">
+            <widget class="QToolButton" name="mod_up_button">
+             <property name="icon">
+              <iconset theme="arrow-up">
+               <normaloff>.</normaloff>.</iconset>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="2">
+            <widget class="QToolButton" name="mod_down_button">
+             <property name="icon">
+              <iconset theme="arrow-down">
+               <normaloff>.</normaloff>.</iconset>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="3">
+            <spacer name="horizontalSpacer_2">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>40</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+          </layout>
          </widget>
         </item>
-        <item row="0" column="4">
-         <spacer name="horizontalSpacer_2">
+        <item row="0" column="2">
+         <widget class="Line" name="line">
           <property name="orientation">
-           <enum>Qt::Horizontal</enum>
-          </property>
-          <property name="sizeHint" stdset="0">
-           <size>
-            <width>40</width>
-            <height>20</height>
-           </size>
-          </property>
-         </spacer>
-        </item>
-        <item row="0" column="3">
-         <widget class="QToolButton" name="remove_profile_button">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
-          <property name="toolTip">
-           <string>Delete Profile</string>
-          </property>
-          <property name="text">
-           <string>...</string>
-          </property>
-          <property name="icon">
-           <iconset theme="remove">
-            <normaloff>.</normaloff>.</iconset>
+           <enum>Qt::Vertical</enum>
           </property>
          </widget>
         </item>
-        <item row="0" column="0" alignment="Qt::AlignLeft">
-         <widget class="QLabel" name="profile_label">
-          <property name="text">
-           <string>Profile:</string>
+        <item row="0" column="0" colspan="2">
+         <widget class="QGroupBox" name="profile_group">
+          <property name="flat">
+           <bool>true</bool>
           </property>
-          <property name="textInteractionFlags">
-           <set>Qt::NoTextInteraction</set>
-          </property>
-          <property name="buddy">
-           <cstring>profile_selector</cstring>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="1">
-         <widget class="QComboBox" name="profile_selector">
-          <item>
-           <property name="text">
-            <string>Default</string>
+          <layout class="QHBoxLayout" name="horizontalLayout_2">
+           <property name="topMargin">
+            <number>0</number>
            </property>
-          </item>
-          <item>
-           <property name="text">
-            <string>Not Default</string>
+           <property name="bottomMargin">
+            <number>0</number>
            </property>
-          </item>
+           <item>
+            <widget class="QLabel" name="profile_label">
+             <property name="text">
+              <string>Profile:</string>
+             </property>
+             <property name="textInteractionFlags">
+              <set>Qt::NoTextInteraction</set>
+             </property>
+             <property name="buddy">
+              <cstring>profile_selector</cstring>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QComboBox" name="profile_selector">
+             <item>
+              <property name="text">
+               <string>Default</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>Not Default</string>
+              </property>
+             </item>
+            </widget>
+           </item>
+           <item>
+            <widget class="QToolButton" name="new_profile_button">
+             <property name="toolTip">
+              <string>Add Profile</string>
+             </property>
+             <property name="text">
+              <string/>
+             </property>
+             <property name="icon">
+              <iconset theme="add">
+               <normaloff>.</normaloff>.</iconset>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QToolButton" name="remove_profile_button">
+             <property name="enabled">
+              <bool>false</bool>
+             </property>
+             <property name="toolTip">
+              <string>Delete Profile</string>
+             </property>
+             <property name="text">
+              <string>...</string>
+             </property>
+             <property name="icon">
+              <iconset theme="remove">
+               <normaloff>.</normaloff>.</iconset>
+             </property>
+            </widget>
+           </item>
+          </layout>
          </widget>
         </item>
        </layout>
@@ -280,49 +386,6 @@
       </widget>
      </widget>
     </item>
-    <item row="3" column="0">
-     <spacer name="horizontalSpacer">
-      <property name="orientation">
-       <enum>Qt::Horizontal</enum>
-      </property>
-      <property name="sizeHint" stdset="0">
-       <size>
-        <width>40</width>
-        <height>20</height>
-       </size>
-      </property>
-     </spacer>
-    </item>
-    <item row="3" column="1" alignment="Qt::AlignRight">
-     <widget class="QDialogButtonBox" name="save_cancel_btnbox">
-      <property name="enabled">
-       <bool>false</bool>
-      </property>
-      <property name="standardButtons">
-       <set>QDialogButtonBox::Apply|QDialogButtonBox::Reset</set>
-      </property>
-     </widget>
-    </item>
-    <item row="3" column="2">
-     <widget class="QPushButton" name="next_button">
-      <property name="enabled">
-       <bool>false</bool>
-      </property>
-      <property name="layoutDirection">
-       <enum>Qt::LeftToRight</enum>
-      </property>
-      <property name="text">
-       <string>Next</string>
-      </property>
-      <property name="icon">
-       <iconset theme="arrow-right">
-        <normaloff>../../../.designer/backup</normaloff>../../../.designer/backup</iconset>
-      </property>
-      <property name="autoDefault">
-       <bool>true</bool>
-      </property>
-     </widget>
-    </item>
    </layout>
   </widget>
   <widget class="QMenuBar" name="menubar">
@@ -453,7 +516,7 @@
   </action>
   <action name="actionSkyrimPrefs_ini">
    <property name="text">
-    <string>SkyrimPrefs.ini</string>
+    <string>SkyrimPrefs.&amp;ini</string>
    </property>
   </action>
  </widget>

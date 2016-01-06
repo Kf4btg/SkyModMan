@@ -329,7 +329,7 @@ class ModTableView(QtWidgets.QTableView):
         self.LOGGER.debug("init ModTable UI")
         self.setSelectionBehavior(QtWidgets.QTableView.SelectRows)
         self.setObjectName("mod_table")
-        grid.addWidget(self, 6, 0, 1, 8) # from old qtdesigner file
+        grid.addWidget(self, 1, 0, 1, 5) # from old qtdesigner file
 
         self.setModel(ModTableModel(self, self.manager))
         hheader = self.horizontalHeader()  # type: QHeaderView
