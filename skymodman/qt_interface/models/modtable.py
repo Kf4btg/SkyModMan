@@ -210,11 +210,11 @@ class ModTableModel(QtCore.QAbstractTableModel):
         if col == self.COL_ENABLED:
             return Qt.ItemIsEnabled | Qt.ItemIsUserCheckable | Qt.ItemIsSelectable
 
-        _flags = Qt.NoItemFlags #start with nothing
+        # _flags = Qt.NoItemFlags #start with nothing
 
         # if this row is enabled, start with the enabled flag
-        if self.mods[index.row()].enabled:
-            _flags = Qt.ItemIsEnabled
+        # if self.mods[index.row()].enabled:
+        _flags = Qt.ItemIsEnabled
 
         # mod id and version are selectable
         if col in [self.COL_MODID, self.COL_VERSION]:
@@ -276,6 +276,11 @@ class ModTableModel(QtCore.QAbstractTableModel):
         newmod = mod._replace(enabled=int(not mod.enabled))
 
         need_notify = self.onModDataEdit(row, mod, newmod)
+
+        for c in self.VISIBLE_COLS:
+            if c==constants.COL_ENABLED:
+                continue
+            index = self.index(row, c) # type: QtCore.QModelIndex
 
         self.rowDataChanged(row)
 

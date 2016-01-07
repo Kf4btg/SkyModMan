@@ -245,8 +245,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
 
     def onNewProfileClick(self):
-        popup = custom_widgets.NewProfileDialog()
-        popup.comboBox.setModel(self.profile_selector.model())
+        popup = custom_widgets.NewProfileDialog(self.profile_selector.model())
+        # popup.comboBox.setModel(self.profile_selector.model())
+        # popup.setComboboxModel(self.profile_selector.model())
 
         # display popup, wait for close and check signal
         if popup.exec_() == popup.Accepted:

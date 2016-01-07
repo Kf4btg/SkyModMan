@@ -104,6 +104,9 @@
            </item>
            <item row="0" column="1">
             <widget class="QToolButton" name="mod_up_button">
+             <property name="statusTip">
+              <string>Move selected mod(s) up in the install order.</string>
+             </property>
              <property name="icon">
               <iconset theme="arrow-up">
                <normaloff>.</normaloff>.</iconset>
@@ -112,6 +115,9 @@
            </item>
            <item row="0" column="2">
             <widget class="QToolButton" name="mod_down_button">
+             <property name="statusTip">
+              <string>Move selected mod(s) down in the install order.</string>
+             </property>
              <property name="icon">
               <iconset theme="arrow-down">
                <normaloff>.</normaloff>.</iconset>
@@ -168,6 +174,9 @@
            </item>
            <item>
             <widget class="QComboBox" name="profile_selector">
+             <property name="statusTip">
+              <string>Select a profile.</string>
+             </property>
              <item>
               <property name="text">
                <string>Default</string>
@@ -185,6 +194,9 @@
              <property name="toolTip">
               <string>Add Profile</string>
              </property>
+             <property name="statusTip">
+              <string>Create a new profile.</string>
+             </property>
              <property name="text">
               <string/>
              </property>
@@ -201,6 +213,9 @@
              </property>
              <property name="toolTip">
               <string>Delete Profile</string>
+             </property>
+             <property name="statusTip">
+              <string>Delete the active profile.</string>
              </property>
              <property name="text">
               <string>...</string>
@@ -420,8 +435,6 @@
      <addaction name="actionSkyrim_ini"/>
      <addaction name="actionSkyrimPrefs_ini"/>
     </widget>
-    <addaction name="actionSet_As_Default"/>
-    <addaction name="separator"/>
     <addaction name="actionLoad"/>
     <addaction name="actionNew"/>
     <addaction name="actionDelete"/>
@@ -444,6 +457,7 @@
    <addaction name="actionChoose_Mod_Folder"/>
    <addaction name="action_Install_Fomod"/>
   </widget>
+  <widget class="QStatusBar" name="statusBar"/>
   <action name="action_Install_Fomod">
    <property name="icon">
     <iconset theme="package-x-generic">
@@ -507,14 +521,6 @@
   <action name="actionSkyrim_ini">
    <property name="text">
     <string>&amp;Skyrim.ini</string>
-   </property>
-  </action>
-  <action name="actionSet_As_Default">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="text">
-    <string>&amp;Default</string>
    </property>
   </action>
   <action name="actionSkyrimPrefs_ini">
