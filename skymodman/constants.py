@@ -9,6 +9,10 @@ VISIBLE_COLS = [COL_ENABLED, COL_NAME, COL_MODID, COL_VERSION]
 
 DBLCLICK_COLS = [COL_ENABLED, COL_MODID, COL_VERSION]
 
+# defines the names and order of fields in the database
+db_fields = ["ordinal", "directory", "name", "modid", "version", "enabled"]
+
+
 
 
 

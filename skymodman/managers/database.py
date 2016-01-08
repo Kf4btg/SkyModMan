@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 from typing import List, Tuple, Iterable
 
-# from skymodman import constants
+from skymodman import constants
 from skymodman.utils import withlogger, counter
 
 mcount = counter()
@@ -23,7 +23,7 @@ class DBManager:
             enabled   INTEGER default 1  --effectively a boolean value (0,1)
         )"""
 
-    __fields = ["ordinal", "directory", "name", "modid", "version", "enabled"]
+    # __fields = ["ordinal", "directory", "name", "modid", "version", "enabled"]
     __defaults = {
         "name": lambda v: v["directory"],
         "modid": lambda v: 0,
@@ -49,6 +49,7 @@ class DBManager:
         # `name` is initially equivalent, but can be changed as
         # desired by the user.
         self._con.execute(self._SCHEMA)
+        self._con.row_factory = sqlite3.Row
 
 
     ################
@@ -115,6 +116,7 @@ class DBManager:
                 success = False
         return success
 
+    # def fillTable(self, mod_list, doprint=False):
     def fillTable(self, mod_list):
         """
         Dynamically build the INSERT statement from the list of fields, then insert
@@ -122,8 +124,14 @@ class DBManager:
         :param mod_list:
         :return:
         """
-        query = "INSERT INTO mods(" + ", ".join(self.__fields) + ") VALUES ("
-        query += ", ".join("?" * len(self.__fields)) + ")"
+        query = "INSERT INTO mods(" + ", ".join(constants.db_fields) + ") VALUES ("
+        query += ", ".join("?" * len(constants.db_fields)) + ")"
+        #
+        # if doprint:
+        #     print(query)
+        #     # print(list(mod_list))
+        #     for m in mod_list:
+        #         print(m)
 
         # self.LOGGER.debug(query)
         with self._con:
@@ -207,7 +215,7 @@ class DBManager:
         # we don't save the ordinal rank, so we need to get a list (set) of the
         # fields without "ordinal"
         # Using sets here is OK because field order doesn't matter when saving
-        noord_fields = set(self.__fields) ^ {"ordinal"}
+        noord_fields = set(constants.db_fields) ^ {"ordinal"}
 
         # select (all fields other than ordinal)...
         query="Select " + ", ".join(noord_fields)
@@ -310,7 +318,7 @@ class DBManager:
         """generates a tuple representing a mod-entry by supplementing a possibly-incomplete mapping of keywords (`kwargs`) with default values for any missing fields"""
         r = []
 
-        for f in self.__fields:
+        for f in constants.db_fields:
             r.append(kwargs.get(f,
                                 self.__defaults.get(f, lambda v: "")(kwargs)
                                 )
@@ -373,7 +381,7 @@ class DBManager:
         :return:
         """
 
-        return (mcount(), ) + tuple(s[1] for s in sorted(pairs, key=lambda p: DBManager.__fields.index(p[0])))
+        return (mcount(), ) + tuple(s[1] for s in sorted(pairs, key=lambda p: constants.db_fields.index(p[0])))
 
 
 if __name__ == '__main__':
@@ -382,17 +390,36 @@ if __name__ == '__main__':
     # test()
     # testload()
     DB = DBManager(ModManager())
+    DB._con.row_factory = sqlite3.Row
+
     DB.loadModDB(Path(os.path.expanduser("~/.config/skymodman/profiles/default/modinfo.json")))
 
+    c= DB.conn.execute("select * from mods")
+
+    print (c.description)
+
+    r=c.fetchone() #type: sqlite3.Row
+
+    print(type(r))
+
+    print(r.keys())
+    print(r['directory'])
+
+    print(dict(zip(r.keys(), r)))
+
+
+
+
+
     # print(DB.getOne("Select * from mods where ordinal = 22"))
-    [ print(r) for r in DB.execute_("Select * from mods where ordinal BETWEEN 20 AND 24")]
-
-    DB.conn.execute("DELETE FROM mods WHERE ordinal = 22")
-    [ print(r) for r in DB.execute_("Select * from mods where ordinal BETWEEN 20 AND 24")]
-
-    DB.conn.execute("INSERT into mods (name, directory, ordinal) VALUES ('boogawooga', 'boogawoogadir', 22)")
-
-    [ print(r) for r in DB.execute_("Select * from mods where ordinal BETWEEN 20 AND 24")]
+    # [ print(r) for r in DB.execute_("Select * from mods where ordinal BETWEEN 20 AND 24")]
+    #
+    # DB.conn.execute("DELETE FROM mods WHERE ordinal = 22")
+    # [ print(r) for r in DB.execute_("Select * from mods where ordinal BETWEEN 20 AND 24")]
+    #
+    # DB.conn.execute("INSERT into mods (name, directory, ordinal) VALUES ('boogawooga', 'boogawoogadir', 22)")
+    #
+    # [ print(r) for r in DB.execute_("Select * from mods where ordinal BETWEEN 20 AND 24")]
 
     DB.shutdown()
 

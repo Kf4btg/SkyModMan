@@ -18,7 +18,7 @@ class QModEntry(ModEntry):
         return Qt.Checked if self.enabled else Qt.Unchecked
 
     def __eq__(self, other):
-        return self.name == other.name and self.enabled == other.enabled
+        return self.name == other.name and self.enabled == other.enabled and self.ordinal == other.ordinal
 
 
 
@@ -90,6 +90,9 @@ class ModTableModel(QtCore.QAbstractTableModel):
             return self.mods[index.row()].checkState
         elif role == Qt.EditRole and col == constants.COL_NAME:
             return self.mods[index.row()].name
+        elif role == Qt.ToolTipRole and col == constants.COL_NAME:
+            # return directory name as tooltip for name field
+            return self.mods[index.row()].directory
 
     def setData(self, index, value:str, role=None):
         """ Qt-override.
@@ -241,7 +244,10 @@ class ModTableModel(QtCore.QAbstractTableModel):
         # set (or reset) the list of tracked changes
         self.modified_rows = {}
         # load fresh mod info
-        self.mods = [QModEntry._make(e) for e in self.manager.basicModInfo()]
+
+        self.mods = [QModEntry(**d) for d in self.manager.basicModInfo()]
+
+        # self.mods = [QModEntry._make(e) for e in self.manager.basicModInfo()]
         self.endResetModel()
 
     def on_doubleClick(self, index:QtCore.QModelIndex):
@@ -284,9 +290,10 @@ class ModTableModel(QtCore.QAbstractTableModel):
         Reset all modified rows to their initial state (i.e., the values of the fields the
         last time the mods list was saved.)
         """
-        for row, cached_mod in self.modified_rows.items():
-            self.mods[row] = cached_mod
-            self.rowDataChanged(row)
+        for cached_mod in self.modified_rows.values():
+            original_row = cached_mod.ordinal-1
+            self.mods[original_row] = cached_mod
+            self.rowDataChanged(original_row)
 
         self.modified_rows.clear()
         self.tableDirtyStatusChange.emit(False)
@@ -298,7 +305,9 @@ class ModTableModel(QtCore.QAbstractTableModel):
         :return:
         """
         # list of (name, enabled, ordinal) tuples to send to modmanager
-        to_save = [(self.mods[row].name, self.mods[row].enabled, self.mods[row].ordinal) for row in self.modified_rows]
+        # to_save = [(self.mods[row].name, self.mods[row].enabled, self.mods[row].ordinal) for row in self.modified_rows]
+
+        to_save = [self.mods[row] for row in self.modified_rows]
 
         self.manager.saveUserEdits(to_save)
 
@@ -338,30 +347,36 @@ class ModTableModel(QtCore.QAbstractTableModel):
         #  > dC = 5+4-2+1 = 8
         #  > 3..5->8 ==> dC = 8+5-3+1 = 11
 
+        # track this to see if we should emit a tableDirty signal afterwards
+        initial_modified_count = len(self.modified_rows)
 
-        selection = self.mods[start_row:end_row+1] # selected mods being moved
+
+        selection = self.mods[start_row:end_row+1] #  mods being moved
         count = len(selection)
+        # displaced = [] # mods that will be reordered as a side-effect of this operation
 
+        new_modified_rows = []
         if move_to_row > start_row:
             # moving mods down in the list (ordinal number increases)
             shift_distance = move_to_row - start_row # this is how many unselected mods will be displaced
-            # destChild = move_to_row + count # first unaffected slot
 
             self.beginMoveRows(parent, start_row, end_row, parent, move_to_row + count)
 
-            # displaced = self.mods[end_row+1:destChild-1]
-
-                            # (i=3; i<8; i++)
             for i in range(start_row, start_row+shift_distance):
                 # shift items between selection and destination index up by <count>
-                self.mods[i] = self.mods[i+count]
+                r = self.reorderMod(i, self.mods[i+count])
+                # self.mods[i] = self.mods[i+count]
+                if r is not None: new_modified_rows.append(r)
+
             for i in range(count):
                 # move selection into place
-                self.mods[move_to_row+i] = selection[i]
+                r = self.reorderMod(move_to_row+i, selection[i])
+                # self.mods[move_to_row+i] = selection[i]
+                if r is not None: new_modified_rows.append(r)
+
 
             self.endMoveRows()
 
-            return True
 
         elif move_to_row < start_row:
             # moving mods up (ordinal number decreases)
@@ -369,16 +384,65 @@ class ModTableModel(QtCore.QAbstractTableModel):
 
             self.beginMoveRows(parent, start_row, end_row, parent, move_to_row)
 
-
             # shift items between selection and destination index down by <count>
             for i in range(end_row, end_row-shift_distance, -1):
-                self.mods[i] = self.mods[i-count]
+                r = self.reorderMod(i, self.mods[i-count])
+                if r is not None: new_modified_rows.append(r)
             for i in range(count):
-                self.mods[move_to_row+i] = selection[i]
+                r = self.reorderMod(move_to_row+i, selection[i])
+                if r is not None: new_modified_rows.append(r)
+
+                # self.mods[move_to_row+i] = selection[i]
 
             self.endMoveRows()
-            return True
-        return False
+        else:
+            return False
+
+
+        for r in new_modified_rows:
+            self.modified_rows.update(r)
+
+        if initial_modified_count: # >0
+            if len(self.modified_rows) == 0: self.tableDirtyStatusChange.emit(False)
+
+        else: # imc==0
+            if len(self.modified_rows) > 0: self.tableDirtyStatusChange.emit(True)
+
+        return True
+
+    def reorderMod(self, new_row: int, mod:QModEntry ):
+        """
+        Moves the given mod to the new position in the list of mods and updates its ordinal number to match.
+
+        :param new_row: destination row for mod being moved
+        :param mod: the mod entry which is being moved to the new position
+        :return: a dict of length 1 containing a pair to insert into the self.modified_rows dict
+        after the reorder-loop has finished running; or None if nothing to insert
+        """
+        old_row = mod.ordinal-1
+
+        updated = mod._replace(ordinal=new_row+1)
+
+        r=None
+        # check modified rows list
+        if old_row in self.modified_rows:
+            # compare updated mod to saved initial state:
+            if updated == self.modified_rows[old_row]:
+                del self.modified_rows[old_row]
+            else:
+                # update entry to associate the intial mod state with its new row position.
+                # **create updated entry, but do not insert into modified_rows yet
+                # as that could cause issues as we continue through the list of mods to reorder;
+                # instead, return the entry for caller to save and handle
+                r={new_row: self.modified_rows[old_row]}
+        else:
+            # create initial entry
+            r = {new_row: mod}
+
+        self.mods[new_row] = updated
+
+        return r
+
 
 
 
@@ -461,7 +525,7 @@ class ModTableView(QtWidgets.QTableView):
         """
         # rows = [idx.row() for idx in self.selectedIndexes()]
         rows = list(set([idx.row() for idx in self.selectedIndexes()]))
-        print(rows)
+        # print(rows)
         if rows:
 
             self.LOGGER.debug("Moving rows {}-{} to row {}.".format(rows[0], rows[-1], rows[0]-distance))
@@ -474,7 +538,7 @@ class ModTableView(QtWidgets.QTableView):
 
     def onMoveModsDownAction(self, distance:int=1):
         rows = list(set([idx.row() for idx in self.selectedIndexes()]))
-        print(rows)
+        # print(rows)
 
         if rows:
 

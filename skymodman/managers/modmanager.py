@@ -1,6 +1,7 @@
 from skymodman import exceptions, ModEntry
 from skymodman.utils import withlogger
 from skymodman.managers import config, database, profiles
+from skymodman import constants
 
 from typing import List
 
@@ -161,10 +162,16 @@ class ModManager:
         yield from self.DB.getModInfo()
 
     def basicModInfo(self):
-        """Convenience method for table-display
+        """
+        This actually now returns _all_ the info for a mod as a dict, intended for feeding
+        to ModEntry(**d) or using directly
         :return: tuples of form (ordinal, enabled-status, mod ID, version, name)
         """
-        yield from (me for me in map(ModEntry._make, self.DB.execute_("SELECT enabled, name, modid, version, ordinal FROM mods")))
+        #TODO: rename this.
+        # yield from self.DB.getModInfo()
+        for row in self.DB.getModInfo():
+            yield dict(zip(row.keys(), row))
+        # yield from (me for me in map(ModEntry._make, self.DB.execute_("SELECT enabled, name, modid, version, ordinal FROM mods")))
 
     def enabledMods(self):
         yield from self.DB.enabledMods(True)
@@ -172,41 +179,25 @@ class ModManager:
     def disabledMods(self):
         yield from self.DB.disabledMods(True)
 
-    # def updateMods(self, updated: List[ModEntry], old_mod_ranks:List[int]):
     def saveUserEdits(self, changes):
         """
-        :param changes: an iterable of 3-tuples of form (mod_name, enabled_status, ordinal)
+        :param changes: an iterable of ModEntry objects
         """
-        # :param updated: the ModEntry named tuple holding the new values
-        # :param old_mod_ranks: the ordinal ranks for the mods to be replaced. If mod install-order has not
-        # changed, then this will match the ordinal number for the updated entries.
-        # :return:
 
-        # test
-        # print([r for r in [s for c in changes for s in
-        #                    self._db_manager.conn.execute("select * from mods where ordinal = ?", (c[2],))]
-        #        ])
+        rows_to_delete = [(m.ordinal, ) for m in changes]
 
+        # a generator that creates tuples of values by sorting the values of the
+        # modentry according the order defined in constants.db_fields
+        dbrowgen = (tuple([getattr(m, f) for f in sorted(m._fields, key=lambda fld: constants.db_fields.index(fld)) ] ) for m in changes)
 
-        # fixme: at the moment, this doesn't handle install-order changes
-        self._db_manager.updatemany_("UPDATE mods SET name=?, enabled=? WHERE ordinal = ?", changes)
+        # delete the row with the given ordinal
+        self._db_manager.updatemany_("DELETE FROM mods WHERE ordinal=?", rows_to_delete)
 
+        # and now re-insert it with the correct modinfo
+        self._db_manager.fillTable(list(dbrowgen))
 
-        # And now save changes to disk
+        # And finally save changes to disk
         self.saveModList()
-
-
-
-        # query = "DELETE FROM mods WHERE ordinal in ("
-        # for i in range(len(old_mod_ranks)-1):
-        #     query+="?, "
-        # else:
-        #     query+="?)" # finish off the group
-        #
-        #
-        # self._db_manager.update_(query, old_mod_ranks)
-        # self._db_manager.updatemany_("INSERT into mods VALUES (:")
-
 
 
     def saveModList(self):
