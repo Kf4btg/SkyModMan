@@ -192,7 +192,7 @@ class Ui_MainWindow(object):
         self.gridLayout.addWidget(self.manager_tabs, 0, 0, 1, 4)
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(MainWindow)
-        self.menubar.setGeometry(QtCore.QRect(0, 0, 800, 26))
+        self.menubar.setGeometry(QtCore.QRect(0, 0, 800, 34))
         self.menubar.setObjectName("menubar")
         self.menu_File = QtWidgets.QMenu(self.menubar)
         self.menu_File.setObjectName("menu_File")
@@ -255,7 +255,7 @@ class Ui_MainWindow(object):
         _translate = QtCore.QCoreApplication.translate
         MainWindow.setWindowTitle(_translate("MainWindow", "MainWindow"))
         self.next_button.setText(_translate("MainWindow", "Next"))
-        self.move_mod_label.setText(_translate("MainWindow", "Move Mod:"))
+        self.move_mod_label.setText(_translate("MainWindow", "Install Order:"))
         self.mod_up_button.setStatusTip(_translate("MainWindow", "Move selected mod(s) up in the install order."))
         self.mod_down_button.setStatusTip(_translate("MainWindow", "Move selected mod(s) down in the install order."))
         self.profile_label.setText(_translate("MainWindow", "Profile:"))
