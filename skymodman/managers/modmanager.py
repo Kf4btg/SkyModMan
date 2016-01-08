@@ -191,13 +191,37 @@ class ModManager:
 
         # a generator that creates tuples of values by sorting the values of the
         # modentry according the order defined in constants.db_fields
+
         dbrowgen = (tuple([getattr(m, f) for f in sorted(m._fields, key=lambda fld: constants.db_fields.index(fld)) ] ) for m in changes)
 
-        # delete the row with the given ordinal
-        self._db_manager.updatemany_("DELETE FROM mods WHERE ordinal=?", rows_to_delete)
+        # generator that sticks the ordinal on the end of tuple
+        # dbrowgen = (tuple([getattr(m, f)
+        #                    for f in sorted([g for g in m._fields if g!="ordinal"],
+        #                                    key=lambda fld: constants.noordinal_dbfields.index(fld)) ] )
+        #             + (m.ordinal, ) for m in changes)
+
+        # using the context manager may allow deferrable foreign to go unsatisfied for a moment
+        with self.DB.conn:
+            # delete the row with the given ordinal
+            self.DB.conn.executemany("DELETE FROM mods WHERE ordinal=?", rows_to_delete)
+
+            # and reinsert
+            query = "INSERT INTO mods(" + ", ".join(constants.db_fields) + ") VALUES ("
+            query += ", ".join("?" * len(constants.db_fields)) + ")"
+
+            self.DB.conn.executemany(query, dbrowgen)
+
+
+        # self._db_manager.updatemany_("DELETE FROM mods WHERE ordinal=?", rows_to_delete)
+
+        # because deleting the row messes with foreign key relationships,
+        # we can just overwrite all the fields for the given ordinal
+        # q="UPDATE mods SET " + "=?, ".join(constants.noordinal_dbfields) + "=? WHERE ordinal=?"
+        # self._db_manager.updatemany_(q, dbrowgen)
 
         # and now re-insert it with the correct modinfo
-        self._db_manager.fillTable(list(dbrowgen))
+        # self._db_manager.fillTable(list(dbrowgen))
+
 
         # And finally save changes to disk
         self.saveModList()
@@ -228,5 +252,4 @@ class ModManager:
         :return:
         """
 
-        print(modName)
         return self.DB.getOne('SELECT directory from mods where name= ? ', (modName, ))[0]
