@@ -241,8 +241,9 @@ class DBManager:
         :return:
         """
         if name_only:
-            return [ t[0] for t in self._con.execute("select name from mods where enabled = 1")]
-        return self._con.execute("select * from mods where enabled = 1").fetchall()
+            yield from (t[0] for t in self._con.execute("select name from mods where enabled = 1"))
+        else:
+            yield from self._con.execute("select * from mods where enabled = 1")
 
     def disabledMods(self, name_only = False):
         """

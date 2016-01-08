@@ -61,7 +61,7 @@
     <item row="0" column="0" colspan="4">
      <widget class="QTabWidget" name="manager_tabs">
       <property name="currentIndex">
-       <number>0</number>
+       <number>1</number>
       </property>
       <widget class="QWidget" name="installed_mods_tab">
        <property name="sizePolicy">
@@ -243,16 +243,17 @@
           </property>
           <widget class="QGroupBox" name="filetree_listbox">
            <property name="title">
-            <string>Mods</string>
+            <string>Active Mods</string>
            </property>
            <layout class="QGridLayout" name="gridLayout_4">
             <item row="0" column="0">
-             <widget class="QListWidget" name="filetree_modlist">
-              <item>
-               <property name="text">
-                <string>Mod1</string>
-               </property>
-              </item>
+             <widget class="QListView" name="filetree_modlist">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
              </widget>
             </item>
            </layout>

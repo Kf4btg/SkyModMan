@@ -174,6 +174,9 @@ class ModManager:
         # yield from (me for me in map(ModEntry._make, self.DB.execute_("SELECT enabled, name, modid, version, ordinal FROM mods")))
 
     def enabledMods(self):
+        """
+        yields the names of enabled mods for the currently active profile
+        """
         yield from self.DB.enabledMods(True)
 
     def disabledMods(self):

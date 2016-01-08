@@ -1,9 +1,9 @@
 import sys
 
-from PyQt5.QtCore import Qt, QStandardPaths, QDir, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import Qt, QStandardPaths, QDir, pyqtSignal, pyqtSlot, QStringListModel
 from PyQt5.QtGui import QGuiApplication
 from PyQt5.QtWidgets import QApplication, QMainWindow, \
-    QFileDialog, QFileSystemModel, QDialogButtonBox
+    QFileDialog, QFileSystemModel, QDialogButtonBox, QListView
 
 import PyQt5.QtWidgets as QtW
 
@@ -45,8 +45,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         setupSlots = [
             self.setupProfileSelector,
-            self.setupFileTree,
             self.setupTable,
+            self.setupFileTree,
                       ]
 
         # connect the windowinit signal to the setup slots
@@ -149,6 +149,17 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     # FILETREE TAB FUNCTIONS
     # ===================================
     def setupFileTree(self):
+        list_model = QStringListModel()
+        list_model.setStringList(list(self.Manager.enabledMods()))
+        print(list(self.Manager.enabledMods()))
+
+
+        self.filetree_modlist.setModel(list_model)
+        self.filetree_modlist.setViewMode(QListView.ListMode)
+        # self.filetree_modlist.model().dataChanged.emit(list_model.index(0), list_model.index(list_model.rowCount()))
+
+
+
         file_tree_model = QFileSystemModel()
         file_tree_model.setRootPath(self._manager.Config['dir_mods'])
         self.filetree_tree.setModel(file_tree_model)
@@ -156,6 +167,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # let setup know we're done here
         self.SetupDone()
+
+    def updateFileTreeModList(self):
+        self.filetree_modlist.model().setStringList(list(self.Manager.enabledMods()))
 
     # ===================================
     # TABLE OF INSTALLED MODS FUNCTIONS
@@ -230,6 +244,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         :return:
         """
         self.mod_table.saveChanges()
+
+        # update the filetree list
+        self.updateFileTreeModList()
 
         # self.modListSaved.emit()
         # self.updateUI()
@@ -314,6 +331,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """For now, this just repopulates the mod-table. There might be more to it later"""
         self.LOGGER.debug("About to repopulate table")
         self.mod_table.loadData()
+        self.updateFileTreeModList()
+
         self.updateUI()
 
     def checkEnableProfileDelete(self, profile_name):
