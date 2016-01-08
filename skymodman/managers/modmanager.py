@@ -179,7 +179,7 @@ class ModManager:
     def disabledMods(self):
         yield from self.DB.disabledMods(True)
 
-    def saveUserEdits(self, changes):
+    def saveUserEdits(self, changes: List[ModEntry]):
         """
         :param changes: an iterable of ModEntry objects
         """

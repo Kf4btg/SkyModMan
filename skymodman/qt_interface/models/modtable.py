@@ -29,11 +29,11 @@ class ModTableModel(QtCore.QAbstractTableModel):
     QAbstractTableModel specialized to consider each row as a single item for some purposes.
     """
 
-    COLUMNS = (COL_ENABLED, COL_NAME, COL_MODID, COL_VERSION, COL_ORDER) = list(range(5))
-
-    VISIBLE_COLS = [COL_ENABLED, COL_NAME, COL_MODID, COL_VERSION]
-
-    DBLCLICK_COLS = [COL_MODID, COL_VERSION]
+    # COLUMNS = (COL_ENABLED, COL_NAME, COL_MODID, COL_VERSION, COL_ORDER) = list(range(5))
+    #
+    # VISIBLE_COLS = [COL_ENABLED, COL_NAME, COL_MODID, COL_VERSION]
+    #
+    # DBLCLICK_COLS = [COL_MODID, COL_VERSION]
 
     headers = ["", "Name", "Mod ID", "Version"]
 
@@ -72,7 +72,7 @@ class ModTableModel(QtCore.QAbstractTableModel):
         :param parent: ignored
         :return:
         """
-        return len(self.VISIBLE_COLS)
+        return len(constants.VISIBLE_COLS)
 
     def data(self, index: QtCore.QModelIndex, role=Qt.DisplayRole):
         """ Qt override
@@ -209,7 +209,7 @@ class ModTableModel(QtCore.QAbstractTableModel):
         """
         col = index.column()
 
-        if col == self.COL_ENABLED:
+        if col == constants.COL_ENABLED:
             return Qt.ItemIsEnabled | Qt.ItemIsUserCheckable | Qt.ItemIsSelectable
 
         # _flags = Qt.NoItemFlags #start with nothing
@@ -219,11 +219,11 @@ class ModTableModel(QtCore.QAbstractTableModel):
         _flags = Qt.ItemIsEnabled
 
         # mod id and version are selectable
-        if col in [self.COL_MODID, self.COL_VERSION]:
+        if col in [constants.COL_MODID, constants.COL_VERSION]:
             return _flags | Qt.ItemIsSelectable
 
         # name is selectable and editable
-        if col == self.COL_NAME:
+        if col == constants.COL_NAME:
             return _flags | Qt.ItemIsSelectable | Qt.ItemIsEditable
 
         return _flags
@@ -247,7 +247,6 @@ class ModTableModel(QtCore.QAbstractTableModel):
 
         self.mods = [QModEntry(**d) for d in self.manager.basicModInfo()]
 
-        # self.mods = [QModEntry._make(e) for e in self.manager.basicModInfo()]
         self.endResetModel()
 
     def on_doubleClick(self, index:QtCore.QModelIndex):
@@ -257,7 +256,7 @@ class ModTableModel(QtCore.QAbstractTableModel):
         :param index: QModelIndex corresponding to the cell that was just clicked.
         :return:
         """
-        if not index.isValid() or index.column() not in self.DBLCLICK_COLS: return
+        if not index.isValid() or index.column() not in constants.DBLCLICK_COLS: return
 
         self.toggleEnabledState(index.row())
 
@@ -275,10 +274,10 @@ class ModTableModel(QtCore.QAbstractTableModel):
 
         need_notify = self.onModDataEdit(row, mod, newmod)
 
-        for c in self.VISIBLE_COLS:
-            if c==constants.COL_ENABLED:
-                continue
-            index = self.index(row, c) # type: QtCore.QModelIndex
+        # for c in self.VISIBLE_COLS:
+        #     if c==constants.COL_ENABLED:
+        #         continue
+        #     index = self.index(row, c) # type: QtCore.QModelIndex
 
         self.rowDataChanged(row)
 
@@ -304,8 +303,6 @@ class ModTableModel(QtCore.QAbstractTableModel):
         become the new base state (the state returned to when the Revert button is pressed)
         :return:
         """
-        # list of (name, enabled, ordinal) tuples to send to modmanager
-        # to_save = [(self.mods[row].name, self.mods[row].enabled, self.mods[row].ordinal) for row in self.modified_rows]
 
         to_save = [self.mods[row] for row in self.modified_rows]
 
@@ -314,9 +311,6 @@ class ModTableModel(QtCore.QAbstractTableModel):
         self.modified_rows.clear()
         self.tableDirtyStatusChange.emit(False)
 
-
-    # def moveRows(self, sourceParent: QtCore.QModelIndex, start: int, count: int, destParent: QtCore.QModelIndex, destChild: int):
-    #     return super(ModTableModel, self).moveRows(sourceParent, start, count, destParent, destChild)
 
     def shiftRows(self, start_row:int, end_row:int, move_to_row:int, parent=QtCore.QModelIndex()):
         """
@@ -327,33 +321,21 @@ class ModTableModel(QtCore.QAbstractTableModel):
         :param move_to_row:
         :return:
         """
+        # TODO: it would be simpler to just change the ordinal number for each modified mod and then sort the list on that field; but would it be faster? or more robust? or would it add more overhead?  Discuss.
 
-        # beginMoveRows(index srcParent, int srcFirst, int srcLast, index destParent, int destChild)
-        #   we have same parent, so we use: (parent, first, last, parent, dest)
-
-
-        # when moving rows down, the entire section is moved so that the first element is in dest; but beginMoveRows defines
-        # destChild (the last argument) as the row BEFORE which the section is moved; so moving rows
-        # 2-4 to row 5 would mean that destchild would be (5+((4-2)+1))=8
         # FROM DOCS:
-        #   "the new index for the source row i (which is between sourceFirst and sourceLast)
+        #   "[when moving items down in the same parent], the new index for the source row i (which is between sourceFirst and sourceLast)
         #       is equal to (destinationChild-sourceLast-1+i)"
-        # thus the new index for row 3 in our example would be (8-4-1+3)=6;
         # in terms of move_to_row,
-        #   destChild = (move_to_row + num_rows_moves)
+        #   destChild = (move_to_row + num_rows_moved)
         #   num_rows_moved = (srcLast - srcFirst)+1
         #   dC = mtr+srcLast-srcFirst+1
-
-        #  > dC = 5+4-2+1 = 8
-        #  > 3..5->8 ==> dC = 8+5-3+1 = 11
 
         # track this to see if we should emit a tableDirty signal afterwards
         initial_modified_count = len(self.modified_rows)
 
-
         selection = self.mods[start_row:end_row+1] #  mods being moved
         count = len(selection)
-        # displaced = [] # mods that will be reordered as a side-effect of this operation
 
         new_modified_rows = []
         if move_to_row > start_row:
@@ -374,9 +356,7 @@ class ModTableModel(QtCore.QAbstractTableModel):
                 # self.mods[move_to_row+i] = selection[i]
                 if r is not None: new_modified_rows.append(r)
 
-
             self.endMoveRows()
-
 
         elif move_to_row < start_row:
             # moving mods up (ordinal number decreases)
@@ -391,8 +371,6 @@ class ModTableModel(QtCore.QAbstractTableModel):
             for i in range(count):
                 r = self.reorderMod(move_to_row+i, selection[i])
                 if r is not None: new_modified_rows.append(r)
-
-                # self.mods[move_to_row+i] = selection[i]
 
             self.endMoveRows()
         else:
@@ -442,8 +420,6 @@ class ModTableModel(QtCore.QAbstractTableModel):
         self.mods[new_row] = updated
 
         return r
-
-
 
 
 
@@ -515,7 +491,6 @@ class ModTableView(QtWidgets.QTableView):
         else:
             self.selectionCleared.emit()
             
-            
         super(ModTableView, self).selectionChanged(selected, deselected)
 
     def onMoveModsUpAction(self, distance:int=1):
@@ -523,9 +498,7 @@ class ModTableView(QtWidgets.QTableView):
         currently only handles moving mod (or selection of mods) up 1 spot at a time
         :return:
         """
-        # rows = [idx.row() for idx in self.selectedIndexes()]
         rows = list(set([idx.row() for idx in self.selectedIndexes()]))
-        # print(rows)
         if rows:
 
             self.LOGGER.debug("Moving rows {}-{} to row {}.".format(rows[0], rows[-1], rows[0]-distance))
@@ -534,11 +507,9 @@ class ModTableView(QtWidgets.QTableView):
 
         # emit signal to allow up/down buttons to be toggled as necessary
         self.itemsMoved.emit(self.selectedIndexes(), self._model)
-        # self.checkSelection()
 
     def onMoveModsDownAction(self, distance:int=1):
         rows = list(set([idx.row() for idx in self.selectedIndexes()]))
-        # print(rows)
 
         if rows:
 
@@ -547,21 +518,6 @@ class ModTableView(QtWidgets.QTableView):
             self._model.shiftRows(rows[0], rows[-1], rows[0] + distance)
 
         self.itemsMoved.emit(self.selectedIndexes(), self._model)
-
-
-        # self.checkSelection()
-
-
-    # def checkSelection(self):
-    #     print(set([p.row() for p in self.selectedIndexes()]))
-
-
-
-    # def edit(self, index, trigger=None, event=None):
-    #     if index.column() == constants.COL_NAME:
-    #         return super(ModTableView, self).edit(index, trigger, event)
-    #     else:
-    #         return False
 
 
 if __name__ == '__main__':
