@@ -458,13 +458,16 @@ class ModTableView(QtWidgets.QTableView):
         :return:
         """
         rows = [idx.row() for idx in self.selectedIndexes()]
+        self.LOGGER.debug("Moving rows {}-{} to row {}.".format(rows[0], rows[-1], rows[0]-1))
 
         self._model.shiftRows(rows[0], rows[-1], rows[0]-1)
 
     def onMoveModsDownAction(self):
         rows = [idx.row() for idx in self.selectedIndexes()]
 
-        self._model.shiftRows(rows[0], rows[-1], rows[-1] + 1)
+        self.LOGGER.debug("Moving rows {}-{} to row {}.".format(rows[0], rows[-1], rows[0]+1))
+
+        self._model.shiftRows(rows[0], rows[-1], rows[0] + 1)
 
 
 

@@ -79,7 +79,7 @@ class DBManager:
     def reinit(self):
         """Drop the current mods table and reinitialize as empty"""
 
-        self.LOGGER.debug("dropping mods table")
+        # self.LOGGER.debug("dropping mods table")
 
         with self._con:
             self._con.execute("DROP TABLE mods")
@@ -97,7 +97,7 @@ class DBManager:
         # in which the entries are read from the file
         mcount = counter()
 
-        self.LOGGER.debug("loading mod db from file")
+        # self.LOGGER.debug("loading mod db from file")
 
         if not isinstance(json_source, Path):
             json_source = Path(json_source)
@@ -125,7 +125,7 @@ class DBManager:
         query = "INSERT INTO mods(" + ", ".join(self.__fields) + ") VALUES ("
         query += ", ".join("?" * len(self.__fields)) + ")"
 
-        self.LOGGER.debug(query)
+        # self.LOGGER.debug(query)
         with self._con:
             # insert the list of row-tuples into the in-memory db
             self._con.executemany(query, mod_list)
