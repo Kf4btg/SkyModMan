@@ -171,6 +171,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.mod_table.itemsSelected.connect(self.onModsSelected)
         self.mod_table.selectionCleared.connect(self.onSelectionCleared)
 
+        self.moveModUp.connect(self.mod_table.onMoveModsUpAction)
+        self.moveModDown.connect(self.mod_table.onMoveModsDownAction)
+
         self.SetupDone()
 
     def onModsSelected(self):

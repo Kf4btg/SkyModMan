@@ -165,7 +165,6 @@ class ModTableModel(QtCore.QAbstractTableModel):
         self.mods[row] = edited # update value with edited entry
         return notify_dirty
 
-
     def headerData(self, section, orientation, role=Qt.DisplayRole):
         """
         Returns labels for the vertical and horizontal headers of the table
@@ -226,7 +225,6 @@ class ModTableModel(QtCore.QAbstractTableModel):
 
         return _flags
     
-
     def rowDataChanged(self, row):
         """Emits data changed for every item in this table row"""
         idx_start = self.index(row, 0)
@@ -245,12 +243,6 @@ class ModTableModel(QtCore.QAbstractTableModel):
         # load fresh mod info
         self.mods = [QModEntry._make(e) for e in self.manager.basicModInfo()]
         self.endResetModel()
-    #
-    # def on_click(self, index):
-    #     """let clicking anywhere on the checkbox-field change its check-status"""
-    #     if index.column() == self.COL_ENABLED:
-    #         self.toggleEnabledState(index.row())
-
 
     def on_doubleClick(self, index:QtCore.QModelIndex):
         """
@@ -312,6 +304,82 @@ class ModTableModel(QtCore.QAbstractTableModel):
 
         self.modified_rows.clear()
         self.tableDirtyStatusChange.emit(False)
+
+
+    # def moveRows(self, sourceParent: QtCore.QModelIndex, start: int, count: int, destParent: QtCore.QModelIndex, destChild: int):
+    #     return super(ModTableModel, self).moveRows(sourceParent, start, count, destParent, destChild)
+
+    def shiftRows(self, start_row:int, end_row:int, move_to_row:int, parent=QtCore.QModelIndex()):
+        """
+        Move the contiguous section of rows from start..end to the position specified by dest_index;
+         that is, after the move, start_row will have be at position dest_index.
+        :param start_row:
+        :param end_row:
+        :param move_to_row:
+        :return:
+        """
+
+        # beginMoveRows(index srcParent, int srcFirst, int srcLast, index destParent, int destChild)
+        #   we have same parent, so we use: (parent, first, last, parent, dest)
+
+
+        # when moving rows down, the entire section is moved so that the first element is in dest; but beginMoveRows defines
+        # destChild (the last argument) as the row BEFORE which the section is moved; so moving rows
+        # 2-4 to row 5 would mean that destchild would be (5+((4-2)+1))=8
+        # FROM DOCS:
+        #   "the new index for the source row i (which is between sourceFirst and sourceLast)
+        #       is equal to (destinationChild-sourceLast-1+i)"
+        # thus the new index for row 3 in our example would be (8-4-1+3)=6;
+        # in terms of move_to_row,
+        #   destChild = (move_to_row + num_rows_moves)
+        #   num_rows_moved = (srcLast - srcFirst)+1
+        #   dC = mtr+srcLast-srcFirst+1
+
+        #  > dC = 5+4-2+1 = 8
+        #  > 3..5->8 ==> dC = 8+5-3+1 = 11
+
+
+        selection = self.mods[start_row:end_row+1] # selected mods being moved
+        count = len(selection)
+
+        if move_to_row > start_row:
+            # moving mods down in the list (ordinal number increases)
+            shift_distance = move_to_row - start_row # this is how many unselected mods will be displaced
+            # destChild = move_to_row + count # first unaffected slot
+
+            self.beginMoveRows(parent, start_row, end_row, parent, move_to_row + count)
+
+            # displaced = self.mods[end_row+1:destChild-1]
+
+                            # (i=3; i<8; i++)
+            for i in range(start_row, start_row+shift_distance):
+                # shift items between selection and destination index up by <count>
+                self.mods[i] = self.mods[i+count]
+            for i in range(count):
+                # move selection into place
+                self.mods[move_to_row+i] = selection[i]
+
+            self.endMoveRows()
+
+            return True
+
+        elif move_to_row < start_row:
+            # moving mods up (ordinal number decreases)
+            shift_distance = start_row - move_to_row
+
+            self.beginMoveRows(parent, start_row, end_row, parent, move_to_row)
+
+
+            # shift items between selection and destination index down by <count>
+            for i in range(end_row, end_row-shift_distance, -1):
+                self.mods[i] = self.mods[i-count]
+            for i in range(count):
+                self.mods[move_to_row+i] = selection[i]
+
+            self.endMoveRows()
+            return True
+        return False
+
 
 
 
@@ -384,9 +452,22 @@ class ModTableView(QtWidgets.QTableView):
             
         super(ModTableView, self).selectionChanged(selected, deselected)
 
+    def onMoveModsUpAction(self):
+        """
+        currently only handles moving mod (or selection of mods) up 1 spot at a time
+        :return:
+        """
+        rows = [idx.row() for idx in self.selectedIndexes()]
+
+        self._model.shiftRows(rows[0], rows[-1], rows[0]-1)
+
+    def onMoveModsDownAction(self):
+        rows = [idx.row() for idx in self.selectedIndexes()]
+
+        self._model.shiftRows(rows[0], rows[-1], rows[-1] + 1)
 
 
-        
+
     # def edit(self, index, trigger=None, event=None):
     #     if index.column() == constants.COL_NAME:
     #         return super(ModTableView, self).edit(index, trigger, event)
