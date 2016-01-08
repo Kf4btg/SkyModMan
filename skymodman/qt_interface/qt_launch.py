@@ -153,12 +153,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         list_model.setStringList(list(self.Manager.enabledMods()))
         print(list(self.Manager.enabledMods()))
 
-
+        # self.filetree_modlist.setViewMode(QListView.ListMode)
         self.filetree_modlist.setModel(list_model)
-        self.filetree_modlist.setViewMode(QListView.ListMode)
-        # self.filetree_modlist.model().dataChanged.emit(list_model.index(0), list_model.index(list_model.rowCount()))
-
-
 
         file_tree_model = QFileSystemModel()
         file_tree_model.setRootPath(self._manager.Config['dir_mods'])
