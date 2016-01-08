@@ -29,9 +29,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     deleteProfileAction = pyqtSignal(str)
 
-    moveModUp = pyqtSignal()
-    moveModDown = pyqtSignal()
-    
+    moveModsUpOne = pyqtSignal()
+    moveModsDownOne = pyqtSignal()
+
+    moveModsUp = pyqtSignal(int)
+    moveModsDown = pyqtSignal(int)
+
 
     def __init__(self, manager: 'managers.ModManager', *args, **kwargs):
         super(ModManagerWindow, self).__init__(*args, **kwargs)
@@ -70,8 +73,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.save_cancel_btnbox.button(QDialogButtonBox.Reset).clicked.connect(self.revertTable)
 
         # connect mod move-up/down
-        self.mod_up_button.clicked.connect(self.moveModUp.emit)
-        self.mod_down_button.clicked.connect(self.moveModDown.emit)
+        self.mod_up_button.clicked.connect(self.moveModsUpOne.emit)
+        self.mod_down_button.clicked.connect(self.moveModsDownOne.emit)
 
 
         # connect the actions
@@ -171,10 +174,16 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.mod_table.itemsSelected.connect(self.onModsSelected)
         self.mod_table.selectionCleared.connect(self.onSelectionCleared)
 
-        self.moveModUp.connect(self.mod_table.onMoveModsUpAction)
-        self.moveModDown.connect(self.mod_table.onMoveModsDownAction)
+        self.moveModsUpOne.connect(self.mod_table.onMoveModsUpAction)
+        self.moveModsDownOne.connect(self.mod_table.onMoveModsDownAction)
 
         self.SetupDone()
+
+    def emitMoveModUpOne(self):
+        self.moveModsUp.emit(1)
+
+    def emitMoveModDownOne(self):
+        self.moveModsDown.emit(1)
 
     def onModsSelected(self):
         """

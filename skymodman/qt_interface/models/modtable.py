@@ -452,22 +452,22 @@ class ModTableView(QtWidgets.QTableView):
             
         super(ModTableView, self).selectionChanged(selected, deselected)
 
-    def onMoveModsUpAction(self):
+    def onMoveModsUpAction(self, distance:int=1):
         """
         currently only handles moving mod (or selection of mods) up 1 spot at a time
         :return:
         """
         rows = [idx.row() for idx in self.selectedIndexes()]
-        self.LOGGER.debug("Moving rows {}-{} to row {}.".format(rows[0], rows[-1], rows[0]-1))
+        self.LOGGER.debug("Moving rows {}-{} to row {}.".format(rows[0], rows[-1], rows[0]-distance))
 
-        self._model.shiftRows(rows[0], rows[-1], rows[0]-1)
+        self._model.shiftRows(rows[0], rows[-1], rows[0]-distance)
 
-    def onMoveModsDownAction(self):
+    def onMoveModsDownAction(self, distance:int=1):
         rows = [idx.row() for idx in self.selectedIndexes()]
 
-        self.LOGGER.debug("Moving rows {}-{} to row {}.".format(rows[0], rows[-1], rows[0]+1))
+        self.LOGGER.debug("Moving rows {}-{} to row {}.".format(rows[0], rows[-1], rows[0]+distance))
 
-        self._model.shiftRows(rows[0], rows[-1], rows[0] + 1)
+        self._model.shiftRows(rows[0], rows[-1], rows[0] + distance)
 
 
 
