@@ -54,7 +54,7 @@ class DBManager:
         # mods-directory where the files for this mod are saved.
         # `name` is initially equivalent, but can be changed as
         # desired by the user.
-        self._con.execute(self._SCHEMA)
+        self._con.executescript(self._SCHEMA)
         self._con.row_factory = sqlite3.Row
 
 
@@ -91,7 +91,7 @@ class DBManager:
         with self._con:
             self._con.execute("DROP TABLE hiddenfiles, mods")
 
-            self._con.execute(self._SCHEMA)
+            self._con.executescript(self._SCHEMA)
 
     def loadModDB(self, json_source):
         """

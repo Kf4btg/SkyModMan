@@ -170,6 +170,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.SetupDone()
 
     def showModFiles(self, index):
+
         mod = self.filetree_modlist.model().stringList()[self.filetree_modlist.currentIndex().row()]
 
         # moddir = self.Manager.getModDir(mod)
