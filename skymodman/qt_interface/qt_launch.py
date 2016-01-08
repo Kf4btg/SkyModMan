@@ -73,8 +73,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.save_cancel_btnbox.button(QDialogButtonBox.Reset).clicked.connect(self.revertTable)
 
         # connect mod move-up/down
-        self.mod_up_button.clicked.connect(self.moveModsUpOne.emit)
-        self.mod_down_button.clicked.connect(self.moveModsDownOne.emit)
+        self.mod_up_button.clicked.connect(self.emitMoveModUpOne)
+        self.mod_down_button.clicked.connect(self.emitMoveModDownOne)
 
 
         # connect the actions
@@ -173,9 +173,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.mod_table.model().tableDirtyStatusChange.connect(self.markTableUnsaved)
         self.mod_table.itemsSelected.connect(self.onModsSelected)
         self.mod_table.selectionCleared.connect(self.onSelectionCleared)
+        self.mod_table.itemsMoved.connect(self.updateModMoveButtons)
 
-        self.moveModsUpOne.connect(self.mod_table.onMoveModsUpAction)
-        self.moveModsDownOne.connect(self.mod_table.onMoveModsDownAction)
+        self.moveModsUp.connect(self.mod_table.onMoveModsUpAction)
+        self.moveModsDown.connect(self.mod_table.onMoveModsDownAction)
 
         self.SetupDone()
 
@@ -191,15 +192,21 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         :return:
         """
         self.move_mod_box.setEnabled(True)
+        self.updateModMoveButtons(self.mod_table.selectedIndexes(), self.mod_table.model())
 
-        model = self.mod_table.model()
-
-        indexes = self.mod_table.selectedIndexes() #type: List[QModelIndex]
+    def updateModMoveButtons(self, selected_indexes: List[QModelIndex], model):
+        """
+        Enabled/disable the mod-up/down buttons depending on whether the first or last
+        items in the table are selected.
+        :param selected_indexes: list of QModelIndex in the selection
+        :param model: the table's model
+        :return:
+        """
         index1 = model.index(0,0)
         index_last = model.index(model.rowCount()-1, 0)
 
-        self.mod_up_button.setEnabled(index1 not in indexes)
-        self.mod_down_button.setEnabled(index_last not in indexes)
+        self.mod_up_button.setEnabled(index1 not in selected_indexes)
+        self.mod_down_button.setEnabled(index_last not in selected_indexes)
 
     def onSelectionCleared(self):
         self.move_mod_box.setEnabled(False)

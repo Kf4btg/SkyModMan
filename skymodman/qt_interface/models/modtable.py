@@ -393,6 +393,8 @@ class ModTableView(QtWidgets.QTableView):
     itemsSelected = pyqtSignal()
     selectionCleared = pyqtSignal()
 
+    itemsMoved = pyqtSignal(list, QtCore.QAbstractTableModel)
+
     def __init__(self, parent, manager, *args, **kwargs):
         super(ModTableView, self).__init__(parent, *args, **kwargs)
         self.manager = manager
@@ -457,17 +459,37 @@ class ModTableView(QtWidgets.QTableView):
         currently only handles moving mod (or selection of mods) up 1 spot at a time
         :return:
         """
-        rows = [idx.row() for idx in self.selectedIndexes()]
-        self.LOGGER.debug("Moving rows {}-{} to row {}.".format(rows[0], rows[-1], rows[0]-distance))
+        # rows = [idx.row() for idx in self.selectedIndexes()]
+        rows = list(set([idx.row() for idx in self.selectedIndexes()]))
+        print(rows)
+        if rows:
 
-        self._model.shiftRows(rows[0], rows[-1], rows[0]-distance)
+            self.LOGGER.debug("Moving rows {}-{} to row {}.".format(rows[0], rows[-1], rows[0]-distance))
+
+            self._model.shiftRows(rows[0], rows[-1], rows[0]-distance)
+
+        # emit signal to allow up/down buttons to be toggled as necessary
+        self.itemsMoved.emit(self.selectedIndexes(), self._model)
+        # self.checkSelection()
 
     def onMoveModsDownAction(self, distance:int=1):
-        rows = [idx.row() for idx in self.selectedIndexes()]
+        rows = list(set([idx.row() for idx in self.selectedIndexes()]))
+        print(rows)
 
-        self.LOGGER.debug("Moving rows {}-{} to row {}.".format(rows[0], rows[-1], rows[0]+distance))
+        if rows:
 
-        self._model.shiftRows(rows[0], rows[-1], rows[0] + distance)
+            self.LOGGER.debug("Moving rows {}-{} to row {}.".format(rows[0], rows[-1], rows[0]+distance))
+
+            self._model.shiftRows(rows[0], rows[-1], rows[0] + distance)
+
+        self.itemsMoved.emit(self.selectedIndexes(), self._model)
+
+
+        # self.checkSelection()
+
+
+    # def checkSelection(self):
+    #     print(set([p.row() for p in self.selectedIndexes()]))
 
 
 
