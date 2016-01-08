@@ -221,3 +221,12 @@ class ModManager:
         self.DB.update_("UPDATE mods SET enabled=? WHERE ordinal = ?", (int(enabled_status), ordinal))
         # print([t for t in self.DB.execute_("Select * from mods where ordinal = ?", (ordinal,))])
 
+    def getModDir(self, modName):
+        """
+        queries the db for the directory associated with the given name
+        :param modName:
+        :return:
+        """
+
+        print(modName)
+        return self.DB.getOne('SELECT directory from mods where name= ? ', (modName, ))[0]

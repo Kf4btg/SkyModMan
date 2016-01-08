@@ -1,6 +1,6 @@
 import sys
 
-from PyQt5.QtCore import Qt, QStandardPaths, QDir, pyqtSignal, pyqtSlot, QStringListModel
+from PyQt5.QtCore import Qt, QStandardPaths, QDir, pyqtSignal, pyqtSlot, QStringListModel, QSize
 from PyQt5.QtGui import QGuiApplication
 from PyQt5.QtWidgets import QApplication, QMainWindow, \
     QFileDialog, QFileSystemModel, QDialogButtonBox, QListView
@@ -151,18 +151,32 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     def setupFileTree(self):
         list_model = QStringListModel()
         list_model.setStringList(list(self.Manager.enabledMods()))
-        print(list(self.Manager.enabledMods()))
 
-        # self.filetree_modlist.setViewMode(QListView.ListMode)
         self.filetree_modlist.setModel(list_model)
+        self.splitter.setSizes([1, 500])
 
         file_tree_model = QFileSystemModel()
-        file_tree_model.setRootPath(self._manager.Config['dir_mods'])
+        # file_tree_model.setRootPath(self._manager.Config['dir_mods'])
         self.filetree_tree.setModel(file_tree_model)
-        self.filetree_tree.setRootIndex(file_tree_model.index(self._manager.Config["dir_mods"]))
+        # self.filetree_tree.setRootIndex(file_tree_model.index(self._manager.Config["dir_mods"]))
+
+        self.filetree_modlist.clicked.connect(self.showModFiles)
+
+        self.filetree_tree.hideColumn(1)
+        self.filetree_tree.hideColumn(2)
+        self.filetree_tree.hideColumn(3)
 
         # let setup know we're done here
         self.SetupDone()
+
+    def showModFiles(self, index):
+        mod = self.filetree_modlist.model().stringList()[self.filetree_modlist.currentIndex().row()]
+
+        # moddir = self.Manager.getModDir(mod)
+        p = self.Manager.Config.paths.dir_mods / self.Manager.getModDir(mod)
+
+        self.filetree_tree.model().setRootPath(str(p))
+        self.filetree_tree.setRootIndex(self.filetree_tree.model().index(str(p)))
 
     def updateFileTreeModList(self):
         self.filetree_modlist.model().setStringList(list(self.Manager.enabledMods()))
