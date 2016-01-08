@@ -253,3 +253,7 @@ class ModManager:
         """
 
         return self.DB.getOne('SELECT directory from mods where name= ? ', (modName, ))[0]
+
+
+    def saveHiddenFiles(self):
+        self.DB.saveHiddenFiles(self.active_profile.hidden_files)

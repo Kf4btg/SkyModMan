@@ -21,7 +21,13 @@ class DBManager:
             modid     INTEGER,        --nexus id, or 0 if none
             version   TEXT,           --arbitrary, set by mod author
             enabled   INTEGER default 1  --effectively a boolean value (0,1)
-        )"""
+        );
+        CREATE TABLE hiddenfiles (
+            file      TEXT      -- path to the file that has been hidden
+            isdir     INTEGER   -- 0 or 1 bool, all files under hidden dir are hidden
+            directory TEXT REFERENCES mods(directory) DEFERRABLE INITIALLY DEFERRED
+              -- the mod directory under which this file resides
+        );"""
 
     # __fields = ["ordinal", "directory", "name", "modid", "version", "enabled"]
     __defaults = {
@@ -83,7 +89,7 @@ class DBManager:
         # self.LOGGER.debug("dropping mods table")
 
         with self._con:
-            self._con.execute("DROP TABLE mods")
+            self._con.execute("DROP TABLE hiddenfiles, mods")
 
             self._con.execute(self._SCHEMA)
 
@@ -115,6 +121,44 @@ class DBManager:
                 self.logger.error("No mod information present in {}, or file is malformed.".format(json_source))
                 success = False
         return success
+
+    def loadHiddenFiles(self, json_source):
+        if not isinstance(json_source, Path):
+            json_source = Path(json_source)
+        success = True
+        with json_source.open('r') as f:
+            try:
+                hiddenfiles = json.load(f)
+                self.populateHiddenFilesTable(hiddenfiles)
+            except json.decoder.JSONDecodeError:
+                self.logger.warning("No hidden files listed in {}, or file is malformed.".format(json_source))
+                success = False
+        return success
+
+
+    def populateHiddenFilesTable(self, filelist):
+
+        q = "insert into hiddenfiles values (?, ?, ?)"
+
+        with self._con:
+            self._con.executemany(q, filelist)
+
+    def saveHiddenFiles(self, json_target):
+        if not isinstance(json_target, Path):
+            json_target = Path(json_target)
+
+        cur = self._con.execute("Select * from hiddenfiles group by directory")
+
+        # todo: use defaultdict for this
+        filelist = {}
+        for row in cur:
+            mdir = row['directory']
+            if not mdir in filelist:
+                filelist[mdir] = []
+            # each file has a path and an indicator whether it is a directory
+            filelist[mdir].append({"file": row['file'], "isdir": row['isdir']})
+
+        self.jsonWrite(json_target, filelist)
 
     # def fillTable(self, mod_list, doprint=False):
     def fillTable(self, mod_list):
@@ -369,6 +413,10 @@ class DBManager:
         # instead of raising an error...hmmm
         return True
 
+    @staticmethod
+    def jsonWrite(json_target: Path, pyobject):
+        with json_target.open('w') as f:
+            json.dump(pyobject, f, indent=1)
 
 
     @staticmethod

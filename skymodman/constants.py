@@ -12,6 +12,11 @@ DBLCLICK_COLS = [COL_MODID, COL_VERSION]
 # defines the names and order of fields in the database
 db_fields = ["ordinal", "directory", "name", "modid", "version", "enabled"]
 
+# a tuple of the db fields without the ordinal field;
+# simply for convenience. As it constructed from a set, it
+# Should only be used where the order of the fields doesn't matter
+noordinal_dbfields = tuple(set(db_fields) ^ {"ordinal"})
+
 
 
 

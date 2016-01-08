@@ -17,6 +17,7 @@ class Profile:
         LOADORDER = "loadorder.json"
         INIEDITS  = "iniedits.json"
         OVERWRITE = "overwrites.json"
+        HIDDEN    = "hiddenfiles.json"
 
     class SyncError(Enum):
         NOTFOUND = 0
@@ -83,6 +84,10 @@ class Profile:
     @property
     def overwrites(self) -> Path:
         return self.localfiles['overwrites']
+
+    @property
+    def hidden_files(self):
+        return self.localfiles['hiddenfiles']
 
     def recordErrors(self, error_type: SyncError, *errors):
         """
