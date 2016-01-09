@@ -9,7 +9,7 @@ from skymodman.utils import withlogger
 # @withlogger
 class FSItem:
 
-    def __init__(self, path:str, name:str,  parent:'FSItem'= None, isdir = False, *args, **kwargs):
+    def __init__(self, path:str, name:str,  parent:'FSItem'= None, isdir = True, *args, **kwargs):
         """
         :param path: a relative path from an arbitray root to this file
         :param name: the name that will displayed for this file; usually just the basename
@@ -18,13 +18,15 @@ class FSItem:
         """
         super(FSItem, self).__init__(*args, **kwargs)
         self._path = path
+        self._lpath = path.lower() # used to case-insensitively compare two FSItems
         self._name = name
-
-        self.isdir = isdir
-
         self._parent = parent
 
-        self._children = []
+        self.isdir = isdir
+        if self.isdir:
+            self._children = []
+        else:
+            self._children = None
 
         self._row=0
 
@@ -32,6 +34,11 @@ class FSItem:
 
     @property
     def path(self)->str: return self._path
+
+    @property
+    def lpath(self)->str:
+        """All-lowercase version of this item's relative path"""
+        return self._lpath
 
     @property
     def name(self)->str: return self._name
@@ -56,7 +63,10 @@ class FSItem:
     @property
     def child_count(self):
         """Number of direct children"""
-        return len(self._children)
+        try:
+            return len(self._children)
+        except TypeError: # _children is None
+            return 0
 
     @property
     def parent(self):
@@ -66,10 +76,10 @@ class FSItem:
 
     def __getitem__(self, row:int):
         """Access children using list notation: thisitem[0]
-        Returns none if given an invalid row number"""
+        Returns none if given an invalid row number or childlist is None"""
         try:
             return self._children[row]
-        except IndexError:
+        except (IndexError, TypeError):
             return None
 
     @property
@@ -135,19 +145,27 @@ class FSItem:
 
         for e in entries: #type: Path
             rel = str(e.relative_to(rpath))
+            # using type(self) here to make sure we get an instance of the subclass we're using
+            # instead of the base FSItem
             child = type(self)(rel, e.name, self, e.is_dir())
             if e.is_dir():
                 child.loadChildren(rel_root, filter)
             self.append(child)
 
 
+    def __eq__(self, other:'FSItem'):
+        """Return true when these 2 items refer to the same relative path.
+        Case insensitive. Used to determine file conflicts."""
+        return self.lpath == other.lpath
+
+
     def __str__(self):
-        s="{_class}(name: '{name}', path: '{path}', isdir: {isdir})".format(
+        s="{_class}(name: '{name}', path: '{path}', isdir: {isdir}, hidden: {hidden})".format(
                 _class=self.__class__.__name__,
                 name=self._name,
                 path=self._path,
-                isdir= self.isdir)
-                # hidden=
+                isdir= self.isdir,
+                hidden=self._hidden)
 
         return s
 
@@ -293,7 +311,7 @@ class ModFileTreeModel(QAbstractItemModel):
             self.beginResetModel()
             self.rootpath = path
             # name for this item is never actually seen
-            self.rootitem = QFSItem("", "datafolder", None)
+            self.rootitem = QFSItem("", "data", None)
             self.rootitem.loadChildren(self.rootpath)
             self.endResetModel()
             # enit notifier signal
@@ -395,6 +413,49 @@ class ModFileTreeModel(QAbstractItemModel):
             self.dataChanged.emit(index, last_index)
             return True
         return super(ModFileTreeModel, self).setData(index, value, role)
+
+    def dumpsHidden(self):
+        """Return a string containing the hidden files of this mod in a form suitable
+        for serializing to json"""
+
+        hiddens = tree()
+        l = defaultdict(list)
+        for child in self.root_item.iterchildren(True):
+            # skip any fully-checked items
+            if child.checkState == Qt.Checked:
+                continue
+
+            elif child.checkState == Qt.Unchecked:
+                # add unchecked dirs, but do not descend
+                if child.isdir: pass
+
+# from collections import UserDict
+class AutoDict:
+
+    class ViviDict(dict):
+        def __missing__(self, key):
+            value = self[key] = type(self)()
+            return value
+
+    def __init__(self, initialData:dict=None):
+        if initialData:
+            self.data = ViviDict(initialData.copy())
+        else: self.data = ViviDict()
+
+
+    def __getitem__(self, key):
+        print ("getting item for "+key)
+        try:
+            return
+        except:
+            pass
+
+    def __setitem__(self, key, value):
+        print ("setting "+key+"="+value)
+        try:
+            super(AutoDict, self).__setitem__(key, value)
+        except TypeError as e:
+            print (e)
 
 
 
