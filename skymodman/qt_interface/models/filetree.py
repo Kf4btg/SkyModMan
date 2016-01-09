@@ -2,11 +2,9 @@ from PyQt5.QtCore import Qt, QModelIndex, QAbstractItemModel, pyqtSignal
 from PyQt5.QtGui import QIcon
 
 import os
-from os.path import join, relpath
 from pathlib import Path
 
 from skymodman.utils import withlogger
-
 
 # @withlogger
 class FSItem:
@@ -114,8 +112,6 @@ class FSItem:
         files from the results
         :return:
         """
-        # TODO: sort the list of children after retrieving. (using the alphabet or something)
-
         # for de in os.scandir(join(rel_root, self.path)):
         #     # have to check this before creating the child
         #     # or (obviously) it won't be available during init
@@ -128,11 +124,14 @@ class FSItem:
         #         child.loadChildren(rel_root)
         #     self.append(child)
 
-        #Easier to use Path objects or even os.walk() than deal with all that crap, and is_dir() not working eliminates what the slight performance benefit there would have been...
+        #Easier to use Path objects or even os.walk() than deal with all that crap,
+        # and is_dir() not working eliminates what slight
+        # performance benefit there would have been...
 
         rpath = Path(rel_root)
         path = rpath / self.path
 
+        # sort by name  ### TODO: folders first?
         entries = sorted(list(path.iterdir()), key = lambda p: p.name)
 
         for e in entries: #type: Path
@@ -149,6 +148,7 @@ class FSItem:
                 name=self._name,
                 path=self._path,
                 isdir= self.isdir)
+                # hidden=
 
         return s
 
