@@ -208,6 +208,11 @@ class QFSItem(FSItem):
                 c.setEnabled(state == Qt.Checked)
 
         self._checkstate = state
+        # the "hidden" attribute on the baseclass is what will allow us to save
+        # the lists of hidden files to disk, so be sure to set it here;
+        # note: only explicitly unchecked items will be marked as hidden here;
+        # checked and partially-checked directories will not be hidden
+        self._hidden = state == Qt.Unchecked
 
     def childrenCheckState(self):
         """  Calculates the checked state of the item based on the checked state
@@ -255,6 +260,8 @@ class ModFileTreeModel(QAbstractItemModel):
     the state of the checkbox on each file or folder (though there is some neat trickery
     that propagates a check-action on a directory to all of its descendants)
     """
+    #TODO: calculate and inform the user of any file-conflicts that will occur in their mod-setup to help them decide what needs to be hidden.
+    # It will probably be necessary to do that asynchronously...somehow...
 
     rootPathChanged = pyqtSignal(str)
 
