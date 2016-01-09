@@ -153,32 +153,22 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         list_model.setStringList(list(self.Manager.enabledMods()))
 
         self.filetree_modlist.setModel(list_model)
-        self.splitter.setSizes([1, 500])
+        self.splitter.setSizes([1, 500]) # just make the left one smaller ok?
 
         file_tree_model = ModFileTreeModel(self._manager, self.filetree_tree)
-        # file_tree_model.setRootPath(self._manager.Config['dir_mods'])
         self.filetree_tree.setModel(file_tree_model)
-        # self.filetree_tree.setRootIndex(file_tree_model.index(self._manager.Config["dir_mods"]))
 
-        # self.filetree_modlist.activated.connect(self.showModFiles)
         self.filetree_modlist.selectionModel().currentChanged.connect(self.showModFiles)
-
-        # self.filetree_tree.hideColumn(1)
-        # self.filetree_tree.hideColumn(2)
-        # self.filetree_tree.hideColumn(3)
 
         # let setup know we're done here
         self.SetupDone()
 
     def showModFiles(self, indexCur, indexPre):
-
         mod = self.filetree_modlist.model().stringList()[indexCur.row()]
 
-        # moddir = self.Manager.getModDir(mod)
         p = self.Manager.Config.paths.dir_mods / self.Manager.getModDir(mod)
 
         self.filetree_tree.model().setRootPath(str(p))
-        # self.filetree_tree.setRootIndex(self.filetree_tree.model().index(str(p)))
 
     def updateFileTreeModList(self):
         self.filetree_modlist.model().setStringList(list(self.Manager.enabledMods()))
