@@ -2,7 +2,7 @@ from PyQt5.QtCore import Qt, QModelIndex, QAbstractItemModel, pyqtSignal
 from PyQt5.QtGui import QIcon
 
 import os
-from os.path import join, relpath, isdir
+from os.path import join, relpath
 from pathlib import Path
 
 from skymodman.utils import withlogger
@@ -11,24 +11,18 @@ from skymodman.utils import withlogger
 # @withlogger
 class FSItem:
 
-    def __init__(self, path:str, name:str,  parent:'FSItem'= None, leaf = False, *args, **kwargs):
+    def __init__(self, path:str, name:str,  parent:'FSItem'= None, isdir = False, *args, **kwargs):
         """
         :param path: a relative path from an arbitray root to this file
         :param name: the name that will displayed for this file; usually just the basename
         :param parent: this Item's parent, if any. will be None for top-level items
-        :param leaf: Whether or not this is a leaf (non-dir) with no children
+        :param isdir: Is this a directory? If not, it will be marked as never being able to hold children
         """
         super(FSItem, self).__init__(*args, **kwargs)
         self._path = path
         self._name = name
 
-        # note: 'is_leaf' was not supposed to mean the same thing
-        # as 'is_not_directory'; it was supposed to mean 'has no
-        # children' and could have also applied to empty dirs...
-        # but it turned out to be easier just to differentiate
-        # between dirs and nondirs so that's what it's gettting
-        # used for now.
-        self.leaf = leaf
+        self.isdir = isdir
 
         self._parent = parent
 
@@ -122,23 +116,39 @@ class FSItem:
         """
         # TODO: sort the list of children after retrieving. (using the alphabet or something)
 
-        for de in os.scandir(join(rel_root, self.path)):
-            # have to check this before creating the child
-            # or (obviously) it won't be available during init
-            isleaf = not isdir(de.path)
-            child = self.__class__(relpath(de.path, rel_root), de.name, self, isleaf)
-            # de.is_dir() does not work...something in the test
-            # file about scandir needing to 'fill d_type', but
-            # nothing in the docs about why it may not work...
-            if not isleaf:
-                child.loadChildren(rel_root)
+        # for de in os.scandir(join(rel_root, self.path)):
+        #     # have to check this before creating the child
+        #     # or (obviously) it won't be available during init
+        #     isleaf = not isdir(de.path)
+        #     child = self.__class__(relpath(de.path, rel_root), de.name, self, isleaf)
+        #     # de.is_dir() does not work...something in the test
+        #     # file about scandir needing to 'fill d_type', but
+        #     # nothing in the docs about why it may not work...
+        #     if not isleaf:
+        #         child.loadChildren(rel_root)
+        #     self.append(child)
+
+        #Easier to use Path objects or even os.walk() than deal with all that crap, and is_dir() not working eliminates what the slight performance benefit there would have been...
+
+        rpath = Path(rel_root)
+        path = rpath / self.path
+
+        entries = sorted(list(path.iterdir()), key = lambda p: p.name)
+
+        for e in entries: #type: Path
+            rel = str(e.relative_to(rpath))
+            child = type(self)(rel, e.name, self, e.is_dir())
+            if e.is_dir():
+                child.loadChildren(rel_root, filter)
             self.append(child)
 
+
     def __str__(self):
-        s="{_class}(name: '{name}', path: '{path}', isdir: {isdir})".format(_class=self.__class__.__name__,
-                          name=self._name,
-                          path=self._path,
-                                                                            isdir=not self.leaf)
+        s="{_class}(name: '{name}', path: '{path}', isdir: {isdir})".format(
+                _class=self.__class__.__name__,
+                name=self._name,
+                path=self._path,
+                isdir= self.isdir)
 
         return s
 
@@ -156,13 +166,12 @@ class QFSItem(FSItem):
 
         self._checkstate=Qt.Checked# tracks explicit checks
         self.flags = Qt.ItemIsUserCheckable | Qt.ItemIsEnabled
-        if self.leaf: #file
-            self.flags |= Qt.ItemNeverHasChildren
-            self.icon = QIcon.fromTheme("text-plain")
-        else: #dir
+        if self.isdir:
             self.flags |= Qt.ItemIsTristate
             self.icon = QIcon.fromTheme("folder")
-
+        else: #file
+            self.flags |= Qt.ItemNeverHasChildren
+            self.icon = QIcon.fromTheme("text-plain")
 
     @property
     def itemflags(self):
