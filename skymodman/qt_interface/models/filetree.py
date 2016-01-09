@@ -28,7 +28,6 @@ class FSItem:
 
         self._row=0
 
-        #TODO: make sure that this actually isn't used anywhere and remove it
         self._hidden = False
 
     @property
