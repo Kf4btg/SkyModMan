@@ -1,7 +1,8 @@
 from PyQt5.QtCore import Qt, QModelIndex, QAbstractItemModel, pyqtSignal
+from PyQt5.QtGui import QIcon
 
 import os
-from os.path import join, relpath
+from os.path import join, relpath, isdir
 from pathlib import Path
 
 from skymodman.utils import withlogger
@@ -10,17 +11,24 @@ from skymodman.utils import withlogger
 # @withlogger
 class FSItem:
 
-    def __init__(self, path:str, name:str,  parent:'FSItem'= None, *args, **kwargs):
+    def __init__(self, path:str, name:str,  parent:'FSItem'= None, leaf = False, *args, **kwargs):
         """
         :param path: a relative path from an arbitray root to this file
         :param name: the name that will displayed for this file; usually just the basename
         :param parent: this Item's parent, if any. will be None for top-level items
+        :param leaf: Whether or not this is a leaf (non-dir) with no children
         """
         super(FSItem, self).__init__(*args, **kwargs)
         self._path = path
         self._name = name
 
-        self.leaf = False
+        # note: 'is_leaf' was not supposed to mean the same thing
+        # as 'is_not_directory'; it was supposed to mean 'has no
+        # children' and could have also applied to empty dirs...
+        # but it turned out to be easier just to differentiate
+        # between dirs and nondirs so that's what it's gettting
+        # used for now.
+        self.leaf = leaf
 
         self._parent = parent
 
@@ -95,6 +103,8 @@ class FSItem:
         based on its position in the parent's list
         :param child:
         """
+        # position after the end of the list, aka where the
+        # child is about to be inserted
         child.row = len(self._children)
         self._children.append(child)
 
@@ -113,12 +123,24 @@ class FSItem:
         # TODO: sort the list of children after retrieving. (using the alphabet or something)
 
         for de in os.scandir(join(rel_root, self.path)):
-            child = self.__class__(relpath(de.path, rel_root), de.name, self)
-            if de.is_dir():
+            # have to check this before creating the child
+            # or (obviously) it won't be available during init
+            isleaf = not isdir(de.path)
+            child = self.__class__(relpath(de.path, rel_root), de.name, self, isleaf)
+            # de.is_dir() does not work...something in the test
+            # file about scandir needing to 'fill d_type', but
+            # nothing in the docs about why it may not work...
+            if not isleaf:
                 child.loadChildren(rel_root)
-            else:
-                child.leaf = True
             self.append(child)
+
+    def __str__(self):
+        s="{_class}(name: '{name}', path: '{path}', isdir: {isdir})".format(_class=self.__class__.__name__,
+                          name=self._name,
+                          path=self._path,
+                                                                            isdir=not self.leaf)
+
+        return s
 
 
 class QFSItem(FSItem):
@@ -134,10 +156,13 @@ class QFSItem(FSItem):
 
         self._checkstate=Qt.Checked# tracks explicit checks
         self.flags = Qt.ItemIsUserCheckable | Qt.ItemIsEnabled
-        if not self.leaf:
-            self.flags |= Qt.ItemIsTristate
-        else:
+        if self.leaf: #file
             self.flags |= Qt.ItemNeverHasChildren
+            self.icon = QIcon.fromTheme("text-plain")
+        else: #dir
+            self.flags |= Qt.ItemIsTristate
+            self.icon = QIcon.fromTheme("folder")
+
 
     @property
     def itemflags(self):
@@ -329,6 +354,8 @@ class ModFileTreeModel(QAbstractItemModel):
         elif role == Qt.CheckStateRole:
             # hides the complexity of the tristate workings
             return item.checkState
+        elif role == Qt.DecorationRole:
+            return item.icon
 
         # apparently the "base implementation" just calls data() again...
         # leading to the lovely recursive loop that had me tearing my
