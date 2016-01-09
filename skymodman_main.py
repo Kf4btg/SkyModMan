@@ -31,7 +31,7 @@ def myexcepthook(type, value, tb):
 
 
 if __name__ == '__main__':
-    sys.excepthook = myexcepthook
+    # sys.excepthook = myexcepthook
 
     if USE_QT_GUI:
         from PyQt5.QtWidgets import QApplication
