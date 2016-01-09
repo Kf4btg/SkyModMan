@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import QFileSystemModel
 from PyQt5.QtCore import Qt, QModelIndex, QAbstractItemModel, pyqtSignal
 
 import os
-from os.path import exists, basename, join, dirname, split, relpath, commonpath
+from os.path import join, relpath
 from collections import defaultdict
 from pathlib import Path
 
@@ -23,9 +23,6 @@ class FSItem:
         super(FSItem, self).__init__(*args, **kwargs)
         self._path = path
         self._name = name
-
-        # P = Path(path)
-        # self._isdir = P.is_dir()
 
         self.leaf = False
 
@@ -110,11 +107,8 @@ class FSItem:
         :param filter:
         :return:
         """
-        # print(join(rel_root, self.path))
         for de in os.scandir(join(rel_root, self.path)):
             child = self.__class__(relpath(de.path, rel_root), de.name, self)
-            # print(type(child))
-            # print(child.name)
             if de.is_dir():
                 child.loadChildren(rel_root)
             else:
@@ -124,7 +118,6 @@ class FSItem:
 
 class QFSItem(FSItem):
     """FSITem subclass with Qt-specific functionality"""
-    # CHECKSTATES = (UNCHECKED, CHECKED, PARTIALCHECK) = list(range(3))
 
     # now here's a hack...
     # this is changed by every child when recursively toggling check state
@@ -135,30 +128,18 @@ class QFSItem(FSItem):
 
         self._checkstate=Qt.Checked# tracks explicit checks
         self.flags = Qt.ItemIsUserCheckable | Qt.ItemIsEnabled
-        self.pflags = ["Check=16", "Enable=32"]
         if not self.leaf:
             self.flags |= Qt.ItemIsTristate
-            self.pflags += ["3state=64"]
         else:
-            self.pflags += ["NoKids=128"]
             self.flags |= Qt.ItemNeverHasChildren
 
     @property
     def itemflags(self):
-        # print(self.pflags)
         return self.flags
 
     @itemflags.setter
     def itemflags(self, value):
         self.flags = value
-
-    # @property
-    # def hidden(self):
-    #     return super(QFSItem, self).hidden
-
-    # @FSItem.hidden.setter
-    # def hidden(self, value):
-    #     FSItem.hidden.fset(self, value)
 
     @property
     def checkState(self):
@@ -166,9 +147,10 @@ class QFSItem(FSItem):
             return self._checkstate
 
         return self.childrenCheckState()
-        # ccs = self.childrenCheckState()
-        # if ccs == Qt.Checked
 
+    # So, I think the protocol here is, when a directory is un/checked,
+    # set the checkstates of all that directory's children to match.
+    # here's the python translation of the c++ code from qtreewidget.cpp:
     @checkState.setter
     def checkState(self, state):
         # state propagation for dirs:
@@ -188,7 +170,9 @@ class QFSItem(FSItem):
         """  Calculates the checked state of the item based on the checked state
           of its children. E.g. if all children checked => this item is also
           checked; if some children checked => this item is partially checked;
-          if no children checked => this item is unchecked."""
+          if no children checked => this item is unchecked.
+
+          Note: both the description above and the algorithm below were 'borrowed' from the Qt code for QTreeWidgetItem"""
         checkedkids = False
         uncheckedkids = False
 
@@ -220,14 +204,6 @@ class QFSItem(FSItem):
 
 
 
-
-
-# class Flogger:
-#     def debug(self, msg):
-#         print(msg)
-#     def info(self, msg):
-#         print(msg)
-
 @withlogger
 class ModFileTreeModel(QAbstractItemModel):
 
@@ -238,8 +214,6 @@ class ModFileTreeModel(QAbstractItemModel):
         self.manager = manager
         self.rootpath = None #type: str
         self.rootitem = None #type: QFSItem
-        # self.logger = Flogger()
-        # self.LOGGER = self.logger
 
     @property
     def root_path(self):
@@ -249,14 +223,10 @@ class ModFileTreeModel(QAbstractItemModel):
     def root_item(self):
         return self.rootitem
 
-
-
     def setRootPath(self, path):
         if path == self.rootpath: return
 
         self.logger.debug("rootpath = "+path)
-
-
         if os.path.exists(path):
             self.beginResetModel()
             self.rootpath = path
@@ -266,10 +236,8 @@ class ModFileTreeModel(QAbstractItemModel):
 
     def getItem(self, index:QModelIndex) -> QFSItem:
         """Extracts actual item from given index"""
-        # self.logger.debug("\n    index {},{}".format(index.row(), index.column()))
         if index.isValid():
             item = index.internalPointer() #type:QFSItem
-            # print(item._name)
             if item: return item
         return self.rootitem
 
@@ -279,14 +247,7 @@ class ModFileTreeModel(QAbstractItemModel):
     def rowCount(self, index:QModelIndex=QModelIndex(), *args, **kwargs):
         """Number of children contained by the item referenced by `index`"""
         if not self.rootitem: return 0
-        # if not index.isValid(): return 0
-        # item = self.getItem(index)
-        # self.logger.debug("{} : {}".format(item.name,item.child_count))
-
         return self.getItem(index).child_count
-        # if not index.isValid():
-        #     return self.rootitem.child_count
-        # return index.internalPointer().child_count()
 
     def headerData(self, section, orient, role=None):
         if orient == Qt.Horizontal and role==Qt.DisplayRole:
@@ -316,36 +277,17 @@ class ModFileTreeModel(QAbstractItemModel):
         return self.createIndex(parent.row, 0, parent)
 
     def flags(self, index:QModelIndex):
-        # flags = Qt.ItemIsUserCheckable
-
         item = self.getItem(index)
-        # self.logger.debug("i:"+item.name)
-        # self.logger.debug(int(item.itemflags))
         return item.itemflags
 
-        # if not item.hidden:
-        #     flags |= Qt.ItemIsEnabled
-        #
-        # if item.child_count: #directories
-        #     flags |= Qt.ItemIsTristate
-        #
-        #
-        # if item.leaf:
-        #     flags |= Qt.ItemNeverHasChildren
-
     def data(self, _index:QModelIndex, role=Qt.DisplayRole):
-        # if not index.isValid(): return None
 
         item = self.getItem(_index)
-        # print ("--"+item.name)
 
         if role == Qt.DisplayRole:
-            # self.logger.debug("Qt.DisplayRole")
             return item.name
         elif role == Qt.CheckStateRole:
-            # self.logger.debug("Qt.CheckStateRole")
             return item.checkState # hides the complexity of the tristate workings
-        # self.logger.debug("role: {}".format(role))
         # return super(ModFileTreeModel, self).data(_index, role)
 
     def setData(self, index, value, role:int=Qt.CheckStateRole):
@@ -359,173 +301,6 @@ class ModFileTreeModel(QAbstractItemModel):
             self.dataChanged.emit(index, last_index)
             return True
         return super(ModFileTreeModel, self).setData(index, value, role)
-
-            # So, I think the protocol here is, when a directory is un/checked,
-            # set the checkstates of all that directory's children to match.
-
-
-            # here's the ppython translation of the c++ code from qtreewidget.cpp:
-
-            # (item.itemflags & Qt.ItemIsTristate) means we have a directory, and
-            # 3state checkmarks are currently enabled (only dirs have the 3state flag)
-            # if item.itemflags & Qt.ItemIsTristate and value != Qt.PartiallyChecked:
-            #     for c in item.children(): # for each child
-            #         f = item.itemflags # ... I don't think this "little hack" is needed in our case
-            #         item.itemflags &= ~Qt.ItemIsTristate  # "a little hack to avoid multiple dataChanged signals"
-            #         c.checkState = value
-            #         item.itemflags = f
-
-
-            # if value == Qt.Unchecked: # hiding a file
-            #     item.hidden = True
-            #     if item.leaf: # a file, no kids
-            #         self.dataChanged.emit(index, index)
-            #     else:
-            #         # todo: propagate
-            #         self.dataChanged.emit(index, index)
-
-
-
-
-
-
-
-@withlogger
-class ModQFSTreeModel(QFileSystemModel):
-
-    def __init__(self, manager: 'ModManager', *args, **kwargs):
-        super(ModQFSTreeModel, self).__init__(*args, **kwargs)
-
-        self.manager = manager
-        self.current_dir = ""
-        self.rootPathChanged.connect(self.setCurrentDir)
-
-        self.hiddenfiles = defaultdict(dict)
-
-    def setCurrentDir(self, newroot):
-        # print("Rootpath changed: {}".format(newroot))
-        self.current_dir = os.path.basename(newroot)
-
-    def getRelPath(self, index:QModelIndex):
-        # self.logger.debug(self.filePath(index))
-        # self.logger.debug(self.rootPath())
-        return os.path.relpath(self.filePath(index), self.rootPath())
-
-    def dirDataChanged(self, dirindex):
-        """
-        Emits data changed for the directory specified by the index and all its children.
-        :param dirindex:
-        """
-        last = ""
-        for r, d, f in os.walk(self.filePath(dirindex)):
-            if f:
-                last = os.path.join(r, f[-1])
-            elif d:
-                last = os.path.join(r, d[-1])
-            else: last = r
-
-        last_index = self.index(last)
-
-        self.dataChanged.emit(dirindex, last_index)
-
-
-
-    def data(self, index:QModelIndex, role=None):
-
-        if role==Qt.CheckStateRole:
-            if self.current_dir in self.hiddenfiles:
-                # check if this file is hidden
-                if self.getRelPath(index) in self.hiddenfiles[self.current_dir]:
-                    return Qt.Unchecked
-            return Qt.Checked
-
-
-        return super(ModQFSTreeModel, self).data(index, role)
-
-    def setData(self, index:QModelIndex , value, role=None):
-        print("index ({},{})".format(index.row(), index.column()))
-        print("children: {}".format(self.rowCount(index)))
-
-        if role==Qt.CheckStateRole:
-            # name = str(index.data())
-            name = self.getRelPath(index)
-
-            # adding a file to hidden list
-            if value == Qt.Unchecked:
-                # if not self.current_dir in self.hiddenfiles:
-                #     self.hiddenfiles[self.current_dir] = {}
-
-                # append {str file_name: bool isdir}
-                if self.hasChildren(index): # if this is a dir
-                    self.hiddenfiles[self.current_dir][name]=True
-                    self.dirDataChanged(index)
-
-
-                else:
-                    self.hiddenfiles[self.current_dir][name]=False
-
-                    self.dataChanged.emit(index, index)
-
-                self.LOGGER.debug("{}".format(self.hiddenfiles))
-
-                # return True
-            else: #rechecked an item
-                del self.hiddenfiles[self.current_dir][name]
-                if self.hasChildren(index):
-                    self.dirDataChanged(index)
-
-                else: self.dataChanged.emit(index, index)
-
-
-                # check if there are any remaining hidden files
-                if len(self.hiddenfiles[self.current_dir]) == 0:
-                    del self.hiddenfiles[self.current_dir]
-
-                self.LOGGER.debug("{}".format(self.hiddenfiles))
-            return True
-
-        return super(ModQFSTreeModel, self).setData(index, value, role)
-
-    def flags(self, index):
-        default_flags = super(ModQFSTreeModel, self).flags(index)
-
-        flags = default_flags | Qt.ItemIsUserCheckable
-        flags &= ~Qt.ItemIsSelectable
-
-        if not flags & Qt.ItemNeverHasChildren:
-            # file is directory
-            flags |= Qt.ItemIsTristate
-
-        if self.current_dir in self.hiddenfiles:
-            try:
-                if self.checkParents(index):
-                    # disable items below unchecked dirs
-                    flags &= ~Qt.ItemIsEnabled
-            except ValueError:
-                self.logger.debug("current_dir: {}".format(self.current_dir))
-                self.logger.debug("hiddenfile: {}".format(self.hiddenfiles))
-                raise
-
-        return flags
-
-    def checkParents(self, index:QModelIndex):
-        """Checks to see if any of this item's parent directories (up to the current root path)
-        are hidden.  Returns true if so, False otherwise"""
-
-        # print("checking parents of: {}".format(index.data()) )
-        name = str(index.data())
-        while self.filePath(index.parent())!=self.rootPath():
-            index = index.parent()
-            if self.getRelPath(index) in self.hiddenfiles[self.current_dir]:
-                return True
-        return False
-
-
-
-
-
-
-
 
 
 
