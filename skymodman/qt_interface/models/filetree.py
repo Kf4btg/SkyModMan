@@ -95,7 +95,8 @@ class FSItem:
         if recursive:
             for child in self._children:
                 yield child
-                yield from child.children(True)
+                if child.isdir:
+                    yield from child.iterchildren(True)
         else:
             yield from self._children
 
@@ -412,6 +413,7 @@ class ModFileTreeModel(QAbstractItemModel):
             # datachanged saves a lot of individual calls. Hopefully there
             # won't be any concurrency issues to worry about later on.
             self.dataChanged.emit(index, last_index)
+            # self.dumpsHidden()
             return True
         return super(ModFileTreeModel, self).setData(index, value, role)
 
@@ -419,16 +421,57 @@ class ModFileTreeModel(QAbstractItemModel):
         """Return a string containing the hidden files of this mod in a form suitable
         for serializing to json"""
 
-        # hiddens = tree()
+        hiddens = Tree()
         # l = defaultdict(list)
-        for child in self.root_item.iterchildren(True):
+        for child in self.root_item.iterchildren(True): #type: QFSItem
             # skip any fully-checked items
             if child.checkState == Qt.Checked:
                 continue
 
             elif child.checkState == Qt.Unchecked:
+                pathparts = [os.path.basename(self.rootpath)]+list(child.ppath.parts[:-1])
                 # add unchecked dirs, but do not descend
-                if child.isdir: pass
+                if child.isdir:
+                    treeInsert(hiddens, pathparts)
+                else:
+                    treeInsert(hiddens, pathparts, child.name)
+
+        # print(json.dumps(hiddens, indent=1))
+        return json.dumps(hiddens, indent=1)
+
+
+
+from collections import defaultdict
+import json
+
+# todo: move to utils
+def Tree():
+    """Autovivifying Tree"""
+    return defaultdict(Tree)
+
+def treeInsert(tree, key_list, value=None, leaf_list_name="_files"):
+    """
+    Given an ordered list of key names, descend down the tree by key,
+     creating child trees as needed.  If "value" is not None, it will
+     be inserted into a special list of non-keyed leaves at the level
+     of the last key specified. Provide leaf_list_name to change the
+     name used as the key for retrieving the list. It must not conflict
+     with any other dict keys at the same tree level.
+    :param tree:
+    :param key_list:
+    :param value:
+    :param leaf_list_name:
+    :return:
+    """
+    for k in key_list:
+        tree=tree[k]
+    if value is not None:
+        if leaf_list_name in tree:
+            tree[leaf_list_name].append(value)
+        else:
+            tree[leaf_list_name]=[value]
+
+
 
 
 if __name__ == '__main__':
