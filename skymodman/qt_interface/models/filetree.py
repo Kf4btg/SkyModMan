@@ -26,7 +26,7 @@ class FSItem:
         if self.isdir:
             self._children = []
         else:
-            self._children = None
+            self._children = None # type: list
 
         self._row=0
 
@@ -178,6 +178,7 @@ class QFSItem(FSItem):
     # thus its final value will the row of the final child accessed.
     last_row_touched = 0
 
+    # noinspection PyTypeChecker
     def __init__(self, *args, **kwargs):
         super(QFSItem, self).__init__(*args, **kwargs)
 
@@ -418,8 +419,8 @@ class ModFileTreeModel(QAbstractItemModel):
         """Return a string containing the hidden files of this mod in a form suitable
         for serializing to json"""
 
-        hiddens = tree()
-        l = defaultdict(list)
+        # hiddens = tree()
+        # l = defaultdict(list)
         for child in self.root_item.iterchildren(True):
             # skip any fully-checked items
             if child.checkState == Qt.Checked:
@@ -429,35 +430,9 @@ class ModFileTreeModel(QAbstractItemModel):
                 # add unchecked dirs, but do not descend
                 if child.isdir: pass
 
-# from collections import UserDict
-class AutoDict:
-
-    class ViviDict(dict):
-        def __missing__(self, key):
-            value = self[key] = type(self)()
-            return value
-
-    def __init__(self, initialData:dict=None):
-        if initialData:
-            self.data = ViviDict(initialData.copy())
-        else: self.data = ViviDict()
-
-
-    def __getitem__(self, key):
-        print ("getting item for "+key)
-        try:
-            return
-        except:
-            pass
-
-    def __setitem__(self, key, value):
-        print ("setting "+key+"="+value)
-        try:
-            super(AutoDict, self).__setitem__(key, value)
-        except TypeError as e:
-            print (e)
-
-
 
 if __name__ == '__main__':
     from skymodman.managers import ModManager
+
+
+
