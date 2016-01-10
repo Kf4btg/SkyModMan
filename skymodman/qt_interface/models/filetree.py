@@ -4,7 +4,7 @@ from PyQt5.QtGui import QIcon
 import os
 from pathlib import Path
 
-from skymodman.utils import withlogger
+from skymodman.utils import withlogger, tree
 
 # @withlogger
 class FSItem:
@@ -44,16 +44,21 @@ class FSItem:
     def name(self)->str: return self._name
 
     @property
-    def ppath(self)->Path: return Path(self._path)
+    def ppath(self)->Path:
+        """The relative path of this item as a pathlib.Path object"""
+        return Path(self._path)
 
     @property
-    def row(self)->int: return self._row
+    def row(self)->int:
+        """Which row (relative to its parent) does this item appear on"""
+        return self._row
 
     @row.setter
     def row(self, value:int): self._row = value
 
     @property
     def hidden(self):
+        """Return whether this item is marked as hidden"""
         return self._hidden
 
     @hidden.setter
@@ -62,7 +67,7 @@ class FSItem:
 
     @property
     def child_count(self):
-        """Number of direct children"""
+        """Number of **direct** children"""
         try:
             return len(self._children)
         except TypeError: # _children is None
@@ -89,8 +94,8 @@ class FSItem:
 
     def iterchildren(self, recursive = False):
         """
-        Iterator over this FSItem's children
-        :param recursive: If False or omitted, just yield this item's direct children. If true, yield each child followed by that child's children
+        Obtain an iterator over this FSItem's children
+        :param recursive: If False or omitted, yield only this item's direct children. If true, yield each child followed by that child's children, if any
         """
         if recursive:
             for child in self._children:
@@ -264,6 +269,10 @@ class QFSItem(FSItem):
 
 
     def setEnabled(self, boolean):
+        """
+        Modify this item's flags to set it enabled or disabled based on value of boolean
+        :param boolean:
+        """
         if boolean:
             self.flags |= Qt.ItemIsEnabled
         else:
@@ -303,20 +312,23 @@ class ModFileTreeModel(QAbstractItemModel):
         Using this instead of a setter just for API-similarity with
         QFileSystemModel. That's the same reason rootPathChanged is emitted
         at the end of the method, as well.
-        :param path:
-        :return:
+        :param path: the absolute filesystem path to the active mod's data folder
         """
         if path == self.rootpath: return
 
         self.logger.debug("rootpath = "+path)
         if os.path.exists(path):
-            self.beginResetModel()
+
+            self.beginResetModel() # tells the view to get ready to redisplay its contents
+
             self.rootpath = path
             # name for this item is never actually seen
             self.rootitem = QFSItem("", "data", None)
             self.rootitem.loadChildren(self.rootpath)
-            self.endResetModel()
-            # enit notifier signal
+
+            self.endResetModel()  # tells the view it should get new data from model & reset itself
+
+            # emit notifier signal
             self.rootPathChanged.emit(path)
 
     def getItem(self, index:QModelIndex) -> QFSItem:
@@ -326,10 +338,10 @@ class ModFileTreeModel(QAbstractItemModel):
             if item: return item
         return self.rootitem
 
-    def columnCount(self, *args, **kwargs):
+    def columnCount(self, *args, **kwargs) -> int:
         return 1
 
-    def rowCount(self, index:QModelIndex=QModelIndex(), *args, **kwargs):
+    def rowCount(self, index:QModelIndex=QModelIndex(), *args, **kwargs) -> int:
         """Number of children contained by the item referenced by `index`"""
         # return 0 until we actually have something to show
         if not self.rootitem: return 0
@@ -375,12 +387,14 @@ class ModFileTreeModel(QAbstractItemModel):
         return self.createIndex(parent.row, 0, parent)
 
     def flags(self, index:QModelIndex):
-        """Flags are held at the item level; lookup and return them from the item referred to be the index"""
+        """Flags are held at the item level; lookup and return them from the item referred to by the index"""
         item = self.getItem(index)
         return item.itemflags
 
     def data(self, _index:QModelIndex, role=Qt.DisplayRole):
-        """For our purposes, only the file name and the checkbox state concern us"""
+        """
+        We handle DisplayRole to return the filename, CheckStateRole to indicate whether the file has been hidden, and Decoration Role to return different icons for folders and files.
+        """
 
         item = self.getItem(_index)
 
@@ -421,8 +435,7 @@ class ModFileTreeModel(QAbstractItemModel):
         """Return a string containing the hidden files of this mod in a form suitable
         for serializing to json"""
 
-        hiddens = Tree()
-        # l = defaultdict(list)
+        hiddens = tree.Tree()
         for child in self.root_item.iterchildren(True): #type: QFSItem
             # skip any fully-checked items
             if child.checkState == Qt.Checked:
@@ -432,46 +445,12 @@ class ModFileTreeModel(QAbstractItemModel):
                 pathparts = [os.path.basename(self.rootpath)]+list(child.ppath.parts[:-1])
                 # add unchecked dirs, but do not descend
                 if child.isdir:
-                    treeInsert(hiddens, pathparts)
+                    tree.treeInsert(hiddens, pathparts) # todo: don't descend; just mark folder excluded, assume contents
                 else:
-                    treeInsert(hiddens, pathparts, child.name)
+                    tree.treeInsert(hiddens, pathparts, child.name)
 
-        # print(json.dumps(hiddens, indent=1))
-        return json.dumps(hiddens, indent=1)
-
-
-
-from collections import defaultdict
-import json
-
-# todo: move to utils
-def Tree():
-    """Autovivifying Tree"""
-    return defaultdict(Tree)
-
-def treeInsert(tree, key_list, value=None, leaf_list_name="_files"):
-    """
-    Given an ordered list of key names, descend down the tree by key,
-     creating child trees as needed.  If "value" is not None, it will
-     be inserted into a special list of non-keyed leaves at the level
-     of the last key specified. Provide leaf_list_name to change the
-     name used as the key for retrieving the list. It must not conflict
-     with any other dict keys at the same tree level.
-    :param tree:
-    :param key_list:
-    :param value:
-    :param leaf_list_name:
-    :return:
-    """
-    for k in key_list:
-        tree=tree[k]
-    if value is not None:
-        if leaf_list_name in tree:
-            tree[leaf_list_name].append(value)
-        else:
-            tree[leaf_list_name]=[value]
-
-
+        # return json.dumps(hiddens, indent=1)
+        return tree.toString(hiddens)
 
 
 if __name__ == '__main__':
