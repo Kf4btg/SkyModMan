@@ -3,7 +3,7 @@ import json.decoder
 import os
 import sqlite3
 from pathlib import Path
-from typing import List, Tuple, Iterable
+# from typing import List, Tuple, Iterable
 
 from skymodman import constants
 from skymodman.utils import withlogger, counter
@@ -38,7 +38,11 @@ class DBManager:
         "enabled": lambda v: 1,
     }
 
-    def __init__(self, manager: 'ModManager'):
+    def __init__(self, manager):
+        """
+
+        :param ModManager manager:
+        """
         super().__init__()
 
         self.manager = manager
@@ -68,15 +72,14 @@ class DBManager:
         """
         Directly access the database connection of this manager
         in order to perform custom queries.
-        :return:
         """
         return self._con
 
     @property
-    def mods(self) -> List[Tuple]:
+    def mods(self):
         """
-        Return list of all mods from the mod db
-        :return:
+        :return: list of all mods from the mod db
+        :rtype: list[sqlite3.Row]
         """
         return self.getModInfo(True).fetchall()
 
@@ -107,7 +110,7 @@ class DBManager:
         """
         read the saved mod information from a json file and
         populate the in-memory database
-        :param json_source: path to modinfo.json file (either pathlib.Path or string)
+        :param str|Path json_source: path to modinfo.json file
         """
         global mcount
         # reset counter so that mod-ordinal is determined by the order
@@ -133,6 +136,11 @@ class DBManager:
         return success
 
     def loadHiddenFiles(self, json_source) -> bool:
+        """
+
+        :param str|Path json_source:
+        :return: success of operation
+        """
         if not isinstance(json_source, Path):
             json_source = Path(json_source)
         success = True
@@ -146,9 +154,10 @@ class DBManager:
         return success
 
 
-    def populateHiddenFilesTable(self, filelist: List[Tuple[str, int, str]]):
+    def populateHiddenFilesTable(self, filelist):
         """
-        :param filelist: List of 3-tuples; each tuple is of form (filepath:str, isdir:int in [0,1], directory:str)
+        :param Iterable[(str, int, str)] filelist:
+            List of 3-tuples; each tuple is of form (filepath:str, isdir:int in [0,1], directory:str)
 
         Here, `filepath` is the relative path from the containing mod directory to the hidden file (this would be something like "meshes/trees/bigtree.nif").
 
@@ -160,6 +169,10 @@ class DBManager:
             self._con.executemany("INSERT INTO hiddenfiles VALUES (?, ?, ?)", filelist)
 
     def saveHiddenFiles(self, json_target):
+        """
+
+        :param str|Path json_target: path to hiddenfiles.json file for current profile
+        """
         if not isinstance(json_target, Path):
             json_target = Path(json_target)
 
@@ -181,8 +194,8 @@ class DBManager:
         """
         Dynamically build the INSERT statement from the list of fields, then insert
         the values from mod_list (a list of tuples) into the database
-        :param mod_list:
-        :return:
+
+        :param Iterable[tuple] mod_list:
         """
         query = "INSERT INTO mods(" + ", ".join(constants.db_fields) + ") VALUES ("
         query += ", ".join("?" * len(constants.db_fields)) + ")"
@@ -203,13 +216,14 @@ class DBManager:
     ## wrappers ##
     ##############
 
-    def execute_(self, query:str, params: Iterable=None):
+    def execute_(self, query, params=None):
         """
         Execute an arbitrary SQL-query using this object's
         database connection as a context manager
-        :param query: a valid SQL string
-        :param params: If the `params` keyword is provided with an Iterable object, it will be used as the parameters for a parameterized query.
-        :return:
+
+        :param str query: a valid SQL query
+        :param typing.Iterable params: If the `params` keyword is provided with an Iterable object, it will be used as the parameters for a parameterized query.
+        :rtype: typing.Generator[sqlite3.Row, Any, None]
         """
         with self._con:
             if params:
@@ -217,12 +231,14 @@ class DBManager:
             else:
                 yield from self._con.execute(query)
 
-    def getOne(self, query, params: Iterable=None):
+    def getOne(self, query, params=None):
         """
         Like execute_, but just returns the first result
-        :param query:
-        :param params:
-        :return:
+
+        :param str query:
+        :param typing.Iterable params:
+        :return: The first row obtained
+        :rtype: sqlite3.Row
         """
         with self._con:
             if params:
@@ -232,11 +248,12 @@ class DBManager:
 
             return cur.fetchone()
 
-    def update_(self, sql, params: Iterable=None):
+    def update_(self, sql, params=None):
         """
         As execute_, but for UPDATE, INSERT, DELETE, etc. commands. Returns the cursor object that was created to execute the statement.
-        :param sql:
-        :param params:
+
+        :param str sql:
+        :param typing.Iterable params:
         """
         with self._con:
             if params:
@@ -244,11 +261,13 @@ class DBManager:
             else:
                 return self._con.execute(sql)
 
-    def updatemany_(self, sql, params: Iterable=None):
+    def updatemany_(self, sql, params=None):
         """
         As update_, but for multiple transactions. Returns the cursor object that was created to execute the statement.
-        :param sql:
-        :param params:
+
+        :param str sql:
+        :param typing.Iterable params:
+        :return: the cursor object that executed the query
         """
         with self._con:
             if params:
@@ -265,8 +284,8 @@ class DBManager:
         Write the data from the in-memory database to a
         json file on disk. The file will be overwritten, or
         created if it does not exist
-        :param json_target: path to modinfo.json file
-        :return:
+
+        :param str|Path json_target: path to modinfo.json file
         """
 
         if not isinstance(json_target, Path):
@@ -295,10 +314,11 @@ class DBManager:
     # db-query convenience methods
     def enabledMods(self, name_only = False):
         """
-        Fetches all mods from the mod database that are
-        marked as enabled.
+        Fetches all mods from the mod database that are marked as enabled.
+
         :param name_only: Return only the names of the mods
         :return:
+        :rtype: typing.Generator[str|tuple, Any, None]
         """
         if name_only:
             yield from (t[0] for t in self._con.execute("select name from mods where enabled = 1"))
@@ -307,21 +327,24 @@ class DBManager:
 
     def disabledMods(self, name_only = False):
         """
-        Fetches all mods from the mod database that are
-        marked as disabled.
+        Fetches all mods from the mod database that are marked as disabled.
+
         :param name_only: Return only the names of the mods
         :return:
+        :rtype: typing.Generator[str|tuple, Any, None]
         """
         if name_only:
-            return [ t[0] for t in self._con.execute("select name from mods where enabled = 0")]
-        return self._con.execute("select * from mods where enabled = 0").fetchall()
+            yield from (t[0] for t in self._con.execute("select name from mods where enabled = 0"))
+        else:
+            yield from self._con.execute("select * from mods where enabled = 0")
 
     def getModInfo(self, raw_cursor = False) :
-        """-> Union[List[DBRow], sqlite3.Cursor]
-        Returns all information about installed mods as a list
-        of tuples.
-        :param raw_cursor: If true, return the db cursor object instead of a list.
-        :return:  Tuple of mod info or sqlite3.cursor
+        """
+        Yields Row objects containing all information about installed mods
+
+        :param raw_cursor: If true, return the db cursor object instead of yielding Rows
+        :return:   Tuple of mod info or sqlite3.cursor
+        :rtype: typing.Generator[sqlite3.Row, Any, None]|sqlite3.Cursor
         """
         cur = self._con.execute("select * from mods")
         if raw_cursor:
@@ -334,12 +357,11 @@ class DBManager:
         """
         self._con.close()
 
-    def getModDataFromModDirectory(self, mods_dir: Path):
+    def getModDataFromModDirectory(self, mods_dir):
         """
         scan the actual mods-directory and populate the database from there instead of a cached json file.
         Will need to do this on first run and periodically to make sure cache is in sync.
-        :param mods_dir:
-        :return:
+        :param Path mods_dir:
         """
         # TODO: Perhaps this should be run on every startup? At least to make sure it matches the stored data.
         import configparser as _config
@@ -377,19 +399,19 @@ class DBManager:
 
     def makeModEntry(self, **kwargs):
         """generates a tuple representing a mod-entry by supplementing a possibly-incomplete mapping of keywords (`kwargs`) with default values for any missing fields"""
-        r = []
+        row = []
 
         for f in constants.db_fields:
-            r.append(kwargs.get(f,
+            row.append(kwargs.get(f,
                                 self.__defaults.get(f, lambda v: "")(kwargs)
                                 )
                      )
-        return tuple(r)
+        return tuple(row)
 
-    def validateModsList(self, installed_mods: List[str]):
+    def validateModsList(self, installed_mods):
         """
         Compare the database's list of mods against a list of the folders in the installed-mods directory. Handle discrepancies accordingly.
-        :param installed_mods:
+        :param typing.MutableSequence[str] installed_mods:
         :return:
         """
         # I wish there were a...lighter way to do this, but I
@@ -430,7 +452,12 @@ class DBManager:
         return True
 
     @staticmethod
-    def jsonWrite(json_target: Path, pyobject):
+    def jsonWrite(json_target, pyobject):
+        """Dump the given object to a json file specified by the given Path object.
+
+        :param Path json_target:
+        :param pyobject:
+        """
         with json_target.open('w') as f:
             json.dump(pyobject, f, indent=1)
 
@@ -442,8 +469,9 @@ class DBManager:
         information loaded from the json file and converts it
         to a tuple of just the field values in the
         correct order for feeding to the sqlite database.
-        :param pairs:
-        :return:
+
+        :param typing.Sequence[tuple[str, Any]] pairs:
+        :return: Tuple containing just the values of the fields
         """
 
         return (mcount(), ) + tuple(s[1] for s in sorted(pairs, key=lambda p: constants.db_fields.index(p[0])))

@@ -1,25 +1,25 @@
-from PyQt5 import Qt, QtCore
-from PyQt5.QtCore import Qt as qt
-from typing import List
+from PyQt5.Qt import QModelIndex
+from PyQt5.QtCore import Qt, QAbstractListModel
 
 from skymodman.utils import withlogger
 
 @withlogger
-class ProfileListModel(QtCore.QAbstractListModel):
+class ProfileListModel(QAbstractListModel):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self.profiles = [] # type: List[Profile]
+        self.profiles = []
+        """:type: list[Profile]"""
 
     def addProfile(self, new_profile):
         """
         implement my own API for adding stuff because the QCombobox is STUPID
-        :param new_profile:
-        :return:
+
+        :param Profile new_profile: A Profile object to add to the model.
         """
         current_rows = self.rowCount()
-        self.beginInsertRows(Qt.QModelIndex(), current_rows, current_rows)
+        self.beginInsertRows(QModelIndex(), current_rows, current_rows)
         self.profiles.append(new_profile)
         self.endInsertRows()
 
@@ -27,22 +27,38 @@ class ProfileListModel(QtCore.QAbstractListModel):
         self.dataChanged.emit(new_index, new_index)
 
 
-    def rowCount(self, *args, **kwargs):
+    def rowCount(self, *args, **kwargs) -> int:
         return len(self.profiles)
 
-    def data(self, index: Qt.QModelIndex, role=qt.UserRole):
+    def data(self, index, role=Qt.UserRole):
+        """
+        Return name for DisplayRole, whole Profile object for UserRole
+
+        :param QModelIndex index:
+        :param role:
+        :return:
+        """
         if not index.isValid(): # or not (0<index.row()<len(self.profiles)):
             return
 
-        if role==qt.UserRole:
+        if role==Qt.UserRole:
             return self.profiles[index.row()]
 
-        if role==qt.DisplayRole:
+        if role==Qt.DisplayRole:
             return self.profiles[index.row()].name.capitalize()
 
 
-    def insertRows(self, row=0, count=1, parent_index = Qt.QModelIndex(), data=None, *args, **kwargs):
-        """Always append"""
+    def insertRows(self, row=0, count=1, parent_index=QModelIndex(), data=None, *args, **kwargs):
+        """
+        Always append
+
+        :param int row:
+        :param int count:
+        :param QModelIndex parent_index:
+        :param Profile data:
+        :return: boolean indicating success of the insertion
+        :rtype: bool
+        """
         # beginInsertRows(self, QModelIndex, first, last)
         self.beginInsertRows(parent_index, self.rowCount(), self.rowCount())
         if data:
@@ -52,7 +68,13 @@ class ProfileListModel(QtCore.QAbstractListModel):
         return True
 
     def removeRows(self, row, *args, **kwargs):
-        self.beginRemoveRows(Qt.QModelIndex(), row, row)
+        """
+        For now, this only removes one row at a time.
+
+        :param int row: which row to drop.
+        :return:
+        """
+        self.beginRemoveRows(QModelIndex(), row, row)
         try:
             del self.profiles[row]
         except IndexError as e:
