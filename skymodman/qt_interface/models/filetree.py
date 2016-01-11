@@ -28,7 +28,7 @@ class FSItem:
             self._children = []
         else:
             self._children = None
-            """:type: typing.Iterable | typing.Sized"""
+            """:type: collections.abc.MutableSequence"""
 
         self._row=0
 
@@ -81,9 +81,12 @@ class FSItem:
         or None if this is the root item"""
         return self._parent
 
-    def __getitem__(self, row:int):
+    def __getitem__(self, row):
         """Access children using list notation: thisitem[0]
-        Returns none if given an invalid row number or childlist is None"""
+        Returns none if given an invalid row number or childlist is None
+
+        :param int row:
+        """
         try:
             return self._children[row]
         except (IndexError, TypeError):
@@ -107,10 +110,10 @@ class FSItem:
         else:
             yield from self._children
 
-    def append(self, child:'FSItem'):
+    def append(self, child):
         """Add a child FSItem to this instance. Also sets that child's 'row' attribute
         based on its position in the parent's list
-        :param child:
+        :param FSItem child:
         """
         # position after the end of the list, aka where the
         # child is about to be inserted
@@ -162,21 +165,22 @@ class FSItem:
             self.append(child)
 
 
-    def __eq__(self, other:'FSItem'):
+    def __eq__(self, other):
         """Return true when these 2 items refer to the same relative path.
-        Case insensitive. Used to determine file conflicts."""
+        Case insensitive. Used to determine file conflicts.
+
+        :param FSItem other:
+        """
         return self.lpath == other.lpath
 
 
     def __str__(self):
-        s="{_class}(name: '{name}', path: '{path}', isdir: {isdir}, hidden: {hidden})".format(
+        return "{_class}(name: '{name}', path: '{path}', isdir: {isdir}, hidden: {hidden})".format(
                 _class=self.__class__.__name__,
                 name=self._name,
                 path=self._path,
                 isdir= self.isdir,
                 hidden=self._hidden)
-
-        return s
 
 
 class QFSItem(FSItem):
@@ -223,18 +227,23 @@ class QFSItem(FSItem):
     # here's the python translation of the c++ code from qtreewidget.cpp:
     @checkState.setter
     def checkState(self, state):
+
         # state propagation for dirs:
         # (only dirs can have the tristate flag turned on)
         if self.flags & Qt.ItemIsTristate and state != Qt.PartiallyChecked:
+
             # propagate a check-or-uncheck down the line:
             for c in self.iterchildren():
+
                 # using a class variable, track which items were changed
                 QFSItem.last_row_touched = c.row
+
                 # this will trigger any child dirs to do the same
                 c.checkState = state
                 c.setEnabled(state == Qt.Checked)
 
         self._checkstate = state
+
         # the "hidden" attribute on the baseclass is what will allow us to save
         # the lists of hidden files to disk, so be sure to set it here;
         # note: only explicitly unchecked items will be marked as hidden here;
@@ -310,12 +319,13 @@ class ModFileTreeModel(QAbstractItemModel):
     def root_item(self):
         return self.rootitem
 
-    def setRootPath(self, path:str):
+    def setRootPath(self, path):
         """
         Using this instead of a setter just for API-similarity with
         QFileSystemModel. That's the same reason rootPathChanged is emitted
         at the end of the method, as well.
-        :param path: the absolute filesystem path to the active mod's data folder
+
+        :param str path: the absolute filesystem path to the active mod's data folder
         """
         if path == self.rootpath: return
 
@@ -334,37 +344,48 @@ class ModFileTreeModel(QAbstractItemModel):
             # emit notifier signal
             self.rootPathChanged.emit(path)
 
-    def getItem(self, index:QModelIndex) -> QFSItem:
-        """Extracts actual item from given index"""
+    def getItem(self, index) -> QFSItem:
+        """Extracts actual item from given index
+
+        :param QModelIndex index:
+        """
         if index.isValid():
-            item = index.internalPointer() #type:QFSItem
+            item = index.internalPointer()
             if item: return item
         return self.rootitem
 
     def columnCount(self, *args, **kwargs) -> int:
         return 1
 
-    def rowCount(self, index:QModelIndex=QModelIndex(), *args, **kwargs) -> int:
-        """Number of children contained by the item referenced by `index`"""
+    def rowCount(self, index=QModelIndex(), *args, **kwargs) -> int:
+        """Number of children contained by the item referenced by `index`
+
+        :param QModelIndex index:
+        """
         # return 0 until we actually have something to show
         if not self.rootitem: return 0
         return self.getItem(index).child_count
 
     def headerData(self, section, orient, role=None):
         """Just one column, 'Name'. super() call should take care of the
-        size hints &c."""
+        size hints &c.
+
+        :param int section:
+        :param orient:
+        :param role:
+        """
         if orient == Qt.Horizontal and role==Qt.DisplayRole:
             return "Name"
         return super().headerData(section, orient, role)
 
-    def index(self, row:int, col:int, parent:QModelIndex=QModelIndex(), *args, **kwargs):
+    def index(self, row, col, parent=QModelIndex(), *args, **kwargs) -> QModelIndex:
         """
-        Create or find the QModelIndex that represents the item at (row, col) with respect
-         to the given  parent index. (or the root index if parent is invalid)
-        :param row:
-        :param col:
-        :param parent:
-        :return:
+
+        :param int row:
+        :param int col:
+        :param QModelIndex parent:
+        :return: the QModelIndex that represents the item at (row, col) with respect
+                 to the given  parent index. (or the root index if parent is invalid)
         """
 
         parent_item = self.rootitem
@@ -377,7 +398,7 @@ class ModFileTreeModel(QAbstractItemModel):
 
         return QModelIndex()
 
-    def parent(self, child_index:QModelIndex=QModelIndex()):
+    def parent(self, child_index=QModelIndex()):
         if not child_index.isValid(): return QModelIndex()
 
         # get the parent FSItem from the reference stored in each FSItem
@@ -394,12 +415,15 @@ class ModFileTreeModel(QAbstractItemModel):
         item = self.getItem(index)
         return item.itemflags
 
-    def data(self, _index:QModelIndex, role=Qt.DisplayRole):
+    def data(self, index, role=Qt.DisplayRole):
         """
         We handle DisplayRole to return the filename, CheckStateRole to indicate whether the file has been hidden, and Decoration Role to return different icons for folders and files.
+
+        :param QModelIndex index:
+        :param role:
         """
 
-        item = self.getItem(_index)
+        item = self.getItem(index)
 
         if role == Qt.DisplayRole:
             return item.name
@@ -413,11 +437,16 @@ class ModFileTreeModel(QAbstractItemModel):
         # leading to the lovely recursive loop that had me tearing my
         # hair out. But implicitly returning None for all other roles
         # doesn't seem to be causing a problem.
-        # return super(ModFileTreeModel, self).data(_index, role)
+        # return super(ModFileTreeModel, self).data(index, role)
 
-    def setData(self, index, value, role:int=Qt.CheckStateRole):
+    def setData(self, index, value, role=Qt.CheckStateRole):
         """Only the checkStateRole can be edited in this model.
-        Most of the machinery for that is in the QFSItem class"""
+        Most of the machinery for that is in the QFSItem class
+
+        :param QModelIndex index:
+        :param value:
+        :param role:
+        """
         if not index.isValid(): return
 
         item = self.getItem(index)
@@ -429,6 +458,8 @@ class ModFileTreeModel(QAbstractItemModel):
             # "bottom-right" child idx that was just changed--to feed to
             # datachanged saves a lot of individual calls. Hopefully there
             # won't be any concurrency issues to worry about later on.
+
+            # noinspection PyUnresolvedReferences
             self.dataChanged.emit(index, last_index)
             # self.dumpsHidden()
             return True
