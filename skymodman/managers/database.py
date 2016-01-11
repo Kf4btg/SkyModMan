@@ -29,7 +29,8 @@ class DBManager:
               -- the mod directory under which this file resides
         );"""
 
-    # __fields = ["ordinal", "directory", "name", "modid", "version", "enabled"]
+    _tablenames = ("hiddenfiles", "mods")
+
     __defaults = {
         "name": lambda v: v["directory"],
         "modid": lambda v: 0,
@@ -38,7 +39,7 @@ class DBManager:
     }
 
     def __init__(self, manager: 'ModManager'):
-        super(DBManager, self).__init__()
+        super().__init__()
 
         self.manager = manager
 
@@ -89,11 +90,20 @@ class DBManager:
         # self.LOGGER.debug("dropping mods table")
 
         with self._con:
-            self._con.execute("DROP TABLE hiddenfiles, mods")
+            # take advantage of the "truncate optimization" feature in sqlite
+            # to remove all rows quicker and easier than dropping and recreating.
 
-            self._con.executescript(self._SCHEMA)
+            # self._con.execute("DELETE FROM ?", self._tablenames)
+            # Apparently you can't use ? parameters for table names??!?!?
+            for n in self._tablenames:
+                self._con.execute("DELETE FROM {table}".format(table=n))
 
-    def loadModDB(self, json_source):
+
+            # self._con.execute("DROP TABLE hiddenfiles, mods")
+
+            # self._con.executescript(self._SCHEMA)
+
+    def loadModDB(self, json_source) -> bool:
         """
         read the saved mod information from a json file and
         populate the in-memory database
@@ -118,11 +128,11 @@ class DBManager:
                 self.fillTable(mods)
 
             except json.decoder.JSONDecodeError:
-                self.logger.error("No mod information present in {}, or file is malformed.".format(json_source))
+                self.LOGGER.error("No mod information present in {}, or file is malformed.".format(json_source))
                 success = False
         return success
 
-    def loadHiddenFiles(self, json_source):
+    def loadHiddenFiles(self, json_source) -> bool:
         if not isinstance(json_source, Path):
             json_source = Path(json_source)
         success = True
@@ -131,17 +141,23 @@ class DBManager:
                 hiddenfiles = json.load(f)
                 self.populateHiddenFilesTable(hiddenfiles)
             except json.decoder.JSONDecodeError:
-                self.logger.warning("No hidden files listed in {}, or file is malformed.".format(json_source))
+                self.LOGGER.warning("No hidden files listed in {}, or file is malformed.".format(json_source))
                 success = False
         return success
 
 
-    def populateHiddenFilesTable(self, filelist):
+    def populateHiddenFilesTable(self, filelist: List[Tuple[str, int, str]]):
+        """
+        :param filelist: List of 3-tuples; each tuple is of form (filepath:str, isdir:int in [0,1], directory:str)
 
-        q = "insert into hiddenfiles values (?, ?, ?)"
+        Here, `filepath` is the relative path from the containing mod directory to the hidden file (this would be something like "meshes/trees/bigtree.nif").
 
+        `isdir` must be either 0 or 1 representing boolean values False and True; True (1) means the path refers to a directory; False (0) means it is a file.
+
+        `directory` is the name of the folder in the configured mods directory that contains the files for the mod in question.  This would be something like 'Big Trees HD_v2', or whatever arbitrary name the mod author gave the folder.
+        """
         with self._con:
-            self._con.executemany(q, filelist)
+            self._con.executemany("INSERT INTO hiddenfiles VALUES (?, ?, ?)", filelist)
 
     def saveHiddenFiles(self, json_target):
         if not isinstance(json_target, Path):
