@@ -1,4 +1,5 @@
-from . import new_profile_dialog_ui, custom_widgets
+from . import custom_widgets
+from .new_profile_dialog import NewProfileDialog
 from PyQt5.QtWidgets import QMessageBox, QSpacerItem, QSizePolicy
 
 _icons = {
