@@ -1,5 +1,6 @@
 from PyQt5.QtCore import Qt, QModelIndex, QAbstractItemModel, pyqtSignal
 from PyQt5.QtGui import QIcon
+from typing import List, Generator
 
 import os
 from pathlib import Path
@@ -34,8 +35,7 @@ class FSItem:
         if self._isdir:
             self._children = []
         else:
-            self._children = None
-            """:type: collections.abc.MutableSequence"""
+            self._children = None #type: List[FSItem]
 
         self._row=0
 
@@ -113,6 +113,8 @@ class FSItem:
         """
         Obtain an iterator over this FSItem's children
         :param recursive: If False or omitted, yield only this item's direct children. If true, yield each child followed by that child's children, if any
+
+        :rtype: __generator[FSItem|QFSItem, Any, None]
         """
         if recursive:
             for child in self._children:
@@ -322,6 +324,12 @@ class ModFileTreeModel(QAbstractItemModel):
     rootPathChanged = pyqtSignal(str)
 
     def __init__(self, *, manager, **kwargs):
+        """
+
+        :param ModManager manager:
+        :param kwargs: anything to pass on to base class
+        :return:
+        """
         super().__init__(**kwargs)
         self.manager = manager
         self.rootpath = None #type: str
@@ -481,6 +489,7 @@ class ModFileTreeModel(QAbstractItemModel):
             # noinspection PyUnresolvedReferences
             self.dataChanged.emit(index, last_index)
             # self.dumpsHidden()
+            self.commit()
             return True
         return super().setData(index, value, role)
 
@@ -505,6 +514,51 @@ class ModFileTreeModel(QAbstractItemModel):
         # return json.dumps(hiddens, indent=1)
         return tree.toString(hiddens)
 
+    def commit(self):
+        """Commit changes to database"""
+        directory = os.path.basename(self.rootpath)
+        hiddens=[]
+        unhiddens=[] # we have to track this too to make sure unhidden files are removed...
+        partials=[]
+
+        base = self.rootitem
+        while base is not None:
+            for child in base.iterchildren():
+                if child.isdir:
+
+                    # if this is a fully-checked directory, no need to descend, so skip it
+                    if child.checkState == Qt.Checked: continue
+
+                    # if this is a fully-unchecked directory, recursively add all non-dir files from it
+                    if child.checkState == Qt.Unchecked:
+                        hiddens+=[(directory, unchild.path) for unchild in child.iterchildren(True) if not unchild.isdir]
+                        # and move on the next child at this level
+                        continue
+
+                    else: # it's partially checked, so we have to go in
+                        partials.append(child) # mark it for descension
+
+                # otherwise, it's a file, so if it's unchecked add it to the list
+                elif child.checkState == Qt.Unchecked:
+                    hiddens.append((directory, child.path))
+            try:
+                base = partials.pop(0)
+            except IndexError:
+                # list was empty, nothing left to check, so end the loop
+                base = None
+
+        if hiddens:
+            #todo: should we add an extra field to hold the mod's install ordinality?
+            # could be helpful for computing file conflicts. Though it would probably have
+            # to be done using a db holding all the NON-hidden files...which could be redonk.
+            self.manager.DB.updatemany_("INSERT INTO hiddenfiles values (?, ?)", hiddens)
+
+        with self.manager.DB.conn:
+            for r in self.manager.DB.conn.execute("select * from hiddenfiles"): #type: Row
+                print(r["directory"]," | ", r["filepath"])
+
+
+from sqlite3 import Row
 
 if __name__ == '__main__':
     from skymodman.managers import ModManager

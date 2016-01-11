@@ -23,11 +23,12 @@ class DBManager:
             enabled   INTEGER default 1  --effectively a boolean value (0,1)
         );
         CREATE TABLE hiddenfiles (
-            file      TEXT      -- path to the file that has been hidden
-            isdir     INTEGER   -- 0 or 1 bool, all files under hidden dir are hidden
-            directory TEXT REFERENCES mods(directory) DEFERRABLE INITIALLY DEFERRED
-              -- the mod directory under which this file resides
+            directory TEXT REFERENCES mods(directory) DEFERRABLE INITIALLY DEFERRED,
+                                -- the mod directory under which this file resides
+            filepath      TEXT      -- path to the file that has been hidden
         );"""
+
+    # having the foreign key deferrable should prevent the db freaking out when we temporarily delete entries in 'mods' to modify the install order.
 
     _tablenames = ("hiddenfiles", "mods")
 
@@ -156,38 +157,39 @@ class DBManager:
 
     def populateHiddenFilesTable(self, filelist):
         """
-        :param Iterable[(str, int, str)] filelist:
-            List of 3-tuples; each tuple is of form (filepath:str, isdir:int in [0,1], directory:str)
+        :param Iterable[(str, str)] filelist:
+            List of 2-tuples; each tuple is of form (directory:str, filepath:str)
 
-        Here, `filepath` is the relative path from the containing mod directory to the hidden file (this would be something like "meshes/trees/bigtree.nif").
+        Here, `directory` is the name of the folder in the configured mods directory that contains the files for the mod in question.  This would be something like 'Big Trees HD_v2', or whatever arbitrary name the mod author gave the folder.
 
-        `isdir` must be either 0 or 1 representing boolean values False and True; True (1) means the path refers to a directory; False (0) means it is a file.
-
-        `directory` is the name of the folder in the configured mods directory that contains the files for the mod in question.  This would be something like 'Big Trees HD_v2', or whatever arbitrary name the mod author gave the folder.
+        `filepath` is the relative path from the containing mod directory to the hidden file (something along the lines of "meshes/trees/bigtree.nif").
         """
         with self._con:
-            self._con.executemany("INSERT INTO hiddenfiles VALUES (?, ?, ?)", filelist)
+            self._con.executemany("INSERT INTO hiddenfiles VALUES (?, ?)", filelist)
 
     def saveHiddenFiles(self, json_target):
         """
 
         :param str|Path json_target: path to hiddenfiles.json file for current profile
         """
+
+        #fixme: use utils.Tree() and the dump method in/from the filetree model
+
         if not isinstance(json_target, Path):
             json_target = Path(json_target)
-
-        cur = self._con.execute("Select * from hiddenfiles group by directory")
-
-        # todo: use defaultdict for this
-        filelist = {}
-        for row in cur:
-            mdir = row['directory']
-            if not mdir in filelist:
-                filelist[mdir] = []
-            # each file has a path and an indicator whether it is a directory
-            filelist[mdir].append({"file": row['file'], "isdir": row['isdir']})
-
-        self.jsonWrite(json_target, filelist)
+        #
+        # cur = self._con.execute("Select * from hiddenfiles group by directory")
+        #
+        # # todo: use defaultdict for this
+        # filelist = {}
+        # for row in cur:
+        #     mdir = row['directory']
+        #     if not mdir in filelist:
+        #         filelist[mdir] = []
+        #     # each file has a path and an indicator whether it is a directory
+        #     filelist[mdir].append({"file": row['file'], "isdir": row['isdir']})
+        #
+        # self.jsonWrite(json_target, filelist)
 
     # def fillTable(self, mod_list, doprint=False):
     def fillTable(self, mod_list):
