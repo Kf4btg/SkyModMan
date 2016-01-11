@@ -121,6 +121,7 @@ class ModTableModel(QtCore.QAbstractTableModel):
 
             need_notify = self.onModDataEdit(row, mod, newmod)
 
+            # noinspection PyUnresolvedReferences
             self.dataChanged.emit(index, index)
 
             if need_notify is not None:
@@ -236,9 +237,14 @@ class ModTableModel(QtCore.QAbstractTableModel):
         return _flags
     
     def rowDataChanged(self, row):
-        """Emits data changed for every item in this table row"""
+        """Emits dataChanged for every item in this table row
+
+        :param int row:
+        """
         idx_start = self.index(row, 0)
         idx_end = self.index(row, self.columnCount())
+
+        # noinspection PyUnresolvedReferences
         self.dataChanged.emit(idx_start, idx_end)
 
     def loadData(self):
@@ -475,6 +481,7 @@ class ModTableView(QtWidgets.QTableView):
         vheader.setFont(QtGui.QFont('mono', 10))
         vheader.setDefaultAlignment(Qt.AlignRight)
 
+        # noinspection PyUnresolvedReferences
         self.doubleClicked.connect(self._model.on_doubleClick)
 
 
