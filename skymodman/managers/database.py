@@ -26,6 +26,11 @@ class DBManager:
             directory TEXT REFERENCES mods(directory) DEFERRABLE INITIALLY DEFERRED,
                                 -- the mod directory under which this file resides
             filepath      TEXT      -- path to the file that has been hidden
+        );
+        CREATE TABLE modfiles (
+                    directory TEXT REFERENCES mods(directory) DEFERRABLE INITIALLY DEFERRED,
+                                        -- the mod directory under which this file resides
+                    filepath      TEXT      -- path to the file that has been hidden
         );"""
 
     # having the foreign key deferrable should prevent the db freaking out when we temporarily delete entries in 'mods' to modify the install order.
@@ -107,6 +112,10 @@ class DBManager:
 
             # self._con.executescript(self._SCHEMA)
 
+    ##################
+    ## DATA LOADING ##
+    ##################
+
     def loadModDB(self, json_source) -> bool:
         """
         read the saved mod information from a json file and
@@ -154,6 +163,12 @@ class DBManager:
                 success = False
         return success
 
+
+
+
+
+
+    ###################################33
 
     def populateHiddenFilesTable(self, filelist):
         """
@@ -382,6 +397,8 @@ class DBManager:
             order = len(mods_list)+1
             dirname = moddir.name
 
+            # self.loadAllModFiles(moddir, order)
+
             inipath = moddir / "meta.ini"
             if inipath.exists():
                 # read info from meta.ini (ModOrganizer) file
@@ -397,7 +414,35 @@ class DBManager:
                 mods_list.append(
                     self.makeModEntry(ordinal = order, directory=dirname))
 
+
+        # with open("res/testdump.txt", 'w') as f:
+        #     for s in self._con.execute("select * from modfiles"):
+        #         f.write(s['directory']+" | "+s["filepath"]+"\n")
+
         self.fillTable(mods_list)
+
+    def loadAllModFiles(self, directory, ordinal):
+        """
+        Here's an experiment to load ALL files from disk when the program starts up...let's see how long it takes
+        :return:
+        :param Path directory:
+        :param int ordinal:
+        """
+        dname = directory.name
+        dpath = str(directory)
+        modfiles=[]
+
+        for root, dirs, files in os.walk(dpath):
+            for d in dirs:
+                if len(os.listdir(os.path.join(root,d)))==0:
+                    dirs.remove(d) # remove empty directories from the list ## todo: is this a good idea?
+            modfiles+= [os.path.relpath(os.path.join(root, f), dpath) for f in files]
+
+        # try: modfiles.remove('meta.ini') #don't care about these
+        # except ValueError: pass
+
+        self._con.executemany("INSERT into modfiles values (?, ?)", ((dname, p) for p in modfiles))
+
 
     def makeModEntry(self, **kwargs):
         """generates a tuple representing a mod-entry by supplementing a possibly-incomplete mapping of keywords (`kwargs`) with default values for any missing fields"""
