@@ -276,7 +276,7 @@
             </item>
            </layout>
           </widget>
-          <widget class="QTreeView" name="filetree_tree"/>
+          <widget class="QTreeView" name="filetree_fileviewer"/>
          </widget>
         </item>
        </layout>

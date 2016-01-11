@@ -158,8 +158,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.filetree_modlist.setModel(list_model)
         self.splitter.setSizes([1, 500]) # just make the left one smaller ok?
 
-        file_tree_model = ModFileTreeModel(manager=self._manager, parent=self.filetree_tree)
-        self.filetree_tree.setModel(file_tree_model)
+        file_tree_model = ModFileTreeModel(manager=self._manager, parent=self.filetree_fileviewer)
+        self.filetree_fileviewer.setModel(file_tree_model)
 
         self.filetree_modlist.selectionModel().currentChanged.connect(self.showModFiles)
 
@@ -171,7 +171,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         p = self.Manager.Config.paths.dir_mods / self.Manager.getModDir(mod)
 
-        self.filetree_tree.model().setRootPath(str(p))
+        self.filetree_fileviewer.model().setRootPath(str(p))
 
     def updateFileTreeModList(self):
         self.filetree_modlist.model().setStringList(list(self.Manager.enabledMods()))
