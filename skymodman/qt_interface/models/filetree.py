@@ -8,6 +8,13 @@ from skymodman.utils import withlogger, tree
 
 # @withlogger
 class FSItem:
+    """
+    Used to hold information about a real file on the filesystem, including references to its containing directory and any (if it is itself a directory) the files and folders contained within it.
+    """
+
+    #Since we may be creating LOTS of these things (some mods have gajiblions of files), we'll define
+    # __slots__ to keep the memory footprint as low as possible
+    __slots__=("_path", "_lpath", "_name", "_parent", "_isdir", "_children", "_row", "_hidden")
 
     def __init__(self, *, path, name, parent=None, isdir=True, **kwargs):
         """
@@ -23,8 +30,8 @@ class FSItem:
         self._name = name
         self._parent = parent
 
-        self.isdir = isdir
-        if self.isdir:
+        self._isdir = isdir
+        if self._isdir:
             self._children = []
         else:
             self._children = None
@@ -54,6 +61,11 @@ class FSItem:
     def row(self)->int:
         """Which row (relative to its parent) does this item appear on"""
         return self._row
+
+    @property
+    def isdir(self)->bool:
+        """Whether this item represents a directory"""
+        return self._isdir
 
     @row.setter
     def row(self, value:int): self._row = value
@@ -191,6 +203,9 @@ class QFSItem(FSItem):
     # thus its final value will the row of the final child accessed.
     last_row_touched = 0
 
+    # Since the base class has __slots__, we need to define them here, too, or we'll lose all the benefits.
+    __slots__=("_checkstate", "flags", "icon")
+
     # noinspection PyTypeChecker
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -235,8 +250,9 @@ class QFSItem(FSItem):
             # propagate a check-or-uncheck down the line:
             for c in self.iterchildren():
 
-                # using a class variable, track which items were changed
-                QFSItem.last_row_touched = c.row
+                # Superfancy typechecker doesn't know what its talking about...
+                # noinspection PyUnresolvedReferences
+                QFSItem.last_row_touched = c.row  # using a class variable, track which items were changed
 
                 # this will trigger any child dirs to do the same
                 c.checkState = state
@@ -410,8 +426,11 @@ class ModFileTreeModel(QAbstractItemModel):
         # Every FSItem has a row attribute which we use to create the index
         return self.createIndex(parent.row, 0, parent)
 
-    def flags(self, index:QModelIndex):
-        """Flags are held at the item level; lookup and return them from the item referred to by the index"""
+    def flags(self, index):
+        """Flags are held at the item level; lookup and return them from the item referred to by the index
+
+        :param QModelIndex index:
+        """
         item = self.getItem(index)
         return item.itemflags
 
