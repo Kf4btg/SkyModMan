@@ -5,8 +5,8 @@ from . import new_profile_dialog_ui
 
 class PluginPage(QtWidgets.QWidget):
 
-    def __init__(self, page_index: int, selection_type, parent: QtWidgets.QStackedWidget, **kwargs):
-        super(PluginPage, self).__init__(parent, **kwargs)
+    def __init__(self, page_index: int, selection_type, *, parent: QtWidgets.QStackedWidget, **kwargs):
+        super().__init__(parent, **kwargs)
 
         self.page = page_index
         self.parent = parent
@@ -18,9 +18,9 @@ class PluginPage(QtWidgets.QWidget):
 
         #self.spacer
 
-        self.plugin_listw = PluginList(self)
+        self.plugin_listw = PluginList(parent=self)
 
-        self.plugin_infow = PluginInfoView(self)
+        self.plugin_infow = PluginInfoView(parent=self)
 
         self.grid.addWidget(self.plugin_listw, 0, 0, 1, 1)
         self.grid.addWidget(self.plugin_infow, 0, 1, 1, 1)
@@ -36,8 +36,8 @@ class PluginPage(QtWidgets.QWidget):
 
 
 class PluginList(QtWidgets.QListWidget):
-    def __init__(self, parent: PluginPage):
-        super(PluginList, self).__init__(parent)
+    def __init__(self, *, parent: PluginPage, **kwargs):
+        super().__init__(parent, **kwargs)
 
         self._type = parent.list_type
 
@@ -75,8 +75,8 @@ class PluginItem(QtWidgets.QListWidgetItem):
         }
     }
 
-    def __init__(self, parent: PluginList, *args):
-        super(PluginItem, self).__init__(parent, *args)
+    def __init__(self, *args, parent:PluginList, **kwargs):
+        super().__init__(*args, parent=parent, **kwargs)
 
         self.setFlags(PluginItem.FLAGS_FOR_TYPE[parent.type]["flags"])
 
@@ -85,8 +85,8 @@ class PluginItem(QtWidgets.QListWidgetItem):
 
 
 class PluginInfoView(QtWidgets.QGroupBox):
-    def __init__(self, parent: PluginPage, *args):
-       super(PluginInfoView, self).__init__(parent, *args)
+    def __init__(self, *args, **kwargs):
+       super().__init__(*args, **kwargs)
 
        self.verticalLayout = QtWidgets.QVBoxLayout(self)
        self.plugin_description_view = QtWidgets.QTextBrowser(self)
@@ -125,8 +125,8 @@ class PluginInfoView(QtWidgets.QGroupBox):
 class NewProfileDialog(QtWidgets.QDialog, new_profile_dialog_ui.Ui_NewProfileDialog):
 
 
-    def __init__(self, combobox_model, *args, **kwargs):
-        super(NewProfileDialog, self).__init__(*args, **kwargs)
+    def __init__(self, *, combobox_model, **kwargs):
+        super(NewProfileDialog, self).__init__(**kwargs)
 
         self.setupUi(self)
 
@@ -212,5 +212,5 @@ class NewProfileDialog(QtWidgets.QDialog, new_profile_dialog_ui.Ui_NewProfileDia
             self.copy_from = self.comboBox.currentData()
 
         # call original accept()
-        super(NewProfileDialog, self).accept()
+        super().accept()
 

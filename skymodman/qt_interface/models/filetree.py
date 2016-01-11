@@ -9,14 +9,15 @@ from skymodman.utils import withlogger, tree
 # @withlogger
 class FSItem:
 
-    def __init__(self, path:str, name:str,  parent:'FSItem'= None, isdir = True, *args, **kwargs):
+    def __init__(self, *, path, name, parent=None, isdir=True, **kwargs):
         """
-        :param path: a relative path from an arbitray root to this file
-        :param name: the name that will displayed for this file; usually just the basename
-        :param parent: this Item's parent, if any. will be None for top-level items
-        :param isdir: Is this a directory? If not, it will be marked as never being able to hold children
+
+        :param str path: a relative path from an arbitray root to this file
+        :param str name: the name that will displayed for this file; usually just the basename
+        :param FSItem parent: this Item's parent, if any. will be None for top-level items
+        :param bool isdir: Is this a directory? If not, it will be marked as never being able to hold children
         """
-        super(FSItem, self).__init__(*args, **kwargs)
+        super().__init__(**kwargs)
         self._path = path
         self._lpath = path.lower() # used to case-insensitively compare two FSItems
         self._name = name
@@ -26,7 +27,8 @@ class FSItem:
         if self.isdir:
             self._children = []
         else:
-            self._children = None # type: list
+            self._children = None
+            """:type: typing.Iterable | typing.Sized"""
 
         self._row=0
 
@@ -122,8 +124,9 @@ class FSItem:
         FSItem for any files found and adding that item to the list of children.
         If the entry found is a directory, then call the loadChildren() method
         of the new FSItem with the same root given here.
-        :param rel_root:
-        :param filter: When implemented, will allow name-filtering to exclude some
+
+        :param str rel_root:
+        :param typing.Callable filter: When implemented, will allow name-filtering to exclude some
         files from the results
         :return:
         """
@@ -153,7 +156,7 @@ class FSItem:
             rel = str(e.relative_to(rpath))
             # using type(self) here to make sure we get an instance of the subclass we're using
             # instead of the base FSItem
-            child = type(self)(rel, e.name, self, e.is_dir())
+            child = type(self)(path=rel, name=e.name, parent=self, isdir=e.is_dir())
             if e.is_dir():
                 child.loadChildren(rel_root, filter)
             self.append(child)
@@ -185,8 +188,8 @@ class QFSItem(FSItem):
     last_row_touched = 0
 
     # noinspection PyTypeChecker
-    def __init__(self, *args, **kwargs):
-        super(QFSItem, self).__init__(*args, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         self._checkstate=Qt.Checked# tracks explicit checks
         self.flags = Qt.ItemIsUserCheckable | Qt.ItemIsEnabled
@@ -293,8 +296,8 @@ class ModFileTreeModel(QAbstractItemModel):
 
     rootPathChanged = pyqtSignal(str)
 
-    def __init__(self, manager, parent, *args, **kwargs):
-        super(ModFileTreeModel, self).__init__(parent, *args, **kwargs)
+    def __init__(self, *, manager, **kwargs):
+        super().__init__(**kwargs)
         self.manager = manager
         self.rootpath = None #type: str
         self.rootitem = None #type: QFSItem
@@ -323,7 +326,7 @@ class ModFileTreeModel(QAbstractItemModel):
 
             self.rootpath = path
             # name for this item is never actually seen
-            self.rootitem = QFSItem("", "data", None)
+            self.rootitem = QFSItem(path="", name="data", parent=None)
             self.rootitem.loadChildren(self.rootpath)
 
             self.endResetModel()  # tells the view it should get new data from model & reset itself
@@ -352,7 +355,7 @@ class ModFileTreeModel(QAbstractItemModel):
         size hints &c."""
         if orient == Qt.Horizontal and role==Qt.DisplayRole:
             return "Name"
-        return super(ModFileTreeModel, self).headerData(section, orient, role)
+        return super().headerData(section, orient, role)
 
     def index(self, row:int, col:int, parent:QModelIndex=QModelIndex(), *args, **kwargs):
         """
@@ -429,7 +432,7 @@ class ModFileTreeModel(QAbstractItemModel):
             self.dataChanged.emit(index, last_index)
             # self.dumpsHidden()
             return True
-        return super(ModFileTreeModel, self).setData(index, value, role)
+        return super().setData(index, value, role)
 
     def dumpsHidden(self):
         """Return a string containing the hidden files of this mod in a form suitable

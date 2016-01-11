@@ -1,7 +1,6 @@
 from PyQt5 import QtCore, QtWidgets, QtGui
 from PyQt5.QtWidgets import QHeaderView
 from PyQt5.QtCore import Qt, pyqtSignal, QItemSelection
-from typing import List
 
 from skymodman import constants, ModEntry
 from skymodman.utils import withlogger
@@ -18,7 +17,9 @@ class QModEntry(ModEntry):
         return Qt.Checked if self.enabled else Qt.Unchecked
 
     def __eq__(self, other):
-        return self.name == other.name and self.enabled == other.enabled and self.ordinal == other.ordinal
+        return self.name == other.name \
+               and self.enabled == other.enabled \
+               and self.ordinal == other.ordinal
 
 
 
@@ -29,24 +30,24 @@ class ModTableModel(QtCore.QAbstractTableModel):
     QAbstractTableModel specialized to consider each row as a single item for some purposes.
     """
 
-    # COLUMNS = (COL_ENABLED, COL_NAME, COL_MODID, COL_VERSION, COL_ORDER) = list(range(5))
-    #
-    # VISIBLE_COLS = [COL_ENABLED, COL_NAME, COL_MODID, COL_VERSION]
-    #
-    # DBLCLICK_COLS = [COL_MODID, COL_VERSION]
-
     headers = ["", "Name", "Mod ID", "Version"]
 
     # emitted when self.modified_rows becomes either non-empty or empty
     # (but not if the 'empty'-status doesn't change)
     tableDirtyStatusChange = pyqtSignal(bool)
 
-    def __init__(self, parent, manager: 'ModManager', *args):
-        super(ModTableModel, self).__init__(parent, *args)
-        self._table = parent
-        self.manager = manager # type: ModManager
+    def __init__(self, *, manager, **kwargs):
+        """
 
-        self.mods = [] # type: List[QModEntry]
+        :param ModManager manager:
+        """
+        super().__init__(**kwargs)
+        # self._table = self.parent
+        self.manager = manager
+
+        self.mods = []
+        """:type: list[QModEntry]"""
+
         self.vheader_field = constants.COL_ORDER
         self.visible_columns = []
 
@@ -55,29 +56,26 @@ class ModTableModel(QtCore.QAbstractTableModel):
         self.LOGGER.debug("init ModTableModel")
 
     @property
-    def isDirty(self):
+    def isDirty(self) -> bool:
         return len(self.modified_rows) > 0
 
-    def rowCount(self, parent = QtCore.QModelIndex(), *args, **kwargs):
+    def rowCount(self, *args, **kwargs) -> int:
         """
         Number of mods installed
-        :param parent: ignored
-        :return:
         """
         return len(self.mods)
 
-    def columnCount(self, parent = QtCore.QModelIndex(), *args, **kwargs):
+    def columnCount(self, *args, **kwargs) -> int:
         """
         At the moment, returns 4. (Enabled, Name, ID, Version)
-        :param parent: ignored
-        :return:
         """
         return len(constants.VISIBLE_COLS)
 
-    def data(self, index: QtCore.QModelIndex, role=Qt.DisplayRole):
+    def data(self, index, role=Qt.DisplayRole):
         """ Qt override
         Controls how the data for a cell is presented.
-        :param index:
+
+        :param QtCore.QModelIndex index:
         :param role: we handle Qt.CheckStateRole for the enabled column,
                     and Qt.DisplayRole for everything else.
         :return: for the checkbox: Qt.Checked or Qt.Unchecked, depending on whether or not the mod is enabled.
@@ -94,14 +92,15 @@ class ModTableModel(QtCore.QAbstractTableModel):
             # return directory name as tooltip for name field
             return self.mods[index.row()].directory
 
-    def setData(self, index, value:str, role=None):
+    def setData(self, index, value, role=None):
         """ Qt-override.
         This handles changes to the checkbox (whether the mod is enabled/disabled)
         and to the displayed name field.
         Here is where we need to track changes to items to allow undo
-        :param index: which cell was edited
-        :param value: the new value of the cell (ignored for the enabled column)
-        :param role: we hangle Qt.CheckStateRole for the Enabled col and Qt.EditRole for the name col
+
+        :param QtCore.QModelIndex index: which cell was edited
+        :param str | int value: the new value of the cell (ignored for the enabled column)
+        :param role: we handle Qt.CheckStateRole for the Enabled col and Qt.EditRole for the name col
         :return:
         """
         if role==Qt.CheckStateRole and index.column() == constants.COL_ENABLED:
@@ -128,20 +127,25 @@ class ModTableModel(QtCore.QAbstractTableModel):
                 self.tableDirtyStatusChange.emit(need_notify)
             return True
 
-        return super(ModTableModel, self).setData(index, value, role)
+        return super().setData(index, value, role)
 
-    def onModDataEdit(self, row:int, current:QModEntry, edited: QModEntry):
+    def onModDataEdit(self, row, current, edited):
         """
         checks if the new value of the mod matches the value of the mod
-         at the time of the last save
-         :param row: the row-index of the mod in the table and self.mods
-         :param current: current value of the mod at this index in self.mods
-         :param edited: the user-edited value of the mod at this index
+        at the time of the last save
+
+         :param int row:
+            the row-index of the mod in the table and self.mods
+         :param QModEntry current:
+            current value of the mod at this index in self.mods
+         :param QModEntry edited:
+            the user-edited value of the mod at this index
          :return: One of True, False, or None, corresponding to which signal value
-         should be emitted by tableDirtyStatusChange(). True indicates that a clean
-         table was just made dirty (has unsaved changes), False means that a dirty
-         table now once again matches its clean state, and None means there has been
-         no change in this status (and no signal should be emitted)
+             should be emitted by tableDirtyStatusChange(). True indicates that a clean
+             table was just made dirty (has unsaved changes), False means that a dirty
+             table now once again matches its clean state, and None means there has been
+             no change in this status (and no signal should be emitted)
+         :rtype: bool | None
          """
 
         notify_dirty = None
@@ -171,11 +175,14 @@ class ModTableModel(QtCore.QAbstractTableModel):
     def headerData(self, section, orientation, role=Qt.DisplayRole):
         """
         Returns labels for the vertical and horizontal headers of the table
-        :param section: if orientation==Qt.Horizontal, this is the column number.
-                        if orientation==Qt.Vertical, this is the row number.
-        :param orientation: either Qt.Horizontal or Qt.Vertical
-        :param role: we're only interested in Qt.DisplayRole for the moment.
-        :return:
+
+        :param int section:
+            If orientation==Qt.Horizontal, this is the column number.
+            If orientation==Qt.Vertical, this is the row number.
+        :param orientation:
+            either Qt.Horizontal or Qt.Vertical
+        :param role:
+            we're only interested in Qt.DisplayRole for the moment.
         """
         # self.logger.debug("Loading header data for {}:{}:{}".format(row_or_col, orientation, role))
         if role==Qt.DisplayRole:
@@ -186,17 +193,17 @@ class ModTableModel(QtCore.QAbstractTableModel):
             else: # vertical header
                 return self.mods[section].ordinal
 
-        return super(ModTableModel, self).headerData(section, orientation, role)
+        return super().headerData(section, orientation, role)
 
-    def flags(self, index: QtCore.QModelIndex):
+    def flags(self, index):
         """
         Called for each cell in the table. this model returns:
 
-            for the 'Enabled' (checkbox) column: Qt.ItemIsEnabled | Qt.ItemIsUserCheckable
+           * for the 'Enabled' (checkbox) column: Qt.ItemIsEnabled | Qt.ItemIsUserCheckable
 
-            For the 'Mod ID' and 'Version' columns: Qt.ItemIsSelectable
+           * For the 'Mod ID' and 'Version' columns: Qt.ItemIsSelectable
 
-            For the 'Name' column: Qt.ItemIsSelectable | Qt.ItemIsEditable
+           * For the 'Name' column: Qt.ItemIsSelectable | Qt.ItemIsEditable
 
         If the backing ModEntry for this row is enabled, then id, version, and name will also
         include Qt.ItemIsEnabled in their flags.
@@ -204,7 +211,7 @@ class ModTableModel(QtCore.QAbstractTableModel):
         Should an index be passed that, somehow, doesn't match any of these columns,
         Qt.NoItemFlags is returned.
 
-        :param index: Table index of the cell in question.
+        :param QtCore.QModelIndex index: Table index of the cell in question.
         :return: the effective itemFlags for the cell at the specified index
         """
         col = index.column()
@@ -238,7 +245,6 @@ class ModTableModel(QtCore.QAbstractTableModel):
         """
         Query the ModManager for a full set of mod-data from the database. This is done during
         setup and when the profile is changed, and triggers a full reset of the table.
-        :return:
         """
         self.beginResetModel()
         # set (or reset) the list of tracked changes
@@ -254,7 +260,6 @@ class ModTableModel(QtCore.QAbstractTableModel):
         Double-clicking on a row will toggle that mod active or inactive (same as clicking
         the checkbox in the first column
         :param index: QModelIndex corresponding to the cell that was just clicked.
-        :return:
         """
         if not index.isValid() or index.column() not in constants.DBLCLICK_COLS: return
 
@@ -267,7 +272,6 @@ class ModTableModel(QtCore.QAbstractTableModel):
         signal for each one.
         :param row: the number of the mod in the table-display; also the index of the mod in
         the model's `self.mods` list, and the effective ordinal rank of this mod in the installation list.
-        :return:
         """
         mod = self.mods[row]
         newmod = mod._replace(enabled=int(not mod.enabled))
@@ -301,7 +305,6 @@ class ModTableModel(QtCore.QAbstractTableModel):
         """
         Save the data for the rows marked as modified to disk. The current state will
         become the new base state (the state returned to when the Revert button is pressed)
-        :return:
         """
 
         to_save = [self.mods[row] for row in self.modified_rows]
@@ -312,14 +315,16 @@ class ModTableModel(QtCore.QAbstractTableModel):
         self.tableDirtyStatusChange.emit(False)
 
 
-    def shiftRows(self, start_row:int, end_row:int, move_to_row:int, parent=QtCore.QModelIndex()):
+    def shiftRows(self, start_row, end_row, move_to_row, parent=QtCore.QModelIndex()) -> bool:
         """
         Move the contiguous section of rows from start..end to the position specified by dest_index;
          that is, after the move, start_row will have be at position dest_index.
-        :param start_row:
-        :param end_row:
-        :param move_to_row:
-        :return:
+
+        :param int start_row:
+        :param int end_row:
+        :param int move_to_row:
+        :param QtCore.QModelIndex parent:
+        :return: boolean value representing whether the attempt to move the rows was successful
         """
         # TODO: it would be simpler to just change the ordinal number for each modified mod and then sort the list on that field; but would it be faster? or more robust? or would it add more overhead?  Discuss.
 
@@ -388,14 +393,18 @@ class ModTableModel(QtCore.QAbstractTableModel):
 
         return True
 
-    def reorderMod(self, new_row: int, mod:QModEntry ):
+    def reorderMod(self, new_row, mod):
         """
         Moves the given mod to the new position in the list of mods and updates its ordinal number to match.
 
-        :param new_row: destination row for mod being moved
-        :param mod: the mod entry which is being moved to the new position
-        :return: a dict of length 1 containing a pair to insert into the self.modified_rows dict
-        after the reorder-loop has finished running; or None if nothing to insert
+        :param int new_row:
+            destination row for mod being moved
+        :param QModEntry mod:
+            the mod entry which is being moved to the new position
+        :return:
+            a dict of length 1 containing a pair to insert into the self.modified_rows dict
+            after the reorder-loop has finished running; or None if nothing to insert
+        :rtype: dict[int, ModEntry] | None
         """
         old_row = mod.ordinal-1
 
@@ -435,8 +444,8 @@ class ModTableView(QtWidgets.QTableView):
 
     itemsMoved = pyqtSignal(list, QtCore.QAbstractTableModel)
 
-    def __init__(self, parent, manager, *args, **kwargs):
-        super(ModTableView, self).__init__(parent, *args, **kwargs)
+    def __init__(self, *, manager, **kwargs):
+        super().__init__(**kwargs)
         self.manager = manager
         self._model = None #type: ModTableModel
         self.LOGGER.debug("Init ModTableView")
@@ -449,7 +458,7 @@ class ModTableView(QtWidgets.QTableView):
         self.setObjectName("mod_table")
         grid.addWidget(self, 1, 0, 1, 5) # from old qtdesigner file
 
-        self.setModel(ModTableModel(self, self.manager))
+        self.setModel(ModTableModel(parent= self, manager= self.manager))
         hheader = self.horizontalHeader()  # type: QHeaderView
         hheader.setHighlightSections(False)
         hheader.setSectionResizeMode(constants.COL_NAME, QHeaderView.Stretch)
@@ -470,7 +479,7 @@ class ModTableView(QtWidgets.QTableView):
 
 
     def setModel(self, model):
-        super(ModTableView, self).setModel(model)
+        super().setModel(model)
         self._model = model
 
     def loadData(self):
@@ -483,7 +492,13 @@ class ModTableView(QtWidgets.QTableView):
     def saveChanges(self):
         self._model.save()
 
-    def selectionChanged(self, selected: QItemSelection, deselected: QItemSelection):
+    def selectionChanged(self, selected, deselected):
+        """
+        Catch the notification that the user has selected something [different] in the mods list and send custom signals to handle updating the UI,
+
+        :param QItemSelection selected:
+        :param QItemSelection deselected:
+        """
         # self.LOGGER.debug("Selection Changed:\n    selected: {}\n    deselected: {}".format(selected.indexes(), deselected.indexes()))
         # self.LOGGER.debug("SelectedIndexes:\n   {}".format(self.selectedIndexes()))
         if len(self.selectedIndexes()) > 0:
@@ -491,12 +506,14 @@ class ModTableView(QtWidgets.QTableView):
         else:
             self.selectionCleared.emit()
             
-        super(ModTableView, self).selectionChanged(selected, deselected)
+        super().selectionChanged(selected, deselected)
 
-    def onMoveModsUpAction(self, distance:int=1):
+    def onMoveModsUpAction(self, distance=1):
         """
         currently only handles moving mod (or selection of mods) up 1 spot at a time
-        :return:
+
+        :param int distance:
+            How far up the selected mods should move. Don't try setting this higher than 1 for now...
         """
         rows = list(set([idx.row() for idx in self.selectedIndexes()]))
         if rows:
@@ -508,7 +525,12 @@ class ModTableView(QtWidgets.QTableView):
         # emit signal to allow up/down buttons to be toggled as necessary
         self.itemsMoved.emit(self.selectedIndexes(), self._model)
 
-    def onMoveModsDownAction(self, distance:int=1):
+    def onMoveModsDownAction(self, distance=1):
+        """
+
+        :param int distance:
+            How far down the selected mods should move. Don't try setting this higher than 1 for now...
+        """
         rows = list(set([idx.row() for idx in self.selectedIndexes()]))
 
         if rows:

@@ -1,22 +1,23 @@
 import sys
+from typing import List
 
-from PyQt5.QtCore import Qt, QStandardPaths, QDir, pyqtSignal, pyqtSlot, QStringListModel, QSize
+from PyQt5.QtCore import (Qt,
+                          pyqtSignal,
+                          pyqtSlot,
+                          QStringListModel,
+                          QModelIndex)
 from PyQt5.QtGui import QGuiApplication
-from PyQt5.QtWidgets import QApplication, QMainWindow, \
-    QFileDialog, QFileSystemModel, QDialogButtonBox, QListView
+from PyQt5.QtWidgets import (QApplication,
+                             QMainWindow,
+                             QDialogButtonBox,
+                             QMessageBox)
 
-import PyQt5.QtWidgets as QtW
 
-import skymodman.constants as const
+from skymodman import skylog, constants
 from skymodman.qt_interface.qt_manager_ui import Ui_MainWindow
 from skymodman.qt_interface.widgets import custom_widgets, message
 from skymodman.qt_interface.models import ProfileListModel, ModTableView, ModFileTreeModel
 from skymodman.utils import withlogger, Notifier
-from skymodman import skylog
-
-
-from typing import List
-from PyQt5.QtCore import QModelIndex
 
 @withlogger
 class ModManagerWindow(QMainWindow, Ui_MainWindow):
@@ -36,8 +37,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     moveModsDown = pyqtSignal(int)
 
 
-    def __init__(self, manager: 'managers.ModManager', *args, **kwargs):
-        super(ModManagerWindow, self).__init__(*args, **kwargs)
+    def __init__(self, *, manager: 'managers.ModManager', **kwargs):
+        super().__init__(**kwargs)
         self.LOGGER.info("Initializing ModManager Window")
 
         # reference to the Mod Manager
@@ -63,7 +64,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.setupUi(self)
 
         #init mod table
-        self.mod_table = ModTableView(self, self.Manager)
+        self.mod_table = ModTableView(parent=self, manager=self.Manager)
 
         # connect the buttons
 
@@ -108,17 +109,19 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         curtab = self.manager_tabs.currentIndex()
 
-        self.save_cancel_btnbox.setVisible(curtab in [const.TAB_MODLIST, const.TAB_FILETREE])
+        self.save_cancel_btnbox.setVisible(curtab in [constants.TAB_MODLIST, constants.TAB_FILETREE])
 
         # if self.save_cancel_btnbox.isVisible():
         #     self.save_cancel_btnbox.setEnabled(
-        #         (curtab == const.TAB_MODLIST and len(self._modified_cells)>0)
-        #     or  (curtab == const.TAB_FILETREE and self.file_tree_modified)
+        #         (curtab == constants.TAB_MODLIST and len(self._modified_cells)>0)
+        #     or  (curtab == constants.TAB_FILETREE and self.file_tree_modified)
         #     )
 
-        self.next_button.setVisible(curtab == const.TAB_INSTALLER)
+        self.next_button.setVisible(curtab == constants.TAB_INSTALLER)
 
     def loadFomod(self):
+        from PyQt5.QtCore import QDir, QStandardPaths
+        from PyQt5.QtWidgets import QFileDialog
         # mimes = [m for m in QImageReader.supportedMimeTypes()]
         # print(mimes)
         # mimes = ['application/x-7z-compressed']
@@ -155,7 +158,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.filetree_modlist.setModel(list_model)
         self.splitter.setSizes([1, 500]) # just make the left one smaller ok?
 
-        file_tree_model = ModFileTreeModel(self._manager, self.filetree_tree)
+        file_tree_model = ModFileTreeModel(manager=self._manager, parent=self.filetree_tree)
         self.filetree_tree.setModel(file_tree_model)
 
         self.filetree_modlist.selectionModel().currentChanged.connect(self.showModFiles)
@@ -283,7 +286,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
 
     def onNewProfileClick(self):
-        popup = custom_widgets.NewProfileDialog(self.profile_selector.model())
+        popup = custom_widgets.NewProfileDialog(combobox_model= self.profile_selector.model())
         # popup.comboBox.setModel(self.profile_selector.model())
         # popup.setComboboxModel(self.profile_selector.model())
 
@@ -361,11 +364,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         # check for unsaved changes to the mod-list
         if self.mod_table.model().isDirty:
-            ok = QtW.QMessageBox(QtW.QMessageBox.Warning, 'Unsaved Changes',
+            ok = QMessageBox(QMessageBox.Warning, 'Unsaved Changes',
                                  'Your mod install-order has unsaved changes. Would you like to save them before continuing?',
-                                 QtW.QMessageBox.No | QtW.QMessageBox.Yes).exec_()
+                                 QMessageBox.No | QMessageBox.Yes).exec_()
 
-            if ok == QtW.QMessageBox.Yes:
+            if ok == QMessageBox.Yes:
                 self.saveModsList()
             else:
                 # don't bother reverting, mods list is getting reset; just disable the buttons
@@ -395,7 +398,7 @@ if __name__ == '__main__':
 
     MM = managers.ModManager()
 
-    w = ModManagerWindow(MM)
+    w = ModManagerWindow(manager= MM)
     w.resize(QGuiApplication.primaryScreen().availableSize()*3/5)
     w.show()
 

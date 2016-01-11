@@ -120,7 +120,7 @@ class ProfileManager:
         :param manager: reference to ModManager
         :param directory: the application's 'profiles' storage directory
         """
-        super(ProfileManager, self).__init__()
+        super().__init__()
         self.manager = manager
 
         self._profiles_dir = directory

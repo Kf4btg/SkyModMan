@@ -3,8 +3,6 @@ import os
 from pathlib import Path
 from skymodman import skylog, utils, exceptions
 
-# from typing import Tuple
-
 __myname = "skymodman"
 
 # Messenger Idiom shamelessly pilfered from:
@@ -15,13 +13,26 @@ __myname = "skymodman"
 #         self.__dict__ = kwargs
 
 class ConfigPaths:
-    file_main    = None # type: Path
+    __slots__=["file_main", "dir_config", "dir_data", "dir_profiles", "dir_mods", "dir_vfs"]
 
-    dir_config   = None # type: Path
-    dir_data     = None # type: Path
-    dir_profiles = None # type: Path
-    dir_mods     = None # type: Path
-    dir_vfs      = None # type: Path
+    def __init__(self, file_main=None, dir_config=None, dir_data=None, dir_profiles=None, dir_mods=None, dir_vfs=None) :
+        """
+
+        :param Path file_main:
+        :param Path dir_config:
+        :param Path dir_data:
+        :param Path dir_profiles:
+        :param Path dir_mods:
+        :param Path dir_vfs:
+        """
+
+        self.file_main    = file_main
+        self.dir_config   = dir_config
+        self.dir_data     = dir_data
+        self.dir_profiles = dir_profiles
+        self.dir_mods     = dir_mods
+        self.dir_vfs      = dir_vfs
+
 
 
 @utils.withlogger
@@ -40,11 +51,13 @@ class ConfigManager:
         }
     }
 
-    def __init__(self, manager, *args, **kwargs):
-        super(ConfigManager, self).__init__(*args, **kwargs)
+    def __init__(self, manager):
+        """
+        :param ModManager manager:
+        """
+        super().__init__()
         self.manager = manager
 
-        # self._messenger = None # type: Messenger
 
         self.__paths = ConfigPaths()
         self._lastprofile = None # type: str
@@ -61,12 +74,13 @@ class ConfigManager:
         return self.__paths
 
 
-    def __getitem__(self, config_file_or_dir: str) -> str:
+    def __getitem__(self, config_file_or_dir) -> str:
         """
         Use dict-access to get string versions of any of the items from the "paths"
         of this config instance by property name
         E.g.: config['dir_mods']
-        :param config_file_or_dir:
+
+        :param str config_file_or_dir:
         :return: str(Path(...))
         """
         return str(getattr(self.paths, config_file_or_dir, None))
@@ -75,7 +89,6 @@ class ConfigManager:
     def lastprofile(self) -> str:
         """
         :return: Name of most recently active profile
-
         """
         return self._lastprofile
 
@@ -94,7 +107,6 @@ class ConfigManager:
         """
         Make sure that all the required files and directories exist,
         creating them if not.
-        :return:
         """
 
         ## set up paths ##
@@ -160,7 +172,6 @@ class ConfigManager:
         """
         Called if the main configuration file does not exist in the expected location.
         Creates 'skymodman.ini' with default values
-        :return:
         """
         #TODO: perhaps just include a default config file and copy it in place.
 
@@ -181,13 +192,13 @@ class ConfigManager:
             config.write(configfile)
 
 
-    def updateConfig(self, value:str, key: str, section: str="General"):
+    def updateConfig(self, value, key, section="General"):
         """
         Update saved configuration file
-        :param value: the new value to set
-        :param key: which key will will be set to the new value
-        :param section: only valid section is 'General' for the moment
-        :return:
+
+        :param str value: the new value to set
+        :param str key: which key will will be set to the new value
+        :param str section: only valid section is 'General' for the moment
         """
         assert section in ['General']
         # assert key in ['modsdirectory', 'virtualfsmountpoint', 'lastprofile']
@@ -220,13 +231,14 @@ class ConfigManager:
         with self.paths.file_main.open('w') as f:
             config.write(f)
 
-    def listModFolders(self) -> [str]:
+    def listModFolders(self):
         """
         Just get a list of all mods installed in the mod directory
         (i.e. a list of folder names)
-        :return:
-        """
 
+        :return: list of names
+        :rtype: list[str]
+        """
         return os.listdir(str(self.paths.dir_mods))
 
 

@@ -7,8 +7,8 @@ from skymodman.utils import withlogger
 @withlogger
 class ProfileListModel(QtCore.QAbstractListModel):
 
-    def __init__(self, *args):
-        super(ProfileListModel, self).__init__(*args)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
         self.profiles = [] # type: List[Profile]
 
@@ -27,7 +27,7 @@ class ProfileListModel(QtCore.QAbstractListModel):
         self.dataChanged.emit(new_index, new_index)
 
 
-    def rowCount(self, index=Qt.QModelIndex(), *args, **kwargs):
+    def rowCount(self, *args, **kwargs):
         return len(self.profiles)
 
     def data(self, index: Qt.QModelIndex, role=qt.UserRole):
