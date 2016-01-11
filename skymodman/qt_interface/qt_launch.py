@@ -1,5 +1,4 @@
 import sys
-from typing import List
 
 from PyQt5.QtCore import (Qt,
                           pyqtSignal,
@@ -15,7 +14,7 @@ from PyQt5.QtWidgets import (QApplication,
 
 from skymodman import skylog, constants
 from skymodman.qt_interface.qt_manager_ui import Ui_MainWindow
-from skymodman.qt_interface.widgets import custom_widgets, message
+from skymodman.qt_interface.widgets import message, NewProfileDialog
 from skymodman.qt_interface.models import ProfileListModel, ModTableView, ModFileTreeModel
 from skymodman.utils import withlogger, Notifier
 
@@ -37,7 +36,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     moveModsDown = pyqtSignal(int)
 
 
-    def __init__(self, *, manager: 'managers.ModManager', **kwargs):
+    def __init__(self, *, manager, **kwargs):
+        """
+
+        :param managers.ModManager manager:
+        :param kwargs: anything to pass on the the base class constructors
+        """
         super().__init__(**kwargs)
         self.LOGGER.info("Initializing ModManager Window")
 
@@ -74,12 +78,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.save_cancel_btnbox.button(QDialogButtonBox.Reset).clicked.connect(self.revertTable)
 
         # connect mod move-up/down
-        self.mod_up_button.clicked.connect(self.emitMoveModUpOne)
+        self.mod_up_button  .clicked.connect(self.emitMoveModUpOne)
         self.mod_down_button.clicked.connect(self.emitMoveModDownOne)
 
 
         # connect the actions
-        self.action_Quit.triggered.connect(self.safeQuitApp)
+        self.action_Quit         .triggered.connect(self.safeQuitApp)
         self.action_Install_Fomod.triggered.connect(self.loadFomod)
 
         # keep track of changes made to mod list
@@ -89,7 +93,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.loaded_fomod = None
         
         # make some UI adjustments
-        self.manager_tabs.setCurrentIndex(0)
+        self.manager_tabs  .setCurrentIndex(0)
         self.installerpages.setCurrentIndex(0)
 
         # connect other signals
@@ -126,7 +130,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # print(mimes)
         # mimes = ['application/x-7z-compressed']
         mimes = ['application/xml']
-        start_locs = QStandardPaths.standardLocations(QStandardPaths.HomeLocation) # type: List[str]
+        start_locs = QStandardPaths.standardLocations(QStandardPaths.HomeLocation)
         dialog = QFileDialog(self, "Choose ModuleConfig.xml file",
                              QDir.currentPath()
                              # start_locs.pop() if start_locs else QDir.currentPath()
@@ -152,6 +156,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     # FILETREE TAB FUNCTIONS
     # ===================================
     def setupFileTree(self):
+        """
+        Create and populate the list of mod-folders shown on the filetree tab, as well as prepare the fileviewer pane to show files when a mod is selected
+
+        """
+        # todo: add name filter, sort function (maybe)
         list_model = QStringListModel()
         list_model.setStringList(list(self.Manager.enabledMods()))
 
@@ -167,6 +176,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.SetupDone()
 
     def showModFiles(self, indexCur, indexPre):
+        """
+        When the currently item changes in the modlist, change the fileviewer to show the files from the new mod's folder.
+
+        :param QModelIndex indexCur: Currently selected index
+        :param QModelIndex indexPre: Previously selected index
+        """
         mod = self.filetree_modlist.model().stringList()[indexCur.row()]
 
         p = self.Manager.Config.paths.dir_mods / self.Manager.getModDir(mod)
@@ -190,11 +205,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # when the list of modified rows changes from empty to
         # non-empty or v.v., enabled/disable the save/cancel btns
         self.mod_table.model().tableDirtyStatusChange.connect(self.markTableUnsaved)
-        self.mod_table.itemsSelected.connect(self.onModsSelected)
-        self.mod_table.selectionCleared.connect(self.onSelectionCleared)
-        self.mod_table.itemsMoved.connect(self.updateModMoveButtons)
 
-        self.moveModsUp.connect(self.mod_table.onMoveModsUpAction)
+        self.mod_table.itemsSelected   .connect(self.onModsSelected)
+        self.mod_table.selectionCleared.connect(self.onSelectionCleared)
+        self.mod_table.itemsMoved      .connect(self.updateModMoveButtons)
+
+        self.moveModsUp  .connect(self.mod_table.onMoveModsUpAction)
         self.moveModsDown.connect(self.mod_table.onMoveModsDownAction)
 
         self.SetupDone()
@@ -211,15 +227,16 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         :return:
         """
         self.move_mod_box.setEnabled(True)
-        self.updateModMoveButtons(self.mod_table.selectedIndexes(), self.mod_table.model())
+        self.updateModMoveButtons(self.mod_table.selectedIndexes(),
+                                  self.mod_table.model())
 
-    def updateModMoveButtons(self, selected_indexes: List[QModelIndex], model):
+    def updateModMoveButtons(self, selected_indexes, model):
         """
         Enabled/disable the mod-up/down buttons depending on whether the first or last
         items in the table are selected.
-        :param selected_indexes: list of QModelIndex in the selection
+
+        :param list[QModelIndex] selected_indexes: list of QModelIndex in the selection
         :param model: the table's model
-        :return:
         """
         index1 = model.index(0,0)
         index_last = model.index(model.rowCount()-1, 0)
@@ -228,10 +245,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.mod_down_button.setEnabled(index_last not in selected_indexes)
 
     def onSelectionCleared(self):
+        """With nothing selected, there's nothing to move, so disable the movement buttons"""
         self.move_mod_box.setEnabled(False)
 
 
-    def markTableUnsaved(self, unsaved_changes_present: bool):
+    def markTableUnsaved(self, unsaved_changes_present):
         self.save_cancel_btnbox.setEnabled(unsaved_changes_present)
 
 
@@ -246,7 +264,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         If the list of installed mods has been modified (e.g.
         some mods marked inactive, names changed, etc.), save
         the modified status of the mods to a file
-        :return:
         """
         self.mod_table.saveChanges()
 
@@ -261,6 +278,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     #==============================
 
     def setupProfileSelector(self):
+        """
+        Initialize the dropdown list for selecting profiles with the names of the profiles found on disk
+        """
         model = ProfileListModel()
 
         start_idx = 0
@@ -286,7 +306,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
 
     def onNewProfileClick(self):
-        popup = custom_widgets.NewProfileDialog(combobox_model= self.profile_selector.model())
+        """
+        When the 'add profile' button is clicked, create and show a small dialog for the user to choose a name for the new profile.
+        """
+        popup = NewProfileDialog(combobox_model= self.profile_selector.model())
         # popup.comboBox.setModel(self.profile_selector.model())
         # popup.setComboboxModel(self.profile_selector.model())
 
@@ -301,6 +324,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.profile_selector.setCurrentIndex(self.profile_selector.findText(new_profile.name, Qt.MatchFixedString))
 
     def onRemoveProfileClick(self):
+        """
+        Show a warning about irreversibly deleting the profile.
+        """
         profile = self.Manager.active_profile
 
         if message('warning', 'Confirm Delete Profile', 'Delete "'+profile.name+'"?','Choosing "Yes" below will remove this profile and all saved information within it, including customized load-orders, ini-edits, etc. Note that installed mods will not be affected. This cannot be undone. Are you sure you wish to continue?'):
@@ -312,6 +338,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     @pyqtSlot('int')
     def onProfileChange(self, index):
+        """
+        When a new profile is chosen from the dropdown list, load all the appropriate data for that profile and replace the current data with it. Also show a message about unsaved changes to the current profile.
+        :param index:
+        :return:
+        """
         if index<0:
             # we have a problem...
             self.LOGGER.error("No profile chosen?!")
@@ -377,7 +408,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def safeQuitApp(self):
         """
-        Show a prompt if there are anay unsaved changes, then close the program.
+        Show a prompt if there are any unsaved changes, then close the program.
         """
         self.checkUnsavedChanges()
         self.Manager.DB.shutdown()
