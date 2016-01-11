@@ -96,9 +96,24 @@ class ConfigManager:
         config = configparser.ConfigParser()
         config.read(str(self.paths.file_main))
 
-        self.paths.dir_mods = Path(config['General']['modsdirectory'])
+        #allow setting some things via ENV
+
+        # first, the mods dir
+        env_md = os.getenv('SMM_MODDIR')
+        if env_md is not None and os.path.exists(env_md):
+            self.paths.dir_mods = Path(env_md)
+        else:
+            self.paths.dir_mods = Path(config['General']['modsdirectory'])
+
+
+        # also which profile is loaded at start
+        env_lpname = os.getenv('SMM_PROFILE', '_OHBOYIREALLYHOPETHISPROFILENAMEDOESNTEXIST_')
+        env_lp = self.paths.dir_profiles / env_lpname
+
+        # first fall back to config file value
+        self._lastprofile = env_lpname if env_lp.exists() else config['General']['lastprofile']
+
         self.paths.dir_vfs = Path(config['General']['virtualfsmountpoint'])
-        self._lastprofile = config['General']['lastprofile']
 
 
 
