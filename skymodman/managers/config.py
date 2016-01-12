@@ -14,43 +14,16 @@ __myname = "skymodman"
 #         self.__dict__ = kwargs
 
 
-class Section(Enum):
+# making these strEnums because I tire of typing .value over and over...
+class Section(str, Enum):
     """Only one section at the moment"""
     DEFAULT = "General"
     GENERAL = DEFAULT
 
-class Key(Enum):
+class Key(str, Enum):
     LASTPROFILE = "lastprofile"
     MODDIR = "modsdirectory"
     VFSMOUNT = "virtualfsmountpoint"
-
-def getConfigValue(parser, key, section=Section.DEFAULT, *, return_hook=None, on_error=None):
-    """
-    Get the value for the specified key from the specified section using the given parser.
-
-    :param configparser.ConfigParser parser:
-        ConfigParser object populated from the main skymodman.ini config file
-    :param Key key:
-        The key under `section` that holds the value being requested
-    :param Section section:
-        If not specified, defaults to the general section
-    :param (str)->Any return_hook:
-        If specified and not None, must be a callable accepting a single required positional parameter, namely the string value pulled from `parser` for the given section and key. Whatever value is returned from the callable will be used as the return value of getConfigValue(). Convenient methods to use for `return_hook` are the builtin getter methods from the ConfigParser object (like getboolean(), getint(), etc.)
-
-    :param (str, str)->Any on_error:
-         If `key` is not found under `section` and `on_error` is a callable, that callable that will be invoked with the string values of `key` and `section` as its first and second positional arguments, respectively. Whatever the callable returns will be used as the return value for getConfigValue (first being passed to return_hook if it is also defined). If onError is None or not specified, the normal exceptions will be raised if a key does not exist.
-    :return: Value from config file, possibly processed by return_hook
-    """
-
-    if on_error:
-        try:
-            ret = parser[section.value][key.value]
-        except (KeyError, TypeError, ValueError):
-            ret = on_error(key.value, section.value)
-    else:
-        ret = parser[section.value][key.value]
-
-    return return_hook(ret) if return_hook else ret
 
 
 class ConfigPaths:
@@ -88,7 +61,7 @@ class ConfigManager:
         'General': {
             'modsdirectory': "##DATADIR##/mods",
             'virtualfsmountpoint': "##DATADIR##/skyrimfs",
-            "lastprofile": __DEFAULT_PROFILE
+            'lastprofile': __DEFAULT_PROFILE
         }
     }
 
@@ -145,20 +118,18 @@ class ConfigManager:
         ######################################################################
         # first, the mods dir
 
-        env_md = os.getenv(constants.EnvVars.MOD_DIR.value)
+        env_md = os.getenv(constants.EnvVars.MOD_DIR)
         if env_md and os.path.exists(env_md):
             self.paths.dir_mods = Path(env_md)
         else:
-            self.paths.dir_mods = Path(getConfigValue(config, Key.MODDIR, Section.GENERAL))
-            # Path(config['General']['modsdirectory'])
-            # self.paths.dir_mods = Path(config['General']['modsdirectory'])
+            self.paths.dir_mods = Path(config[Section.GENERAL][Key.MODDIR])
 
 
         ######################################################################
         ######################################################################
         # then, which profile is loaded on boot
 
-        env_lpname = os.getenv('SMM_PROFILE')
+        env_lpname = os.getenv(constants.EnvVars.PROFILE)
 
         # see if the named profile exists in the profiles dir
         if env_lpname:
@@ -170,21 +141,21 @@ class ConfigManager:
 
         # if it wasn't set above, get the value from config file
         if not self._lastprofile:
-            self._lastprofile = config['General']['lastprofile']
+            self._lastprofile = config[Section.GENERAL][Key.LASTPROFILE]
 
 
         ######################################################################
         ######################################################################
         # now check env for vfs mount
 
-        env_vfs = os.getenv(constants.EnvVars.VFS_MOUNT.value)
+        env_vfs = os.getenv(constants.EnvVars.VFS_MOUNT)
 
         # check to see if the given path is a valid mount point
         # todo: this is assuming that the vfs has already been mounted manually; I'd much rather do it automatically, so I really should just check that the given directory is empty
         if env_vfs and os.path.exists(env_vfs) and os.path.ismount(env_vfs):
             self.paths.dir_vfs = Path(env_vfs)
         else:
-            self.paths.dir_vfs = Path(config['General']['virtualfsmountpoint'])
+            self.paths.dir_vfs = Path(config[Section.GENERAL][Key.VFSMOUNT])
 
 
     def ensureDefaultSetup(self):
@@ -235,11 +206,11 @@ class ConfigManager:
         ## TODO: maybe we shouldn't create the mod directory by default?
         if not self.paths.dir_mods.exists():
             # for now, only create if the location in the config is same as the default
-            if str(self.paths.dir_mods) == os.path.join(os.getenv
-                                                   ("XDG_DATA_HOME",
-                                                    os.path.expanduser("~/.local/share")),
-                                                   self.__APPNAME,
-                                                   "mods"):
+            if str(self.paths.dir_mods) == \
+                    os.path.join(os.getenv("XDG_DATA_HOME",
+                                           os.path.expanduser("~/.local/share")),
+                                 ConfigManager.__APPNAME,
+                                 "mods"):
                 self.LOGGER.info("Creating new mods directory at: {}".format(self.paths.dir_mods))
                 self.paths.dir_mods.mkdir(parents=True)
             else:

@@ -20,7 +20,7 @@ noordinal_dbfields = tuple(set(db_fields) ^ {"ordinal"})
 
 from enum import Enum
 
-class EnvVars(Enum):
+class EnvVars(str, Enum):
     MOD_DIR = "SMM_MODDIR"
     PROFILE = "SMM_PROFILE"
     USE_QT  = "SMM_QTGUI"
