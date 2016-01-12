@@ -39,7 +39,7 @@ class ModTableModel(QtCore.QAbstractTableModel):
     def __init__(self, *, manager, **kwargs):
         """
 
-        :param ModManager manager:
+        :param skymodman.managers.ModManager manager:
         """
         super().__init__(**kwargs)
         # self._table = self.parent
@@ -261,33 +261,31 @@ class ModTableModel(QtCore.QAbstractTableModel):
 
         self.endResetModel()
 
-    def on_doubleClick(self, index:QtCore.QModelIndex):
+    def on_doubleClick(self, index):
         """
         Double-clicking on a row will toggle that mod active or inactive (same as clicking
         the checkbox in the first column
-        :param index: QModelIndex corresponding to the cell that was just clicked.
+
+        :param QtCore.QModelIndex index:
+            corresponding to the cell that was just clicked.
         """
         if not index.isValid() or index.column() not in constants.DBLCLICK_COLS: return
 
         self.toggleEnabledState(index.row())
 
-    def toggleEnabledState(self, row: int):
+    def toggleEnabledState(self, row):
         """
         For the mod at row `row`, set it enabled if it is currently disabled, or vice-versa.
         This adjusts the enabled-status of all the other fields and emits a datachanged()
         signal for each one.
-        :param row: the number of the mod in the table-display; also the index of the mod in
-        the model's `self.mods` list, and the effective ordinal rank of this mod in the installation list.
+
+        :param int row:
+            the number of the mod in the table-display; also the index of the mod in the model's `self.mods` list, and the effective ordinal rank of this mod in the installation list.
         """
         mod = self.mods[row]
         newmod = mod._replace(enabled=int(not mod.enabled))
 
         need_notify = self.onModDataEdit(row, mod, newmod)
-
-        # for c in self.VISIBLE_COLS:
-        #     if c==constants.COL_ENABLED:
-        #         continue
-        #     index = self.index(row, c) # type: QtCore.QModelIndex
 
         self.rowDataChanged(row)
 

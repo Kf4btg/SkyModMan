@@ -361,7 +361,7 @@ class DBManager:
 
         :param raw_cursor: If true, return the db cursor object instead of yielding Rows
         :return:   Tuple of mod info or sqlite3.cursor
-        :rtype: typing.Generator[sqlite3.Row, Any, None]|sqlite3.Cursor
+        :rtype: __generator[sqlite3.Row, Any, None]|sqlite3.Cursor
         """
         cur = self._con.execute("select * from mods")
         if raw_cursor:
@@ -458,7 +458,8 @@ class DBManager:
     def validateModsList(self, installed_mods):
         """
         Compare the database's list of mods against a list of the folders in the installed-mods directory. Handle discrepancies accordingly.
-        :param typing.MutableSequence[str] installed_mods:
+
+        :param collections.abc.MutableSequence[str] installed_mods:
         :return:
         """
         # I wish there were a...lighter way to do this, but I

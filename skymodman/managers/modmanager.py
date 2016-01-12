@@ -141,37 +141,15 @@ class ModManager:
             return False
         return True
 
-
-    def allmods(self):
-        """
-        Obtain an iterator of all the currently installed mods; contains
-        information on with their installation order, nexus id, current
-        version, name of FS folder that holds their data, user-customized
-        name for the mod, and whether they're enabled in the load order or not.
-
-        :return:This is returned as a list of tuples with the following structure:
-            (
-                Ordinality (int),
-                Mod-ID (int),
-                Version (str),
-                directory (str),
-                name (str),
-                enabled-status (int, either 0 or 1)
-            )
-        """
-        yield from self.DB.getModInfo()
-
     def basicModInfo(self):
         """
-        This actually now returns _all_ the info for a mod as a dict, intended for feeding
-        to ModEntry(**d) or using directly
-        :return: tuples of form (ordinal, enabled-status, mod ID, version, name)
+        Obtain an iterator over all the rows in the database which yields _all_ the info for a mod as a dict, intended for feeding to ModEntry(**d) or using directly.
+
+        :rtype: __generator[dict[str, sqlite3.Row], Any, None]
         """
         #TODO: rename this.
-        # yield from self.DB.getModInfo()
         for row in self.DB.getModInfo():
             yield dict(zip(row.keys(), row))
-        # yield from (me for me in map(ModEntry._make, self.DB.execute_("SELECT enabled, name, modid, version, ordinal FROM mods")))
 
     def enabledMods(self):
         """
@@ -182,23 +160,16 @@ class ModManager:
     def disabledMods(self):
         yield from self.DB.disabledMods(True)
 
-    def saveUserEdits(self, changes: List[ModEntry]):
+    def saveUserEdits(self, changes):
         """
-        :param changes: an iterable of ModEntry objects
+        :param collections.abc.Iterable[ModEntry] changes: an iterable of ModEntry objects
         """
 
         rows_to_delete = [(m.ordinal, ) for m in changes]
 
         # a generator that creates tuples of values by sorting the values of the
         # modentry according the order defined in constants.db_fields
-
         dbrowgen = (tuple([getattr(m, f) for f in sorted(m._fields, key=lambda fld: constants.db_fields.index(fld)) ] ) for m in changes)
-
-        # generator that sticks the ordinal on the end of tuple
-        # dbrowgen = (tuple([getattr(m, f)
-        #                    for f in sorted([g for g in m._fields if g!="ordinal"],
-        #                                    key=lambda fld: constants.noordinal_dbfields.index(fld)) ] )
-        #             + (m.ordinal, ) for m in changes)
 
         # using the context manager may allow deferrable foreign to go unsatisfied for a moment
         with self.DB.conn:
@@ -210,18 +181,6 @@ class ModManager:
             query += ", ".join("?" * len(constants.db_fields)) + ")"
 
             self.DB.conn.executemany(query, dbrowgen)
-
-
-        # self._db_manager.updatemany_("DELETE FROM mods WHERE ordinal=?", rows_to_delete)
-
-        # because deleting the row messes with foreign key relationships,
-        # we can just overwrite all the fields for the given ordinal
-        # q="UPDATE mods SET " + "=?, ".join(constants.noordinal_dbfields) + "=? WHERE ordinal=?"
-        # self._db_manager.updatemany_(q, dbrowgen)
-
-        # and now re-insert it with the correct modinfo
-        # self._db_manager.fillTable(list(dbrowgen))
-
 
         # And finally save changes to disk
         self.saveModList()

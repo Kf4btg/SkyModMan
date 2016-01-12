@@ -292,7 +292,6 @@ class ConfigManager:
         (i.e. a list of folder names)
 
         :return: list of names
-        :rtype: list[str]
         """
         return os.listdir(str(self.paths.dir_mods))
 
