@@ -1,7 +1,8 @@
 import configparser
 import os
 from pathlib import Path
-from skymodman import skylog, utils, exceptions
+from enum import Enum
+from skymodman import skylog, utils, exceptions, constants
 
 __myname = "skymodman"
 
@@ -12,10 +13,50 @@ __myname = "skymodman"
 #     def __init__(self, **kwargs):
 #         self.__dict__ = kwargs
 
+
+class Section(Enum):
+    """Only one section at the moment"""
+    DEFAULT = "General"
+    GENERAL = DEFAULT
+
+class Key(Enum):
+    LASTPROFILE = "lastprofile"
+    MODDIR = "modsdirectory"
+    VFSMOUNT = "virtualfsmountpoint"
+
+def getConfigValue(parser, key, section=Section.DEFAULT, *, return_hook=None, on_error=None):
+    """
+    Get the value for the specified key from the specified section using the given parser.
+
+    :param configparser.ConfigParser parser:
+        ConfigParser object populated from the main skymodman.ini config file
+    :param Key key:
+        The key under `section` that holds the value being requested
+    :param Section section:
+        If not specified, defaults to the general section
+    :param (str)->Any return_hook:
+        If specified and not None, must be a callable accepting a single required positional parameter, namely the string value pulled from `parser` for the given section and key. Whatever value is returned from the callable will be used as the return value of getConfigValue(). Convenient methods to use for `return_hook` are the builtin getter methods from the ConfigParser object (like getboolean(), getint(), etc.)
+
+    :param (str, str)->Any on_error:
+         If `key` is not found under `section` and `on_error` is a callable, that callable that will be invoked with the string values of `key` and `section` as its first and second positional arguments, respectively. Whatever the callable returns will be used as the return value for getConfigValue (first being passed to return_hook if it is also defined). If onError is None or not specified, the normal exceptions will be raised if a key does not exist.
+    :return: Value from config file, possibly processed by return_hook
+    """
+
+    if on_error:
+        try:
+            ret = parser[section.value][key.value]
+        except (KeyError, TypeError, ValueError):
+            ret = on_error(key.value, section.value)
+    else:
+        ret = parser[section.value][key.value]
+
+    return return_hook(ret) if return_hook else ret
+
+
 class ConfigPaths:
     __slots__=["file_main", "dir_config", "dir_data", "dir_profiles", "dir_mods", "dir_vfs"]
 
-    def __init__(self, file_main=None, dir_config=None, dir_data=None, dir_profiles=None, dir_mods=None, dir_vfs=None) :
+    def __init__(self, *, file_main=None, dir_config=None, dir_data=None, dir_profiles=None, dir_mods=None, dir_vfs=None) :
         """
 
         :param Path file_main:
@@ -93,29 +134,57 @@ class ConfigManager:
         return self._lastprofile
 
     def loadConfig(self):
+        """
+        Based on values from defined Environment values (first priority) and settings in config file (second priority), setup the configuration that will be used throughout this session.
+        """
         config = configparser.ConfigParser()
         config.read(str(self.paths.file_main))
 
-        #allow setting some things via ENV
-
+        ######################################################################
+        # allow setting some things via ENV
+        ######################################################################
         # first, the mods dir
-        env_md = os.getenv('SMM_MODDIR')
-        if env_md is not None and os.path.exists(env_md):
+
+        env_md = os.getenv(constants.EnvVars.MOD_DIR.value)
+        if env_md and os.path.exists(env_md):
             self.paths.dir_mods = Path(env_md)
         else:
-            self.paths.dir_mods = Path(config['General']['modsdirectory'])
+            self.paths.dir_mods = Path(getConfigValue(config, Key.MODDIR, Section.GENERAL))
+            # Path(config['General']['modsdirectory'])
+            # self.paths.dir_mods = Path(config['General']['modsdirectory'])
 
 
-        # also which profile is loaded at start
-        env_lpname = os.getenv('SMM_PROFILE', '_OHBOYIREALLYHOPETHISPROFILENAMEDOESNTEXIST_')
-        env_lp = self.paths.dir_profiles / env_lpname
+        ######################################################################
+        ######################################################################
+        # then, which profile is loaded on boot
 
-        # first fall back to config file value
-        self._lastprofile = env_lpname if env_lp.exists() else config['General']['lastprofile']
+        env_lpname = os.getenv('SMM_PROFILE')
 
-        self.paths.dir_vfs = Path(config['General']['virtualfsmountpoint'])
+        # see if the named profile exists in the profiles dir
+        if env_lpname:
+            env_lpname = env_lpname.lower() # ignore case
+            for p in (d.name for d in self.paths.dir_profiles.iterdir() if d.is_dir()):
+                if env_lpname == p.lower():
+                    self._lastprofile = p # but make sure we get the proper-cased name here
+                    break
+
+        # if it wasn't set above, get the value from config file
+        if not self._lastprofile:
+            self._lastprofile = config['General']['lastprofile']
 
 
+        ######################################################################
+        ######################################################################
+        # now check env for vfs mount
+
+        env_vfs = os.getenv(constants.EnvVars.VFS_MOUNT.value)
+
+        # check to see if the given path is a valid mount point
+        # todo: this is assuming that the vfs has already been mounted manually; I'd much rather do it automatically, so I really should just check that the given directory is empty
+        if env_vfs and os.path.exists(env_vfs) and os.path.ismount(env_vfs):
+            self.paths.dir_vfs = Path(env_vfs)
+        else:
+            self.paths.dir_vfs = Path(config['General']['virtualfsmountpoint'])
 
 
     def ensureDefaultSetup(self):

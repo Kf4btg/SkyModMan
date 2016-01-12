@@ -3,6 +3,7 @@ import os
 import sys
 
 from skymodman.managers import ModManager
+from skymodman import constants
 
 
 def main():
@@ -12,7 +13,7 @@ def main():
     # skylog.stop_listener()
 
 
-USE_QT_GUI = os.getenv("USE_QT_GUI", True)
+USE_QT_GUI = os.getenv(constants.EnvVars.USE_QT.value, True)
 
 
 def myexcepthook(type, value, tb):
