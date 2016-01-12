@@ -179,6 +179,19 @@ def _iscallable(obj):
 def _isiterable(obj):
     return hasattr(obj, "__iter__")
 
+def first_true(iterable, default=False, pred=None):
+    """Returns the first true value in the iterable.
+
+    If no true value is found, returns *default*
+
+    If *pred* is not None, returns the first item
+    for which pred(item) is true.
+
+    """
+    # first_true([a,b,c], x) --> a or b or c or x
+    # first_true([a,b], x, f) --> a if f(a) else b if f(b) else x
+    return next(filter(pred, iterable), default)
+
 #
 #
 #
@@ -223,13 +236,164 @@ def doubleZipList(list1, list2):
 
 
 from collections import OrderedDict
+import itertools as it
+import operator as op
+import functools as fun
+
+def flatten(listOfLists):
+    """Flatten one level of nesting"""
+    return it.chain.from_iterable(listOfLists)
+
+def printerate(iterable):
+    for p in iterable:
+        print(p)
+
+def splitterate(iterator):
+    return list(i if not isinstance(i, abcco.Iterator) else splitterate(i) for i in iterator )
+
+def partition(pred, iterable):
+    'Use a predicate to partition entries into false entries and true entries'
+    # partition(is_odd, range(10)) --> 0 2 4 6 8   and  1 3 5 7 9
+    t1, t2 = it.tee(iterable)
+    return it.filterfalse(pred, t1), filter(pred, t2)
+
+class ValueSwitch:
+ def __init__(self,v):self.m,self.v=0,v
+ def __iter__(self):yield self.__
+ def __(self,*o): #list of options to match against
+  if self.m or not o:return True # always returns 1 after first match (allows fallthrough)
+  elif self.v in o:self.m=True
+  return True
+
+class DSwitch:
+    def __init__(self, v):
+        self.m, self.v = 0, v
+
+    def __iter__(self):
+        yield self.__
+
+    def __(self, *o):  # list of options to match against
+        if self.m or not o:
+            return True  # always returns 1 after first match (allows fallthrough)
+        elif self.v in o:
+            self.m = True
+        return True
+
+def _varicomp(c, v):
+    return c(v)
+
+
+def _in_or_is(c, v, eq=op.eq, con=op.contains):
+    try:
+        return con(c,v)
+    except TypeError:
+        return eq(c,v)
+
+def _call_or_in_or_is(c,v):
+    try:
+        return c(v)
+    except TypeError:
+        try:
+            return op.contains(c, v)
+        except TypeError:
+            return op.eq(c, v)
+
+
+def sswitch(value, comp=_in_or_is):
+    return [lambda match: comp(match, value)]
+
 if __name__ == '__main__':
     j=2
-    cas = ["a", "11", "2", [25, "4", "5", "g"], "3", "&"]
+    cas = ["a", "11", "5", [25, "4", "5", "g"], "3", "&"]
     ops = [ord, int, int, [lambda v: j+v**2, lambda v: ord(str(v)[:1]), lambda v: None, type], int, ord]
 
-    # cc = doubleZipList(cas, ops)
+    hashes = []
 
+    # pprint([p for p in itertools.product(cas, ops)])
+    [print(p) for p in it.takewhile(lambda x: not isinstance(x, list), ops)]
+    # [print(type(p)) for p in ops]
+
+    # printerate(flatten(cas))
+    # print(splitterate(cas))
+    print(splitterate(partition(lambda x: isinstance(x, list), cas)))
+
+    # printerate(partition(lambda x: isinstance(x, list), cas))
+
+    v="a"
+    # print(first_true(cas, pred=fun.partial(op.eq, v)))
+    #
+    # for case in ValueSwitch(v):
+    #     if case("a"):
+    #         print("v is a")
+    #
+    #     if case(False):
+    #         print ("fallthrough")
+    #         break
+    #
+    #     if case ("25", 56, "5", "g"):
+    #         print("second case")
+    #         break
+    #     if case():
+    #         print("v not found")
+
+    g=3
+    # for case in sswitch(g):
+    #     if case("3"):
+    #         print("numba1")
+    #         break
+    #     if case("a"):
+    #         print("numba2")
+    #         break
+    # else:
+    #     print("default")
+    #
+    #
+    # g=5
+    # for case in sswitch(g):
+    #     if case(3):
+    #         print(0)
+    #         break
+    #     if case(["4", 5, 90]):
+    #         print(1)
+    #         break
+    #     if case([99, 23]):
+    #         print(2)
+    #         break
+    # else:
+    #     print("default")
+
+    g=12
+    # for case in sswitch(g, _varicomp):
+    #     if case(lambda gv: gv**2==25):
+    #         print("squared")
+    #         break
+    #     if case(lambda gv: gv * 2 == 24):
+    #         print ("doubled")
+    #         break
+
+    g="4"
+    def thing(val):
+        for case in sswitch(val, _call_or_in_or_is):
+            if case(3):
+                print(0)
+                break
+            if case(["4", 5, 90]):
+                print("listed")
+                break
+            if case(lambda gv: gv * 2 == 24):
+                print("doubled")
+                break
+        else:
+            print("nada")
+
+    thing("4")
+    thing("3")
+    thing(3)
+    thing(12)
+
+
+
+    # cc = doubleZipList(cas, ops)
     # c = []
     # t=(cas, ops)
     # for k,v in zip(cas, ops):
@@ -240,10 +404,10 @@ if __name__ == '__main__':
     #         c.append((k,v))
 
     # pprint(cc)
-    s = Switch(cas, ops)
+    # s = Switch(cas, ops)
 
     # s("g")
     # s("11")
     # s("&")
-    [print(vv) for vv in s("4")]
-    print(s(5555))
+    # [print(vv) for vv in s("4")]
+    # print(s(5555))
