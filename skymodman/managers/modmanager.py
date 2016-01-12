@@ -106,15 +106,16 @@ class ModManager:
         Asks the Database Manager to load the information stored
         on disk for the given profile into an in-memory database
         that will be used to provide data to the rest of the app.
-        :return:
         """
-        self.LOGGER.debug("loading data for active profile")
+        self.LOGGER.debug("loading data for active profile '{}'".format(self.active_profile.name))
         # try to read modinfo file
         if self.DB.loadModDB(self.active_profile.modinfo):
+            self.LOGGER.debug("validating installed mods")
             # if successful, validate modinfo
             self.validateModInstalls()
 
         else:
+            self.LOGGER.debug("Could not load mod info, reading from configured mods directory: {}".format(self.Config.paths.dir_mods))
             # if it fails, re-read mod data from disk
             self.DB.getModDataFromModDirectory(self.Config.paths.dir_mods)
             # and [re]create the cache file
@@ -126,6 +127,7 @@ class ModManager:
         Queries the disk and the database to see if the respective
         lists of mods are in sync. If not, any issues encountered
         are recorded on the active profile object.
+
         :return: True if no errors encountered, False otherwise
         """
         try:

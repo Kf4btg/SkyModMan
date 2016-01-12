@@ -2,6 +2,8 @@ import configparser
 import os
 from pathlib import Path
 from enum import Enum
+from copy import deepcopy
+
 from skymodman import skylog, utils, exceptions, constants
 
 __myname = "skymodman"
@@ -20,7 +22,7 @@ class Section(str, Enum):
     DEFAULT = "General"
     GENERAL = DEFAULT
 
-class Key(str, Enum):
+class Setting(str, Enum):
     LASTPROFILE = "lastprofile"
     MODDIR = "modsdirectory"
     VFSMOUNT = "virtualfsmountpoint"
@@ -58,10 +60,10 @@ class ConfigManager:
     __APPNAME = "skymodman"
 
     __DEFAULT_CONFIG={
-        'General': {
-            'modsdirectory': "##DATADIR##/mods",
-            'virtualfsmountpoint': "##DATADIR##/skyrimfs",
-            'lastprofile': __DEFAULT_PROFILE
+        Section.GENERAL: {
+            Setting.MODDIR: "##DATADIR##/mods",
+            Setting.VFSMOUNT: "##DATADIR##/skyrimfs",
+            Setting.LASTPROFILE: __DEFAULT_PROFILE
         }
     }
 
@@ -75,6 +77,9 @@ class ConfigManager:
 
         self.__paths = ConfigPaths()
         self._lastprofile = None # type: str
+
+        # keep a dictionary that is effectively an in-memory version of the main config file
+        self.currentValues = deepcopy(ConfigManager.__DEFAULT_CONFIG)
 
         self.ensureDefaultSetup()
 
@@ -122,7 +127,8 @@ class ConfigManager:
         if env_md and os.path.exists(env_md):
             self.paths.dir_mods = Path(env_md)
         else:
-            self.paths.dir_mods = Path(config[Section.GENERAL][Key.MODDIR])
+            self.paths.dir_mods = Path(config[Section.GENERAL][Setting.MODDIR])
+
 
 
         ######################################################################
@@ -141,7 +147,8 @@ class ConfigManager:
 
         # if it wasn't set above, get the value from config file
         if not self._lastprofile:
-            self._lastprofile = config[Section.GENERAL][Key.LASTPROFILE]
+            self._lastprofile = config[Section.GENERAL][Setting.LASTPROFILE]
+
 
 
         ######################################################################
@@ -155,7 +162,13 @@ class ConfigManager:
         if env_vfs and os.path.exists(env_vfs) and os.path.ismount(env_vfs):
             self.paths.dir_vfs = Path(env_vfs)
         else:
-            self.paths.dir_vfs = Path(config[Section.GENERAL][Key.VFSMOUNT])
+            self.paths.dir_vfs = Path(config[Section.GENERAL][Setting.VFSMOUNT])
+
+        # update config-file mirror
+        self.currentValues[Section.GENERAL][Setting.MODDIR] = str(self.paths.dir_mods)
+        self.currentValues[Section.GENERAL][Setting.VFSMOUNT] = str(self.paths.dir_vfs)
+        self.currentValues[Section.GENERAL][Setting.LASTPROFILE] = self._lastprofile
+
 
 
     def ensureDefaultSetup(self):
@@ -247,39 +260,83 @@ class ConfigManager:
             config.write(configfile)
 
 
-    def updateConfig(self, value, key, section="General"):
+    def updateConfig(self, value, setting, section=Section.DEFAULT):
         """
         Update saved configuration file
 
-        :param str value: the new value to set
-        :param str key: which key will will be set to the new value
+        :param  value: the new value to set
+        :param str setting: which setting will will be set to the new value
         :param str section: only valid section is 'General' for the moment
         """
-        assert section in ['General']
-        # assert key in ['modsdirectory', 'virtualfsmountpoint', 'lastprofile']
 
         # new configurator
         config = configparser.ConfigParser()
         # load current values
-        config.read(str(self.paths.file_main))
+        # config.read(str(self.paths.file_main))
+        # populate with current values
+
 
         # validate new value
-        if key in ['modsdirectory', 'virtualfsmountpoint'] and not os.path.exists(value):
-                raise FileNotFoundError(filename=value)
-        elif key == 'lastprofile':
-            pdir = self.paths.dir_profiles / value
-            if not pdir.exists():
-                raise FileNotFoundError(filename=str(pdir))
+        if setting in [Setting.MODDIR, Setting.VFSMOUNT]:
+            p=Path(value)
+        elif setting == Setting.LASTPROFILE:
+            p = self.paths.dir_profiles / value
         else:
-            raise exceptions.InvalidConfigKeyError(key)
+            raise exceptions.InvalidConfigKeyError(setting)
+
+        d= {
+            Setting.MODDIR.value: {
+                "set": ["paths","dir_mods"],
+                "to": (lambda v: Path(v)),
+            },
+
+            Setting.VFSMOUNT.value: {
+                "set": ["paths","dir_vfs"],
+                "to": (lambda v: Path(v)),
+            },
+
+            Setting.LASTPROFILE.value: {
+                "set": ["_lastprofile"],
+                "to": (lambda v: v),
+            },
+        }
+        """:type: typing.MutableMapping[str, typing.MutableMapping[str,list[str]|(str)->Any]] """
+
+
+        if p.exists() and p.is_dir():
+            cases = list(d.keys())
+            arg = setting
+
+            case=d[setting]
+
+            subject=self
+            for a in case["set"][:-1]:
+                subject=getattr(subject, a)
+            setattr(subject, case["set"][-1], d[setting]["to"](value))
+        else:
+            raise FileNotFoundError(filename=value)
+
+        # elif setting == Setting.VFSMOUNT:
+        #         raise FileNotFoundError(filename=value)
+        #
+        # elif key == Setting.LASTPROFILE:
+        #     pdir = self.paths.dir_profiles / value
+        #     if not pdir.exists() and pdir.is_dir():
+        #         raise FileNotFoundError(filename=str(pdir))
+        # else:
+        #     raise exceptions.InvalidConfigKeyError(key)
+
+
 
         # now insert new value
-        config[section][key] = value
+        # config[section][key] = value
+        # self.currentValues[section][key]=value
+
 
         # update current state
-        self.paths.dir_mods = Path(config['General']['modsdirectory'])
-        self.paths.dir_vfs = Path(config['General']['virtualfsmountpoint'])
-        self._lastprofile = config['General']['lastprofile']
+        # self.paths.dir_mods = Path(self.currentValues['General']['modsdirectory'])
+        # self.paths.dir_vfs = Path(self.currentValues['General']['virtualfsmountpoint'])
+        # self._lastprofile = self.currentValues['General']['lastprofile']
 
         # now write the new data to disk
         # also, maybe this operation should be async? Maybe it already is?
@@ -293,6 +350,7 @@ class ConfigManager:
 
         :return: list of names
         """
+        self.LOGGER.info("Getting list of mod directories from {}".format(self.paths.dir_mods))
         return os.listdir(str(self.paths.dir_mods))
 
 
