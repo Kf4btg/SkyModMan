@@ -1,6 +1,9 @@
 from skymodman import skylog
 from .notifier import Notifier
 
+from skymodman.utils import switch
+
+
 def withlogger(cls):
     """Class decorator to add a logger to the class"""
     orig_init = cls.__init__
@@ -29,4 +32,5 @@ def counter():
         count+=1
         return count
     return inc
+
 
