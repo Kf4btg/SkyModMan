@@ -13,14 +13,21 @@ mcount = counter()
 @withlogger
 class DBManager:
 
-    _SCHEMA = """CREATE TABLE mods (
-
+    _SCHEMA = """
+        CREATE TABLE mods (
             ordinal   INTEGER unique, --mod's rank in the install order
             directory TEXT    unique, --folder on disk holding mod's files
             name      TEXT,           --user-editable label for mod
             modid     INTEGER,        --nexus id, or 0 if none
             version   TEXT,           --arbitrary, set by mod author
             enabled   INTEGER default 1  --effectively a boolean value (0,1)
+        );
+        CREATE TABLE moderrors(
+            --records any errors encountered when loading the modlist
+            mod         TEXT REFERENCES mods(directory) DEFERRABLE INITIALLY DEFERRED,
+            errortype   INT -- should be a number corresponding to the values in constants.SyncError:
+                                -- 0=not-found: mod was in list of installed mods but not found on disk
+                                -- 1=not-listed: mod was found on disk but not in installed list
         );
         CREATE TABLE hiddenfiles (
             directory TEXT REFERENCES mods(directory) DEFERRABLE INITIALLY DEFERRED,
@@ -30,12 +37,13 @@ class DBManager:
         CREATE TABLE modfiles (
                     directory TEXT REFERENCES mods(directory) DEFERRABLE INITIALLY DEFERRED,
                                         -- the mod directory under which this file resides
-                    filepath      TEXT      -- path to the file that has been hidden
-        );"""
+                    filepath      TEXT      -- path to the file
+        );
+        """
 
     # having the foreign key deferrable should prevent the db freaking out when we temporarily delete entries in 'mods' to modify the install order.
 
-    _tablenames = ("hiddenfiles", "mods")
+    _tablenames = ("hiddenfiles", "moderrors", "mods") # which tables need to be reset when profile changes
 
     __defaults = {
         "name": lambda v: v["directory"],
