@@ -48,6 +48,10 @@ class ModTableModel(QtCore.QAbstractTableModel):
         self.mods = []
         """:type: list[QModEntry]"""
 
+        # self.errors={constants.SE_NOTFOUND: {},
+        #              constants.SE_NOTLISTED: {}} # dict[int: dict[int, str]] of {err_type: {ordinal: modname}}
+        self.errors={} # dict[str, int] of {mod_directory_name: err_type}
+
         self.vheader_field = constants.COL_ORDER
         self.visible_columns = []
 
@@ -71,6 +75,7 @@ class ModTableModel(QtCore.QAbstractTableModel):
         """
         return len(constants.VISIBLE_COLS)
 
+    # noinspection PyTypeChecker
     def data(self, index, role=Qt.DisplayRole):
         """ Qt override
         Controls how the data for a cell is presented.
@@ -82,15 +87,55 @@ class ModTableModel(QtCore.QAbstractTableModel):
         All other columns just return their text value.
         """
         col = index.column()
-        if role == Qt.DisplayRole and col != constants.COL_ENABLED:
-            return self.mods[index.row()][col]
-        elif role == Qt.CheckStateRole and col == constants.COL_ENABLED:
-            return self.mods[index.row()].checkState
-        elif role == Qt.EditRole and col == constants.COL_NAME:
-            return self.mods[index.row()].name
-        elif role == Qt.ToolTipRole and col == constants.COL_NAME:
-            # return directory name as tooltip for name field
-            return self.mods[index.row()].directory
+
+        # handle errors first
+        if self.mods[index.row()].directory in self.errors:
+            for case in [lambda r, c: role == r and col == c]:
+
+
+
+        # switch on combinations of role and column type
+        for case in [lambda r,c: role==r and col==c]:
+
+            if case(Qt.CheckStateRole, constants.COL_ENABLED):
+                return self.mods[index.row()].checkState
+
+            if case(Qt.EditRole, constants.COL_NAME):
+                return self.mods[index.row()].name
+
+            if case(Qt.ToolTipRole, constants.COL_NAME):
+                # return directory name as tooltip for name field
+                return self.mods[index.row()].directory
+
+            if case(Qt.DecorationRole, constants.COL_VERSION):
+                # show an error icon if there was an issue during loading?
+                try:
+                    # self.LOGGER.debug(self.errors[self.mods[index.row()].directory])
+                    if self.errors[self.mods[index.row()].directory]==constants.SE_NOTFOUND:
+
+                        # self.LOGGER.debug(
+                        #         "mod '{}' encountered an SENF error".format(self.mods[index.row()].directory))
+                        return QtGui.QIcon.fromTheme('dialog-error')
+                    if self.errors[self.mods[index.row()].directory]==constants.SE_NOTLISTED:
+                        # self.LOGGER.debug(
+                        #     "mod '{}' encountered an SENL error".format(self.mods[index.row()].directory))
+                        return QtGui.QIcon.fromTheme('dialog-warning')
+                except KeyError:
+                    pass
+
+
+        else:
+            if role == Qt.DisplayRole and col != constants.COL_ENABLED:
+                return self.mods[index.row()][col]
+
+
+        # elif role == Qt.CheckStateRole and col == constants.COL_ENABLED:
+        #     return self.mods[index.row()].checkState
+        # elif role == Qt.EditRole and col == constants.COL_NAME:
+        #     return self.mods[index.row()].name
+        # elif role == Qt.ToolTipRole and col == constants.COL_NAME:
+        #     # return directory name as tooltip for name field
+        #     return self.mods[index.row()].directory
 
     def setData(self, index, value, role=None):
         """ Qt-override.
@@ -260,13 +305,20 @@ class ModTableModel(QtCore.QAbstractTableModel):
         self.mods = [QModEntry(**d) for d in self.manager.basicModInfo()]
 
         # get any errors from the active profile and mark them in the list
-        self.showErrors()
+        self.getErrors()
 
         self.endResetModel()
 
-    def showErrors(self):
+    def getErrors(self):
 
-        print(self.manager.getErrors(constants.SE_NOTFOUND))
+        for err in self.manager.getErrors(constants.SE_NOTFOUND):
+            # will be returned as name of mod directoru
+            # todo: probably should store this on the modentry tuple
+            self.errors[err]=constants.SE_NOTFOUND
+
+        for err in self.manager.getErrors(constants.SE_NOTLISTED):
+            self.errors[err]=constants.SE_NOTLISTED
+
 
 
     def on_doubleClick(self, index):

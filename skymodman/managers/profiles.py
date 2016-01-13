@@ -2,7 +2,7 @@ from enum import Enum
 from pathlib import Path
 from typing import List, Dict
 
-from skymodman import exceptions
+from skymodman import exceptions, constants
 from skymodman.utils import withlogger
 
 
@@ -18,10 +18,6 @@ class Profile:
         INIEDITS  = "iniedits.json"
         OVERWRITE = "overwrites.json"
         HIDDEN    = "hiddenfiles.json"
-
-    class SyncError(Enum):
-        NOTFOUND = 0
-        NOTLISTED = 1
 
     def __init__(self, profiles_dir: Path, name: str = "default", copy_profile: 'Profile' = None):
 
@@ -56,8 +52,8 @@ class Profile:
 
         # create a container to hold any issues found during
         # validation of this profile's mod list
-        self.syncErrors = {Profile.SyncError.NOTFOUND: [],
-                           Profile.SyncError.NOTLISTED: []}
+        self.syncErrors = {constants.SE_NOTFOUND: [],
+                           constants.SE_NOTLISTED: []}
 
         # self.LOGGER.debug(self.localfiles)
 
@@ -89,15 +85,17 @@ class Profile:
     def hidden_files(self):
         return self.localfiles['hiddenfiles']
 
-    def recordErrors(self, error_type: SyncError, *errors):
+    def recordErrors(self, error_type, errors):
         """
         Save any disk-sync errors discovered with the profile
         to be retrieved and handled at the appropriate time.
         Note that this method overwrites the list of errors
         for the given type; it does not append to it.
-        :param error_type: either SyncError.NOTFOUND or SyncError.NOTLISTED
+
+        :param int error_type: either constants.SE_NOTFOUND or constants.SE_NOTLISTED
+        :param errors: a list of the errors encountered
         """
-        self.syncErrors[error_type] = [e for e in errors]
+        self.syncErrors[error_type] = errors
 
 
 

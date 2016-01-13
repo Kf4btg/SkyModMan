@@ -134,12 +134,25 @@ class ModManager:
             self.DB.validateModsList(self.Config.listModFolders())
         except exceptions.FilesystemDesyncError as e:
             self.LOGGER.error(e)
+
             if e.count_not_listed:
                 # add them to the end of the list and notify the user
-                self.active_profile.recordErrors(profiles.Profile.SyncError.NOTLISTED, e.not_listed)
+
+                # record in moderrors table
+                self.DB.conn.executemany("INSERT INTO moderrors(mod, errortype) VALUES (?, ?)",
+                                         map(lambda v: (v, constants.SE_NOTLISTED), e.not_listed))
+
+                # record on profile
+                # self.active_profile.recordErrors(constants.SE_NOTLISTED, e.not_listed)
             if e.count_not_found:
                 # mark them somehow in the list display, and notify the user. Don't automatically remove from the list or anything silly like that.
-                self.active_profile.recordErrors(profiles.Profile.SyncError.NOTFOUND, e.not_found)
+
+                # record in moderrors table
+                self.DB.conn.executemany("INSERT INTO moderrors(mod, errortype) VALUES (?, ?)",
+                                         map(lambda v: (v, constants.SE_NOTFOUND), e.not_found))
+
+                # record on profile
+                # self.active_profile.recordErrors(constants.SE_NOTFOUND, e.not_found)
             return False
         return True
 
@@ -228,4 +241,15 @@ class ModManager:
 
         :param int error_type: constants.SE_NOTFOUND = 0; constants.SE_NOTLISTED = 1
         """
-        return self.active_profile.syncErrors[constants.SE_NOTFOUND]
+        # return self.active_profile.syncErrors[error_type]
+
+
+        q="""SELECT mod, ordinal from (
+            SELECT moderrors.mod as mod, moderrors.errortype as etype, mods.ordinal as ordinal
+            FROM moderrors INNER JOIN mods
+            ON mod = mods.directory
+            WHERE etype = ?)
+            ORDER BY ordinal
+        """
+
+        yield from (r['mod'] for r in self.DB.execute_(q, (error_type, )))
