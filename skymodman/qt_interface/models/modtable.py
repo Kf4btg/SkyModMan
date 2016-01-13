@@ -259,7 +259,15 @@ class ModTableModel(QtCore.QAbstractTableModel):
 
         self.mods = [QModEntry(**d) for d in self.manager.basicModInfo()]
 
+        # get any errors from the active profile and mark them in the list
+        self.showErrors()
+
         self.endResetModel()
+
+    def showErrors(self):
+
+        print(self.manager.getErrors(constants.SE_NOTFOUND))
+
 
     def on_doubleClick(self, index):
         """

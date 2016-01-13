@@ -218,3 +218,14 @@ class ModManager:
 
     def saveHiddenFiles(self):
         self.DB.saveHiddenFiles(self.active_profile.hidden_files)
+
+
+    def getErrors(self, error_type):
+        """
+        Returns any recorded errors of the specified type from the active profile.
+        'Not Found' means that a mod was in the profile's list of installed mods, but could not be found on disk.
+        'Not Listed' means that a mod was found on disk that was not previously in the list of installed mods.
+
+        :param int error_type: constants.SE_NOTFOUND = 0; constants.SE_NOTLISTED = 1
+        """
+        return self.active_profile.syncErrors[constants.SE_NOTFOUND]

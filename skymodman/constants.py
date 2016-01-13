@@ -9,6 +9,8 @@ VISIBLE_COLS = [COL_ENABLED, COL_NAME, COL_MODID, COL_VERSION]
 
 DBLCLICK_COLS = [COL_MODID, COL_VERSION]
 
+SyncError = (SE_NOTFOUND, SE_NOTLISTED) = list(range(2))
+
 # defines the names and order of fields in the database
 db_fields = ["ordinal", "directory", "name", "modid", "version", "enabled"]
 
@@ -17,7 +19,6 @@ db_fields = ["ordinal", "directory", "name", "modid", "version", "enabled"]
 # Should only be used where the order of the fields doesn't matter
 noordinal_dbfields = tuple(set(db_fields) ^ {"ordinal"})
 
-
 from enum import Enum
 
 class EnvVars(str, Enum):
@@ -25,6 +26,7 @@ class EnvVars(str, Enum):
     PROFILE = "SMM_PROFILE"
     USE_QT  = "SMM_QTGUI"
     VFS_MOUNT = "SMM_VFS"
+
 
 
 
