@@ -1,6 +1,7 @@
 from PyQt5.QtCore import Qt, QModelIndex, QAbstractItemModel, pyqtSignal
 from PyQt5.QtGui import QIcon
 from typing import List, Generator
+import itertools
 
 import os
 from pathlib import Path
@@ -145,23 +146,7 @@ class FSItem:
         :param str rel_root:
         :param typing.Callable filter: When implemented, will allow name-filtering to exclude some
         files from the results
-        :return:
         """
-        # for de in os.scandir(join(rel_root, self.path)):
-        #     # have to check this before creating the child
-        #     # or (obviously) it won't be available during init
-        #     isleaf = not isdir(de.path)
-        #     child = self.__class__(relpath(de.path, rel_root), de.name, self, isleaf)
-        #     # de.is_dir() does not work...something in the test
-        #     # file about scandir needing to 'fill d_type', but
-        #     # nothing in the docs about why it may not work...
-        #     if not isleaf:
-        #         child.loadChildren(rel_root)
-        #     self.append(child)
-
-        #Easier to use Path objects or even os.walk() than deal with all that crap,
-        # and is_dir() not working eliminates what slight
-        # performance benefit there would have been...
 
         rpath = Path(rel_root)
         path = rpath / self.path
@@ -460,11 +445,6 @@ class ModFileTreeModel(QAbstractItemModel):
         elif role == Qt.DecorationRole:
             return item.icon
 
-        # apparently the "base implementation" just calls data() again...
-        # leading to the lovely recursive loop that had me tearing my
-        # hair out. But implicitly returning None for all other roles
-        # doesn't seem to be causing a problem.
-        # return super(ModFileTreeModel, self).data(index, role)
 
     def setData(self, index, value, role=Qt.CheckStateRole):
         """Only the checkStateRole can be edited in this model.
@@ -489,7 +469,7 @@ class ModFileTreeModel(QAbstractItemModel):
             # noinspection PyUnresolvedReferences
             self.dataChanged.emit(index, last_index)
             # self.dumpsHidden()
-            self.commit()
+            self.commit() # update the db with which files are now hidden
             return True
         return super().setData(index, value, role)
 
@@ -517,51 +497,63 @@ class ModFileTreeModel(QAbstractItemModel):
     def commit(self):
         """Commit changes to database"""
         directory = os.path.basename(self.rootpath)
-        hiddens=[]
-        unhiddens=[] # we have to track this too to make sure unhidden files are removed...
-        partials=[]
+        ffalse = itertools.filterfalse
 
-        base = self.rootitem
-        while base is not None:
-            for child in base.iterchildren():
-                if child.isdir:
+        dbconn = self.manager.DB.conn
+        # here's a list of the CURRENTLY hidden filepaths for this mod, as known to the database
+        nowhiddens = [r["filepath"] for r in
+                      dbconn.execute("SELECT * FROM hiddenfiles WHERE directory=?",
+                                     (directory, ))]
 
-                    # if this is a fully-checked directory, no need to descend, so skip it
-                    if child.checkState == Qt.Checked: continue
+        # let's forget all that silly complicated stuff and do this:
+        hiddens, unhiddens = self.markHiddenStates(len(nowhiddens)>0)
 
-                    # if this is a fully-unchecked directory, recursively add all non-dir files from it
-                    if child.checkState == Qt.Unchecked:
-                        hiddens+=[(directory, unchild.path) for unchild in child.iterchildren(True) if not unchild.isdir]
-                        # and move on the next child at this level
-                        continue
+        if nowhiddens:
+            # to remove will be empty if either of now/un-hiddens is empty
+            toremove = list(filter(unhiddens.__contains__, nowhiddens))
 
-                    else: # it's partially checked, so we have to go in
-                        partials.append(child) # mark it for descension
+            # don't want to add items twice, so remove any already in db
+            # (not quite sure how that would happen...but let's play it safe for now)
+            toadd = list(ffalse(nowhiddens.__contains__, hiddens))
+        else:
+            toremove = []
+            toadd = hiddens
 
-                # otherwise, it's a file, so if it's unchecked add it to the list
+        if toremove: self.manager.DB.updatemany_("DELETE FROM hiddenfiles WHERE directory=? AND filepath=?",
+                                                 map(lambda v: (directory, v), toremove))
+        if toadd: self.manager.DB.updatemany_("INSERT INTO hiddenfiles values (?, ?)",
+                                    map(lambda v: (directory, v), toadd))
+
+
+        # with self.manager.DB.conn:
+        #     for r in self.manager.DB.conn.execute("select * from hiddenfiles"): #type: Row
+        #         print(r["directory"]," | ", r["filepath"])
+
+    def markHiddenStates(self, track_unhidden = True):
+        """Maybe straightforward is better than stupidly complex. Who'd have thought.
+
+        :param bool track_unhidden: whether we care about tracking unhidden files; For example, if the hiddenfiles database table has no entries for this mod, we wouldn't care because there's nothing to reset
+        """
+        hBasket=[]   #holds hidden files
+        uhBasket=[]  #holds non-hidden files
+
+        def _(base):
+            for child in base.iterchildren(True):
+                if child.isdir: _(child)
                 elif child.checkState == Qt.Unchecked:
-                    hiddens.append((directory, child.path))
-            try:
-                base = partials.pop(0)
-            except IndexError:
-                # list was empty, nothing left to check, so end the loop
-                base = None
+                    hBasket.append(child.path)
+                elif track_unhidden:
+                    uhBasket.append(child.path)
 
-        if hiddens:
-            #todo: should we add an extra field to hold the mod's install ordinality?
-            # could be helpful for computing file conflicts. Though it would probably have
-            # to be done using a db holding all the NON-hidden files...which could be redonk.
-            self.manager.DB.updatemany_("INSERT INTO hiddenfiles values (?, ?)", hiddens)
-
-        with self.manager.DB.conn:
-            for r in self.manager.DB.conn.execute("select * from hiddenfiles"): #type: Row
-                print(r["directory"]," | ", r["filepath"])
+        _(self.root_item)
+        return hBasket, uhBasket
 
 
-from sqlite3 import Row
 
 if __name__ == '__main__':
     from skymodman.managers import ModManager
+    from sqlite3 import Row
+
 
 
 
