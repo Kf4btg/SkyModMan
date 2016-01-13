@@ -89,13 +89,32 @@ class ModTableModel(QtCore.QAbstractTableModel):
         col = index.column()
 
         # handle errors first
-        if self.mods[index.row()].directory in self.errors:
-            for case in [lambda r, c: role == r and col == c]:
+        try:
+            err = self.errors[self.mods[index.row()].directory]
+            if col==constants.COL_VERSION:
+                for case, choices in [(lambda r: role==r, lambda d: d[err])]:
 
+                    if case(Qt.DecorationRole): return QtGui.QIcon.fromTheme(
+                                choices({constants.SE_NOTFOUND: 'dialog-error',
+                                        constants.SE_NOTLISTED: 'dialog-warning'}))
+                    
+                    if case(Qt.ToolTipRole): return choices(
+                            { constants.SE_NOTFOUND: "The data for this mod was not found"
+                                                         "in the currently configured mod directory."
+                                                         "Have the files been moved? The mod"
+                                                         "cannot be loaded if it cannot be found!",
+                              constants.SE_NOTLISTED: "This mod was found in the mods directory"
+                                                          "but has not previously been seen my this"
+                                                          "profile. Be sure that it is either set up"
+                                                          "correctly or disabled before running any tools."
+                            })
+        except KeyError:
+            # no errors for this mod
+            pass
 
 
         # switch on combinations of role and column type
-        for case in [lambda r,c: role==r and col==c]:
+        for case in [lambda r,c: role == r and col==c]:
 
             if case(Qt.CheckStateRole, constants.COL_ENABLED):
                 return self.mods[index.row()].checkState
@@ -106,23 +125,6 @@ class ModTableModel(QtCore.QAbstractTableModel):
             if case(Qt.ToolTipRole, constants.COL_NAME):
                 # return directory name as tooltip for name field
                 return self.mods[index.row()].directory
-
-            if case(Qt.DecorationRole, constants.COL_VERSION):
-                # show an error icon if there was an issue during loading?
-                try:
-                    # self.LOGGER.debug(self.errors[self.mods[index.row()].directory])
-                    if self.errors[self.mods[index.row()].directory]==constants.SE_NOTFOUND:
-
-                        # self.LOGGER.debug(
-                        #         "mod '{}' encountered an SENF error".format(self.mods[index.row()].directory))
-                        return QtGui.QIcon.fromTheme('dialog-error')
-                    if self.errors[self.mods[index.row()].directory]==constants.SE_NOTLISTED:
-                        # self.LOGGER.debug(
-                        #     "mod '{}' encountered an SENL error".format(self.mods[index.row()].directory))
-                        return QtGui.QIcon.fromTheme('dialog-warning')
-                except KeyError:
-                    pass
-
 
         else:
             if role == Qt.DisplayRole and col != constants.COL_ENABLED:
