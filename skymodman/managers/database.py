@@ -3,9 +3,10 @@ import json.decoder
 import os
 import sqlite3
 from pathlib import Path
+import functools
 # from typing import List, Tuple, Iterable
 
-from skymodman import constants
+from skymodman.constants import db_fields, SyncError
 from skymodman.utils import withlogger, counter
 
 mcount = counter()
@@ -43,7 +44,9 @@ class DBManager:
 
     # having the foreign key deferrable should prevent the db freaking out when we temporarily delete entries in 'mods' to modify the install order.
 
-    _tablenames = ("hiddenfiles", "moderrors", "mods") # which tables need to be reset when profile changes
+    _tablenames = ("modfiles", "hiddenfiles", "moderrors", "mods")
+    _profile_reset_tables = ("hiddenfiles", "mods") # which tables need to be reset when profile changes
+                                                    # (moderrors is reset every time validation is run)
 
     __defaults = {
         "name": lambda v: v["directory"],
@@ -119,6 +122,30 @@ class DBManager:
             # self._con.execute("DROP TABLE hiddenfiles, mods")
 
             # self._con.executescript(self._SCHEMA)
+
+    def resetTable(self, table_name):
+        """
+        Remove all rows from specified table
+
+        :param table_name: Jim.
+        :return: Number of rows removed
+        """
+
+        # not that I'm worried too much about security with this program...
+        # but let's see if we can't avoid some SQL-injection attacks, just out of principle
+
+        if table_name not in self._tablenames:
+            # should probably raise an error
+            return 0
+
+        q="DELETE FROM {table}".format(table=table_name)
+        with self._con:
+            return self._con.execute(q).rowcount
+
+
+    resetErrors = functools.partialmethod(resetTable, "moderrors")
+
+
 
     ##################
     ## DATA LOADING ##
@@ -222,8 +249,8 @@ class DBManager:
 
         :param Iterable[tuple] mod_list:
         """
-        query = "INSERT INTO mods(" + ", ".join(constants.db_fields) + ") VALUES ("
-        query += ", ".join("?" * len(constants.db_fields)) + ")"
+        query = "INSERT INTO mods(" + ", ".join(db_fields) + ") VALUES ("
+        query += ", ".join("?" * len(db_fields)) + ")"
         #
         # if doprint:
         #     print(query)
@@ -319,7 +346,7 @@ class DBManager:
         # we don't save the ordinal rank, so we need to get a list (set) of the
         # fields without "ordinal"
         # Using sets here is OK because field order doesn't matter when saving
-        noord_fields = set(constants.db_fields) ^ {"ordinal"}
+        noord_fields = set(db_fields) ^ {"ordinal"}
 
         # select (all fields other than ordinal)...
         query="Select " + ", ".join(noord_fields)
@@ -456,7 +483,7 @@ class DBManager:
         """generates a tuple representing a mod-entry by supplementing a possibly-incomplete mapping of keywords (`kwargs`) with default values for any missing fields"""
         row = []
 
-        for f in constants.db_fields:
+        for f in db_fields:
             row.append(kwargs.get(f,
                                 self.__defaults.get(f, lambda v: "")(kwargs)
                                 )
@@ -479,8 +506,11 @@ class DBManager:
         # us to provide useful feedback to the user about
         # problems with the mod installation
 
-        dblist = [t.directory for t in self._con.execute("Select directory from mods")]
+        # first, reset the errors table
+        num_removed = self.resetTable("moderrors")
+        self.logger.debug("Resetting mod errors table: {} entries removed".format(num_removed))
 
+        dblist = [t["directory"] for t in self._con.execute("Select directory from mods")]
         not_found = []
         not_listed = []
 
@@ -503,13 +533,25 @@ class DBManager:
             # if everything matched, this should be empty
             not_listed = installed_mods
 
-        if not_listed or not_found:
-            from skymodman.exceptions import FilesystemDesyncError
-            raise FilesystemDesyncError(not_found, not_listed)
 
-        # maybe we should return a False value along with the lists
-        # instead of raising an error...hmmm
-        return True
+        # since i believe inserting into the database is faster when done in chunks,
+        # we accumulated the errors above and will not insert them all at once
+        if not_listed:
+            with self._con:
+                self._con.executemany("INSERT INTO moderrors(mod, errortype) VALUES (?, ?)",
+                                      map(lambda v: (v, SyncError.NOTLISTED.value), not_listed)
+                                      )
+        if not_found:
+            with self._con:
+                self._con.executemany("INSERT INTO moderrors(mod, errortype) VALUES (?, ?)",
+                                     map(lambda v: (v, SyncError.NOTFOUND.value), not_found))
+
+            # from skymodman.exceptions import FilesystemDesyncError
+            # raise FilesystemDesyncError(not_found, not_listed)
+
+        # return true only if all 3 are empty/0;
+        # we return false on num_removed so that the GUI will still update its contents
+        return not (not_listed or not_found or num_removed)
 
     @staticmethod
     def jsonWrite(json_target, pyobject):
@@ -534,7 +576,7 @@ class DBManager:
         :return: Tuple containing just the values of the fields
         """
 
-        return (mcount(), ) + tuple(s[1] for s in sorted(pairs, key=lambda p: constants.db_fields.index(p[0])))
+        return (mcount(), ) + tuple(s[1] for s in sorted(pairs, key=lambda p: db_fields.index(p[0])))
 
 
 if __name__ == '__main__':

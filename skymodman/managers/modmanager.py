@@ -127,31 +127,31 @@ class ModManager:
 
         :return: True if no errors encountered, False otherwise
         """
-        try:
-            self.DB.validateModsList(self.Config.listModFolders())
-            return True
-        except exceptions.FilesystemDesyncError as e:
-            self.LOGGER.error(e)
-
-            if e.count_not_listed:
-                # add them to the end of the list and notify the user
-
-                # record in moderrors table
-                self.DB.conn.executemany("INSERT INTO moderrors(mod, errortype) VALUES (?, ?)",
-                                         map(lambda v: (v, SyncError.NOTLISTED.value), e.not_listed))
-
-                # record on profile
-                # self.active_profile.recordErrors(constants.SE_NOTLISTED, e.not_listed)
-            if e.count_not_found:
-                # mark them somehow in the list display, and notify the user. Don't automatically remove from the list or anything silly like that.
-
-                # record in moderrors table
-                self.DB.conn.executemany("INSERT INTO moderrors(mod, errortype) VALUES (?, ?)",
-                                         map(lambda v: (v, SyncError.NOTFOUND.value), e.not_found))
-
-                # record on profile
-                # self.active_profile.recordErrors(constants.SE_NOTFOUND, e.not_found)
-            return False
+        # try:
+        return self.DB.validateModsList(self.Config.listModFolders())
+            # return True
+        # except exceptions.FilesystemDesyncError as e:
+        #     self.LOGGER.error(e)
+        #
+        #     if e.count_not_listed:
+        #         # add them to the end of the list and notify the user
+        #
+        #         # record in moderrors table
+        #         self.DB.conn.executemany("INSERT INTO moderrors(mod, errortype) VALUES (?, ?)",
+        #                                  map(lambda v: (v, SyncError.NOTLISTED.value), e.not_listed))
+        #
+        #         # record on profile
+        #         # self.active_profile.recordErrors(constants.SE_NOTLISTED, e.not_listed)
+        #     if e.count_not_found:
+        #         # mark them somehow in the list display, and notify the user. Don't automatically remove from the list or anything silly like that.
+        #
+        #         # record in moderrors table
+        #         self.DB.conn.executemany("INSERT INTO moderrors(mod, errortype) VALUES (?, ?)",
+        #                                  map(lambda v: (v, SyncError.NOTFOUND.value), e.not_found))
+        #
+        #         # record on profile
+        #         # self.active_profile.recordErrors(constants.SE_NOTFOUND, e.not_found)
+        #     return False
 
     def basicModInfo(self):
         """

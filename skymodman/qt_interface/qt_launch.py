@@ -162,16 +162,18 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         :return:
         """
-        moddir = QFileDialog.getExistingDirectory(self, "Choose Directory Containing Installed Mods", QDir.homePath())
+        moddir = QFileDialog.getExistingDirectory(self, "Choose Directory Containing Installed Mods", self.Manager.Config['dir_mods'])
 
         # update config with new path
         if checkPath(moddir):
             self.Manager.Config.updateConfig(moddir, INIKey.MODDIR, INISection.GENERAL)
 
 
-        # and now...wait what now.
-        # i guess we reverify and reload the mods.
-        if notself.Manager.validateModInstalls()
+            # and now...wait what now.
+            # i guess we reverify and reload the mods.
+            if not self.Manager.validateModInstalls():
+                self.mod_table.model().reloadErrorsOnly()
+
 
 
 

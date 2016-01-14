@@ -40,20 +40,6 @@ def checkPath(path, exp_user=False):
     :param exp_user:
     :return:
     """
-
-
     if exp_user:
         return path and exists(expanduser(path))
     return path and exists(path)
-
-from itertools import starmap, repeat
-# Thanks, Python docs!
-def repeatfunc(func, times=None, *args):
-    """Repeat calls to func with specified arguments.
-
-    Example:  repeatfunc(random.random)
-    """
-    if times is None:
-        return starmap(func, repeat(args))
-    return starmap(func, repeat(args, times))
-

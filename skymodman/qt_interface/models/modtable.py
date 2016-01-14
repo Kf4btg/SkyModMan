@@ -313,7 +313,7 @@ class ModTableModel(QtCore.QAbstractTableModel):
         self.endResetModel()
 
     def getErrors(self):
-
+        self.errors = {} # reset
         for err in self.manager.getErrors(SyncError.NOTFOUND):
             # will be returned as name of mod directoru
             # todo: probably should store this on the modentry tuple
@@ -322,6 +322,10 @@ class ModTableModel(QtCore.QAbstractTableModel):
         for err in self.manager.getErrors(SyncError.NOTLISTED):
             self.errors[err]=SyncError.NOTLISTED
 
+    def reloadErrorsOnly(self):
+        self.beginResetModel()
+        self.getErrors()
+        self.endResetModel()
 
 
     def on_doubleClick(self, index):
