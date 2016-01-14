@@ -1,10 +1,7 @@
 from skymodman import exceptions, ModEntry
 from skymodman.utils import withlogger
 from skymodman.managers import config, database, profiles
-from skymodman import constants
-
-from typing import List
-
+from skymodman.constants import SyncError, db_fields
 
 @withlogger
 class ModManager:
@@ -20,7 +17,7 @@ class ModManager:
         if it is called multiple times.  Makes this class a singleton"""
         if cls._instance is not None:
             return cls._instance
-        self = object.__new__(cls, *args, **kwargs)
+        self = object.__new__(cls, *args)
         cls._instance = self
         return self
 
@@ -140,7 +137,7 @@ class ModManager:
 
                 # record in moderrors table
                 self.DB.conn.executemany("INSERT INTO moderrors(mod, errortype) VALUES (?, ?)",
-                                         map(lambda v: (v, constants.SE_NOTLISTED), e.not_listed))
+                                         map(lambda v: (v, SyncError.NOTLISTED.value), e.not_listed))
 
                 # record on profile
                 # self.active_profile.recordErrors(constants.SE_NOTLISTED, e.not_listed)
@@ -149,7 +146,7 @@ class ModManager:
 
                 # record in moderrors table
                 self.DB.conn.executemany("INSERT INTO moderrors(mod, errortype) VALUES (?, ?)",
-                                         map(lambda v: (v, constants.SE_NOTFOUND), e.not_found))
+                                         map(lambda v: (v, SyncError.NOTFOUND.value), e.not_found))
 
                 # record on profile
                 # self.active_profile.recordErrors(constants.SE_NOTFOUND, e.not_found)
@@ -184,7 +181,7 @@ class ModManager:
 
         # a generator that creates tuples of values by sorting the values of the
         # modentry according the order defined in constants.db_fields
-        dbrowgen = (tuple([getattr(m, f) for f in sorted(m._fields, key=lambda fld: constants.db_fields.index(fld)) ] ) for m in changes)
+        dbrowgen = (tuple([getattr(m, f) for f in sorted(m._fields, key=lambda fld: db_fields.index(fld)) ] ) for m in changes)
 
         # using the context manager may allow deferrable foreign to go unsatisfied for a moment
         with self.DB.conn:
@@ -192,8 +189,8 @@ class ModManager:
             self.DB.conn.executemany("DELETE FROM mods WHERE ordinal=?", rows_to_delete)
 
             # and reinsert
-            query = "INSERT INTO mods(" + ", ".join(constants.db_fields) + ") VALUES ("
-            query += ", ".join("?" * len(constants.db_fields)) + ")"
+            query = "INSERT INTO mods(" + ", ".join(db_fields) + ") VALUES ("
+            query += ", ".join("?" * len(db_fields)) + ")"
 
             self.DB.conn.executemany(query, dbrowgen)
 
@@ -239,9 +236,8 @@ class ModManager:
         'Not Found' means that a mod was in the profile's list of installed mods, but could not be found on disk.
         'Not Listed' means that a mod was found on disk that was not previously in the list of installed mods.
 
-        :param int error_type: constants.SE_NOTFOUND = 0; constants.SE_NOTLISTED = 1
+        :param error_type: constants.SyncError
         """
-        # return self.active_profile.syncErrors[error_type]
 
 
         q="""SELECT mod, ordinal from (
@@ -252,4 +248,4 @@ class ModManager:
             ORDER BY ordinal
         """
 
-        yield from (r['mod'] for r in self.DB.execute_(q, (error_type, )))
+        yield from (r['mod'] for r in self.DB.execute_(q, (error_type.value, )))

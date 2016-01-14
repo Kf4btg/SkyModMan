@@ -3,7 +3,7 @@ import os
 import sys
 
 from skymodman.managers import ModManager
-from skymodman import constants
+from skymodman import constants, skylog
 
 
 def main():
@@ -15,19 +15,19 @@ def main():
 
 USE_QT_GUI = os.getenv(constants.EnvVars.USE_QT.value, True)
 
-
-def myexcepthook(type, value, tb):
-    import traceback
-    from pygments import highlight
-    from pygments.lexers import get_lexer_by_name
-    from pygments.formatters.terminal import TerminalFormatter
-
-    tbtext = ''.join(traceback.format_exception(type, value, tb))
-    lexer = get_lexer_by_name("pytb", stripall=True)
-    formatter = TerminalFormatter()
-    sys.stderr.write(highlight(tbtext, lexer, formatter))
-
-    sys.exit()
+#
+# def myexcepthook(type, value, tb):
+#     import traceback
+#     from pygments import highlight
+#     from pygments.lexers import get_lexer_by_name
+#     from pygments.formatters.terminal import TerminalFormatter
+#
+#     tbtext = ''.join(traceback.format_exception(type, value, tb))
+#     lexer = get_lexer_by_name("pytb", stripall=True)
+#     formatter = TerminalFormatter()
+#     sys.stderr.write(highlight(tbtext, lexer, formatter))
+#
+#     sys.exit()
 
 
 if __name__ == '__main__':
@@ -44,10 +44,21 @@ if __name__ == '__main__':
         MM = ModManager()
 
         w = ModManagerWindow(manager=MM)
+        # noinspection PyArgumentList
         w.resize(QGuiApplication.primaryScreen().availableSize()*3/5)
         w.show()
 
-        sys.exit(app.exec_())
+        ret = None
+        try:
+            ret = app.exec_()
+        except:
+            skylog.stop_listener()
+            MM.DB.shutdown()
+            raise
+        finally:
+            if ret is not None:
+                sys.exit(ret)
+
     else:
         main()
 

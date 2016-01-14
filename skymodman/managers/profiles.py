@@ -2,7 +2,8 @@ from enum import Enum
 from pathlib import Path
 from typing import List, Dict
 
-from skymodman import exceptions, constants
+from skymodman import exceptions
+from skymodman.constants import SyncError as SE
 from skymodman.utils import withlogger
 
 
@@ -19,7 +20,14 @@ class Profile:
         OVERWRITE = "overwrites.json"
         HIDDEN    = "hiddenfiles.json"
 
-    def __init__(self, profiles_dir: Path, name: str = "default", copy_profile: 'Profile' = None):
+    def __init__(self, profiles_dir, name="default", copy_profile=None):
+        """
+
+        :param Path profiles_dir:
+        :param str name:
+        :param Profile copy_profile:
+        :return:
+        """
 
         self._name = name
 
@@ -52,8 +60,8 @@ class Profile:
 
         # create a container to hold any issues found during
         # validation of this profile's mod list
-        self.syncErrors = {constants.SE_NOTFOUND: [],
-                           constants.SE_NOTLISTED: []}
+        self.syncErrors = {SE.NOTFOUND: [],
+                           SE.NOTLISTED: []}
 
         # self.LOGGER.debug(self.localfiles)
 
@@ -92,7 +100,7 @@ class Profile:
         Note that this method overwrites the list of errors
         for the given type; it does not append to it.
 
-        :param int error_type: either constants.SE_NOTFOUND or constants.SE_NOTLISTED
+        :param error_type: either constants.SyncError.NOTFOUND or constants.SE.NOTLISTED
         :param errors: a list of the errors encountered
         """
         self.syncErrors[error_type] = errors
@@ -113,10 +121,10 @@ class ProfileManager:
     __cache = {} # type: Dict[str, Profile]
 
 
-    def __init__(self, manager, directory: Path):
+    def __init__(self, manager, directory):
         """
-        :param manager: reference to ModManager
-        :param directory: the application's 'profiles' storage directory
+        :param skymodman.managers.ModManager manager: reference to ModManager
+        :param Path directory: the application's 'profiles' storage directory
         """
         super().__init__()
         self.manager = manager
@@ -147,20 +155,27 @@ class ProfileManager:
     ################
 
     @property
-    def active_profile(self) -> Profile:
+    def active_profile(self):
         if self._current_profile is None:
             self._current_profile = self.loadProfile("default")
         return self._current_profile
 
     @property
-    def profile_names(self) -> List[str]:
+    def profile_names(self):
         return self._available_profiles
 
     #######################
     ## Choosing Profiles ##
     #######################
 
-    def loadProfile(self, profilename, copy_from:Profile = None):
+    def loadProfile(self, profilename, copy_from = None):
+        """
+
+        :param str profilename:
+        :param Profile copy_from:
+            if the named Profile does not exist, a new one will be created with that name. If `copy_from` is specified and is the name of a currently existing profile, settings will be copied from that profile to the new one rather than creating the typical default configuration files.
+        :return:
+        """
         # self.LOGGER.info("Loading profile '{}'.".format(profilename))
 
         if profilename in self.__cache:
@@ -170,7 +185,12 @@ class ProfileManager:
 
         return self.__cache[profilename]
 
-    def setActiveProfile(self, profilename: str):
+    def setActiveProfile(self, profilename):
+        """
+
+        :param str profilename:
+        :return: the newly created Profile object
+        """
         if self._current_profile is None or \
             self._current_profile.name != profilename:
 
@@ -200,14 +220,17 @@ class ProfileManager:
     ## Adding/Removing ##
     #####################
 
-    def newProfile(self, profile_name, copy_from: Profile = None) -> Profile:
+    def newProfile(self, profile_name, copy_from = None) -> Profile:
         """
         Create a new folder in the configured profiles directory and generate
         empty placeholder config-files within it. If an existing Profile is
         specified in `copy_from`, config files are duplicated from that
         Profile directory into the the new one, rather than being created empty.
-        :param profile_name: name of new profile. Must not already exist or an Exception will be raised
-        :param copy_from: if not None, copy settings from the specified pre-existing profile to the newly created one
+
+        :param str profile_name:
+            name of new profile. Must not already exist or an Exception will be raised
+        :param Profile copy_from:
+            if not None, copy settings from the specified pre-existing profile to the newly created one
         :return: the Profile object for the newly created profile
         """
         new_pdir = self._profiles_dir / profile_name
@@ -227,9 +250,12 @@ class ProfileManager:
     def deleteProfile(self, profile, confirm = False):
         """
         Removes the folder and all config files for the specified profile.
-        :param profile: either a Profile object or the name of an existing profile
-        :param confirm: must pass true for this to work. This option will likely be removed;
-        it's mainly to prevent me from doing stupid things during development
+
+        :param profile:
+            either a Profile object or the name of an existing profile
+        :param confirm:
+            must pass true for this to work. This option will likely be removed;
+            it's mainly to prevent me from doing stupid things during development
         :return:
         """
 

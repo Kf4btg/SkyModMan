@@ -4,15 +4,19 @@ from PyQt5.QtCore import (Qt,
                           pyqtSignal,
                           pyqtSlot,
                           QStringListModel,
-                          QModelIndex)
+                          QModelIndex,
+                          QDir,
+                          QStandardPaths)
 from PyQt5.QtGui import QGuiApplication
 from PyQt5.QtWidgets import (QApplication,
                              QMainWindow,
                              QDialogButtonBox,
-                             QMessageBox)
+                             QMessageBox,
+                             QFileDialog)
 
 
-from skymodman import skylog, constants
+from skymodman import skylog
+from skymodman.constants import Tab as TAB
 from skymodman.qt_interface.qt_manager_ui import Ui_MainWindow
 from skymodman.qt_interface.widgets import message, NewProfileDialog
 from skymodman.qt_interface.models import ProfileListModel, ModTableView, ModFileTreeModel
@@ -70,7 +74,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         #init mod table
         self.mod_table = ModTableView(parent=self, manager=self.Manager)
 
-        # connect the buttons
+        #########################
+        ## connect the buttons ##
 
         # use a dialog-button-box for save/cancel
         # have to specify by standard button type
@@ -81,10 +86,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.mod_up_button  .clicked.connect(self.emitMoveModUpOne)
         self.mod_down_button.clicked.connect(self.emitMoveModDownOne)
 
-
-        # connect the actions
+        #########################
+        ## connect the actions ##
         self.action_Quit         .triggered.connect(self.safeQuitApp)
         self.action_Install_Fomod.triggered.connect(self.loadFomod)
+        self.actionChoose_Mod_Folder.triggered.connect(self.chooseModFolder)
 
         # keep track of changes made to mod list
         self.file_tree_modified = False
@@ -107,25 +113,28 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     def Manager(self):
         return self._manager
 
+    ###################
+    # ACTION HANDLERS #
+    ###################
+
     def updateUI(self, *args):
         if self.loaded_fomod is None:
             self.fomod_tab.setEnabled(False)
 
         curtab = self.manager_tabs.currentIndex()
 
-        self.save_cancel_btnbox.setVisible(curtab in [constants.TAB_MODLIST, constants.TAB_FILETREE])
+        self.save_cancel_btnbox.setVisible(curtab in [TAB.MODLIST, TAB.FILETREE])
 
         # if self.save_cancel_btnbox.isVisible():
         #     self.save_cancel_btnbox.setEnabled(
-        #         (curtab == constants.TAB_MODLIST and len(self._modified_cells)>0)
-        #     or  (curtab == constants.TAB_FILETREE and self.file_tree_modified)
+        #         (curtab == TAB.MODLIST and len(self._modified_cells)>0)
+        #     or  (curtab == TAB.FILETREE and self.file_tree_modified)
         #     )
 
-        self.next_button.setVisible(curtab == constants.TAB_INSTALLER)
+        self.next_button.setVisible(curtab == TAB.INSTALLER)
 
     def loadFomod(self):
-        from PyQt5.QtCore import QDir, QStandardPaths
-        from PyQt5.QtWidgets import QFileDialog
+
         # mimes = [m for m in QImageReader.supportedMimeTypes()]
         # print(mimes)
         # mimes = ['application/x-7z-compressed']
@@ -147,6 +156,14 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             # todo: maybe run this method in a separate thread? at least the dialog
             # todo: setup 2nd tab with data from xml file and begin installation process
             # todo: support loading actual fomod archives. (7z, rar, zip, etc.)
+
+    def chooseModFolder(self):
+        moddir = QFileDialog.getExistingDirectory(self, "Chose Directory Containing Installed Mods", QDir.homePath())
+
+        # if moddir:
+        #     self.Manager.Config.updateConfig(moddir, )
+
+
 
 
     def getTab(self, index:int):

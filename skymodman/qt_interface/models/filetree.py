@@ -1,6 +1,6 @@
 from PyQt5.QtCore import Qt, QModelIndex, QAbstractItemModel, pyqtSignal
 from PyQt5.QtGui import QIcon
-from typing import List, Generator
+from typing import List
 import itertools
 
 import os

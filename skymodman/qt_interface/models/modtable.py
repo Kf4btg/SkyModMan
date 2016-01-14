@@ -2,7 +2,8 @@ from PyQt5 import QtCore, QtWidgets, QtGui
 from PyQt5.QtWidgets import QHeaderView
 from PyQt5.QtCore import Qt, pyqtSignal, QItemSelection
 
-from skymodman import constants, ModEntry
+from skymodman import ModEntry
+from skymodman.constants import (Column as COL, SyncError, DBLCLICK_COLS, VISIBLE_COLS)
 from skymodman.utils import withlogger
 
 class QModEntry(ModEntry):
@@ -48,11 +49,11 @@ class ModTableModel(QtCore.QAbstractTableModel):
         self.mods = []
         """:type: list[QModEntry]"""
 
-        # self.errors={constants.SE_NOTFOUND: {},
-        #              constants.SE_NOTLISTED: {}} # dict[int: dict[int, str]] of {err_type: {ordinal: modname}}
+        # self.errors={SyncError.NOTFOUND: {},
+        #              SyncError.NOTLISTED: {}} # dict[int: dict[int, str]] of {err_type: {ordinal: modname}}
         self.errors={} # dict[str, int] of {mod_directory_name: err_type}
 
-        self.vheader_field = constants.COL_ORDER
+        self.vheader_field = COL.ORDER
         self.visible_columns = []
 
         self.modified_rows = {}
@@ -73,7 +74,7 @@ class ModTableModel(QtCore.QAbstractTableModel):
         """
         At the moment, returns 4. (Enabled, Name, ID, Version)
         """
-        return len(constants.VISIBLE_COLS)
+        return len(VISIBLE_COLS)
 
     # noinspection PyTypeChecker
     def data(self, index, role=Qt.DisplayRole):
@@ -91,19 +92,19 @@ class ModTableModel(QtCore.QAbstractTableModel):
         # handle errors first
         try:
             err = self.errors[self.mods[index.row()].directory]
-            if col==constants.COL_VERSION:
+            if col==COL.VERSION:
                 for case, choices in [(lambda r: role==r, lambda d: d[err])]:
 
                     if case(Qt.DecorationRole): return QtGui.QIcon.fromTheme(
-                                choices({constants.SE_NOTFOUND: 'dialog-error',
-                                        constants.SE_NOTLISTED: 'dialog-warning'}))
+                                choices({SyncError.NOTFOUND: 'dialog-error',
+                                        SyncError.NOTLISTED: 'dialog-warning'}))
                     
                     if case(Qt.ToolTipRole): return choices(
-                            { constants.SE_NOTFOUND: "The data for this mod was not found"
+                            { SyncError.NOTFOUND: "The data for this mod was not found"
                                                          "in the currently configured mod directory."
                                                          "Have the files been moved? The mod"
                                                          "cannot be loaded if it cannot be found!",
-                              constants.SE_NOTLISTED: "This mod was found in the mods directory"
+                              SyncError.NOTLISTED: "This mod was found in the mods directory"
                                                           "but has not previously been seen my this"
                                                           "profile. Be sure that it is either set up"
                                                           "correctly or disabled before running any tools."
@@ -116,26 +117,26 @@ class ModTableModel(QtCore.QAbstractTableModel):
         # switch on combinations of role and column type
         for case in [lambda r,c: role == r and col==c]:
 
-            if case(Qt.CheckStateRole, constants.COL_ENABLED):
+            if case(Qt.CheckStateRole, COL.ENABLED):
                 return self.mods[index.row()].checkState
 
-            if case(Qt.EditRole, constants.COL_NAME):
+            if case(Qt.EditRole, COL.NAME):
                 return self.mods[index.row()].name
 
-            if case(Qt.ToolTipRole, constants.COL_NAME):
+            if case(Qt.ToolTipRole, COL.NAME):
                 # return directory name as tooltip for name field
                 return self.mods[index.row()].directory
 
         else:
-            if role == Qt.DisplayRole and col != constants.COL_ENABLED:
+            if role == Qt.DisplayRole and col != COL.ENABLED:
                 return self.mods[index.row()][col]
 
 
-        # elif role == Qt.CheckStateRole and col == constants.COL_ENABLED:
+        # elif role == Qt.CheckStateRole and col == COL.ENABLED:
         #     return self.mods[index.row()].checkState
-        # elif role == Qt.EditRole and col == constants.COL_NAME:
+        # elif role == Qt.EditRole and col == COL.NAME:
         #     return self.mods[index.row()].name
-        # elif role == Qt.ToolTipRole and col == constants.COL_NAME:
+        # elif role == Qt.ToolTipRole and col == COL.NAME:
         #     # return directory name as tooltip for name field
         #     return self.mods[index.row()].directory
 
@@ -150,11 +151,11 @@ class ModTableModel(QtCore.QAbstractTableModel):
         :param role: we handle Qt.CheckStateRole for the Enabled col and Qt.EditRole for the name col
         :return:
         """
-        if role==Qt.CheckStateRole and index.column() == constants.COL_ENABLED:
+        if role==Qt.CheckStateRole and index.column() == COL.ENABLED:
             self.toggleEnabledState(index.row())
             return True
 
-        elif role == Qt.EditRole and index.column() == constants.COL_NAME:
+        elif role == Qt.EditRole and index.column() == COL.NAME:
             row = index.row()
             mod = self.mods[row]
             new_name = value.strip() # remove trailing/leading space
@@ -264,7 +265,7 @@ class ModTableModel(QtCore.QAbstractTableModel):
         """
         col = index.column()
 
-        if col == constants.COL_ENABLED:
+        if col == COL.ENABLED:
             return Qt.ItemIsEnabled | Qt.ItemIsUserCheckable | Qt.ItemIsSelectable
 
         # _flags = Qt.NoItemFlags #start with nothing
@@ -274,11 +275,11 @@ class ModTableModel(QtCore.QAbstractTableModel):
         _flags = Qt.ItemIsEnabled
 
         # mod id and version are selectable
-        if col in [constants.COL_MODID, constants.COL_VERSION]:
+        if col in [COL.MODID, COL.VERSION]:
             return _flags | Qt.ItemIsSelectable
 
         # name is selectable and editable
-        if col == constants.COL_NAME:
+        if col == COL.NAME:
             return _flags | Qt.ItemIsSelectable | Qt.ItemIsEditable
 
         return _flags
@@ -313,13 +314,13 @@ class ModTableModel(QtCore.QAbstractTableModel):
 
     def getErrors(self):
 
-        for err in self.manager.getErrors(constants.SE_NOTFOUND):
+        for err in self.manager.getErrors(SyncError.NOTFOUND):
             # will be returned as name of mod directoru
             # todo: probably should store this on the modentry tuple
-            self.errors[err]=constants.SE_NOTFOUND
+            self.errors[err]=SyncError.NOTFOUND
 
-        for err in self.manager.getErrors(constants.SE_NOTLISTED):
-            self.errors[err]=constants.SE_NOTLISTED
+        for err in self.manager.getErrors(SyncError.NOTLISTED):
+            self.errors[err]=SyncError.NOTLISTED
 
 
 
@@ -331,7 +332,7 @@ class ModTableModel(QtCore.QAbstractTableModel):
         :param QtCore.QModelIndex index:
             corresponding to the cell that was just clicked.
         """
-        if not index.isValid() or index.column() not in constants.DBLCLICK_COLS: return
+        if not index.isValid() or index.column() not in DBLCLICK_COLS: return
 
         self.toggleEnabledState(index.row())
 
@@ -527,7 +528,7 @@ class ModTableView(QtWidgets.QTableView):
         self.setModel(ModTableModel(parent= self, manager= self.manager))
         hheader = self.horizontalHeader()  # type: QHeaderView
         hheader.setHighlightSections(False)
-        hheader.setSectionResizeMode(constants.COL_NAME, QHeaderView.Stretch)
+        hheader.setSectionResizeMode(COL.NAME, QHeaderView.Stretch)
         hheader.setDefaultAlignment(Qt.AlignLeft)
 
         # f = hheader.font() #type: QtGui.QFont

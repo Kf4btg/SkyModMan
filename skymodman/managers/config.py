@@ -4,7 +4,9 @@ from pathlib import Path
 from enum import Enum
 from copy import deepcopy
 
-from skymodman import skylog, utils, exceptions, constants
+from skymodman import utils, exceptions
+
+from skymodman.constants import EnvVars
 
 __myname = "skymodman"
 
@@ -123,7 +125,7 @@ class ConfigManager:
         ######################################################################
         # first, the mods dir
 
-        env_md = os.getenv(constants.EnvVars.MOD_DIR)
+        env_md = os.getenv(EnvVars.MOD_DIR)
         if env_md and os.path.exists(env_md):
             self.paths.dir_mods = Path(env_md)
         else:
@@ -135,7 +137,7 @@ class ConfigManager:
         ######################################################################
         # then, which profile is loaded on boot
 
-        env_lpname = os.getenv(constants.EnvVars.PROFILE)
+        env_lpname = os.getenv(EnvVars.PROFILE)
 
         # see if the named profile exists in the profiles dir
         if env_lpname:
@@ -155,7 +157,7 @@ class ConfigManager:
         ######################################################################
         # now check env for vfs mount
 
-        env_vfs = os.getenv(constants.EnvVars.VFS_MOUNT)
+        env_vfs = os.getenv(EnvVars.VFS_MOUNT)
 
         # check to see if the given path is a valid mount point
         # todo: this is assuming that the vfs has already been mounted manually; I'd much rather do it automatically, so I really should just check that the given directory is empty
@@ -323,9 +325,3 @@ class ConfigManager:
         return os.listdir(str(self.paths.dir_mods))
 
 
-if __name__ == '__main__':
-    # getConfig()
-
-    cm = ConfigManager()
-
-    skylog.stop_listener()
