@@ -1,5 +1,9 @@
 from enum import Enum, IntEnum
 
+
+# using IntEnums here because they are interacting with code I can't change (Qt)
+# which sends ints around quite a bit. Rather than having to look up the enum
+# value each time, I think it's better just to have them comparable to ints.
 class Tab(IntEnum):
     MODLIST, FILETREE, INSTALLER = range(3)
 
@@ -18,6 +22,18 @@ class EnvVars(str, Enum):
     PROFILE = "SMM_PROFILE"
     USE_QT  = "SMM_QTGUI"
     VFS_MOUNT = "SMM_VFS"
+
+# labels for the sections and settings in the main INI config file.
+# making these strEnums because I tire of typing .value over and over...
+class INISection(str, Enum):
+    """Only one section at the moment"""
+    DEFAULT = "General"
+    GENERAL = DEFAULT
+
+class INIKey(str, Enum):
+    LASTPROFILE = "lastprofile"
+    MODDIR = "modsdirectory"
+    VFSMOUNT = "virtualfsmountpoint"
 
 
 

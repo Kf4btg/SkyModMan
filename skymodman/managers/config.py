@@ -1,12 +1,11 @@
 import configparser
 import os
 from pathlib import Path
-from enum import Enum
 from copy import deepcopy
 
 from skymodman import utils, exceptions
 
-from skymodman.constants import EnvVars
+from skymodman.constants import (EnvVars, INIKey, INISection)
 
 __myname = "skymodman"
 
@@ -18,16 +17,11 @@ __myname = "skymodman"
 #         self.__dict__ = kwargs
 
 
-# making these strEnums because I tire of typing .value over and over...
-class Section(str, Enum):
-    """Only one section at the moment"""
-    DEFAULT = "General"
-    GENERAL = DEFAULT
-
-class Key(str, Enum):
-    LASTPROFILE = "lastprofile"
-    MODDIR = "modsdirectory"
-    VFSMOUNT = "virtualfsmountpoint"
+# bind these values locally, since we need the actual string more often than not here
+_S_GENERAL = INISection.GENERAL.value
+_K_LASTPRO = INIKey.LASTPROFILE.value
+_K_MODDIR  = INIKey.MODDIR.value
+_K_VFSMNT  = INIKey.VFSMOUNT.value
 
 
 class ConfigPaths:
@@ -62,10 +56,10 @@ class ConfigManager:
     __APPNAME = "skymodman"
 
     __DEFAULT_CONFIG={
-        Section.GENERAL.value: {
-            Key.MODDIR.value: "##DATADIR##/mods",
-            Key.VFSMOUNT.value: "##DATADIR##/skyrimfs",
-            Key.LASTPROFILE.value: __DEFAULT_PROFILE
+        _S_GENERAL: {
+            _K_MODDIR: "##DATADIR##/mods",
+            _K_VFSMNT: "##DATADIR##/skyrimfs",
+            _K_LASTPRO: __DEFAULT_PROFILE
         }
     }
 
@@ -129,7 +123,7 @@ class ConfigManager:
         if env_md and os.path.exists(env_md):
             self.paths.dir_mods = Path(env_md)
         else:
-            self.paths.dir_mods = Path(config[Section.GENERAL][Key.MODDIR])
+            self.paths.dir_mods = Path(config[_S_GENERAL][_K_MODDIR])
 
 
 
@@ -149,7 +143,7 @@ class ConfigManager:
 
         # if it wasn't set above, get the value from config file
         if not self._lastprofile:
-            self._lastprofile = config[Section.GENERAL][Key.LASTPROFILE]
+            self._lastprofile = config[_S_GENERAL][_K_LASTPRO]
 
 
 
@@ -164,12 +158,12 @@ class ConfigManager:
         if env_vfs and os.path.exists(env_vfs) and os.path.ismount(env_vfs):
             self.paths.dir_vfs = Path(env_vfs)
         else:
-            self.paths.dir_vfs = Path(config[Section.GENERAL][Key.VFSMOUNT])
+            self.paths.dir_vfs = Path(config[_S_GENERAL][_K_VFSMNT])
 
         # update config-file mirror
-        self.currentValues[Section.GENERAL.value][Key.MODDIR.value] = str(self.paths.dir_mods)
-        self.currentValues[Section.GENERAL.value][Key.VFSMOUNT.value] = str(self.paths.dir_vfs)
-        self.currentValues[Section.GENERAL.value][Key.LASTPROFILE.value] = self._lastprofile
+        self.currentValues[_S_GENERAL][_K_MODDIR] = str(self.paths.dir_mods)
+        self.currentValues[_S_GENERAL][_K_VFSMNT] = str(self.paths.dir_vfs)
+        self.currentValues[_S_GENERAL][_K_LASTPRO] = self._lastprofile
 
 
 
@@ -262,7 +256,7 @@ class ConfigManager:
             config.write(configfile)
 
 
-    def updateConfig(self, value, key, section=Section.DEFAULT.value):
+    def updateConfig(self, value, key, section=_S_GENERAL):
         """
         Update saved configuration file
 
@@ -282,10 +276,10 @@ class ConfigManager:
         config.read(str(self.paths.file_main))
 
         # validate new value
-        if key in [Key.MODDIR, Key.VFSMOUNT]:
+        if key in [_K_MODDIR, _K_VFSMNT]:
             p=Path(value)
 
-        elif key == Key.LASTPROFILE:
+        elif key == _K_LASTPRO:
             p = self.paths.dir_profiles / value
         else:
             raise exceptions.InvalidConfigKeyError(key)
@@ -293,11 +287,11 @@ class ConfigManager:
         if p.exists() and p.is_dir():
 
             for case in [key.__eq__]:
-                if case(Key.MODDIR):
+                if case(_K_MODDIR):
                     self.paths.dir_mods = p
-                elif case(Key.VFSMOUNT):
+                elif case(_K_VFSMNT):
                     self.paths.dir_vfs = p
-                elif case(Key.LASTPROFILE):
+                elif case(_K_LASTPRO):
                     self._lastprofile = value
 
             else: # should always run since we didn't use 'break' above
