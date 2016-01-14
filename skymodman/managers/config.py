@@ -272,11 +272,17 @@ class ConfigManager:
         # new configurator
         config = configparser.ConfigParser()
         # populate with current values
-        config.read_dict(self.currentValues)
+        # config.read_dict(self.currentValues)
+
+        # because we don't want to overwrite saved config values with
+        # session-temporary values (e.g. from ENV vars or cli-options),
+        # we read the saved data from disk again.
+        config.read(str(self.paths.file_main))
 
         # validate new value
         if key in [Key.MODDIR, Key.VFSMOUNT]:
             p=Path(value)
+
         elif key == Key.LASTPROFILE:
             p = self.paths.dir_profiles / value
         else:
@@ -284,16 +290,18 @@ class ConfigManager:
 
         if p.exists() and p.is_dir():
 
-            for case in [lambda k: k==key]:
+            for case in [key.__eq__]:
                 if case(Key.MODDIR):
                     self.paths.dir_mods = p
                 elif case(Key.VFSMOUNT):
                     self.paths.dir_vfs = p
                 elif case(Key.LASTPROFILE):
                     self._lastprofile = value
-            else:
+
+            else: # should always run since we didn't use 'break' above
                 # now insert new value into saved config
                 config[section][key] = value
+                self.currentValues[section][key] = value
 
         else:
             raise FileNotFoundError(filename=value)
