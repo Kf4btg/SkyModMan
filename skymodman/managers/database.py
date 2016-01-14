@@ -465,7 +465,11 @@ class DBManager:
 
     def validateModsList(self, installed_mods):
         """
-        Compare the database's list of mods against a list of the folders in the installed-mods directory. Handle discrepancies accordingly.
+        Compare the database's list of mods against a list of the folders in the installed-mods directory.
+        Handle discrepancies by raising an Exception object containing two separate lists:
+
+            * Mods Not Listed: for mod directories found on disk but not previously listed in the user's list of installed mods
+            * Mods Not Found: for mods listed in the list of installed mods whose installation folders were not found on disk.
 
         :param collections.abc.MutableSequence[str] installed_mods:
         :return:
@@ -475,7 +479,7 @@ class DBManager:
         # us to provide useful feedback to the user about
         # problems with the mod installation
 
-        dblist = [t[0] for t in self._con.execute("Select directory from mods")]
+        dblist = [t.directory for t in self._con.execute("Select directory from mods")]
 
         not_found = []
         not_listed = []

@@ -1,9 +1,6 @@
 from skymodman import skylog
 from .notifier import Notifier
 
-from skymodman.utils import switch
-
-
 def withlogger(cls):
     """Class decorator to add a logger to the class"""
     orig_init = cls.__init__
@@ -24,7 +21,6 @@ def withlogger(cls):
 
     return cls
 
-
 def counter():
     count=0
     def inc():
@@ -33,4 +29,31 @@ def counter():
         return count
     return inc
 
+
+from os.path import exists, expanduser
+def checkPath(path, exp_user=False):
+    """
+    Verifies that path is not None or an empty string, then returns whether
+    the path exists on the filesystem.
+
+    :param path:
+    :param exp_user:
+    :return:
+    """
+
+
+    if exp_user:
+        return path and exists(expanduser(path))
+    return path and exists(path)
+
+from itertools import starmap, repeat
+# Thanks, Python docs!
+def repeatfunc(func, times=None, *args):
+    """Repeat calls to func with specified arguments.
+
+    Example:  repeatfunc(random.random)
+    """
+    if times is None:
+        return starmap(func, repeat(args))
+    return starmap(func, repeat(args, times))
 

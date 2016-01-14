@@ -16,11 +16,11 @@ from PyQt5.QtWidgets import (QApplication,
 
 
 from skymodman import skylog
-from skymodman.constants import Tab as TAB
+from skymodman.constants import (Tab as TAB, INIKey, INISection)
 from skymodman.qt_interface.qt_manager_ui import Ui_MainWindow
 from skymodman.qt_interface.widgets import message, NewProfileDialog
 from skymodman.qt_interface.models import ProfileListModel, ModTableView, ModFileTreeModel
-from skymodman.utils import withlogger, Notifier
+from skymodman.utils import withlogger, Notifier, checkPath
 
 @withlogger
 class ModManagerWindow(QMainWindow, Ui_MainWindow):
@@ -108,7 +108,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # Let sub-widgets know the main window is initialized
         self.windowInitialized.emit()
 
-
     @property
     def Manager(self):
         return self._manager
@@ -158,10 +157,23 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             # todo: support loading actual fomod archives. (7z, rar, zip, etc.)
 
     def chooseModFolder(self):
-        moddir = QFileDialog.getExistingDirectory(self, "Chose Directory Containing Installed Mods", QDir.homePath())
+        """
+        Show dialog allowing user to choose a mod folder.
 
-        # if moddir:
-        #     self.Manager.Config.updateConfig(moddir, )
+        :return:
+        """
+        moddir = QFileDialog.getExistingDirectory(self, "Choose Directory Containing Installed Mods", QDir.homePath())
+
+        # update config with new path
+        if checkPath(moddir):
+            self.Manager.Config.updateConfig(moddir, INIKey.MODDIR, INISection.GENERAL)
+
+
+        # and now...wait what now.
+        # i guess we reverify and reload the mods.
+        if notself.Manager.validateModInstalls()
+
+
 
 
 
@@ -211,6 +223,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     # ===================================
     # TABLE OF INSTALLED MODS FUNCTIONS
     # ===================================
+    # <editor-fold desc="...">
 
     def setupTable(self):
         # self.logger.debug("setupTable begin")
@@ -265,10 +278,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """With nothing selected, there's nothing to move, so disable the movement buttons"""
         self.move_mod_box.setEnabled(False)
 
-
     def markTableUnsaved(self, unsaved_changes_present):
         self.save_cancel_btnbox.setEnabled(unsaved_changes_present)
-
 
     def revertTable(self):
         self.mod_table.revertChanges()
@@ -290,9 +301,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # self.modListSaved.emit()
         # self.updateUI()
 
+    # </editor-fold>
+
     #===============================
     #  Profile-handling UI
     #==============================
+    # <editor-fold desc="...">
 
     def setupProfileSelector(self):
         """
@@ -319,8 +333,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # let setup know we're done here
         self.SetupDone()
-
-
 
     def onNewProfileClick(self):
         """
@@ -351,7 +363,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.profile_selector.removeItem(self.profile_selector.currentIndex())
 
             # self.deleteProfileAction.emit(profile.name)
-
 
     @pyqtSlot('int')
     def onProfileChange(self, index):
@@ -402,6 +413,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.remove_profile_button.setEnabled(True)
             self.remove_profile_button.setToolTip('Remove Profile')
 
+    # </editor-fold>
+
     def checkUnsavedChanges(self):
         """
         Check for unsaved changes to the mods list and show a prompt if any are found.
@@ -422,7 +435,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 # don't bother reverting, mods list is getting reset; just disable the buttons
                 self.markTableUnsaved(False)
 
-
     def safeQuitApp(self):
         """
         Show a prompt if there are any unsaved changes, then close the program.
@@ -438,6 +450,7 @@ def quit_app():
     skylog.stop_listener()
     QApplication.quit()
 
+# <editor-fold desc="__main__">
 if __name__ == '__main__':
 
     from skymodman import managers
@@ -451,3 +464,4 @@ if __name__ == '__main__':
     w.show()
 
     sys.exit(app.exec_())
+# </editor-fold>

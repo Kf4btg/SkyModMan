@@ -1,6 +1,5 @@
 from enum import Enum
 from pathlib import Path
-from typing import List, Dict
 
 from skymodman import exceptions
 from skymodman.constants import SyncError as SE
@@ -26,7 +25,6 @@ class Profile:
         :param Path profiles_dir:
         :param str name:
         :param Profile copy_profile:
-        :return:
         """
 
         self._name = name
@@ -63,7 +61,6 @@ class Profile:
         self.syncErrors = {SE.NOTFOUND: [],
                            SE.NOTLISTED: []}
 
-        # self.LOGGER.debug(self.localfiles)
 
     @property
     def name(self) -> str:
@@ -104,7 +101,6 @@ class Profile:
         :param errors: a list of the errors encountered
         """
         self.syncErrors[error_type] = errors
-
 
 
 
@@ -284,3 +280,5 @@ class ProfileManager:
         if profile.name in self.__cache:
             del self.__cache[profile.name]
 
+if __name__ == '__main__':
+    from typing import List, Dict

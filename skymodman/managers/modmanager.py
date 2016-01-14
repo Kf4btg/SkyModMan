@@ -129,6 +129,7 @@ class ModManager:
         """
         try:
             self.DB.validateModsList(self.Config.listModFolders())
+            return True
         except exceptions.FilesystemDesyncError as e:
             self.LOGGER.error(e)
 
@@ -151,7 +152,6 @@ class ModManager:
                 # record on profile
                 # self.active_profile.recordErrors(constants.SE_NOTFOUND, e.not_found)
             return False
-        return True
 
     def basicModInfo(self):
         """
