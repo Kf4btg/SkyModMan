@@ -226,7 +226,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         fileviewer_model = self.models[M.file_viewer] = ModFileTreeModel(manager=self._manager, parent=self.filetree_fileviewer)
 
         ## filter
-        fileviewer_filter = self.filters[F.file_viewer] = QSortFilterProxyModel(self.filetree_modlist)
+        fileviewer_filter = self.filters[F.file_viewer] = QSortFilterProxyModel(self.filetree_fileviewer)
         fileviewer_filter.setSourceModel(fileviewer_model)
         fileviewer_filter.setFilterCaseSensitivity(Qt.CaseInsensitive)
 
@@ -243,6 +243,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # let setup know we're done here
         self.SetupDone()
+
 
     def showModFiles(self, indexCur, indexPre):
         """
