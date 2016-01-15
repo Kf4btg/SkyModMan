@@ -168,15 +168,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         if checkPath(moddir):
             self.Manager.Config.updateConfig(moddir, INIKey.MODDIR, INISection.GENERAL)
 
-
-            # and now...wait what now.
-            # i guess we reverify and reload the mods.
+            # reverify and reload the mods.
             if not self.Manager.validateModInstalls():
                 self.mod_table.model().reloadErrorsOnly()
-
-
-
-
 
 
 
@@ -228,7 +222,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     # <editor-fold desc="...">
 
     def setupTable(self):
-        # self.logger.debug("setupTable begin")
+        # self.logger << "setupTable begin" + " now"
         self.Manager.loadActiveProfileData()
         self.mod_table.initUI(self.installed_mods_layout)
 

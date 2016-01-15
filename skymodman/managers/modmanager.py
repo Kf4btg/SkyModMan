@@ -60,10 +60,9 @@ class ModManager:
     def active_profile(self, profile):
         """
         To be called by external interfaces.
-        Set `profile` as currently loaded. Updates saved config file to mark this profile as the last-loaded profile,
-        and loads the data for the newly-activated profile
+        Set `profile` as currently loaded. Updates saved config file to mark this profile as the last-loaded profile, and loads the data for the newly-activated profile
+
         :param profile:
-        :return:
         """
         # make sure we're dealing with just the name
         if isinstance(profile, profiles.Profile):
@@ -77,19 +76,21 @@ class ModManager:
         self.loadActiveProfileData()
 
     def getProfiles(self, names_only = True):
-        """Generator that iterates over all existing profiles.
+        """
+        Generator that iterates over all existing profiles.
+
         :param names_only: if True, only yield the profile names. If false, yield tuples of (name, Profile) pairs"""
         if names_only:
             yield from (n for n in self.Profiler.profile_names)
         else:
             yield from self.Profiler.profilesByName()
 
-    def newProfile(self, name: str, copy_from: profiles.Profile = None):
+    def newProfile(self, name, copy_from = None):
         """
         Create and return a new Profile object with the specified name, optionally
         copying config files from the `copy_from` Profile
-        :param name:
-        :param copy_from:
+        :param str name:
+        :param profiles.Profile copy_from:
         :return:
         """
         return self.Profiler.newProfile(name, copy_from)
@@ -104,15 +105,15 @@ class ModManager:
         on disk for the given profile into an in-memory database
         that will be used to provide data to the rest of the app.
         """
-        self.LOGGER.debug("loading data for active profile '{}'".format(self.active_profile.name))
+        self.LOGGER << "loading data for active profile: " + self.active_profile.name
         # try to read modinfo file
         if self.DB.loadModDB(self.active_profile.modinfo):
-            self.LOGGER.debug("validating installed mods")
+            self.LOGGER << "validating installed mods"
             # if successful, validate modinfo
             self.validateModInstalls()
 
         else:
-            self.LOGGER.debug("Could not load mod info, reading from configured mods directory: {}".format(self.Config.paths.dir_mods))
+            self.LOGGER << "Could not load mod info, reading from configured mods directory: " + str(self.Config.paths.dir_mods)
             # if it fails, re-read mod data from disk
             self.DB.getModDataFromModDirectory(self.Config.paths.dir_mods)
             # and [re]create the cache file

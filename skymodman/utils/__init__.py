@@ -36,8 +36,8 @@ def checkPath(path, exp_user=False):
     Verifies that path is not None or an empty string, then returns whether
     the path exists on the filesystem.
 
-    :param path:
-    :param exp_user:
+    :param str path:
+    :param exp_user: expand ~ in path string
     :return:
     """
     if exp_user:
