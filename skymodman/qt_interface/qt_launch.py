@@ -1,4 +1,5 @@
 import sys
+from functools import partial
 
 from PyQt5.QtCore import (Qt,
                           pyqtSignal,
@@ -231,7 +232,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.filetree_fileviewer.setModel(fileviewer_filter)
 
         ## show new files when mod selection in list
-        self.filetree_modlist.selectionModel().currentChanged.connect(self.showModFiles)
+        proxy2source = lambda c,p: self.showModFiles(
+                mod_filter.mapToSource(c), mod_filter.mapToSource(p))
+        self.filetree_modlist.selectionModel().currentChanged.connect(proxy2source)
 
         # let setup know we're done here
         self.SetupDone()
@@ -263,11 +266,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.Manager.loadActiveProfileData()
         self.mod_table.initUI(self.installed_mods_layout)
 
+        self.models[M.mod_table] = self.mod_table.model()
+
         self.mod_table.loadData()
 
         # when the list of modified rows changes from empty to
         # non-empty or v.v., enabled/disable the save/cancel btns
-        self.mod_table.model().tableDirtyStatusChange.connect(self.markTableUnsaved)
+        self.models[M.mod_table].tableDirtyStatusChange.connect(self.markTableUnsaved)
 
         self.mod_table.itemsSelected   .connect(self.onModsSelected)
         self.mod_table.selectionCleared.connect(self.onSelectionCleared)
@@ -291,7 +296,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         self.move_mod_box.setEnabled(True)
         self.updateModMoveButtons(self.mod_table.selectedIndexes(),
-                                  self.mod_table.model())
+                                  self.models[M.mod_table])
 
     def updateModMoveButtons(self, selected_indexes, model):
         """
