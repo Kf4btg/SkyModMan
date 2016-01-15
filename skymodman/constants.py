@@ -14,6 +14,12 @@ VISIBLE_COLS = [Column.ENABLED, Column.NAME, Column.MODID, Column.VERSION]
 
 DBLCLICK_COLS = [Column.MODID, Column.VERSION]
 
+class qModels(Enum):
+    mod_table, profile_list, mod_list, file_viewer = range(4)
+
+class qFilters(Enum):
+    mod_list, file_viewer, mod_table = range(3)
+
 class SyncError(Enum):
     NOTFOUND, NOTLISTED = range(2)
 

@@ -13,7 +13,6 @@ class NewProfileDialog(QDialog,  Ui_NewProfileDialog):
 
     def __init__(self, *, combobox_model, **kwargs):
         super(NewProfileDialog, self).__init__(**kwargs)
-        self.logger << "testing"
 
         self.setupUi(self)
 

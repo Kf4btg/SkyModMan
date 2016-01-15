@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (QApplication,
 
 
 from skymodman import skylog
-from skymodman.constants import (Tab as TAB, INIKey, INISection)
+from skymodman.constants import (Tab as TAB, INIKey, INISection, qModels as M, qFilters as F)
 from skymodman.qt_interface.qt_manager_ui import Ui_MainWindow
 from skymodman.qt_interface.widgets import message, NewProfileDialog
 from skymodman.qt_interface.models import ProfileListModel, ModTableView, ModFileTreeModel
@@ -26,8 +26,7 @@ from skymodman.utils import withlogger, Notifier, checkPath
 
 # because it's getting a bit unwieldy trying to keep track of all these models,
 # let's let this thing help
-qModels = "mod_table", "profile_list", "mod_list", "file_tree"
-qFilters = "mod_list", "file_tree", "mod_table"
+
 
 @withlogger
 class ModManagerWindow(QMainWindow, Ui_MainWindow):
@@ -60,8 +59,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self._manager = manager
 
         # setup trackers for all of our models and proxies
-        self.models = {m:None for m in qModels}
-        self.filters = {f:None for f in qFilters}
+        # self.all_models = { "models":{}, "filters":{} } # tracks all models by name
+        self.models = {} #tracks the
+        self.filters = {} #tracks the
 
         # slots (methods) to be called after __init__ is finished
         setupSlots = [
@@ -200,25 +200,37 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         ##################################
         # setup model for active mods list
-        list_model = self.models["mod_list"] =  QStringListModel()
+        list_model = self.models[M.mod_list] = QStringListModel()
         list_model.setStringList(list(self.Manager.enabledMods()))
 
         # and now the filter proxy
-        modfilter = QSortFilterProxyModel(self.filetree_modlist)
-        modfilter.setSourceModel(list_model)
+        mod_filter = self.filters[F.mod_list] = QSortFilterProxyModel(self.filetree_modlist)
+        mod_filter.setSourceModel(list_model)
+        mod_filter.setFilterCaseSensitivity(Qt.CaseInsensitive)
 
         # connect proxy to textchanged of filter box
-        self.filetree_modfilter.textChanged.connect(modfilter.setFilterWildcard)
+        self.filetree_modfilter.textChanged.connect(mod_filter.setFilterWildcard)
 
         # finally, set the filter as the model for the modlist
-        self.filetree_modlist.setModel(modfilter)
-
+        self.filetree_modlist.setModel(mod_filter)
 
         self.splitter.setSizes([1, 500]) # just make the left one smaller ok?
 
-        file_tree_model = ModFileTreeModel(manager=self._manager, parent=self.filetree_fileviewer)
-        self.filetree_fileviewer.setModel(file_tree_model)
+        ## model for tree view of files
+        fileviewer_model = self.models[M.file_viewer] = ModFileTreeModel(manager=self._manager, parent=self.filetree_fileviewer)
 
+        ## filter
+        fileviewer_filter = self.filters[F.file_viewer] = QSortFilterProxyModel(self.filetree_modlist)
+        fileviewer_filter.setSourceModel(fileviewer_model)
+        fileviewer_filter.setFilterCaseSensitivity(Qt.CaseInsensitive)
+
+        ## connect proxy to textchanged of filter box
+        self.filetree_filefilter.textChanged.connect(fileviewer_filter.setFilterWildcard)
+
+        ## set model
+        self.filetree_fileviewer.setModel(fileviewer_filter)
+
+        ## show new files when mod selection in list
         self.filetree_modlist.selectionModel().currentChanged.connect(self.showModFiles)
 
         # let setup know we're done here
@@ -231,14 +243,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         :param QModelIndex indexCur: Currently selected index
         :param QModelIndex indexPre: Previously selected index
         """
-        mod = self.filetree_modlist.model().stringList()[indexCur.row()]
+        mod = self.models[M.mod_list].stringList()[indexCur.row()]
+        # mod = self.filetree_modlist.model().stringList()[indexCur.row()]
 
         p = self.Manager.Config.paths.dir_mods / self.Manager.getModDir(mod)
 
-        self.filetree_fileviewer.model().setRootPath(str(p))
+        self.models[M.file_viewer].setRootPath(str(p))
 
     def updateFileTreeModList(self):
-        self.filetree_modlist.model().setStringList(list(self.Manager.enabledMods()))
+        self.models[M.mod_list].setStringList(list(self.Manager.enabledMods()))
 
     # ===================================
     # TABLE OF INSTALLED MODS FUNCTIONS
