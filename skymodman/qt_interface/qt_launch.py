@@ -128,6 +128,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     ###################
     # ACTION HANDLERS #
     ###################
+    # <editor-fold desc="...">
 
     def updateUI(self, *args):
         if self.loaded_fomod is None:
@@ -190,9 +191,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     def getTab(self, index:int):
         return self.manager_tabs.widget(index)
 
+    # </editor-fold>
+
+
     # ===================================
     # FILETREE TAB FUNCTIONS
     # ===================================
+    # <editor-fold desc="...">
     def setupFileTree(self):
         """
         Create and populate the list of mod-folders shown on the filetree tab, as well as prepare the fileviewer pane to show files when a mod is selected
@@ -247,7 +252,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         :param QModelIndex indexPre: Previously selected index
         """
         mod = self.models[M.mod_list].stringList()[indexCur.row()]
-        # mod = self.filetree_modlist.model().stringList()[indexCur.row()]
 
         p = self.Manager.Config.paths.dir_mods / self.Manager.getModDir(mod)
 
@@ -255,6 +259,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def updateFileTreeModList(self):
         self.models[M.mod_list].setStringList(list(self.Manager.enabledMods()))
+
+    # </editor-fold>
 
     # ===================================
     # TABLE OF INSTALLED MODS FUNCTIONS

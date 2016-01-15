@@ -460,6 +460,7 @@ class ModFileTreeModel(QAbstractItemModel):
         if role==Qt.CheckStateRole:
             item.checkState = value
             last_index = self.index(QFSItem.last_row_touched, 0, index)
+            self.logger << "Last row touched: {}".format(QFSItem.last_row_touched)
 
             # using the "last_row_touched" value--which SHOULD be the most
             # "bottom-right" child idx that was just changed--to feed to
@@ -467,9 +468,9 @@ class ModFileTreeModel(QAbstractItemModel):
             # won't be any concurrency issues to worry about later on.
 
             # noinspection PyUnresolvedReferences
-            self.dataChanged.emit(index, last_index)
             # self.dumpsHidden()
             self.commit() # update the db with which files are now hidden
+            self.dataChanged.emit(index, last_index)
             return True
         return super().setData(index, value, role)
 
@@ -519,8 +520,9 @@ class ModFileTreeModel(QAbstractItemModel):
             toremove = []
             toadd = hiddens
 
-        if toremove: self.manager.DB.updatemany_("DELETE FROM hiddenfiles WHERE directory=? AND filepath=?",
-                                                 map(lambda v: (directory, v), toremove))
+        if toremove: self.manager.DB.updatemany_(
+                "DELETE FROM hiddenfiles WHERE directory=? AND filepath=?",
+                map(lambda v: (directory, v), toremove))
         if toadd: self.manager.DB.updatemany_("INSERT INTO hiddenfiles values (?, ?)",
                                     map(lambda v: (directory, v), toadd))
 
