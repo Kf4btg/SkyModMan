@@ -112,7 +112,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.loaded_fomod = None
         
         # make some UI adjustments
-        self.manager_tabs  .setCurrentIndex(0)
+        self.manager_tabs  .setCurrentIndex(1)
         self.installerpages.setCurrentIndex(0)
 
         # connect other signals

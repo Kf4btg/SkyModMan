@@ -85,7 +85,10 @@ def humanize(cls):
         if getattr(_tls, "level", 0) > 0:
             return str(self)
         else:
-            attrs = ", ".join("%s = %r" % (k, v) for k, v in self.__dict__.items())
+            try:
+                attrs = ", ".join("%s = %r" % (k, v) for k, v in self.__dict__.items())
+            except AttributeError:
+                attrs = ", ".join("{} = {}".format(k,getattr(self,k)) for k in self.__slots__)
             return "%s(%s)" % (self.__class__.__name__, attrs)
 
     def __str__(self):
@@ -94,7 +97,12 @@ def humanize(cls):
                 return "<...>"
             with _nested() as indent:
                 attrs = []
-                for k, v in self.__dict__.items():
+                try:
+                    info = self.__dict__
+                except AttributeError:
+                    info = {k:getattr(self, k) for k in self.__slots__}
+                # for k, v in self.__dict__.items():
+                for k, v in info.items():
                     # if k.startswith("_"):
                     #     continue
                     if isinstance(v, (list, tuple)) and v:

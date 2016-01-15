@@ -6,9 +6,11 @@ import itertools
 import os
 from pathlib import Path
 
-from skymodman.utils import withlogger, tree
+from skymodman.utils import withlogger, tree, humanizer
 
+bstr = (str, bytes)
 # @withlogger
+# @humanizer.humanize
 class FSItem:
     """
     Used to hold information about a real file on the filesystem, including references to its containing directory and any (if it is itself a directory) the files and folders contained within it.
@@ -16,7 +18,7 @@ class FSItem:
 
     #Since we may be creating LOTS of these things (some mods have gajiblions of files), we'll define
     # __slots__ to keep the memory footprint as low as possible
-    __slots__=("_path", "_lpath", "_name", "_parent", "_isdir", "_children", "_row", "_hidden")
+    __slots__=("_path", "_lpath", "_name", "_parent", "_isdir", "_children", "_row", "_hidden", "_level")
 
     def __init__(self, *, path, name, parent=None, isdir=True, **kwargs):
         """
@@ -42,6 +44,9 @@ class FSItem:
 
         self._hidden = False
 
+        self._level = len(self.ppath.parts)
+
+
     @property
     def path(self)->str: return self._path
 
@@ -62,6 +67,12 @@ class FSItem:
     def row(self)->int:
         """Which row (relative to its parent) does this item appear on"""
         return self._row
+
+    @property
+    def level(self):
+        """How deep is this item from the root"""
+        return self._level
+
 
     @property
     def isdir(self)->bool:
@@ -94,14 +105,20 @@ class FSItem:
         or None if this is the root item"""
         return self._parent
 
-    def __getitem__(self, row):
-        """Access children using list notation: thisitem[0]
-        Returns none if given an invalid row number or childlist is None
 
-        :param int row:
+    def __getitem__(self, item):
+        """Access children using list notation: thisitem[0] or thisitem["childfile.nif"]
+        Returns none if given an invalid item number or childlist is None
+
+        :param int|str item:
         """
+
         try:
-            return self._children[row]
+            if isinstance(item, bstr): #passed a filename
+                for c in self._children:
+                    if c.name==item: return c
+            else:
+                return self._children[item]
         except (IndexError, TypeError):
             return None
 
@@ -173,15 +190,23 @@ class FSItem:
         return self.lpath == other.lpath
 
 
-    def __str__(self):
-        return "{_class}(name: '{name}', path: '{path}', isdir: {isdir}, hidden: {hidden})".format(
-                _class=self.__class__.__name__,
-                name=self._name,
-                path=self._path,
-                isdir= self.isdir,
-                hidden=self._hidden)
+    # def __str__(self):
+    #     return "{_class}(name: '{0._name}', " \
+    #            "path: '{0._path}', " \
+    #            "isdir: {0._isdir}, " \
+    #            "kids: {0.child_count" \
+    #            "hidden: {0._hidden}" \
+    #            "" \
+    #            "" \
+    #            "" \
+    #            ")".format(
+    #             _class=self.__class__.__name__,
+    #             name=self._name,
+    #             path=self._path,
+    #             isdir= self.isdir,
+    #             hidden=self._hidden)
 
-
+# @humanizer.humanize
 class QFSItem(FSItem):
     """FSITem subclass with Qt-specific functionality"""
 
@@ -191,6 +216,7 @@ class QFSItem(FSItem):
     last_row_touched = 0
 
     # Since the base class has __slots__, we need to define them here, too, or we'll lose all the benefits.
+    # __slots__=FSItem.__slots__+("_checkstate", "flags", "icon")
     __slots__=("_checkstate", "flags", "icon")
 
     # noinspection PyTypeChecker
@@ -219,7 +245,7 @@ class QFSItem(FSItem):
 
     @property
     def checkState(self):
-        if not self.child_count:
+        if not self.isdir:
             return self._checkstate
 
         return self.childrenCheckState()
@@ -227,13 +253,18 @@ class QFSItem(FSItem):
     # So, I think the protocol here is, when a directory is un/checked,
     # set the checkstates of all that directory's children to match.
     # here's the python translation of the c++ code from qtreewidget.cpp:
+
+    changed_dirs=[]
+
     @checkState.setter
     def checkState(self, state):
-
+        # print("\n" + " " * QFSItem.level + "{:02}".format(QFSItem.last_row_touched), end="")
+        # print("::{0.row:02} {0.name:25}".format(self), end=": ")
         # state propagation for dirs:
         # (only dirs can have the tristate flag turned on)
-        if self.flags & Qt.ItemIsTristate and state != Qt.PartiallyChecked:
-
+        # print("isdir:", bool(self.flags & Qt.ItemIsTristate), end=" ")
+        if self.flags & Qt.ItemIsTristate:
+            QFSItem.changed_dirs.append(self)
             # propagate a check-or-uncheck down the line:
             for c in self.iterchildren():
 
@@ -241,17 +272,23 @@ class QFSItem(FSItem):
                 # noinspection PyUnresolvedReferences
                 QFSItem.last_row_touched = c.row  # using a class variable, track which items were changed
 
+
                 # this will trigger any child dirs to do the same
                 c.checkState = state
                 c.setEnabled(state == Qt.Checked)
+            # print()
+
+        # print(" "*QFSItem.level, "state=", state, end=" ")
 
         self._checkstate = state
+
 
         # the "hidden" attribute on the baseclass is what will allow us to save
         # the lists of hidden files to disk, so be sure to set it here;
         # note: only explicitly unchecked items will be marked as hidden here;
         # checked and partially-checked directories will not be hidden
         self._hidden = state == Qt.Unchecked
+        # print("hidden: ", self._hidden, end=" ")
 
     def childrenCheckState(self):
         """  Calculates the checked state of the item based on the checked state
@@ -363,6 +400,19 @@ class ModFileTreeModel(QAbstractItemModel):
             if item: return item
         return self.rootitem
 
+    def itemFromPath(self, path_parts):
+        """
+
+        :param path_parts: a tuple where each element is an element in the filesystem path
+         leading from the root item to the item
+        :return: the item
+        """
+        item = self.rootitem
+        for p in path_parts:
+            item = item[p]
+
+        return item
+
     def columnCount(self, *args, **kwargs) -> int:
         return 1
 
@@ -401,11 +451,17 @@ class ModFileTreeModel(QAbstractItemModel):
         if parent.isValid():
             parent_item = parent.internalPointer()
 
+        # self.logger << parent_item.name
+
         child = parent_item[row]
+        # self.logger << "{}".format(child)
         if child:
             return self.createIndex(row, col, child)
 
         return QModelIndex()
+
+    def getIndexFromItem(self, item) -> QModelIndex:
+        return self.createIndex(item.row, 0, item)
 
     def parent(self, child_index=QModelIndex()):
         if not child_index.isValid(): return QModelIndex()
@@ -458,9 +514,11 @@ class ModFileTreeModel(QAbstractItemModel):
 
         item = self.getItem(index)
         if role==Qt.CheckStateRole:
+
             item.checkState = value
-            last_index = self.index(QFSItem.last_row_touched, 0, index)
-            self.logger << "Last row touched: {}".format(QFSItem.last_row_touched)
+            # print()
+            # last_index = self.index(QFSItem.last_row_touched, 0, index)
+            # self.logger << "Last row touched: {}".format(QFSItem.last_row_touched)
 
             # using the "last_row_touched" value--which SHOULD be the most
             # "bottom-right" child idx that was just changed--to feed to
@@ -470,7 +528,21 @@ class ModFileTreeModel(QAbstractItemModel):
             # noinspection PyUnresolvedReferences
             # self.dumpsHidden()
             self.commit() # update the db with which files are now hidden
-            self.dataChanged.emit(index, last_index)
+
+            if item.isdir:
+                self.dataChanged.emit(index, self.getIndexFromItem(item.children[-1]))
+
+                # we can ignore the first one
+                for changed in QFSItem.changed_dirs[1:]: #type: QFSItem
+                    myindex = self.getIndexFromItem(changed)
+                    self.dataChanged.emit(myindex, self.getIndexFromItem(changed.children[-1]))
+
+            else:
+                self.dataChanged.emit(index, index)
+            while item.parent is not None:
+                self.dataChanged.emit(index.parent(), index.parent())
+                item = item.parent
+                index = index.parent()
             return True
         return super().setData(index, value, role)
 
