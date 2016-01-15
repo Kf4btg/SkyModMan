@@ -5,7 +5,8 @@ from skymodman import exceptions
 from skymodman.constants import SyncError as SE
 from skymodman.utils import withlogger
 
-
+# from skymodman.utils import humanizer
+# @humanizer.humanize
 @withlogger
 class Profile:
     """
@@ -103,7 +104,7 @@ class Profile:
         self.syncErrors[error_type] = errors
 
 
-
+# @humanizer.humanize
 @withlogger
 class ProfileManager:
     """

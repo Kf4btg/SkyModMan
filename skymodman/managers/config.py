@@ -4,6 +4,7 @@ from pathlib import Path
 from copy import deepcopy
 
 from skymodman import utils, exceptions
+# from skymodman.utils.humanizer import humanize
 
 from skymodman.constants import (EnvVars, INIKey, INISection)
 
@@ -22,7 +23,6 @@ _S_GENERAL = INISection.GENERAL.value
 _K_LASTPRO = INIKey.LASTPROFILE.value
 _K_MODDIR  = INIKey.MODDIR.value
 _K_VFSMNT  = INIKey.VFSMOUNT.value
-
 
 class ConfigPaths:
     __slots__=["file_main", "dir_config", "dir_data", "dir_profiles", "dir_mods", "dir_vfs"]
@@ -46,7 +46,7 @@ class ConfigPaths:
         self.dir_vfs      = dir_vfs
 
 
-
+# @humanize
 @utils.withlogger
 class ConfigManager:
 

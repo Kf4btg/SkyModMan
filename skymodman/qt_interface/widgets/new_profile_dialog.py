@@ -5,13 +5,15 @@ from PyQt5.QtWidgets import (QDialog,
                              QPushButton)
 
 from .new_profile_dialog_ui import Ui_NewProfileDialog
+from skymodman.utils import withlogger
 
-
+@withlogger
 class NewProfileDialog(QDialog,  Ui_NewProfileDialog):
 
 
     def __init__(self, *, combobox_model, **kwargs):
         super(NewProfileDialog, self).__init__(**kwargs)
+        self.logger << "testing"
 
         self.setupUi(self)
 

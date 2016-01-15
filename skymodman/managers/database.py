@@ -4,13 +4,14 @@ import os
 import sqlite3
 from pathlib import Path
 import functools
-# from typing import List, Tuple, Iterable
 
 from skymodman.constants import db_fields, SyncError
 from skymodman.utils import withlogger, counter
 
 mcount = counter()
 
+# from skymodman.utils import humanizer
+# @humanizer.humanize
 @withlogger
 class DBManager:
 

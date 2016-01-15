@@ -3,6 +3,9 @@ from logging import handlers
 from logging import config
 from queue import Queue
 
+import sys
+from os.path import relpath
+
 
 __logging_queue = None # type: Queue
 __listener = None # type: handlers.QueueListener
@@ -30,9 +33,12 @@ def setupLogListener():
     q = Queue()
 
     console_handler = logging.StreamHandler()
-    detailed_formatter = logging.Formatter('%(asctime)s %(name)-15s %(levelname)-8s %(message)s')
+    detailed_formatter = logging.Formatter('[{asctime}.{msecs:03.0f}] line {lineno:4d} in {funcName:37}: {message}', datefmt='%H:%M:%S', style='{')
+    # detailed_formatter = logging.Formatter('%(asctime)s %(name)-15s %(levelname)-8s %(message)s')
+    # plain_formatter = logging.Formatter('%(asctime)s %(message)s')
 
     console_handler.setFormatter(detailed_formatter)
+    # console_handler.setFormatter(plain_formatter)
 
     q_listener = handlers.QueueListener(q, console_handler)
 
@@ -73,9 +79,28 @@ def newLogger(name, configuration=None, level="DEBUG"):
     return logger
 
 
+old_factory = logging.getLogRecordFactory()
+def recordFactory(name, level, fn, lno, msg, args, exc_info, func=None, sinfo=None, **kwargs):
+    """
+    intercept log record creation to clean up output a bit, as well as to correct the information the << overload was giving us (it was reporting module name and line numbers as coming from the skylog module, rather than from where the debug call originated)
+    """
+    _name=name.split(".")[-1]
+    if func and not func=="__lshift":
+        func = _name + "." + func
+        return old_factory(name, level, fn, lno, msg, args, exc_info, func, sinfo, **kwargs)
 
+    ## get info for actual calling function
+    ## (value of 5 determined by trial and error)
+    f = sys._getframe(5)
+    # pathname = f.f_code.co_filename
+    # lineno = f.f_lineno
+    funcName=_name + "." + f.f_code.co_name
 
-def __lshift(self, value):
+    return old_factory(name, level, f.f_code.co_filename, f.f_lineno, msg, args, exc_info, funcName, sinfo, **kwargs)
+
+logging.setLogRecordFactory(recordFactory)
+
+def __lshift(caller, value):
     """
     Overload the << op to allow a shortcut to debug() calls:
 
@@ -87,9 +112,9 @@ def __lshift(self, value):
 
     :param value: the message to send
     """
-    # print("thisdsfgsdgdsf")
-    self.debug(value)
-    return self
+    caller.debug(value)
+
+    return caller
 
 # holy ... it took forever, but I finally figured out you have to set the
 # attribute on the class, not the instance...which I guess makes sense, in hindsight

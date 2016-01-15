@@ -3,6 +3,8 @@ from skymodman.utils import withlogger
 from skymodman.managers import config, database, profiles
 from skymodman.constants import SyncError, db_fields
 
+# from skymodman.utils import humanizer
+# @humanizer.humanize
 @withlogger
 class ModManager:
     """
