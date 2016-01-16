@@ -1,12 +1,15 @@
 from PyQt5 import QtCore, QtGui
-from PyQt5.QtWidgets import QHeaderView, QTreeView
+from PyQt5.QtWidgets import QHeaderView, QTreeView, QUndoStack
 from PyQt5.QtCore import Qt, pyqtSignal, QItemSelection, QAbstractItemModel
 
 from skymodman import ModEntry
 # from skymodman.constants import (Column as COL, SyncError, DBLCLICK_COLS, VISIBLE_COLS)
 from skymodman.constants import SyncError
-from skymodman.utils import (withlogger, undo as Undo)
+from skymodman.utils import withlogger
+from skymodman.managers import undo as Undo
 from skymodman.qt_interface.models.modtable import ModTableModel
+
+from skymodman.qt_interface.models.undoactions import ShiftRowsCommand
 
 from enum import IntEnum
 from functools import total_ordering
@@ -63,6 +66,8 @@ class ModTable_TreeModel(QAbstractItemModel):
         super().__init__(**kwargs)
         self._parent = self.parent
         self.manager = manager
+
+        self.undostack = QUndoStack()
 
         self.mod_entries = []
         """:type: list[QModEntry]"""
@@ -262,7 +267,11 @@ class ModTable_TreeModel(QAbstractItemModel):
         :param parent:
         :return:
         """
+        self.undostack.push(ShiftRowsCommand(self.mod_entries, start_row, end_row, move_to_row, parent))
 
+
+
+    def oldshuftrows(self, start_row, end_row, move_to_row, parent) -> bool:
         count       = 1 + end_row - start_row
         d_shift     = move_to_row - start_row      # shift distance; could be +-
         rvector     = -(d_shift/abs(d_shift))      # get inverse normal vector (see below)
