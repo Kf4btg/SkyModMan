@@ -21,7 +21,7 @@ from skymodman import skylog
 from skymodman.constants import (Tab as TAB, INIKey, INISection, qModels as M, qFilters as F)
 from skymodman.qt_interface.qt_manager_ui import Ui_MainWindow
 from skymodman.qt_interface.widgets import message, NewProfileDialog
-from skymodman.qt_interface.models import ProfileListModel, ModTableView, ModFileTreeModel
+from skymodman.qt_interface.models import ProfileListModel, ModTableView, ModFileTreeModel, ModTable_TreeView
 from skymodman.utils import withlogger, Notifier, checkPath
 
 
@@ -85,7 +85,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.setupUi(self)
 
         #init mod table
-        self.mod_table = ModTableView(parent=self, manager=self.Manager)
+        self.mod_table = ModTable_TreeView(parent=self, manager=self.Manager)
 
         #########################
         ## connect the buttons ##
@@ -112,7 +112,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.loaded_fomod = None
         
         # make some UI adjustments
-        self.manager_tabs  .setCurrentIndex(1)
+        self.manager_tabs  .setCurrentIndex(0)
         self.installerpages.setCurrentIndex(0)
 
         # connect other signals
