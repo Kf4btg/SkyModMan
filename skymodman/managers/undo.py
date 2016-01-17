@@ -4,7 +4,7 @@ Delta = collections.namedtuple("Delta", "attrname previous current")
 
 class ObjectDiffTracker:
 
-    def __init__(self, target_type, *slots):
+    def __init__(self, target_type, *slots, callback=None):
         """
 
         :param type target_type: type (class) of object being tracked
@@ -13,11 +13,14 @@ class ObjectDiffTracker:
         self._type = target_type
         self._slots = slots
 
+        self._savepoint = -1 # updated when user saves, points to index in revision list that is the new "clean" state
+
         # container of Delta stacks for each registered property slot
         self._tracked = {}  # dict of target_ids to target_objects
         self._revisions = {} # dict of target_ids to target revision stacks (list of Deltas)
 
-        self._callbacks = {} # if specified when adding a tracked item, the target's
+        self._callback = callback
+        # self._callbacks = {} # if specified when adding a tracked item, the target's
                              # callback will be invoked instead of setattr when changing values
 
         self._revptr = {} # mapping of [id: int], where the value is the index in the target's revisions list corresponding to current location in the undo/redo stack for that item
@@ -30,35 +33,36 @@ class ObjectDiffTracker:
         return len(self._revisions[target_id])
 
     def max_undos(self, target_id):
-        return self._revptr[target_id]
+        return self._revptr[target_id]+1
 
     def max_redos(self, target_id):
-        return self.stack_size(target_id)-self.max_undos(target_id)-1
+        return self.stack_size(target_id)-self.max_undos(target_id)
 
-    def isClean(self, target_id):
-        """Returns False if any revisions have been made to the target since tracking started"""
+    def is_clean(self, target_id):
+        """Returns False if any revisions have been made to the target since the last savepoint"""
 
-        return self._revptr[target_id]==0
+        return self._revptr[target_id]==self._savepoint
 
     ##===============================================
     ## Adding/removing Tracked objects
     ##===============================================
 
-    def track(self, target, target_id, callback=None):
-        """Start tracking change operations for the specified object
-
-        :param target:
-            the actual object being tracked. To prevent state corruption, changes to tracked items should only be done through the Delta/tracker mechanics.
-        :param target_id:
-            must be a unique, hashable value that can be used to identify this object amongst all the other tracked items
-        :param callable callback:
-            if specified, will be invoked instead of setattr when changing values on the target. Called with the property name and new value as arguments. Useful for immutable objects like namedtuples.
-        """
-        if target_id not in self._tracked:
-            self._tracked[target_id] = target
-            if callback is not None: self._callbacks[target_id]=callback
-
-            self._revisions[target_id] = []
+    # def track(self, target, target_id, callback=None):
+    # def track(self, target, target_id):
+    #     """Start tracking change operations for the specified object
+    #
+    #     :param target:
+    #         the actual object being tracked. To prevent state corruption, changes to tracked items should only be done through the Delta/tracker mechanics.
+    #     :param target_id:
+    #         must be a unique, hashable value that can be used to identify this object amongst all the other tracked items
+    #     :param callable callback:
+    #         if specified, will be invoked instead of setattr when changing values on the target. Called with the property name and new value as arguments. Useful for immutable objects like namedtuples.
+    #     """
+    #     if target_id not in self._tracked:
+    #         self._tracked[target_id] = target
+    #         # if callback is not None: self._callbacks[target_id]=callback
+    #
+    #         self._revisions[target_id] = []
 
             # on first add, save the values for each tracked property
             # in the first entry of the revision stack
@@ -81,6 +85,23 @@ class ObjectDiffTracker:
     ##===============================================
     ## Tracking changes
     ##===============================================
+    bstr = (str, bytes)
+    def addNew(self, target, target_id, *args):
+        """Use when adding the first change to begin tracking the target"""
+        if target_id not in self._tracked:
+            self._tracked[target_id] = target
+            self._revisions[target_id] = []
+            self._revptr[target_id]=0
+
+        self.add(target_id, *args)
+
+    def add(self, target_id, *args):
+        if isinstance(args[0],self.bstr): #prop name
+            return self.addChange(target_id, *args)
+        if isinstance(args[0], Delta):
+            return self.addDelta(target_id, *args)
+        if isinstance(args[0], collections.Iterable):
+            return self.addDeltaGroup(target_id, *args)
 
     def addChange(self, target_id, prop, old_val, new_val):
         """
@@ -125,9 +146,12 @@ class ObjectDiffTracker:
 
         :param target_id:
         """
-        r = self.max_undos(target_id) + 1 # should == stacksize for this target if at end
-        if self.stack_size(target_id) == r:
+        r = self.max_undos(target_id) # should == stacksize for this target if at end
+        if self.stack_size(target_id) > r:
             self._revisions[target_id][r:] = []
+            # invalidates savepoint if it is further ahead in undo-stack
+            if self._savepoint > r:
+                self._savepoint = -1
 
     ##===============================================
     ## Undo Management
