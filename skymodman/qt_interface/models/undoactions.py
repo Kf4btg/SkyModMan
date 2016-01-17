@@ -2,6 +2,13 @@ from PyQt5.QtWidgets import QUndoCommand, QUndoGroup, QUndoStack, QUndoView
 from .modtable_tree import QModEntry
 from collections import deque, namedtuple
 
+
+class CleanStateManager:
+
+    pass
+
+
+
 Slice = namedtuple('Slice', 'start, end')
 class ShiftRowsCommand(QUndoCommand):
 
@@ -26,7 +33,7 @@ class ShiftRowsCommand(QUndoCommand):
         self.parent = parent
 
 
-        self.count = 1 + end - start
+        self.count   = 1 + end - start
 
         d_shift      = dest - start # shift distance; could be +-
         self.rvector = -(d_shift / abs(d_shift))  # get inverse normal vector (see below)

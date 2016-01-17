@@ -1,42 +1,266 @@
-from collections import namedtuple
+import collections
 
-ActionDelta = namedtuple("ActionDelta", "action diff undo_callback")
-                                    # str, tuple, callable(callable, tuple)
+Delta = collections.namedtuple("Delta", "attrname previous current")
 
+class ObjectDiffTracker:
 
-class ActionTracker:
+    def __init__(self, target_type, *slots):
+        """
 
-    def __init__(self, target, *slots):
-        self._target = target
+        :param type target_type: type (class) of object being tracked
+        :param list[str] slots: names of tracked properties in an instance of target type
+        """
+        self._type = target_type
         self._slots = slots
 
-        # container of actionDelta stacks for each registered action slot
-        self._actions = {s:[] for s in slots} # type: dict[str, list[ActionDelta]]
+        # container of Delta stacks for each registered property slot
+        self._tracked = {}  # dict of target_ids to target_objects
+        self._revisions = {} # dict of target_ids to target revision stacks (list of Deltas)
+
+        self._callbacks = {} # if specified when adding a tracked item, the target's
+                             # callback will be invoked instead of setattr when changing values
+
+        self._revptr = {} # mapping of [id: int], where the value is the index in the target's revisions list corresponding to current location in the undo/redo stack for that item
 
         # most recently used action
-        self.mru_action = None
+        # self.mru_action = None
+
+    ##===============================================
+    ## Properties (-ish)
+    ##===============================================
+
+    def stack_size(self, target_id):
+        return len(self._revisions[target_id])
+
+    def max_undos(self, target_id):
+        return self._revptr[target_id]
+
+    def max_redos(self, target_id):
+        return self.stack_size(target_id)-self.max_undos(target_id)-1
+
+    def isClean(self, target_id):
+        """Returns False if any revisions have been made to the target since tracking started"""
+
+        return self._revptr[target_id]==0
+
+    ##===============================================
+    ## Adding/removing Tracked objects
+    ##===============================================
+
+    def track(self, target, target_id, callback=None):
+        """Start tracking change operations for the specified object
+
+        :param target:
+            the actual object being tracked. To prevent state corruption, changes to tracked items should only be done through the Delta/tracker mechanics.
+        :param target_id:
+            must be a unique, hashable value that can be used to identify this object amongst all the other tracked items
+        :param callable callback:
+            if specified, will be invoked instead of setattr when changing values on the target. Called with the property name and new value as arguments. Useful for immutable objects like namedtuples.
+        """
+        if target_id not in self._tracked:
+            self._tracked[target_id] = target
+            if callback is not None: self._callbacks[target_id]=callback
+
+            self._revisions[target_id] = []
+
+            # on first add, save the values for each tracked property
+            # in the first entry of the revision stack
+            # self._revisions[target_id] = {p:getattr(target, p) for p in self._slots}
+
+    def untrack(self, target_id):
+        """Stop tracking the object with the specified id"""
+
+        for coll in [self._tracked, self._revisions, self._revptr, self._callbacks]:
+            try:
+                del coll[target_id]
+            except KeyError:
+                pass
+
+    def resetTracker(self):
+        """Forget all tracked objects. Does not revert state."""
+        for coll in [self._tracked, self._revisions, self._revptr, self._callbacks]:
+            coll.clear()
+
+    ##===============================================
+    ## Tracking changes
+    ##===============================================
+
+    def addChange(self, target_id, prop, old_val, new_val):
+        """
+        Record a change operation to the tracked object specified by target_id;
+        the effect of the operation is given by `delta`, containing the names and new values of the updated properties.
+
+        :param target_id:
+        """
+        self.truncate_redos(target_id)
+        self._revisions[target_id].append(Delta(prop, old_val, new_val))
 
 
-    @property
-    def target(self):
-        return self._target
+    def addDelta(self, target_id, delta):
+        """
+        Record a change operation to the tracked object specified by target_id;
+        the effect of the operation is given by `delta`, containing the name, old value, and new value of the updated property.
+
+        :param target_id:
+        :param delta:
+        """
+        assert isinstance(delta, Delta)
+        self.truncate_redos(target_id)
+        self._revisions[target_id].append(delta)
 
 
-    def add(self, delta: ActionDelta):
-        self._actions[delta.action].append(delta)
-        return self
+    def addDeltaGroup(self, target_id, deltas):
+        """Any Deltas contained within the sequence `deltas` will be
+        undone/redone as a single operation when invoked via Undo/Redo
 
-    def __sub__(self, number):
-        try: steps = int(number)
-        except TypeError: return NotImplemented
+        :param target_id:
+        :param collections.Iterable[Delta] deltas: must be an ordered sequence of Delta objects
+        :return:
+        """
+        self.truncate_redos(target_id)
+        self._revisions[target_id].append(deltas)
 
-        self.undo(self.mru_action, max(1,steps))
+    def truncate_redos(self, target_id):
+        """
+        If a change is being added and we are not at the end of the revision stack
+        (because some actions have been undone), truncate the items after the
+        current pointer position so that the current position is now the final item of the stack.
 
-    def undo(self, action_slot, steps=1):
-        slot = self._actions[action_slot]
-        for s in range(min(steps, len(slot))):
-            delta=slot.pop()
-            a=getattr(self._target, delta.action)
-            delta.undo_callback(a, delta.diff)
+        :param target_id:
+        """
+        r = self.max_undos(target_id) + 1 # should == stacksize for this target if at end
+        if self.stack_size(target_id) == r:
+            self._revisions[target_id][r:] = []
+
+    ##===============================================
+    ## Undo Management
+    ##===============================================
+
+    # def revert(self, target_id):
+    #     """revert the specified tracked object to its initial state"""
+    #     self._revptr[target_id]=0
+    #
+    #
+    #     # self.applyCurrentRevision(target_id)
+    #
+    #     # truncate all but initial value
+    #     self._revisions[target_id] = self._revisions[target_id][:1]
+        # target = self._tracked[target_id]
+        # for p,v in self._revisions[target_id][0]:
+        #     setattr(target, p, v)
+
+
+    # def applyCurrentRevision(self, target_id):
+    #     """applies settings in revision pointed to by _revptr[target_id]"""
+    #     target = self._tracked[target_id]
+    #     for p, v in self._revisions[target_id][self._revptr[target_id]].items():
+    #         setattr(target, p, v)
+
+
+    def _accum_changes(self, target_id, num_steps, step=-1):
+        """
+
+        :param target_id:
+        :param num_steps: number of steps to move
+        :param step: either +1 or -1, depending on if this is called from the redo or undo method
+        :return:
+        """
+
+        acc_changes = {}  # accumulate the changes as we go backwards/forwards
+
+        revlist = self._revisions[target_id]
+        revptr = self._revptr[target_id]
+
+        for s in range(num_steps):
+            revptr += step
+            change = revlist[revptr]  # type: Delta
+
+            if isinstance(change, collections.Iterable): #delta group
+                for c in change[::step]:  # type: Delta
+                    acc_changes[c.attrname] = c.previous
+            else:
+                acc_changes[change.attrname] = change.previous
+
+        # afterwards, update pointer
+        self._revptr[target_id] = revptr
+
+        return acc_changes
+
+    def _apply_opchanges(self, target_id, changes):
+        """
+        Apply finalized state changes to target.
+
+        :param target_id:
+        :param changes: dict of changes accumulated during traversal of revision stack
+        :return:
+        """
+        target = self._tracked[target_id]
+
+        if target_id in self._callbacks:
+            cb = self._callbacks[target_id]
+            for prop, val in changes.items():
+                cb(prop, val)
+
+        else:
+            for prop, val in changes.items():
+                setattr(target, prop, val)
+
+    def undo(self, target_id, steps=1):
+        """Undo `steps` most recent change operations to the target"""
+
+        if not steps: return False # steps==0 is a noop
+
+        if steps < 0 or steps >= self.max_undos(target_id):
+            # -steps or too many steps will be taken as a 'revert' command.
+            steps = self.max_undos(target_id)
+
+        acc_changes  = self._accum_changes(target_id, steps, -1)
+        self._apply_opchanges(target_id, acc_changes)
+        # acc_changes  = {} # accumulate the changes as we go backwards
+        #
+        # target  = self._tracked[target_id]
+        # revlist = self._revisions[target_id]
+        # revptr  = self._revptr[target_id]
+        #
+        # for s in range(steps):
+        #     revptr-=1
+        #     change = revlist[revptr] # type: Delta
+        #
+        #     if isinstance(change, collections.Iterable):
+        #
+        #         for c in change[::-1]: # type: Delta
+        #             acc_changes[c.attrname] = c.previous
+        #
+        #
+        #     else:
+        #         acc_changes[change.attrname] = change.previous
+        #
+        # # afterwards, update pointer
+        # self._revptr[target_id] = revptr
+
+        # now apply finalized state changes to target.
+        # if target_id in self._callbacks:
+        #     cb = self._callbacks[target_id]
+        #     for prop, val in acc_changes.items():
+        #         cb(prop, val)
+        #
+        # else:
+        #     for prop, val in acc_changes.items():
+        #         setattr(target, prop, val)
+
+    ##===============================================
+    ## Redo
+    ##===============================================
+
+    def redo(self, target_id, steps=1):
+
+        if steps <= 0: return False  # steps==0 is a noop
+
+        steps = min(steps, self.max_redos(target_id))
+
+        acc_changes = self._accum_changes(target_id, steps, 1)
+
+        self._apply_opchanges(target_id, acc_changes)
+
 
 
