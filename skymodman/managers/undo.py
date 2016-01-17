@@ -22,9 +22,6 @@ class ObjectDiffTracker:
 
         self._revptr = {} # mapping of [id: int], where the value is the index in the target's revisions list corresponding to current location in the undo/redo stack for that item
 
-        # most recently used action
-        # self.mru_action = None
-
     ##===============================================
     ## Properties (-ish)
     ##===============================================
@@ -136,27 +133,6 @@ class ObjectDiffTracker:
     ## Undo Management
     ##===============================================
 
-    # def revert(self, target_id):
-    #     """revert the specified tracked object to its initial state"""
-    #     self._revptr[target_id]=0
-    #
-    #
-    #     # self.applyCurrentRevision(target_id)
-    #
-    #     # truncate all but initial value
-    #     self._revisions[target_id] = self._revisions[target_id][:1]
-        # target = self._tracked[target_id]
-        # for p,v in self._revisions[target_id][0]:
-        #     setattr(target, p, v)
-
-
-    # def applyCurrentRevision(self, target_id):
-    #     """applies settings in revision pointed to by _revptr[target_id]"""
-    #     target = self._tracked[target_id]
-    #     for p, v in self._revisions[target_id][self._revptr[target_id]].items():
-    #         setattr(target, p, v)
-
-
     def _accum_changes(self, target_id, num_steps, step=-1):
         """
 
@@ -216,37 +192,7 @@ class ObjectDiffTracker:
 
         acc_changes  = self._accum_changes(target_id, steps, -1)
         self._apply_opchanges(target_id, acc_changes)
-        # acc_changes  = {} # accumulate the changes as we go backwards
-        #
-        # target  = self._tracked[target_id]
-        # revlist = self._revisions[target_id]
-        # revptr  = self._revptr[target_id]
-        #
-        # for s in range(steps):
-        #     revptr-=1
-        #     change = revlist[revptr] # type: Delta
-        #
-        #     if isinstance(change, collections.Iterable):
-        #
-        #         for c in change[::-1]: # type: Delta
-        #             acc_changes[c.attrname] = c.previous
-        #
-        #
-        #     else:
-        #         acc_changes[change.attrname] = change.previous
-        #
-        # # afterwards, update pointer
-        # self._revptr[target_id] = revptr
 
-        # now apply finalized state changes to target.
-        # if target_id in self._callbacks:
-        #     cb = self._callbacks[target_id]
-        #     for prop, val in acc_changes.items():
-        #         cb(prop, val)
-        #
-        # else:
-        #     for prop, val in acc_changes.items():
-        #         setattr(target, prop, val)
 
     ##===============================================
     ## Redo
@@ -261,6 +207,4 @@ class ObjectDiffTracker:
         acc_changes = self._accum_changes(target_id, steps, 1)
 
         self._apply_opchanges(target_id, acc_changes)
-
-
 

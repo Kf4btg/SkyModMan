@@ -1,17 +1,13 @@
 from PyQt5.QtWidgets import QUndoCommand, QUndoGroup, QUndoStack, QUndoView
-from .modtable_tree import QModEntry
+# from .modtable_tree import QModEntry
 from collections import deque, namedtuple
-
 
 class CleanStateManager:
 
     pass
 
-
-
 Slice = namedtuple('Slice', 'start, end')
 class ShiftRowsCommand(QUndoCommand):
-
 
     def __init__(self, entrylist, start, end, dest, parent):
         """
@@ -63,7 +59,4 @@ class ShiftRowsCommand(QUndoCommand):
         self.entrylist[self.slice.start:self.slice.end] = \
             [me.replace(ordinal=self.slice.start + i)
              for i, me in enumerate(self.deck, start=1)]  # ordinal is 1 higher than index
-
-
-
 
