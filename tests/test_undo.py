@@ -8,12 +8,13 @@ from unittest import mock
 @pytest.fixture()
 def mock_mod_entry():
     me = mock.Mock(spec=ModEntry)
-    me.enabled = True
+    me.enabled = 1
     me.name = "Mod Name"
     me.directory = "Mod Name HD v1_01HDWHOA"
     me.modid = 15602
     me.version = "v1.0.1"
-    me.ordinal = 23
+    me.ordinal = 42
+
     return me
 
 # class Thing:pass
@@ -50,17 +51,16 @@ def test_tracker_init(mock_mod_entry):
         assert a in odt._slots
 
 
-@pytest.fixture
+@pytest.fixture(scope='module')
 def tracker():
-    me = mock.Mock(spec=ModEntry)
-    odt = undo.ObjectDiffTracker(me.__class__, "enabled", "name", "modid", "version", "ordinal")
-    assert odt._type == ModEntry
-    for a in ["enabled", "name", "modid", "version", "ordinal"]:
-        assert a in odt._slots
+    odt = undo.ObjectDiffTracker(ModEntry, "enabled", "name", "modid", "version", "ordinal")
     return odt
 
 
 def test_new_tracker(tracker):
+    assert tracker._type == ModEntry
+    for a in ["enabled", "name", "modid", "version", "ordinal"]:
+        assert a in tracker._slots
 
     with pytest.raises(KeyError):
         assert tracker.stack_size(1)
@@ -68,26 +68,216 @@ def test_new_tracker(tracker):
     assert not tracker._tracked
     assert not tracker._revisions
     assert not tracker._callback
-    assert not tracker._revptr
+    assert not tracker._revcur
 
 
-def test_add_tracked(tracker):
+def test_add_tracked(mock_mod_entry, tracker):
 
-    me = random_mock_modentry()
+    # me = random_mock_modentry()
+    me = mock_mod_entry
     new_name = "Rather Boring Name"
+    old_name = me.name
 
     tracker.addNew(me, me.directory, "name", me.name, new_name )
 
+    assert tracker._tracked[me.directory] is me
 
-    assert tracker._savepoint < 0
     assert tracker.stack_size(me.directory) == 1
     assert tracker.max_undos(me.directory)  == 1
     assert tracker.max_redos(me.directory)  == 0
-    assert tracker.is_clean(me.directory)   == False
+
+    assert tracker.savepoint < 0
+    assert not tracker.is_clean(me.directory)
 
     assert tracker._revisions[me.directory][0].attrname=="name"
-    assert tracker._revisions[me.directory][0].previous==me.name
+    assert tracker._revisions[me.directory][0].previous==old_name
     assert tracker._revisions[me.directory][0].current==new_name
+
+    # check that it actually changed this object
+    assert tracker._revisions[me.directory][0].current==me.name
+    for s in tracker._slots:
+        assert getattr(tracker._tracked[me.directory], s) == \
+               getattr(me, s)
+
+
+
+
+def test_more_revisions(mock_mod_entry, tracker:undo.ObjectDiffTracker):
+
+    me  = mock_mod_entry
+    key = me.directory
+
+    tracker.add(key, "enabled", me.enabled, 0)
+    tracker.add(key, "ordinal", me.ordinal, 100)
+    tracker.add(key, undo.Delta("version", me.version, "v2.0"))
+
+    assert tracker.max_undos(key) == tracker.stack_size(key) == 4
+    assert tracker.max_redos(key) == 0
+
+
+
+def test_set_savepoint(tracker: undo.ObjectDiffTracker):
+    key = mock_mod_entry().directory
+
+    assert tracker.savepoint==-1
+    assert not tracker.is_clean(key)
+    assert tracker._steps_to_revert(key) == 4
+
+    tracker.savepoint = 2
+    assert not tracker.is_clean(key)
+    assert tracker._steps_to_revert(key) == 1
+    # these invariant wrt savepoint
+    assert tracker.max_undos(key) == tracker.stack_size(key) == 4
+    assert tracker.max_redos(key) == 0
+
+    # current end of list
+    tracker.savepoint = 3
+    assert tracker._steps_to_revert(key) == 0
+    assert tracker.is_clean(key)
+
+# before testing: (3, True, 0, 4, 0), savepoint == 3
+cursor_change_params = [(2,False,-1,3,1),
+                        (1,False,-2,2,2),
+                        (0,False,-3,1,3),
+                        (3, True, 0,4,0) # reset to pre-test state
+                        ]
+
+@pytest.mark.parametrize("curpos, x_isclean, x_s2r, x_maxundo, x_maxredo", cursor_change_params)
+def test_cursor_change(tracker: undo.ObjectDiffTracker,
+                       curpos, x_isclean, x_s2r,
+                       x_maxundo, x_maxredo):
+
+    key = mock_mod_entry().directory
+
+    # artificially change revision cursor
+    tracker._revcur[key]=curpos
+    assert tracker.is_clean(key) == x_isclean
+    assert tracker._steps_to_revert(key) == x_s2r
+
+    assert tracker.max_undos(key) == x_maxundo
+    assert tracker.max_redos(key) == x_maxredo
+
+    # reset savepoint
+    # tracker.savepoint = -1
+
+
+#version <- ord <- enabled <- name
+mrvtestparams = [(3,
+                  15602,       # original
+                  0,           # modified
+                  100,         # modified
+                  "v2.0",      # modified
+                  "Rather Boring Name" # modified
+                  ),
+                 (2,15602,0,100,"v1.0.1","Rather Boring Name"),
+                 (1,15602,0,42,"v1.0.1","Rather Boring Name"),
+                 (0,15602,1,42,"v1.0.1","Rather Boring Name"),
+                 (3,15602,0,100,"v2.0","Rather Boring Name"),
+                 ]
+
+def get_mrv(odt):
+    me = mock_mod_entry()
+
+    mrv = odt.most_recent_values(me.directory)
+    return {
+        s: mrv[s] if s in mrv else getattr(me, s) for s in odt._slots
+        }
+
+@pytest.mark.parametrize("curpos, x_modid, x_enabled, x_ord, x_version, x_name", mrvtestparams)
+def test_most_recent_vals(mock_mod_entry,
+                          tracker:undo.ObjectDiffTracker,
+                          curpos, x_modid, x_enabled,
+                          x_ord, x_version, x_name):
+
+    key = mock_mod_entry.directory
+
+    #artificially change cursor position
+    tracker._revcur[key] = curpos
+
+    # mrv = tracker.most_recent_values(key)
+    currstate = get_mrv(tracker)
+
+    assert currstate["modid"] == x_modid
+    assert currstate["enabled"] == x_enabled
+    assert currstate["ordinal"] == x_ord
+    assert currstate["version"] == x_version
+    assert currstate["name"] == x_name
+
+
+def check_obj_state(key, _tracker, x_modid, x_enabled, x_ord, x_version, x_name):
+    curr_obj = _tracker._tracked[key]
+    assert curr_obj.modid == x_modid
+    assert curr_obj.enabled == x_enabled
+    assert curr_obj.ordinal == x_ord
+    assert curr_obj.version == x_version
+    assert curr_obj.name == x_name
+
+
+def check_tracker_stats(key, _tracker, x_cur, x_stacksize, x_maxundo, x_maxredo, x_s2r, x_isclean):
+    assert _tracker._revcur[key] == x_cur
+    assert _tracker.stack_size(key) == x_stacksize
+    assert _tracker.max_undos(key) == x_maxundo
+    assert _tracker.max_redos(key) == x_maxredo
+    assert _tracker._steps_to_revert(key) == x_s2r
+    assert _tracker.is_clean(key) == x_isclean
+
+
+def test_undo(mock_mod_entry, tracker:undo.ObjectDiffTracker):
+    # reset savepoint
+    tracker.savepoint=2
+    orig = mock_mod_entry
+    key = orig.directory
+
+    # steps==0 case; noop, returns False
+    assert not tracker.undo(key,0)
+
+    # current setup
+    check_tracker_stats(key,tracker,3,4,4,0,1,False)
+
+    # test that all previous changes were actually
+    # made to the tracked object
+    check_obj_state(key, tracker, 15602,0,100,"v2.0","Rather Boring Name")
+
+    assert tracker.undo(key) #default 1 step
+
+    #after undo
+    check_tracker_stats(key,tracker,2,4,3,1,0,True)
+
+    check_obj_state(key, tracker, 15602, 0, 100,
+                    "v1.0.1", #UNDO
+                    "Rather Boring Name")
+
+
+
+def test_redo(tracker:undo.ObjectDiffTracker):
+    orig = mock_mod_entry()
+    key = orig.directory
+
+    # steps==0 case; noop, returns False
+    assert not tracker.redo(key, 0)
+
+    # should still be clean from last time
+    assert tracker.is_clean(key)
+
+    curr_obj = tracker._tracked[key]
+    assert tracker.redo(key) #default 1 step
+
+
+    check_obj_state(key, tracker, 15602, 0, 100,
+                    "v2.0", #REDO
+                    "Rather Boring Name")
+
+    check_tracker_stats(key, tracker, 3, 4, 4, 0, 1, False)
+
+
+
+
+
+
+
+
+
+
 
 
 
