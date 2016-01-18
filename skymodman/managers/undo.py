@@ -31,6 +31,11 @@ class ObjectDiffTracker:
 
         # dict of target_ids to target revision stacks (list of Deltas)
         self._revisions = {}
+        # mapping of ids to a full description of the item attributes at the time tracking began. Used for the final undo.
+        self._initialstates = {}
+        # mapping of ids to a full description of the item attributes at the time of the last save. Used for the detecting 'manual' undos.
+        #todo: maybe it would be better to just check a few items earlier in the undo stack to see if the target has been reverted...
+        self._cleanstates = {}
 
         # the 'revision cursors'
         # mapping of [target_id: int], where the value is the index in the target's revisions stack corresponding to the Delta object that describes the target's current revision state.
@@ -152,6 +157,9 @@ class ObjectDiffTracker:
             self._tracked[target_id] = target
             self._revisions[target_id] = []
             self._revcur[target_id] = self._savecur[target_id] = -1
+            self._initialstates[target_id] = \
+                self._cleanstates[target_id] = \
+                self._get_current_state(target_id)
 
         self.add(target_id, *args)
 
@@ -174,6 +182,10 @@ class ObjectDiffTracker:
 
         # now need to actually apply the change
         self.redo(target_id)
+
+    def _get_current_state(self, target_id):
+        return { s:self.get_attr(target_id, s)
+                    for s in self._slots }
 
     def _addChange(self, target_id, prop, old_val, new_val):
         """
