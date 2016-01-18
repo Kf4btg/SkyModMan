@@ -372,6 +372,15 @@ def test_save(key, tracker:undo.ObjectDiffTracker):
     assert tracker._revcur[key] == 3
     assert tracker._savecur[key] == 3
 
+def test_truncate_stack(key,tracker:undo.ObjectDiffTracker):
+
+    tracker.undo(2) # back 2: c==1
+
+    assert tracker.max_undos(key)==2
+    assert tracker.max_redos(key)==2
+
+
+
 
 testwords=[ "Dawnguard", "HearthFires", "Unofficial", "Skyrim", "Legendary", "Edition", "Patch", "Clothing", "and", "Clutter", "Fixes", "Cutting", "Room", "Floor", "Guard", "Dialogue", "Overhaul", "Invisibility", "Eyes", "Fix", "Weapons", "and", "Armor", "Fixes", "Complete", "Crafting", "Overhaul", "Remade", "Realistic", "Water", "Two" ,"Content","Addon", "Explosive", "Bolts", "Visualized" , "Animated", "Weapon", "Enchants" , "Deadly", "Spell", "Impacts" , "dD", "-", "Enhanced", "Blood", "Main", "Book", "Covers", "Skyrim", "Improved", "Combat", "Sounds", "v2.2", "Bring", "Out", "Your", "Dead", "-","Legendary", "Edition", "The", "Choice", "Is", "Yours" , "The", "Paarthurnax", "Dilemma", "Better", "Quest", "Objectives",]
 # "aMidianBorn",

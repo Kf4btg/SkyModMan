@@ -236,7 +236,7 @@ class ObjectDiffTracker:
                 self._savecur[target_id] = -1
 
     ##===============================================
-    ## Undo Management
+    ## Undo/Redo Helpers
     ##===============================================
 
     def _accum_changes(self, target_id, num_steps, step=-1):
