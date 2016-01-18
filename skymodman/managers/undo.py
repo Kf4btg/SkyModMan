@@ -5,26 +5,58 @@ Delta = collections.namedtuple("Delta", "attrname previous current")
 
 class ObjectDiffTracker:
 
-    def __init__(self, target_type, *slots, callback=None):
+    def __init__(self, target_type, *slots, attrgetter=None,attrsetter=None):
         """
 
-        :param type target_type: type (class) of object being tracked
-        :param list[str] slots: names of tracked properties in an instance of target type
+        :param type target_type:
+            type (class) of object being tracked
+        :param list[str] slots:
+            names of tracked properties in an instance of target type
+        :param callable attrgetter:
+            if specified, must be a callable object that takes two parameters--an instance of `target_type`; and the name of a property or attribute--and returns the value of that attribute for the passed instance. This callback will be used instead of getattr() to get values from tracked targets.
+        :param callable attrsetter:
+            if specified, must be a callable object that takes three parameters--an instance of `target_type`; the name of a property or attribute; and some value--and sets that attribute on the instance to the passed value. This callback will be used instead of setattr() to set values on tracked targets.
         """
         self._type = target_type
         self._slots = slots
 
-        self._savepoint = -1 # updated when user saves, points to index in revision list that is the new "clean" state
+        # -----------------------------------------------
+        # Mappings and collections
+        # -----------------------------------------------
 
-        # container of Delta stacks for each registered property slot
-        self._tracked = {}  # dict of target_ids to target_objects
-        self._revisions = {} # dict of target_ids to target revision stacks (list of Deltas)
+        # dict of target_ids to target_objects
+        self._tracked = {}
+        # a dictview collection on the keys of the tracked objects for easy access to the target ids
+        self._ids = self._tracked.keys()
 
-        self._callback = callback
-        # self._callbacks = {} # if specified when adding a tracked item, the target's
-                             # callback will be invoked instead of setattr when changing values
-        # the 'revision cursor'
-        self._revcur = {} # mapping of [id: int], where the value is the index in the target's revisions list corresponding to current location in the undo/redo stack for that item
+        # dict of target_ids to target revision stacks (list of Deltas)
+        self._revisions = {}
+
+        # the 'revision cursors'
+        # mapping of [target_id: int], where the value is the index in the target's revisions stack corresponding to the Delta object that describes the target's current revision state.
+        self._revcur = {}
+
+        # each stack will also need it's own savepoint cursor;
+        # these point to the stack index that was current the last
+        # time a save command was issued (or the program loaded)
+        self._savecur = {}
+
+        #-----------------------------------------------
+        # define attribute getter/setter
+        #-----------------------------------------------
+
+        if attrgetter is not None:
+            assert callable(attrgetter)
+            self._getattr = attrgetter
+        else:
+            self._getattr = getattr
+
+        if attrsetter is not None:
+            assert callable(attrsetter)
+            self._setattr = attrsetter
+        else:
+            self._setattr = setattr
+
 
     ##===============================================
     ## Properties (-ish)
@@ -39,22 +71,32 @@ class ObjectDiffTracker:
     def max_redos(self, target_id):
         return self.stack_size(target_id)-self.max_undos(target_id)
 
-    ####
-    ## Check/Set savepoint
-    @property
-    def savepoint(self) -> int:
-        return self._savepoint
+    ## Attr get/set
+    ##==============
+    def get_attr(self, target, attr_name):
+        self._getattr(target, attr_name)
 
-    @savepoint.setter
-    def savepoint(self, new_savept):
-        self._savepoint = new_savept
+    def set_attr(self, target, attr_name, value):
+        self._setattr(target, attr_name, value)
+
+    ## Saving/checking saved status
+    ##=============================
+    def save(self):
+        """
+        Mark the current revision position in each stack as the "clean" state.
+        :return:
+        """
+        for tid, cur in self._revcur.items():
+            self._savecur[tid] = cur
 
     def is_clean(self, target_id):
         """Returns False if any revisions have been made to the target since the last savepoint"""
 
-        # if savepoint is beyond the length of this item's revstack,
-        # then return true if the revision cursor points to end of stack
-        return self._revcur[target_id] == min(self._savepoint, self.stack_size(target_id))
+        return self._savecur[target_id] == self._revcur[target_id]
+
+    def all_clean(self):
+        """Returns True iff every tracked object evaluates as clean. Short circuits on finding first non-clean obj"""
+        return any(not self.is_clean(t) for t in self._ids)
 
     def _steps_to_revert(self, target_id):
         """ number of undo steps required to revert this target
@@ -63,13 +105,12 @@ class ObjectDiffTracker:
         :param target_id:
         :return: # of undo-ops; negative means redo-ops
         """
-        return self._revcur[target_id] - self._savepoint
+        return self._revcur[target_id] - self._savecur[target_id]
 
     ##===============================================
     ## Adding/removing Tracked objects
     ##===============================================
 
-    # def track(self, target, target_id, callback=None):
     # def track(self, target, target_id):
     #     """Start tracking change operations for the specified object
     #
@@ -93,7 +134,7 @@ class ObjectDiffTracker:
     def untrack(self, target_id):
         """Stop tracking the object with the specified id"""
 
-        for coll in [self._tracked, self._revisions, self._revcur, self._callbacks]:
+        for coll in [self._tracked, self._revisions, self._revcur, self._savecur]:
             try:
                 del coll[target_id]
             except KeyError:
@@ -101,7 +142,7 @@ class ObjectDiffTracker:
 
     def resetTracker(self):
         """Forget all tracked objects. Does not revert state."""
-        for coll in [self._tracked, self._revisions, self._revcur]:
+        for coll in [self._tracked, self._revisions, self._revcur, self._savecur]:
             coll.clear()
 
     ##===============================================
@@ -109,21 +150,33 @@ class ObjectDiffTracker:
     ##===============================================
     bstr = (str, bytes)
     def addNew(self, target, target_id, *args):
-        """Use when adding the first change to begin tracking the target"""
+        """Use the first time a change is added for an object; this causes the tracker to register `target` as a tracked item and begin managing its undo/redo state.
+
+        For subsequent changes to this target, use the ``add()`` method
+
+        :param target:
+            the actual object to tracked. To prevent state corruption, any changes to the target should only be done through the DiffTracker after tracking has begun.
+        :param target_id:
+            must be a unique, hashable value that can be used to identify this object among all the other tracked items
+        :param args: see description for the ``add()`` method.
+        """
+
         if target_id not in self._tracked:
             self._tracked[target_id] = target
             self._revisions[target_id] = []
-            self._revcur[target_id]=-1
+            self._revcur[target_id] = self._savecur[target_id] = -1
 
         self.add(target_id, *args)
 
     def add(self, target_id, *args):
-        """Basically a selector for the the other _add* methods (Change, Delta, DeltaGroup)
+        """Basically an overloaded method for recording changes in several ways (Change, Delta, DeltaGroup)
 
             * add(target_id, attrname, prev_value, curr_value)
             * add(target_id, Delta)
             * add(target_id, Iterable(Delta))
 
+        :param args:
+            should either be three arguments in the order (attribute_name, previous_value, current_value); a ``Delta`` object with the corresponding fields set; or several ``Delta`` objects contained in an ordered iterable such as a list. All the changes in a 'Delta group' will be undone/redone by a single undo or redo operation.
         """
         if isinstance(args[0],self.bstr): #prop name
             self._addChange(target_id, *args)
@@ -131,8 +184,6 @@ class ObjectDiffTracker:
             self._addDelta(target_id, *args)
         elif isinstance(args[0], collections.Iterable):
             self._addDeltaGroup(target_id, *args)
-
-        # self._revcur[target_id]+=1
 
         # now need to actually apply the change
         self.redo(target_id)
@@ -142,11 +193,9 @@ class ObjectDiffTracker:
         Record a change operation to the tracked object specified by target_id;
         the effect of the operation is given by `delta`, containing the names and new values of the updated properties.
 
-        :param target_id:
         """
         self._truncate_redos(target_id)
         self._revisions[target_id].append(Delta(prop, old_val, new_val))
-
 
     def _addDelta(self, target_id, delta):
         """
@@ -167,7 +216,6 @@ class ObjectDiffTracker:
 
         :param target_id:
         :param collections.Iterable[Delta] deltas: must be an ordered sequence of Delta objects
-        :return:
         """
         self._truncate_redos(target_id)
         self._revisions[target_id].append(deltas)
@@ -184,8 +232,8 @@ class ObjectDiffTracker:
         if self.stack_size(target_id) > r:
             self._revisions[target_id][r:] = []
             # invalidates savepoint if it is further ahead in undo-stack
-            if self._savepoint > r:
-                self._savepoint = -1
+            if self._savecur[target_id] > r:
+                self._savecur[target_id] = -1
 
     ##===============================================
     ## Undo Management
@@ -195,8 +243,8 @@ class ObjectDiffTracker:
         """
 
         :param target_id:
-        :param num_steps: number of steps to move
-        :param step: either +1 or -1, depending on if this is called from the redo or undo method
+        :param int num_steps: number of steps to move
+        :param int step: either +1 or -1, depending on if this is called from the redo or undo method
         :return:
         """
         acc_changes = {}  # accumulate the changes as we go backwards/forwards
@@ -207,11 +255,10 @@ class ObjectDiffTracker:
         end= start+step*num_steps
 
 
-
         # print("revlist: ")
         # pprint(revlist)
         # print("cursor pos: ", cur)
-
+        #
         # print("slice: [start=",start,", stop=",end,
         #       ", step=",step,"] == ",
         #       revlist[start:end:step])
@@ -230,9 +277,6 @@ class ObjectDiffTracker:
             else:
                 acc_changes[change.attrname] = (None, change.current, change.previous)[step]
 
-        # afterwards, update cursor
-        # self._revcur[target_id] = start
-
         # print("changes: ", acc_changes)
 
         return acc_changes
@@ -248,42 +292,14 @@ class ObjectDiffTracker:
         target = self._tracked[target_id]
         # print(changes)
 
-
-        if self._callback:
-            for prop, val in changes.items():
-                # print(getattr(target, prop), end=" ")
-
-                self._callback(prop, val)
-                # print(getattr(target, prop), end=" ")
-
-
-        else:
-            for prop, val in changes.items():
+        for prop, val in changes.items():
                 # print(getattr(target, prop), end="==>")
-
-                setattr(target, prop, val)
+                self.set_attr(target, prop, val)
                 # print(getattr(target, prop), end="::")
 
         # print()
         return True
-    #
-    # def _undo(self, target_id, steps=1):
-    #     """Undo `steps` most recent change operations to the target"""
-    #
-    #     acc_changes  = self._accum_changes(target_id, steps, -1)
-    #
-    #     return self._apply_opchanges(target_id, acc_changes)
 
-
-    ##===============================================
-    ## Redo
-    ##===============================================
-    #
-    # def _redo(self, target_id, steps=1):
-    #
-    #     acc_changes = self._accum_changes(target_id, steps, 1)
-    #
-    #     return self._apply_opchanges(target_id, acc_changes)
 
 
     def most_recent_values(self, target_id):
@@ -300,18 +316,29 @@ class ObjectDiffTracker:
 
         return vals
 
+    ##===============================================
+    ## Undo/Redo Calls
+    ##===============================================
 
-    ###
+
     def _walk_stack(self, target_id, steps):
-        if steps == 0: return False  # steps==0 is a noop
+        """
+        This is the real method that handles both undo and redo calls; which operation is performed depends on the sign (positive or negative) of `steps`.
 
-        if steps < 0: #undo
-            _steps = min(abs(steps), self.max_undos(target_id))
-            _norm = -1 #step direction
+        :param target_id:
+        :param int steps:
+        :return: False if the operation could not be performed for some reason, such as steps being passed as 0, or if there are no more possible operations of that type in the stack. True if the undo/redo operation proceeds as normal.
+        """
 
-        else: # steps > 0:  # redo
-            _steps = min(steps, self.max_redos(target_id))
-            _norm = 1
+        _steps = min(abs(steps),
+                     self.max_undos(target_id) if steps < 0
+                     else self.max_redos(target_id))
+
+        # if steps was passed as 0 or there are no undo/redos to do:
+        if _steps == 0: return False # no change
+
+        _norm = abs(steps)//steps #step direction unit vector
+
 
         acc_changes = self._accum_changes(target_id, _steps, _norm)
         stat = self._apply_opchanges(target_id, acc_changes)
@@ -320,8 +347,21 @@ class ObjectDiffTracker:
         return stat
 
     def undo(self, target_id, steps=1):
+        """
+
+        :param target_id:
+        :param steps:
+            how many steps to move backward in the revision stack. Note that a negative value here will actually result in a redo.
+        :return: False if the operation could not be performed for some reason, such as steps being passed as 0, or if the revision cursor is already at the beginning of the stack. True if the undo operation proceeds as normal.
+        """
         return self._walk_stack(target_id, -steps)
 
     def redo(self, target_id, steps=1):
+        """
+
+        :param target_id:
+        :param steps: how many steps in the revision stack to move forward. Note that a negative value here will actually result in an undo.
+        :return: False if the operation could not be performed for some reason, such as steps being passed as 0, or if the revision cursor is already at the end of the stack. True if the redo operation proceeds as normal.
+        """
         return self._walk_stack(target_id, steps)
 

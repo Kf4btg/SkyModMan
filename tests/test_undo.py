@@ -17,6 +17,25 @@ def mock_mod_entry():
 
     return me
 
+# @pytest.fixture(scope='module')
+# def ref_mme():
+#     "Reference mock modentry"
+#     me = mock.Mock(spec=ModEntry)
+#     me.enabled = 1
+#     me.name = "Mod Name"
+#     me.directory = "Mod Name HD v1_01HDWHOA"
+#     me.modid = 15602
+#     me.version = "v1.0.1"
+#     me.ordinal = 42
+#
+#     return me
+
+@pytest.fixture(scope='module')
+def key():
+    me = mock_mod_entry()
+    return me.directory
+
+
 # class Thing:pass
 
 def random_mock_modentry():
@@ -67,8 +86,10 @@ def test_new_tracker(tracker):
 
     assert not tracker._tracked
     assert not tracker._revisions
-    assert not tracker._callback
+    assert tracker._getattr is getattr
+    assert tracker._setattr is setattr
     assert not tracker._revcur
+    assert not tracker._savecur
 
 
 def test_add_tracked(mock_mod_entry, tracker):
@@ -86,7 +107,7 @@ def test_add_tracked(mock_mod_entry, tracker):
     assert tracker.max_undos(me.directory)  == 1
     assert tracker.max_redos(me.directory)  == 0
 
-    assert tracker.savepoint < 0
+    assert tracker._savecur[me.directory] < 0
     assert not tracker.is_clean(me.directory)
 
     assert tracker._revisions[me.directory][0].attrname=="name"
@@ -102,10 +123,9 @@ def test_add_tracked(mock_mod_entry, tracker):
 
 
 
-def test_more_revisions(mock_mod_entry, tracker:undo.ObjectDiffTracker):
+def test_more_revisions(key, mock_mod_entry, tracker:undo.ObjectDiffTracker):
 
     me  = mock_mod_entry
-    key = me.directory
 
     tracker.add(key, "enabled", me.enabled, 0)
     tracker.add(key, "ordinal", me.ordinal, 100)
@@ -116,14 +136,14 @@ def test_more_revisions(mock_mod_entry, tracker:undo.ObjectDiffTracker):
 
 
 
-def test_set_savepoint(tracker: undo.ObjectDiffTracker):
-    key = mock_mod_entry().directory
+def test_set_savepoint(key, tracker: undo.ObjectDiffTracker):
 
-    assert tracker.savepoint==-1
+    assert tracker._savecur[key]==-1
     assert not tracker.is_clean(key)
     assert tracker._steps_to_revert(key) == 4
 
-    tracker.savepoint = 2
+    # cheat by moving cursor artificially
+    tracker._savecur[key] = 2
     assert not tracker.is_clean(key)
     assert tracker._steps_to_revert(key) == 1
     # these invariant wrt savepoint
@@ -131,7 +151,8 @@ def test_set_savepoint(tracker: undo.ObjectDiffTracker):
     assert tracker.max_redos(key) == 0
 
     # current end of list
-    tracker.savepoint = 3
+    tracker.save()
+    assert tracker._savecur[key] == 3
     assert tracker._steps_to_revert(key) == 0
     assert tracker.is_clean(key)
 
@@ -157,9 +178,6 @@ def test_cursor_change(tracker: undo.ObjectDiffTracker,
     assert tracker.max_undos(key) == x_maxundo
     assert tracker.max_redos(key) == x_maxredo
 
-    # reset savepoint
-    # tracker.savepoint = -1
-
 
 #version <- ord <- enabled <- name
 mrvtestparams = [(3,
@@ -175,6 +193,13 @@ mrvtestparams = [(3,
                  (3,15602,0,100,"v2.0","Rather Boring Name"),
                  ]
 
+tracker_stat_params = [(3, 4, 4, 0, 1, False),
+                       (2, 4, 3, 1, 0, True),
+                       (1, 4, 2, 2, -1, False),
+                       (0, 4, 1, 3, -2, False)
+                       ]
+
+
 def get_mrv(odt):
     me = mock_mod_entry()
 
@@ -184,14 +209,12 @@ def get_mrv(odt):
         }
 
 @pytest.mark.parametrize("curpos, x_modid, x_enabled, x_ord, x_version, x_name", mrvtestparams)
-def test_most_recent_vals(mock_mod_entry,
+def test_most_recent_vals(key,
                           tracker:undo.ObjectDiffTracker,
                           curpos, x_modid, x_enabled,
                           x_ord, x_version, x_name):
 
-    key = mock_mod_entry.directory
-
-    #artificially change cursor position
+     #artificially change cursor position
     tracker._revcur[key] = curpos
 
     # mrv = tracker.most_recent_values(key)
@@ -222,11 +245,10 @@ def check_tracker_stats(key, _tracker, x_cur, x_stacksize, x_maxundo, x_maxredo,
     assert _tracker.is_clean(key) == x_isclean
 
 
-def test_undo(mock_mod_entry, tracker:undo.ObjectDiffTracker):
-    # reset savepoint
-    tracker.savepoint=2
-    orig = mock_mod_entry
-    key = orig.directory
+def test_undo(key, tracker:undo.ObjectDiffTracker):
+
+    # cheat save cursor to 2
+    tracker._savecur[key] = 2
 
     # steps==0 case; noop, returns False
     assert not tracker.undo(key,0)
@@ -249,9 +271,7 @@ def test_undo(mock_mod_entry, tracker:undo.ObjectDiffTracker):
 
 
 
-def test_redo(tracker:undo.ObjectDiffTracker):
-    orig = mock_mod_entry()
-    key = orig.directory
+def test_redo(key, tracker:undo.ObjectDiffTracker):
 
     # steps==0 case; noop, returns False
     assert not tracker.redo(key, 0)
@@ -259,9 +279,7 @@ def test_redo(tracker:undo.ObjectDiffTracker):
     # should still be clean from last time
     assert tracker.is_clean(key)
 
-    curr_obj = tracker._tracked[key]
     assert tracker.redo(key) #default 1 step
-
 
     check_obj_state(key, tracker, 15602, 0, 100,
                     "v2.0", #REDO
@@ -270,18 +288,92 @@ def test_redo(tracker:undo.ObjectDiffTracker):
     check_tracker_stats(key, tracker, 3, 4, 4, 0, 1, False)
 
 
+def test_seq_undo(key, tracker:undo.ObjectDiffTracker):
+
+        # test multiple undo steps in a row
+
+    assert tracker.undo(key) #cur :: 3->2
+    assert tracker.undo(key) #cur :: 2->1
+    assert tracker.undo(key) #cur :: 1->0
+
+    check_tracker_stats(key, tracker, *tracker_stat_params[3])
+
+    check_obj_state(key, tracker, *mrvtestparams[3][1:])
+
+def test_seq_redo(key, tracker:undo.ObjectDiffTracker):
+       # test multiple redo steps in a row
+
+    assert tracker.redo(key)  # cur :: 0->1
+    assert tracker.redo(key)  # cur :: 1->2
+
+    check_tracker_stats(key, tracker, 2, 4, 3, 1, 0, True)
+
+    check_obj_state(key, tracker, 15602,0,100,"v1.0.1","Rather Boring Name")
+
+    assert tracker.redo(key) # 2->3
+
+def test_cannot_redo(key, tracker):
+
+    assert tracker.stack_size(key) \
+           == tracker.max_undos(key) \
+           == tracker._revcur[key]+1
+
+    assert tracker.max_redos(key) == 0
+
+    assert not tracker.redo(key)
+
+    assert not tracker.redo(key, 65536)
 
 
+def test_multi_undo(key, tracker:undo.ObjectDiffTracker):
+    # test undo multiple steps at once
+
+    assert tracker.undo(key, 3) # cur:: 3->0
+
+    check_tracker_stats(key, tracker, 0, 4, 1, 3, -2, False)
+
+    check_obj_state(key, tracker, 15602,1,42,"v1.0.1","Rather Boring Name")
+
+    assert tracker.redo(key, 2)  # cur:: 0->2
+    check_tracker_stats(key, tracker, 2, 4, 3, 1, 0, True)
+
+    check_obj_state(key, tracker, 15602, 0, 100, "v1.0.1", "Rather Boring Name")
 
 
+def test_save(key, tracker:undo.ObjectDiffTracker):
+
+    assert tracker.is_clean(key)
+    assert tracker._revcur[key] == 2
+    assert tracker._savecur[key] == 2
 
 
+    assert tracker.undo(key)
+
+    assert not tracker.is_clean(key)
+    assert tracker._revcur[key] == 1
+    assert tracker._savecur[key] == 2
 
 
+    tracker.save()
+
+    assert tracker.is_clean(key)
+    assert tracker._revcur[key] == 1
+    assert tracker._savecur[key] == 1
 
 
+    assert tracker.redo(key, 2)
 
-testwords=[ "Dawnguard", "HearthFires", "Unofficial", "Skyrim", "Legendary", "Edition", "Patch", "Clothing", "and", "Clutter", "Fixes", "Cutting", "Room", "Floor", "Guard", "Dialogue", "Overhaul","Invisibility", "Eyes", "Fix", "Weapons", "and", "Armor", "Fixes", "Complete", "Crafting", "Overhaul", "Remade" , "Realistic","Water","Two" ,"Content", "Addon" , "Explosive","Bolts","Visualized" , "Animated", "Weapon", "Enchants" , "Deadly","Spell","Impacts" , "dD", "-", "Enhanced", "Blood", "Main" , "Book", "Covers", "Skyrim" , "Improved", "Combat", "Sounds", "v2.2" , "Bring", "Out", "Your", "Dead", "-","Legendary", "Edition", "The","Choice","Is","Yours" , "The", "Paarthurnax", "Dilemma" , "Better", "Quest", "Objectives" ,]
+    assert not tracker.is_clean(key)
+    assert tracker._revcur[key] == 3
+    assert tracker._savecur[key] == 1
+
+    tracker.save()
+    assert tracker.is_clean(key)
+    assert tracker._revcur[key] == 3
+    assert tracker._savecur[key] == 3
+
+
+testwords=[ "Dawnguard", "HearthFires", "Unofficial", "Skyrim", "Legendary", "Edition", "Patch", "Clothing", "and", "Clutter", "Fixes", "Cutting", "Room", "Floor", "Guard", "Dialogue", "Overhaul", "Invisibility", "Eyes", "Fix", "Weapons", "and", "Armor", "Fixes", "Complete", "Crafting", "Overhaul", "Remade", "Realistic", "Water", "Two" ,"Content","Addon", "Explosive", "Bolts", "Visualized" , "Animated", "Weapon", "Enchants" , "Deadly", "Spell", "Impacts" , "dD", "-", "Enhanced", "Blood", "Main", "Book", "Covers", "Skyrim", "Improved", "Combat", "Sounds", "v2.2", "Bring", "Out", "Your", "Dead", "-","Legendary", "Edition", "The", "Choice", "Is", "Yours" , "The", "Paarthurnax", "Dilemma", "Better", "Quest", "Objectives",]
 # "aMidianBorn",
 
 
