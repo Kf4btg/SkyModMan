@@ -17,19 +17,6 @@ def mock_mod_entry():
 
     return me
 
-# @pytest.fixture(scope='module')
-# def ref_mme():
-#     "Reference mock modentry"
-#     me = mock.Mock(spec=ModEntry)
-#     me.enabled = 1
-#     me.name = "Mod Name"
-#     me.directory = "Mod Name HD v1_01HDWHOA"
-#     me.modid = 15602
-#     me.version = "v1.0.1"
-#     me.ordinal = 42
-#
-#     return me
-
 @pytest.fixture(scope='module')
 def key():
     me = mock_mod_entry()
@@ -75,6 +62,10 @@ def tracker():
     odt = undo.ObjectDiffTracker(ModEntry, "enabled", "name", "modid", "version", "ordinal")
     return odt
 
+@pytest.fixture #not module-scoped
+def new_tracker():
+    odt = undo.ObjectDiffTracker(ModEntry, "enabled", "name", "modid", "version", "ordinal")
+    return odt
 
 def test_new_tracker(tracker):
     assert tracker._type == ModEntry
@@ -86,8 +77,6 @@ def test_new_tracker(tracker):
 
     assert not tracker._tracked
     assert not tracker._revisions
-    assert tracker._getattr is getattr
-    assert tracker._setattr is setattr
     assert not tracker._revcur
     assert not tracker._savecur
 
@@ -374,12 +363,89 @@ def test_save(key, tracker:undo.ObjectDiffTracker):
 
 def test_truncate_stack(key,tracker:undo.ObjectDiffTracker):
 
-    tracker.undo(2) # back 2: c==1
+    tracker.undo(key, 2) # back 2: c==1
 
-    assert tracker.max_undos(key)==2
-    assert tracker.max_redos(key)==2
+    assert tracker.max_undos(key) == 2
+    assert tracker.max_redos(key) == 2
+    assert tracker._savecur[key]  == 3
+    assert tracker.stack_size(key) == 4
 
 
+    tracker.add(key, "modid",15602,12345)
+
+    assert tracker.max_undos(key) == 3
+    assert tracker.max_redos(key) == 0
+    assert tracker._savecur[key]  == -1
+    assert tracker.stack_size(key) == 3
+
+    check_obj_state(key, tracker, 12345,0,42,"v1.0.1","Rather Boring Name")
+
+    # shouldn't be able to redo now
+    assert not tracker.redo(key)
+
+def test_add_delta_group(key, tracker):
+
+    dgroup = []
+    for change in [("name", "Rather Boring Name", "Super Awesome Name"), ("version", "v1.0.1", "vWhat.0"), ("ordinal", 42, 255)]:
+        dgroup.append(undo.Delta._make(change))
+
+    assert len(dgroup)==3
+    assert all(isinstance(d, undo.Delta) for d in dgroup)
+
+    tracker.add(key, dgroup)
+
+    assert tracker.max_undos(key) == 4
+    assert tracker.max_redos(key) == 0
+    assert tracker.stack_size(key) == 4
+
+    check_obj_state(key,tracker, 12345, 0, 255, "vWhat.0", "Super Awesome Name")
+
+    tracker.undo(key)
+
+    assert tracker.max_undos(key) == 3
+    assert tracker.max_redos(key) == 1
+    assert tracker.stack_size(key) == 4
+
+    check_obj_state(key, tracker, 12345, 0, 42, "v1.0.1", "Rather Boring Name")
+
+    tracker.redo(key)
+
+    assert tracker.max_undos(key) == 4
+    assert tracker.max_redos(key) == 0
+    assert tracker.stack_size(key) == 4
+
+    check_obj_state(key, tracker, 12345, 0, 255, "vWhat.0", "Super Awesome Name")
+
+def test_fail_settattr():
+    t = undo.ObjectDiffTracker(ModEntry, "enabled", "name", "modid", "version", "ordinal")
+
+    me = ModEntry(1, "Name", 2, '3', 'ModDirectory', 4)
+
+    with pytest.raises(AttributeError):
+        t.addNew(me, me.directory, "modid", me.modid, me.modid + 1)
+
+def test_attr_callbacks():
+    # Use real modentry
+    t = undo.ObjectDiffTracker(ModEntry, "enabled", "name", "modid", "version", "ordinal", attrsetter=lambda m,n,v: m._replace(**{n:v}))
+
+    me = ModEntry(1, "Name", 2, '3', 'ModDirectory', 4)
+    myid = me.directory
+
+    assert me.enabled == 1
+    assert me.name == "Name"
+    assert me.modid == 2
+    assert me.version == '3'
+    assert me.ordinal == 4
+
+    t.addNew(me, myid, "modid", me.modid, me.modid + 1)
+
+    obj = t[myid]
+
+    assert obj.enabled  == 1
+    assert obj.name     == "Name"
+    assert obj.modid    == 3
+    assert obj.version  == '3'
+    assert obj.ordinal  == 4
 
 
 testwords=[ "Dawnguard", "HearthFires", "Unofficial", "Skyrim", "Legendary", "Edition", "Patch", "Clothing", "and", "Clutter", "Fixes", "Cutting", "Room", "Floor", "Guard", "Dialogue", "Overhaul", "Invisibility", "Eyes", "Fix", "Weapons", "and", "Armor", "Fixes", "Complete", "Crafting", "Overhaul", "Remade", "Realistic", "Water", "Two" ,"Content","Addon", "Explosive", "Bolts", "Visualized" , "Animated", "Weapon", "Enchants" , "Deadly", "Spell", "Impacts" , "dD", "-", "Enhanced", "Blood", "Main", "Book", "Covers", "Skyrim", "Improved", "Combat", "Sounds", "v2.2", "Bring", "Out", "Your", "Dead", "-","Legendary", "Edition", "The", "Choice", "Is", "Yours" , "The", "Paarthurnax", "Dilemma", "Better", "Quest", "Objectives",]

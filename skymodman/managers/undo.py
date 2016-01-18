@@ -15,7 +15,7 @@ class ObjectDiffTracker:
         :param callable attrgetter:
             if specified, must be a callable object that takes two parameters--an instance of `target_type`; and the name of a property or attribute--and returns the value of that attribute for the passed instance. This callback will be used instead of getattr() to get values from tracked targets.
         :param callable attrsetter:
-            if specified, must be a callable object that takes three parameters--an instance of `target_type`; the name of a property or attribute; and some value--and sets that attribute on the instance to the passed value. This callback will be used instead of setattr() to set values on tracked targets.
+            if specified, must be a callable object that takes three parameters--an instance of `target_type`; the name of a property or attribute; and some value--and sets that attribute on the instance to the passed value. It should then return the modified object. This callback will be used instead of setattr() to set values on tracked targets.
         """
         self._type = target_type
         self._slots = slots
@@ -47,15 +47,17 @@ class ObjectDiffTracker:
 
         if attrgetter is not None:
             assert callable(attrgetter)
-            self._getattr = attrgetter
+            self._getattr = lambda tid,n: attrgetter(self._tracked[tid], n)
         else:
-            self._getattr = getattr
+            self._getattr = lambda t,n: getattr(self._tracked[t],n)
 
         if attrsetter is not None:
             assert callable(attrsetter)
-            self._setattr = attrsetter
+            def __sattr(tid,attr,val):
+                self._tracked[tid] = attrsetter(self._tracked[tid],attr,val)
+            self._setattr = lambda t,n,v: __sattr(t,n,v)
         else:
-            self._setattr = setattr
+            self._setattr = lambda t,n,v: setattr(self._tracked[t], n,v)
 
 
     ##===============================================
@@ -73,11 +75,16 @@ class ObjectDiffTracker:
 
     ## Attr get/set
     ##==============
-    def get_attr(self, target, attr_name):
-        self._getattr(target, attr_name)
+    def get_attr(self, target_id, attr_name):
+        return self._getattr(target_id, attr_name)
 
-    def set_attr(self, target, attr_name, value):
-        self._setattr(target, attr_name, value)
+    def set_attr(self, target_id, attr_name, value):
+        self._setattr(target_id, attr_name, value)
+
+    ## Retrieve a tracked object by id
+    ##=================================
+    def __getitem__(self, target_id):
+        return self._tracked[target_id]
 
     ## Saving/checking saved status
     ##=============================
@@ -110,26 +117,6 @@ class ObjectDiffTracker:
     ##===============================================
     ## Adding/removing Tracked objects
     ##===============================================
-
-    # def track(self, target, target_id):
-    #     """Start tracking change operations for the specified object
-    #
-    #     :param target:
-    #         the actual object being tracked. To prevent state corruption, changes to tracked items should only be done through the Delta/tracker mechanics.
-    #     :param target_id:
-    #         must be a unique, hashable value that can be used to identify this object amongst all the other tracked items
-    #     :param callable callback:
-    #         if specified, will be invoked instead of setattr when changing values on the target. Called with the property name and new value as arguments. Useful for immutable objects like namedtuples.
-    #     """
-    #     if target_id not in self._tracked:
-    #         self._tracked[target_id] = target
-    #         # if callback is not None: self._callbacks[target_id]=callback
-    #
-    #         self._revisions[target_id] = []
-
-            # on first add, save the values for each tracked property
-            # in the first entry of the revision stack
-            # self._revisions[target_id] = {p:getattr(target, p) for p in self._slots}
 
     def untrack(self, target_id):
         """Stop tracking the object with the specified id"""
@@ -228,10 +215,18 @@ class ObjectDiffTracker:
 
         :param target_id:
         """
-        r = self.max_undos(target_id) # should == stacksize for this target if at end
+        # get max undos, a.k.a. (revision_cursor_index)+1;
+        # this should == stacksize for this target if we're at
+        # end of the stack.
+        r = self.max_undos(target_id)
+
+        # But if it doesn't, then it is the start
+        # of the slice of the stack we need to drop.
         if self.stack_size(target_id) > r:
             self._revisions[target_id][r:] = []
-            # invalidates savepoint if it is further ahead in undo-stack
+
+            # invalidate save cursor if it was in the part
+            # of the stack that just got chopped
             if self._savecur[target_id] > r:
                 self._savecur[target_id] = -1
 
@@ -289,12 +284,12 @@ class ObjectDiffTracker:
         :param changes: dict of changes accumulated during traversal of revision stack
         :return:
         """
-        target = self._tracked[target_id]
+        # target = self._tracked[target_id]
         # print(changes)
 
         for prop, val in changes.items():
                 # print(getattr(target, prop), end="==>")
-                self.set_attr(target, prop, val)
+                self.set_attr(target_id, prop, val)
                 # print(getattr(target, prop), end="::")
 
         # print()
