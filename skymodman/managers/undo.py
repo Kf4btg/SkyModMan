@@ -39,6 +39,9 @@ class delta_:
 
 class ObjectDiffTracker:
 
+    stackitem = collections.namedtuple("stackitem", "id description")
+    """These make up the elements of the master undo stack; they hold a reference to the object that was modified for a specific change operation, as well as a text description of the change that can be displayed e.g. in a menu"""
+
     def __init__(self, target_type, *slots, attrgetter=None,attrsetter=None):
         """
 
@@ -84,6 +87,11 @@ class ObjectDiffTracker:
         # time a save command was issued (or the program loaded)
         self._savecur = {}
 
+        #----------------------
+        # Master Stack
+        #----------------------
+        self._masterstack = [] #type: list[ObjectDiffTracker.stackitem]
+        self._mastercursor = -1
 
         #-----------------------------------------------
         # define attribute getter/setter
@@ -180,6 +188,7 @@ class ObjectDiffTracker:
         """Forget all tracked objects. Does not revert or otherwise affect state of tracked objects. Does not change the registered "slots", default descriptions, or defined attr-getter/-setter callbacks."""
         for coll in self.__allmappings:
             coll.clear()
+        self._masterstack.clear()
 
     def registerDescription(self, attrname, description):
         """Set a new default description text to be used for changes to the specified attribute name"""
@@ -223,14 +232,22 @@ class ObjectDiffTracker:
             Each overload also takes an optional `description` argument which can be used to override the default text description for this type of change.
         """
         if isinstance(args[0],self.bstr): #prop name
-            self._addChange(target_id, *args)
+            attrname, desc=self._addChange(target_id, *args)
         elif isinstance(args[0], Delta):
-            self._addDelta(target_id, *args)
+            attrname, desc=self._addDelta(target_id, *args)
         elif isinstance(args[0], collections.Iterable):
-            self._addDeltaGroup(target_id, *args)
+            attrname, desc=self._addDeltaGroup(target_id, *args)
+        else:
+            raise TypeError("Unrecognized type for arguments to push()")
 
         # now need to actually apply the change
         self.redo(target_id)
+
+        if not desc:
+            desc = self._descriptions[attrname]
+
+        # record the most recently touched target
+        self._masterstack.append(self.stackitem(target_id, desc ))
 
     def _get_current_state(self, target_id):
         """Returns a dictionary of {attribute_name: value} pairs for the current value of each attribute of the target that matches one of the tracker's registered 'slots'."""
@@ -241,6 +258,13 @@ class ObjectDiffTracker:
         """Can be used instead of the `push()` method for adding a change to the target's revision stack. The current value for the attribute will be queried from the target and a Delta object created dynamically"""
         self._truncate_redos(target_id)
         self._revisions[target_id].append(Delta(attr, self.get_attr(target_id, attr), new_val))
+        self.redo(target_id)
+
+        if not description:
+            description = self._descriptions[attr]
+
+        self._masterstack.append(self.stackitem(target_id, description))
+
 
     def _addChange(self, target_id, attr, old_val, new_val, description=None):
         """
@@ -248,6 +272,7 @@ class ObjectDiffTracker:
         """
         self._truncate_redos(target_id)
         self._revisions[target_id].append(Delta(attr, old_val, new_val))
+        return attr, description
 
     def _addDelta(self, target_id, delta, description=None):
         """
@@ -261,16 +286,20 @@ class ObjectDiffTracker:
         self._truncate_redos(target_id)
         self._revisions[target_id].append(delta)
 
+        return delta.attrname, description
+
 
     def _addDeltaGroup(self, target_id, deltas, description=None):
         """Any Deltas contained within the sequence `deltas` will be
         undone/redone as a single operation when invoked via Undo/Redo
 
         :param target_id:
-        :param collections.Iterable[Delta] deltas: must be an ordered sequence of Delta objects
+        :param deltas: must be an ordered sequence of Delta objects
         """
         self._truncate_redos(target_id)
         self._revisions[target_id].append(deltas)
+        return deltas[-1].attrname, description
+
 
     def _truncate_redos(self, target_id):
         """
@@ -365,7 +394,7 @@ class ObjectDiffTracker:
                 # print(getattr(target, prop), end="::")
 
         # print()
-        return True
+        # return True
 
     def revert(self, target_id, *, remove_after=False):
         """
@@ -429,10 +458,13 @@ class ObjectDiffTracker:
 
 
         acc_changes = self._accum_changes(target_id, _steps, _norm)
-        stat = self._apply_opchanges(target_id, acc_changes)
+        # stat = self._apply_opchanges(target_id, acc_changes)
+        self._apply_opchanges(target_id, acc_changes)
         self._revcur[target_id] += _norm*_steps
 
-        return stat
+
+        # return stat
+        return True
 
     def undo(self, target_id, steps=1):
         """
@@ -452,4 +484,40 @@ class ObjectDiffTracker:
         :return: False if the operation could not be performed for some reason, such as steps being passed as 0, or if the revision cursor is already at the end of the stack. True if the redo operation proceeds as normal.
         """
         return self._walk_stack(target_id, steps)
+
+    ##===============================================
+    ## Master Undo/Redo
+    ##===============================================
+
+    def Undo(self, steps=1):
+        """
+        Using the ids from the master stack of recently changed targets, perform a number of undo operations equal to the value of `steps` on the recorded targets as they are encountered, starting at the current master cursor position and iterating backwards.
+        :param steps:
+        :return:
+        """
+
+        for i in range(steps):
+            mru = self._masterstack[self._mastercursor-i]
+            if not self.undo(mru.id):
+                self._mastercursor -= i
+                break
+        else:
+            self._mastercursor -= steps
+
+    def Redo(self, steps=1):
+        for i in range(steps):
+            mru = self._masterstack[self._mastercursor+i]
+            if not self.redo(mru.id):
+                self._mastercursor += i
+        else:
+            self._mastercursor += steps
+
+    @property
+    def master_stack_size(self):
+        return len(self._masterstack)
+
+    @property
+    def master_cursor(self):
+        return self._mastercursor
+
 

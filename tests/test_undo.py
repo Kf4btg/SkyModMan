@@ -113,8 +113,9 @@ def test_more_revisions(key, mock_mod_entry, tracker:undo.ObjectDiffTracker):
 
     me  = mock_mod_entry
 
+    # three different push() methods
     tracker.push(key, "enabled", me.enabled, 0)
-    tracker.push(key, "ordinal", me.ordinal, 100)
+    tracker.pushUpdate(key, "ordinal", 100)
     tracker.push(key, undo.Delta("version", me.version, "v2.0"))
 
     assert tracker.max_undos(key) == tracker.stack_size(key) == 4
@@ -320,6 +321,27 @@ def test_multi_undo(key, tracker:undo.ObjectDiffTracker):
 
     check_obj_state(key, tracker, 15602,1,42,"v1.0.1","Rather Boring Name")
 
+def test_final_undo(mock_mod_entry, key, tracker:undo.ObjectDiffTracker):
+
+    orig = mock_mod_entry
+    assert tracker.undo(key) # 0 -> -1
+
+    tobj = tracker[key]
+
+    check_tracker_stats(key, tracker, -1, 4, 0, 4, -3, False)
+
+    assert orig.enabled == tobj.enabled
+    assert orig.name == tobj.name
+    assert orig.ordinal == tobj.ordinal
+    assert orig.modid == tobj.modid
+    assert orig.version == tobj.version
+
+    assert tracker.redo(key) # make sure going back to 0 works
+
+    check_obj_state(key, tracker, 15602,1,42,"v1.0.1","Rather Boring Name")
+
+
+def test_multi_redo(key, tracker):
     assert tracker.redo(key, 2)  # cur:: 0->2
     check_tracker_stats(key, tracker, 2, 4, 3, 1, 0, True)
 
@@ -451,6 +473,7 @@ def test_attr_callbacks(new_tracker):
     assert obj.modid    == 3
     assert obj.version  == '3'
     assert obj.ordinal  == 4
+
 
 
 testwords=[ "Dawnguard", "HearthFires", "Unofficial", "Skyrim", "Legendary", "Edition", "Patch", "Clothing", "and", "Clutter", "Fixes", "Cutting", "Room", "Floor", "Guard", "Dialogue", "Overhaul", "Invisibility", "Eyes", "Fix", "Weapons", "and", "Armor", "Fixes", "Complete", "Crafting", "Overhaul", "Remade", "Realistic", "Water", "Two" ,"Content","Addon", "Explosive", "Bolts", "Visualized" , "Animated", "Weapon", "Enchants" , "Deadly", "Spell", "Impacts" , "dD", "-", "Enhanced", "Blood", "Main", "Book", "Covers", "Skyrim", "Improved", "Combat", "Sounds", "v2.2", "Bring", "Out", "Your", "Dead", "-","Legendary", "Edition", "The", "Choice", "Is", "Yours" , "The", "Paarthurnax", "Dilemma", "Better", "Quest", "Objectives",]
