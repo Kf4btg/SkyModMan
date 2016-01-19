@@ -1,4 +1,5 @@
 import collections
+from skymodman.utils import singledispatch_m, dispatch_on
 from pprint import pprint
 
 Delta = collections.namedtuple("Delta", "attrname previous current")
@@ -36,6 +37,280 @@ class delta_:
             desc = "Change {}".format(attrname)
 
         return Delta(attrname, getattr(from_obj, attrname), new_value)
+
+
+
+class UndoStack:
+
+    def __init__(self):
+        self.stack = []
+
+    @property
+    def stacksize(self):
+        return len(self.stack)
+
+class RevisionTracker:
+
+    stackitem = collections.namedtuple("stackitem", "id delta description")
+    """These make up the elements of the master undo stack; they hold a reference to the object that was modified for a specific change operation, as well as a text description of the change that can be displayed e.g. in a menu"""
+
+    def __init__(self, target_type, *slots, attrgetter=None,attrsetter=None):
+
+
+        self._type = target_type
+        self._slots = slots
+
+        # default descriptions to use when adding a new Delta. New defaults can be registered, and the text can be overridden for an individual change when it is created.
+        self._descriptions = {s: "Change ".format(s) for s in slots}
+
+        # -----------------------------------------------
+        # Mappings and collections
+        # -----------------------------------------------
+
+        self.undostack = collections.deque()
+        self.redostack = collections.deque()
+
+        self.stack_by_id = {id(self.undostack):self.undostack,
+                            id(self.redostack):self.redostack}
+
+        # determines which Delta field to get without knowing
+        # precisely which stack you're dealing with.
+        self._get_delta_field = {
+            id(self.undostack): lambda d: d.previous,
+            id(self.redostack): lambda d: d.current,
+        }
+
+        # dict of target_ids to target_objects
+        self._tracked = {}
+        # a dictview collection on the keys of the tracked objects for easy access to the target ids
+        self._ids = self._tracked.keys()
+
+        # mapping of ids to a full description of the item attributes at the time tracking began. Used for the final undo.
+        self._initialstates = {}
+        # mapping of ids to a full description of the item attributes at the time of the last save. Used for the detecting 'manual' undos.
+        # todo: maybe it would be better to just check a few items earlier in the undo stack to see if the target has been reverted...
+        self._cleanstates = {}
+
+        # -----------------------------------------------
+        # define attribute getter/setter
+        # -----------------------------------------------
+
+        if attrgetter is not None:
+            assert callable(attrgetter)
+            self._getattr = lambda tid, n: attrgetter(self._tracked[tid], n)
+        else:
+            self._getattr = lambda t, n: getattr(self._tracked[t], n)
+
+        if attrsetter is not None:
+            assert callable(attrsetter)
+
+            def __sattr(tid, attr, val):
+                self._tracked[tid] = attrsetter(self._tracked[tid], attr, val)
+
+            self._setattr = lambda t, n, v: __sattr(t, n, v)
+        else:
+            self._setattr = lambda t, n, v: setattr(self._tracked[t], n, v)
+
+
+    @property
+    def max_undos(self):
+        return len(self.undostack)
+
+    @property
+    def max_redos(self):
+        return len(self.redostack)
+
+    ## Attr get/set
+    ##==============
+    def get_attr(self, target_id, attr_name):
+        return self._getattr(target_id, attr_name)
+
+    def set_attr(self, target_id, attr_name, value):
+        self._setattr(target_id, attr_name, value)
+
+    bstr = (str, bytes)
+
+    def pushNew(self, target, target_id, *args):
+        """Use the first time a change is added for an object;
+        this causes the tracker to register `target` as a tracked item and begin managing its undo/redo state.
+
+        For subsequent changes to this target, use the ``push()`` method
+
+        :param target:
+            the actual object to tracked. To prevent state corruption, any changes to the target should only be done through the DiffTracker after tracking has begun.
+        :param target_id:
+            must be a unique, hashable value that can be used to identify this object among all the other tracked items
+        :param args: see description for the ``push()`` method.
+        """
+
+        if target_id not in self._ids:
+            self._tracked[target_id] = target
+            # self._revisions[target_id] = []
+            # self._revcur[target_id] = self._savecur[target_id] = -1
+            self._initialstates[target_id] = \
+                self._cleanstates[target_id] = \
+                self._get_current_state(target_id)
+
+        self.push(target_id, *args)
+
+    # def push(self, target_id, *args, desc=None):
+
+    def push(self, target_id, *args, description=None):
+        """Basically an overloaded method for recording changes in several ways (Change, Delta, DeltaGroup)
+            * ``push(target_id, attrname, prev_value, curr_value, description=None)``
+            * ``push(target_id, Delta, description=None)``
+            * ``push(target_id, list(Delta), description=None)``
+
+        :param args:
+            should either be three arguments in the order (attribute_name, previous_value, current_value); a ``Delta`` object with the corresponding fields set; or several ``Delta`` objects contained in an ordered iterable such as a list. All the changes in a 'Delta group' will be undone/redone by a single undo or redo operation.
+            Each overload also takes an optional `description` argument which can be used to override the default text description for this type of change.
+        """
+
+
+        sitem = self._push(*args, target_id=target_id, desc=description) #type: RevisionTracker.stackitem
+
+        # self._truncate_redos()
+        # adding a new change invalidates the redos
+        self.redostack.clear()
+
+        # but we add this right back on so that we can just call redo()
+        self.redostack.append(sitem)
+        # now need to actually apply the change
+        self.redo()
+
+    @singledispatch_m
+    def _push(self, *args, target_id, desc=None):
+        raise TypeError("Unrecognized type for arguments to push()")
+
+    @_push.register(str)
+    @_push.register(bytes) #attribute name (raw change data)
+    def _(self, attr, val1, val2=..., *, target_id, desc=None):
+        if not desc:
+            desc = self._descriptions[attr]
+
+        if val2 is ...:
+            # ... is our `None` placeholder, so that `None` can actually
+            # be passed as a value. Thus, this means that val2 was not
+            # specified, indicating that val1 is the new value and we should
+            # pull the old value from the object itself.
+            return self.stackitem(target_id, Delta(attr, self.get_attr(target_id, attr), val1), desc)
+
+        # otherwise assume val1 is oldval and val2 is newval
+        return self.stackitem(target_id, Delta(attr, val1, val2), desc)
+
+    @_push.register(Delta) #preconstructed Delta obj
+    def _(self, delta, *, target_id, desc=None):
+        if not desc:
+            desc = self._descriptions[delta.attrname]
+        return self.stackitem(target_id, delta, desc)
+
+    @_push.register(list) # list of (we assume) Delta objects
+    def _(self, delta_group, *, target_id, desc=None):
+        # for delta groups, base the description on the last
+        # attribute changed
+        if not desc:
+            desc = self._descriptions[delta_group[-1].attrname]
+
+        # convert list to tuple for hashability
+        return self.stackitem(target_id, tuple(delta_group), desc)
+
+
+
+
+        # record the most recently touched target
+        # self.undostack.append(self.stackitem(target_id, desc))
+
+    def _get_current_state(self, target_id):
+        """Returns a dictionary of {attribute_name: value} pairs for the current value of each attribute of the target that matches one of the tracker's registered 'slots'."""
+        return {s: self.get_attr(target_id, s)
+                for s in self._slots}
+
+    ##===============================================
+    ## Undo/Redo
+    ##===============================================
+
+    def _do(self, steps=1):
+        if steps < 0:
+            steps, fromstack, tostack = min(abs(steps), self.max_undos), self.undostack, self.redostack
+        else:
+            steps, fromstack, tostack = min(steps, self.max_redos), self.redostack, self.undostack
+        if not steps:  # if steps==0 or maxops == 0
+            return False
+
+        self._apply_changes(
+                self._accum_changes(
+                        fromstack,
+                        tostack,
+                        steps))
+
+    def undo(self, steps=1):
+        return self._do(-steps)
+
+    redo = _do
+
+    ##===============================================
+    ## Helpers
+    ##===============================================
+
+    def _apply_changes(self, changed):
+
+        for tid, changes in changed.items():
+            for prop, val in changes.items():
+                self.set_attr(tid, prop, val)
+
+    def _accum_changes(self, fromstack, tostack, steps):
+        """
+        For `steps` iterations, this pops the last item off of `fromstack` and collects the change information stored inside, overwriting changes to the same attribute of the same target with the most recently encountered value. That information is stored and returned in an ordered dictionary keyed by the target id. This odict can be iterated through afterwards to apply the accumulated changes to the appropriate targets
+
+        :param fromstack:
+        :param tostack:
+        :param steps:
+        :return:
+        """
+
+        changed = collections.OrderedDict() # {target: {attr: value, ...}, ...}
+
+        for s in range(steps):
+            sitem = fromstack.pop()
+            tid, delta, desc = sitem
+
+            if not isinstance(delta, Delta):
+                # then it's a delta group
+                for d in delta: #type: Delta
+                    val = self._get_delta_field[id(fromstack)](d)
+                    try:
+                        changed[tid].update({d.attrname: val})
+                    except KeyError:
+                        changed[tid] = {d.attrname: val}
+
+                # we always reverse the group before adding it to the other stack so that 'going the other way' will iterate over the group in the correct order.
+                sitem = sitem._replace(delta=tuple(reversed(delta)))
+            else:
+                # whether we pull the previous or current
+                # field from the Delta depends on whether this
+                # is an undo or a redo, which we don't know due
+                # to the genericn nature of this function. However,
+                # we can use the id() of `fromstack` to query
+                # a predefined mapping to determine the answer
+                # for us.
+                val = self._get_delta_field[id(fromstack)](delta)
+                try:
+                    changed[tid].update({delta.attrname: val})
+                except KeyError:
+                    changed[tid] = {delta.attrname: val}
+
+            # now add this stackitem to the other stack
+            tostack.append(sitem)
+        return changed
+
+
+
+
+
+
+
+
+
 
 class ObjectDiffTracker:
 
@@ -369,7 +644,10 @@ class ObjectDiffTracker:
             if not isinstance(change, Delta): #delta group
                 for c in change[::step]:  # type: Delta
                     acc_changes[c.attrname] = \
-                        (None, c.current, c.previous)[step] # this is what i call a "silly hack"
+                        (None,
+                         c.current, # step==1
+                         c.previous # step==-1
+                         )[step] # this is what i call a "silly hack"
             else:
                 acc_changes[change.attrname] = (None, change.current, change.previous)[step]
 
@@ -379,7 +657,9 @@ class ObjectDiffTracker:
 
     def _apply_opchanges(self, target_id, changes):
         """
-        Apply finalized state changes to target.
+         Apply finalized state
+         changes to target.
+
 
         :param target_id:
         :param changes: dict of changes accumulated during traversal of revision stack
