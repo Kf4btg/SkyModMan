@@ -88,7 +88,7 @@ def test_add_tracked(mock_mod_entry, tracker):
     new_name = "Rather Boring Name"
     old_name = me.name
 
-    tracker.addNew(me, me.directory, "name", me.name, new_name )
+    tracker.pushNew(me, me.directory, "name", me.name, new_name)
 
     assert tracker._tracked[me.directory] is me
 
@@ -116,9 +116,9 @@ def test_more_revisions(key, mock_mod_entry, tracker:undo.ObjectDiffTracker):
 
     me  = mock_mod_entry
 
-    tracker.add(key, "enabled", me.enabled, 0)
-    tracker.add(key, "ordinal", me.ordinal, 100)
-    tracker.add(key, undo.Delta("version", me.version, "v2.0"))
+    tracker.push(key, "enabled", me.enabled, 0)
+    tracker.push(key, "ordinal", me.ordinal, 100)
+    tracker.push(key, undo.Delta("version", me.version, "v2.0"))
 
     assert tracker.max_undos(key) == tracker.stack_size(key) == 4
     assert tracker.max_redos(key) == 0
@@ -371,7 +371,7 @@ def test_truncate_stack(key,tracker:undo.ObjectDiffTracker):
     assert tracker.stack_size(key) == 4
 
 
-    tracker.add(key, "modid",15602,12345)
+    tracker.push(key, "modid", 15602, 12345)
 
     assert tracker.max_undos(key) == 3
     assert tracker.max_redos(key) == 0
@@ -392,7 +392,7 @@ def test_add_delta_group(key, tracker):
     assert len(dgroup)==3
     assert all(isinstance(d, undo.Delta) for d in dgroup)
 
-    tracker.add(key, dgroup)
+    tracker.push(key, dgroup)
 
     assert tracker.max_undos(key) == 4
     assert tracker.max_redos(key) == 0
@@ -422,7 +422,7 @@ def test_fail_settattr():
     me = ModEntry(1, "Name", 2, '3', 'ModDirectory', 4)
 
     with pytest.raises(AttributeError):
-        t.addNew(me, me.directory, "modid", me.modid, me.modid + 1)
+        t.pushNew(me, me.directory, "modid", me.modid, me.modid + 1)
 
 def test_attr_callbacks():
     # Use real modentry
@@ -437,7 +437,7 @@ def test_attr_callbacks():
     assert me.version == '3'
     assert me.ordinal == 4
 
-    t.addNew(me, myid, "modid", me.modid, me.modid + 1)
+    t.pushNew(me, myid, "modid", me.modid, me.modid + 1)
 
     obj = t[myid]
 
