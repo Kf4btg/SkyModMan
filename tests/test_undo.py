@@ -62,10 +62,7 @@ def tracker():
     odt = undo.ObjectDiffTracker(ModEntry, "enabled", "name", "modid", "version", "ordinal")
     return odt
 
-@pytest.fixture #not module-scoped
-def new_tracker():
-    odt = undo.ObjectDiffTracker(ModEntry, "enabled", "name", "modid", "version", "ordinal")
-    return odt
+
 
 def test_new_tracker(tracker):
     assert tracker._type == ModEntry
@@ -424,10 +421,18 @@ def test_fail_settattr():
     with pytest.raises(AttributeError):
         t.pushNew(me, me.directory, "modid", me.modid, me.modid + 1)
 
-def test_attr_callbacks():
-    # Use real modentry
-    t = undo.ObjectDiffTracker(ModEntry, "enabled", "name", "modid", "version", "ordinal", attrsetter=lambda m,n,v: m._replace(**{n:v}))
 
+@pytest.fixture #not module-scoped
+def new_tracker():
+    # with attrsetter callbacks
+    odt = undo.ObjectDiffTracker(ModEntry, "enabled", "name", "modid", "version", "ordinal", attrsetter=lambda m,n,v: m._replace(**{n:v}))
+    return odt
+
+def test_attr_callbacks(new_tracker):
+    # t = undo.ObjectDiffTracker(ModEntry, "enabled", "name", "modid", "version", "ordinal", attrsetter=lambda m,n,v: m._replace(**{n:v}))
+
+    t=new_tracker
+    # Use real modentry
     me = ModEntry(1, "Name", 2, '3', 'ModDirectory', 4)
     myid = me.directory
 
