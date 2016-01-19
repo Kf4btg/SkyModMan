@@ -147,6 +147,75 @@ def test_undo(modentry, tracker):
     check_obj_state(modentry.directory, tracker, modentry.modid, modentry.enabled, modentry.ordinal, modentry.version, modentry.name)
 
 
+@pytest.fixture(scope='module')
+def tracker2():
+    return undo.RevisionTracker(ModEntry, *ModEntry._fields)
+
+@pytest.fixture(scope='module')
+def randentries():
+    entries = [random_mock_modentry() for _ in range(5)]
+
+    for e in entries: assert isinstance(e, ModEntry)
+    return entries
+
+def test_track_multiple(randentries, tracker2):
+
+    tracker = tracker2
+
+    entries = randentries
+
+    changes = [['modid', lambda v: v+111],
+               ['name', lambda v: v+"morename"],
+               ['version', lambda v: 'vABC.D'],
+               ['enabled', lambda v: int(not v)],
+               ['ordinal', lambda v: v+101,]]
+
+    ovals = {}
+    for e,c in zip(entries, changes):
+        ovals[e.directory] = {c[0]: getattr(e, c[0])}
+        tracker.pushNew(e, e.directory, c[0], c[1](getattr(e, c[0])))
+
+    assert tracker.max_redos == 0
+    assert tracker.max_undos == 5
+
+    assert tracker[entries[0].directory] is entries[0]
+
+    assert entries[0].modid == ovals[entries[0].directory]['modid'] + 111
+    assert entries[1].name == ovals[entries[1].directory]['name'] + 'morename'
+    assert entries[2].version == 'vABC.D'
+    assert entries[3].enabled == int(not ovals[entries[3].directory]['enabled'])
+    assert entries[4].ordinal == ovals[entries[4].directory]['ordinal']+101
+
+    tracker.undo()
+
+    assert tracker.max_redos == 1
+    assert tracker.max_undos == 4
+    assert entries[4].ordinal == ovals[entries[4].directory]['ordinal']
+
+    tracker.undo(2)
+    assert tracker.max_redos == 3
+    assert tracker.max_undos == 2
+
+    assert entries[3].enabled == ovals[entries[3].directory]['enabled']
+    assert entries[2].version == ovals[entries[2].directory]['version']
+
+    tracker.redo()
+    assert tracker.max_redos == 2
+    assert tracker.max_undos == 3
+    assert entries[2].version == 'vABC.D'
+
+
+def test_save(randentries, tracker2:RevTrak):
+    entries, tracker = randentries, tracker2
+
+
+    assert tracker.steps_to_revert == 3 == tracker.max_undos
+    tracker.save()
+
+    assert tracker.steps_to_revert == 0
+    assert tracker.max_undos == 3
+
+
 
 
 

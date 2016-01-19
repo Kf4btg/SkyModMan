@@ -60,7 +60,7 @@ class RevisionTracker:
         self._type = target_type
         self._slots = slots
 
-        self._savepoint = -1
+        self._savepoint = 0
 
         # default descriptions to use when adding a new Delta. New defaults can be registered, and the text can be overridden for an individual change when it is created.
         self._descriptions = {s: "Change ".format(s) for s in slots}
