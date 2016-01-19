@@ -60,6 +60,8 @@ class RevisionTracker:
         self._type = target_type
         self._slots = slots
 
+        self._savepoint = -1
+
         # default descriptions to use when adding a new Delta. New defaults can be registered, and the text can be overridden for an individual change when it is created.
         self._descriptions = {s: "Change ".format(s) for s in slots}
 
@@ -70,8 +72,8 @@ class RevisionTracker:
         self.undostack = collections.deque()
         self.redostack = collections.deque()
 
-        self.stack_by_id = {id(self.undostack):self.undostack,
-                            id(self.redostack):self.redostack}
+        # self.stack_by_id = {id(self.undostack):self.undostack,
+        #                     id(self.redostack):self.redostack}
 
         # determines which Delta field to get without knowing
         # precisely which stack you're dealing with.
@@ -120,6 +122,38 @@ class RevisionTracker:
     def max_redos(self):
         return len(self.redostack)
 
+    @property
+    def total_stack_size(self):
+        return self.max_undos+self.max_redos
+
+    def __getitem__(self, target_id):
+        return self._tracked[target_id]
+
+    @property
+    def __allmappings(self):
+        """
+        :return: a tuple containing references to each of this tracker's {target_id: ...} mappings. No specific order is guaranteed.
+        """
+        return self._tracked, self._initialstates, self._cleanstates
+
+    def save(self):
+        """Sets the current stack position as the 'clean' state"""
+        # since max_undos describes the 'lower half' of the stack below the current state, its value can be thought of as the position of an 'undo-cursor'.  Saving sets the 'save-cursor' to match the undo-cursor.
+        self._savepoint=self.max_undos
+
+    @property
+    def isclean(self):
+
+        return self._savepoint==self.max_undos
+
+    @property
+    def steps_to_revert(self):
+        """Undo steps needed to return the most recent save point. If a negative value is returned, that means **redo**-steps are required, instead"""
+        if self._savepoint < 0:
+            # todo: make a better exception for this
+            raise IndexError("No valid savepoint is active.")
+        return self.max_undos - self._savepoint
+
     ## Attr get/set
     ##==============
     def get_attr(self, target_id, attr_name):
@@ -130,7 +164,7 @@ class RevisionTracker:
 
     bstr = (str, bytes)
 
-    def pushNew(self, target, target_id, *args):
+    def pushNew(self, target, target_id, *args, desc=None):
         """Use the first time a change is added for an object;
         this causes the tracker to register `target` as a tracked item and begin managing its undo/redo state.
 
@@ -145,17 +179,14 @@ class RevisionTracker:
 
         if target_id not in self._ids:
             self._tracked[target_id] = target
-            # self._revisions[target_id] = []
-            # self._revcur[target_id] = self._savecur[target_id] = -1
             self._initialstates[target_id] = \
                 self._cleanstates[target_id] = \
                 self._get_current_state(target_id)
 
-        self.push(target_id, *args)
+        self.push(target_id, *args, desc=None)
 
-    # def push(self, target_id, *args, desc=None):
 
-    def push(self, target_id, *args, description=None):
+    def push(self, target_id, *args, desc=None):
         """Basically an overloaded method for recording changes in several ways (Change, Delta, DeltaGroup)
             * ``push(target_id, attrname, prev_value, curr_value, description=None)``
             * ``push(target_id, Delta, description=None)``
@@ -167,7 +198,7 @@ class RevisionTracker:
         """
 
 
-        sitem = self._push(*args, target_id=target_id, desc=description) #type: RevisionTracker.stackitem
+        sitem = self._push(*args, target_id=target_id, desc=desc) #type: RevisionTracker.stackitem
 
         # self._truncate_redos()
         # adding a new change invalidates the redos
@@ -242,6 +273,8 @@ class RevisionTracker:
                         fromstack,
                         tostack,
                         steps))
+        return True
+
 
     def undo(self, steps=1):
         return self._do(-steps)
@@ -302,6 +335,58 @@ class RevisionTracker:
             # now add this stackitem to the other stack
             tostack.append(sitem)
         return changed
+
+    def revertAll(self):
+        """Undo every change in the undostack"""
+        return self.undo(self.max_undos)
+
+    def revertToSave(self):
+        """Undo (or redo) until the latest save point is reached. Returns true on success, or False if no valid save point can be determined."""
+        try:
+            steps = self.steps_to_revert
+        except IndexError:
+            return False
+
+        return self.undo(steps)
+
+
+    def revertItem(self, target_id, *, remove_after=False):
+        """
+        This is not technically an 'undo'; it does not walk the revision stack, but instead updates the target so that its current attributes match the values from its initial state. The `revert` itself is pushed to the revision stack and treated as a normal operation that can itself be subject to Undo/Redo.
+
+        If, however, the optional, kw-only param `remove_after` is set to ``True``, all references to the object will be **removed** from the tracker after its attributes are set and will need to be re-added using ``pushNew()`` if it is decided to allow undo/redo of the object again.
+
+        :param target_id:
+        """
+        # compare current target attributes to initial state, and push a delta group of those which need changing to match initial state.
+        istate = self._initialstates[target_id]
+        dgroup = []
+        for s in self._slots:
+            currval = self.get_attr(target_id, s)
+            if istate[s] != currval:
+                dgroup.append(Delta(s, currval, istate[s]))
+
+        if dgroup: self.push(target_id, dgroup, desc="Revert Item")
+
+        if remove_after:
+            self.untrack(target_id)
+
+    def untrack(self, target_id):
+        """Stop tracking the object with the specified id. All references to the object will be removed from the tracker and its revision history will be lost. The object itself will not be affected."""
+
+        for coll in self.__allmappings:
+            try:
+                del coll[target_id]
+            except KeyError:
+                pass
+
+        # rotate through the deques and remove items w/ this id
+        for d in [self.redostack, self.undostack]:
+            for _ in range(len(d)):
+                sitem=d.pop()
+                if sitem.id != target_id:
+                    d.appendleft(sitem)
+
 
 
 
