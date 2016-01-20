@@ -5,58 +5,16 @@ from pprint import pprint
 # Delta = collections.namedtuple("Delta", "attrname previous current")
 Delta = collections.namedtuple("Delta", "id attrname previous current")
 
-class delta_:
-
-    @staticmethod
-    def make(attrname, prev_value, updated_value, description=None):
-        """
-        Create and return a Delta object change descriptor.
-
-        :param attrname: Name of the attribute being changed
-        :param prev_value: The value of the attribute before the change
-        :param updated_value: value of the attribute after the change
-        :param description: Text description of the change made, for display in e.g. undo menu items. If not provided, default to simply "Change <attrname>".
-        :return:
-        """
-        if description is None:
-            description = "Change {}".format(attrname)
-
-        return Delta(attrname, prev_value, updated_value)
-
-    @staticmethod
-    def produce(from_obj, attrname, new_value, desc=None):
-        """
-        create and return a Delta change descriptor object for the named attribute using the current value of that attribute from 'from_obj' and the given new_value.
-
-        :param from_obj:
-        :param attrname: must be available via getattr(from_obj, attrname)
-        :param new_value:
-        :param desc:
-        :return:
-        """
-        if desc is None:
-            desc = "Change {}".format(attrname)
-
-        return Delta(attrname, getattr(from_obj, attrname), new_value)
-
-
-
-class UndoStack:
-
-    def __init__(self):
-        self.stack = []
-
-    @property
-    def stacksize(self):
-        return len(self.stack)
 
 class RevisionTracker:
 
     stackitem = collections.namedtuple("stackitem", "id delta description")
     """These make up the elements of the master undo stack; they hold a reference to the object that was modified for a specific change operation, as well as a text description of the change that can be displayed e.g. in a menu"""
 
-    # def __init__(self, target_type, keyfunc, *slots, attrgetter=None,attrsetter=None):
-    def __init__(self, target_type=None, keyfunc=None, *slots, attrgetter=None, attrsetter=None, descriptions=None):
+    def __init__(self, target_type=None,
+                 keyfunc=None, *slots,
+                 attrgetter=None, attrsetter=None,
+                 descriptions=None):
         """Initialize the Revision Tracker, allowing the pushing of change operations and performing undo/redo commands. To register a type during construction, pass values for the optional arguments: at a minumum `target_type`, `keyfunc`, and some number of `slots` must be provided to register a type. Types can also be registered after construction with the ``register()`` method. See that method for descriptions of the parameters."""
 
 
@@ -104,30 +62,21 @@ class RevisionTracker:
                           attrsetter=attrsetter,
                           descriptions=descriptions)
 
-        # if attrgetter is not None:
-        #     assert callable(attrgetter)
-        #     self._getattr = lambda tid, n: attrgetter(self._tracked[tid], n)
-        # else:
-        #     self._getattr = lambda t, n: getattr(self._tracked[t], n)
-        #
-        # if attrsetter is not None:
-        #     assert callable(attrsetter)
-        #
-        #     def __sattr(tid, attr, val):
-        #         self._tracked[tid] = attrsetter(self._tracked[tid], attr, val)
-        #
-        #     self._setattr = lambda t, n, v: __sattr(t, n, v)
-        # else:
-        #     self._setattr = lambda t, n, v: setattr(self._tracked[t], n, v)
-
-
     @property
     def max_undos(self):
         return len(self.undostack)
 
     @property
+    def canundo(self):
+        return self.max_undos > 0
+
+    @property
     def max_redos(self):
         return len(self.redostack)
+
+    @property
+    def can_redo(self):
+        return self.max_redos > 0
 
     @property
     def total_stack_size(self):
@@ -255,29 +204,6 @@ class RevisionTracker:
 
 
     bstr = (str, bytes)
-    #
-    # def pushNew(self, target, *args, desc=None):
-    #     """Use the first time a change is added for an object;
-    #     this causes the tracker to register `target` as a tracked item and begin managing its undo/redo state.
-    #
-    #     For subsequent changes to this target, use the ``push()`` method
-    #
-    #     :param target:
-    #         the actual object to tracked. To prevent state corruption, any changes to the target should only be done through the DiffTracker after tracking has begun.
-    #     :param target_id:
-    #         must be a unique, hashable value that can be used to identify this object among all the other tracked items
-    #     :param args: see description for the ``push()`` method.
-    #     """
-    #     target_id = self._targetID(target)
-    #
-    #     if target_id not in self._ids:
-    #         self._tracked[target_id] = target
-    #         self._initialstates[target_id] = \
-    #             self._cleanstates[target_id] = \
-    #             self._get_current_state(target_id)
-    #
-    #     self.push(target_id, *args, desc=None)
-
 
     def _start_tracking(self, target, target_id):
         self._tracked[target_id] = target
@@ -314,73 +240,18 @@ class RevisionTracker:
             Each overload also takes an optional `desc` argument which can be used to override the default text description of the change being made. Note that for Delta Groups, if `desc` is not provided, the default description will be taken from the type and changed attribute of the final target in the group.
         """
 
-        # ttype = type(target)
-        # target_id = self._targetID_fortype(target, ttype)
-
-        # if target_id not in self._ids:
-        #     self._start_tracking(target, target_id)
-            # self._tracked[target_id] = target
-            # self._initialstates[target_id] = \
-            #     self._cleanstates[target_id] = \
-            #     self._get_current_state(target_id)
-
-        # sitem = self._push(*args, target_id=target_id, target_type=ttype, desc=desc) #type: RevisionTracker.stackitem
-
         sitem = self._push(*args, target=target, desc=desc)
 
-        # self._truncate_redos()
+        return self._appendAndDo(sitem)
         # adding a new change invalidates the redos
+
+    def _appendAndDo(self, stackitem):
         self.redostack.clear()
 
-        # but we add this right back on so that we can just call redo()
-        self.redostack.append(sitem)
-        # now need to actually apply the change
-        self.redo()
-
-    def pushGroup(self, *changes, desc=None):
-        """Push a grouped block of revisions to the stack. All changes in a group will be undone/redone in a single undo/redo operation.
-        :param changes: Each change should be either a 4-tuple with form(target, attr_name, old_val, new_val) or a 3-tuple with form (target, attr_name, new_val). In the latter case, the 'old_val' will be read from the target before the update is made.
-
-        """
-        if len(changes)==1: self.push(*changes[0], desc)
-
-        tids = []
-        dgroup = []
-        ttype = None # for access after loop
-        attr = None  # for access after loop
-        for t in changes:
-            ttype = type(t[0])
-            tid = self._targetID_fortype(t[0], ttype)
-            if tid not in self._ids:
-                self._start_tracking(t[0], tid)
-
-            tids.append(tid)
-            assert 2 < len(t) < 5
-
-            attr = t[1]
-
-            dgroup.append(Delta( tid,
-                    attr,
-                    self._get_attr(ttype, tid, attr) if len(t)==3 else t[2],
-                    t[-1]))
-
-        if not desc:
-            # take default desc from type and attrname of last
-            # seen item in change list
-            desc = self._descriptions[ttype][attr]
-
-        self._finish_pushDeltaGroup(tids, dgroup, desc=desc)
-
-
-    def pushDeltaGroup(self, targets, deltas, desc=None):
-
-        pass
-
-    # def _finish_pushDeltaGroup(self, deltas, desc):
-
-
-
-
+        # but we add the new item right back on so that we can just call redo()...
+        self.redostack.append(stackitem)
+        # ... to actually apply the change
+        return self.redo()
 
     @singledispatch_m
     def _push(self, *args, **kwargs):
@@ -453,13 +324,11 @@ class RevisionTracker:
                 attr = d[0]
 
                 dgroup.append(
-                        Delta(
-                            tid,
-                            attr,
-                            self._get_attr(ttype, tid, attr)
-                                if len(d) == 2 # (name, newval)
-                            else d[2], # (name, oldval, newval)
-                            d[-1])) #always newval
+                        Delta(tid, attr,
+                              self._get_attr(ttype, tid, attr)
+                                  if len(d) == 2 # (name, newval)
+                                  else d[2], # (name, oldval, newval)
+                              d[-1])) #always newval
 
         if not desc:
             # take default desc from type and attrname of last
@@ -467,19 +336,6 @@ class RevisionTracker:
             desc = self._descriptions[ttype][attr]
 
         return self.stackitem(dgroup, desc)
-
-
-        # if not desc:
-        #     desc = self._descriptions[delta_group[-1].attrname]
-        #
-        # # convert list to tuple for hashability
-        # return self.stackitem(target_id, tuple(delta_group), desc)
-
-
-
-
-        # record the most recently touched target
-        # self.undostack.append(self.stackitem(target_id, desc))
 
     def _get_current_state(self, target_id):
         """Returns a dictionary of {attribute_name: value} pairs for the current value of each attribute of the target that matches one of the tracker's registered 'slots'."""
@@ -538,7 +394,7 @@ class RevisionTracker:
             tid, delta, desc = sitem
 
             if not isinstance(delta, Delta):
-                # then it's a delta group
+                # then assume it's a delta group
                 for d in delta: #type: Delta
                     val = self._get_delta_field[id(fromstack)](d)
                     try:
@@ -546,7 +402,9 @@ class RevisionTracker:
                     except KeyError:
                         changed[tid] = {d.attrname: val}
 
-                # we always reverse the group before adding it to the other stack so that 'going the other way' will iterate over the group in the correct order.
+                # we always reverse the group before adding it to the other
+                # stack so that 'going the other way' will iterate over
+                # the group in the correct order.
                 sitem = sitem._replace(delta=tuple(reversed(delta)))
             else:
                 # whether we pull the previous or current
@@ -562,7 +420,7 @@ class RevisionTracker:
                 except KeyError:
                     changed[tid] = {delta.attrname: val}
 
-            # now add this stackitem to the other stack
+            # now push this stackitem to the other stack
             tostack.append(sitem)
         return changed
 
@@ -580,29 +438,37 @@ class RevisionTracker:
         return self.undo(steps)
 
 
-    def revertItem(self, target_id, *, remove_after=False):
+    def revertItem(self, target, *, remove_after=False):
         """
         This is not technically an 'undo'; it does not walk the revision stack, but instead updates the target so that its current attributes match the values from its initial state. The `revert` itself is pushed to the revision stack and treated as a normal operation that can itself be subject to Undo/Redo.
 
         If, however, the optional, kw-only param `remove_after` is set to ``True``, all references to the object will be **removed** from the tracker after its attributes are set and will need to be re-added using ``pushNew()`` if it is decided to allow undo/redo of the object again.
 
-        :param target_id:
+        :param target:
         """
-        # compare current target attributes to initial state, and push a delta group of those which need changing to match initial state.
+        # compare current target attributes to initial state,
+        # and push a delta group of those which need changing
+        # to match initial state.
+
+        target_id = self._targetID(target)
+
         istate = self._initialstates[target_id]
         dgroup = []
         for s in self._slots:
             currval = self.get_attr(target_id, s)
             if istate[s] != currval:
-                dgroup.append(Delta(s, currval, istate[s]))
+                dgroup.append(Delta(target_id, s, currval, istate[s]))
 
-        if dgroup: self.push(target_id, dgroup, desc="Revert Item")
+        if dgroup:
+            self._appendAndDo(self.stackitem(dgroup, desc="Revert Item Changes"))
 
         if remove_after:
             self.untrack(target_id)
 
-    def untrack(self, target_id):
+    def untrack(self, target):
         """Stop tracking the object with the specified id. All references to the object will be removed from the tracker and its revision history will be lost. The object itself will not be affected."""
+
+        target_id = self._targetID(target)
 
         for coll in self.__allmappings:
             try:
@@ -613,9 +479,22 @@ class RevisionTracker:
         # rotate through the deques and remove items w/ this id
         for d in [self.redostack, self.undostack]:
             for _ in range(len(d)):
-                sitem=d.pop()
-                if sitem.id != target_id:
-                    d.appendleft(sitem)
+                sitem=d.pop() #type: RevisionTracker.stackitem
+                if isinstance(sitem.delta, Delta):
+                    if sitem.delta.id != target_id:
+                        d.appendleft(sitem)
+                else: #delta group
+                    newgroup = tuple(filter(lambda g: g.id !=target_id, sitem.delta))
+                    # if there's anything left
+                    if len(newgroup) > 0:
+                        if len(newgroup) < len(sitem.delta):
+                            # if we filtered out some items
+                            d.appendleft(sitem._replace(delta=newgroup))
+                        else:
+                            # nothing was filtered, just put the original back on
+                            d.appendleft(sitem)
+
+
 
 
 
