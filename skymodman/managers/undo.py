@@ -1,22 +1,31 @@
 import collections
-from skymodman.utils import singledispatch_m, dispatch_on
 from contextlib import suppress
-from pprint import pprint
 
-Delta = collections.namedtuple("Delta", "id attrname previous current")
+from skymodman.utils import singledispatch_m
+
+Delta = collections.namedtuple("Delta",
+                               "id attrname previous current")
 
 _bstr = (str, bytes)
 
-class RevisionTracker:
 
-    stackitem = collections.namedtuple("stackitem", "delta description")
+class RevisionTracker:
+    stackitem = collections.namedtuple("stackitem",
+                                       "delta description")
     """These make up the elements of the master undo stack; they hold a reference to the object that was modified for a specific change operation, as well as a text description of the change that can be displayed e.g. in a menu"""
 
     def __init__(self, target_type=None,
                  keyfunc=None, *slots,
                  attrgetter=None, attrsetter=None,
                  descriptions=None):
-        """Initialize the Revision Tracker, allowing the pushing of change operations and performing undo/redo commands. To register a type during construction, pass values for the optional arguments: at a minumum `target_type`, `keyfunc`, and some number of `slots` must be provided to register a type. Types can also be registered after construction with the ``register()`` method. See that method for descriptions of the parameters."""
+        """Initialize the Revision Tracker, allowing the pushing of change
+            operations and performing undo/redo commands.
+
+            To register a type during construction, pass values for the optional
+            arguments: at a minumum `target_type`, `keyfunc`, and some number of
+            `slots` must be provided to register a type. Types can also be
+            registered after construction with the ``register()`` method. See that
+            method for descriptions of the parameters."""
 
         self._savepoint = 0
 
@@ -25,15 +34,15 @@ class RevisionTracker:
         # -----------------------------------------------
         self._descriptions = {}
 
-        self._slots = {}    #dict[type, tuple[str]]
-        self._keyfuncs = {} #dict[type, func(type)->id]
-        self._types = self._keyfuncs.keys()
+        self._slots    = {}  # dict[type, tuple[str]]
+        self._keyfuncs = {}  # dict[type, func(type)->id]
+        self._types    = self._keyfuncs.keys()
 
-        self.attr_getters = {} #dict[type, func(object, str)->val]
-        self.attr_setters = {} #dict[type, func(object, str, val)]
+        self.attr_getters = {}  # dict[type, func(object, str)->val]
+        self.attr_setters = {}  # dict[type, func(object, str, val)]
 
-        self.undostack = collections.deque() #type: collections.deque[RevisionTracker.stackitem]
-        self.redostack = collections.deque() #type: collections.deque[RevisionTracker.stackitem]
+        self.undostack = collections.deque()  # type: collections.deque[RevisionTracker.stackitem]
+        self.redostack = collections.deque()  # type: collections.deque[RevisionTracker.stackitem]
 
         # determines which Delta field to get without knowing
         # precisely which stack you're dealing with.
@@ -48,20 +57,20 @@ class RevisionTracker:
         self._ids = self._tracked.keys()
 
         # mapping of ids to a full description of the item attributes at the time tracking began. Used for the final undo.
-        self._initialstates = {} # {id: {attr:val, ...}, ...}
+        self._initialstates = {}  # {id: {attr:val, ...}, ...}
         # mapping of ids to a full description of the item attributes at the time of the last save. Used for the detecting 'manual' undos.
         # todo: maybe it would be better to just check a few items earlier in the undo stack to see if the target has been reverted...
-        self._cleanstates = {} # {id: {attr:val, ...}, ...}
+        self._cleanstates = {}  # {id: {attr:val, ...}, ...}
 
         # -----------------------------------------------
         # register initial type if one was passed
         # -----------------------------------------------
 
-        if target_type and keyfunc and len(slots)>0:
+        if target_type and keyfunc and len(slots) > 0:
             self.registerType(target_type, keyfunc, *slots,
-                          attrgetter=attrgetter,
-                          attrsetter=attrsetter,
-                          descriptions=descriptions)
+                              attrgetter=attrgetter,
+                              attrsetter=attrsetter,
+                              descriptions=descriptions)
 
     @property
     def max_undos(self):
@@ -81,7 +90,7 @@ class RevisionTracker:
 
     @property
     def total_stack_size(self):
-        return self.max_undos+self.max_redos
+        return self.max_undos + self.max_redos
 
     @property
     def num_tracked(self):
@@ -100,12 +109,12 @@ class RevisionTracker:
     def save(self):
         """Sets the current stack position as the 'clean' state"""
         # since max_undos describes the 'lower half' of the stack below the current state, its value can be thought of as the position of an 'undo-cursor'.  Saving sets the 'save-cursor' to match the undo-cursor.
-        self._savepoint=self.max_undos
+        self._savepoint = self.max_undos
 
     @property
     def isclean(self):
 
-        return self._savepoint==self.max_undos
+        return self._savepoint == self.max_undos
 
     @property
     def steps_to_revert(self):
@@ -118,7 +127,9 @@ class RevisionTracker:
     ##===============================================
     ## Registering types
     ##===============================================
-    def registerType(self, target_type, keyfunc, *slots, attrgetter=None, attrsetter = None, descriptions = None):
+    def registerType(self, target_type, keyfunc, *slots,
+                     attrgetter=None, attrsetter=None,
+                     descriptions=None):
         """
 
         :param target_type:
@@ -153,14 +164,14 @@ class RevisionTracker:
             self._descriptions[target_type] = {
                 s:
                     descriptions[s]
-                        if s in descriptions
+                    if s in descriptions
                     else "Change {}".format(s)
                 for s in self._slots[target_type]
-            }
+                }
         else:
             self._descriptions[target_type] = {
-                    s: "Change {}".format(s)
-                    for s in self._slots[target_type]
+                s: "Change {}".format(s)
+                for s in self._slots[target_type]
                 }
 
         # -----------------------------------------------
@@ -169,18 +180,24 @@ class RevisionTracker:
 
         if attrgetter is not None:
             assert callable(attrgetter)
-            self.attr_getters[target_type] = lambda tid, n: attrgetter(self._tracked[tid], n)
+            self.attr_getters[target_type] = lambda tid, n: attrgetter(
+                                                    self._tracked[tid], n)
         else:
-            self.attr_getters[target_type] = lambda t, n: getattr(self._tracked[t], n)
+            self.attr_getters[target_type] = lambda t, n: getattr(
+                                                    self._tracked[t], n)
 
         if attrsetter is not None:
             assert callable(attrsetter)
-            def __sattr(tid, attr, val):
-                self._tracked[tid] = attrsetter(self._tracked[tid], attr, val)
 
-            self.attr_setters[target_type] = lambda t, n, v: __sattr(t, n, v)
+            def __sattr(tid, attr, val):
+                self._tracked[tid] = attrsetter(self._tracked[tid],
+                                                attr, val)
+
+            self.attr_setters[target_type] = lambda t, n, v: __sattr(
+                                                    t, n, v)
         else:
-            self.attr_setters[target_type] = lambda t, n, v: setattr(self._tracked[t], n, v)
+            self.attr_setters[target_type] = lambda t, n, v: setattr(
+                                                    self._tracked[t], n, v)
 
     ##===============================================
     ## Register New Default Descriptions
@@ -189,25 +206,26 @@ class RevisionTracker:
     def registerDescription(self, target_type, attrname, description):
         """Set a new default description text to be used for changes to the specified attribute name"""
 
-
-        if attrname in self._slots[target_type] and description is not None:
+        if attrname in self._slots[
+            target_type] and description is not None:
             self._descriptions[target_type][attrname] = description
-
 
     ##==============
     ## Attr get/set
     ##==============
 
-    def get_attr(self, attr_name, target_id, target_type=None ):
+    def get_attr(self, attr_name, target_id, target_type=None):
         if target_type:
-            return self.attr_getters[target_type](target_id, attr_name)
+            return self.attr_getters[target_type](target_id,
+                                                  attr_name)
         else:
-            return self.attr_getters[type(self[target_id])](target_id, attr_name)
-
+            return self.attr_getters[type(self[target_id])](target_id,
+                                                            attr_name)
 
     def set_attr(self, attr_name, value, target_id):
-        self.attr_setters[type(self[target_id])](target_id, attr_name, value)
-
+        self.attr_setters[type(self[target_id])](target_id,
+                                                 attr_name,
+                                                 value)
 
     def getID(self, target, target_type=None):
         """Get the id for `target` object by calling the key function for the target's type. If the `target_type` is specified, type lookup of the target will be skipped and the value for `target_type` used instead. This can be used to avoid lookup of a target's type if it is already know, or to 'fake' a target's type if needed for some reason"""
@@ -272,7 +290,7 @@ class RevisionTracker:
         raise TypeError("Unrecognized type for arguments to push()")
 
     @_push.register(str)
-    @_push.register(bytes) #attribute name (raw change data)
+    @_push.register(bytes)  # attribute name (raw change data)
     def _(self, attr, val1, val2=..., *, target, desc=None):
         target_type = type(target)
         target_id = self.getID(target, target_type)
@@ -288,10 +306,14 @@ class RevisionTracker:
             # be passed as a value. Thus, this means that val2 was not
             # specified, indicating that val1 is the new value and we should
             # pull the old value from the object itself.
-            return self.stackitem(Delta(target_id, attr, self.get_attr(attr, target_id, target_type), val1), desc)
+            return self.stackitem(Delta(target_id, attr,
+                                        self.get_attr(attr, target_id,
+                                                      target_type),
+                                        val1), desc)
 
         # otherwise assume val1 is oldval and val2 is newval
-        return self.stackitem(Delta(target_id, attr, val1, val2), desc)
+        return self.stackitem(Delta(target_id, attr,
+                                    val1, val2), desc)
 
     @_push.register(Delta)
     def _(self, delta, *, target, desc=None):
@@ -315,12 +337,12 @@ class RevisionTracker:
 
         if not (isinstance(target, (list, set))):
             # if this is not a list-like thing
-            target = [target] # ... make it one.
+            target = [target]  # ... make it so.
 
         targs_byid = {}
         # make an {id:target} dict
         for targ in target:
-            targs_byid[self.getID(targ)]=targ
+            targs_byid[self.getID(targ)] = targ
 
         dgroup = []
         ttype = None  # for access after loop
@@ -332,7 +354,7 @@ class RevisionTracker:
             if isinstance(d, Delta):
                 attr = d.attrname
                 dgroup.append(d)
-                t=targs_byid[d.id]
+                t = targs_byid[d.id]
                 ttype = type(t)
 
                 if d.id not in self._ids:
@@ -350,13 +372,13 @@ class RevisionTracker:
                 if target_id not in self._ids:
                     self._start_tracking(t, target_id)
 
-
                 attr = d['attrname']
                 ttype = type(t)
                 dgroup.append(
                         Delta(target_id, attr,
                               d['previous'] if 'previous' in d
-                              else self.get_attr(attr, target_id, ttype),
+                              else self.get_attr(attr, target_id,
+                                                 ttype),
                               d['current']))
 
             else:
@@ -373,11 +395,11 @@ class RevisionTracker:
 
                 ttype = type(t)
                 attr  = d[1]
-                prev  = d[2] if len(d)==4 else self.get_attr(attr, target_id, ttype)
+                prev  = d[2] if len(d) == 4 \
+                        else self.get_attr(attr, target_id, ttype)
                 curr  = d[-1]
 
                 dgroup.append(Delta(target_id, attr, prev, curr))
-
 
         if not desc:
             # take default desc from type and attrname of last
@@ -397,9 +419,11 @@ class RevisionTracker:
 
     def _do(self, steps=1):
         if steps < 0:
-            steps, fromstack, tostack = min(abs(steps), self.max_undos), self.undostack, self.redostack
+            steps, fromstack, tostack = min(abs(steps),
+                    self.max_undos), self.undostack, self.redostack
         else:
-            steps, fromstack, tostack = min(steps, self.max_redos), self.redostack, self.undostack
+            steps, fromstack, tostack = min(steps,
+                    self.max_redos), self.redostack, self.undostack
         if not steps:  # if steps==0 or maxops == 0
             return False
 
@@ -409,7 +433,6 @@ class RevisionTracker:
                         tostack,
                         steps))
         return True
-
 
     def undo(self, steps=1):
         return self._do(-steps)
@@ -436,7 +459,7 @@ class RevisionTracker:
         :return:
         """
 
-        changed = collections.OrderedDict() # {target: {attr: value, ...}, ...}
+        changed = collections.OrderedDict()  # {target: {attr: value, ...}, ...}
 
         for s in range(steps):
             sitem = fromstack.pop()
@@ -444,7 +467,7 @@ class RevisionTracker:
 
             if not isinstance(delta, Delta):
                 # assume it's a delta group
-                for d in delta: #type: Delta
+                for d in delta:  # type: Delta
                     tid = d.id
                     val = self._get_delta_field[id(fromstack)](d)
                     try:
@@ -488,7 +511,6 @@ class RevisionTracker:
 
         return self.undo(steps)
 
-
     def revertItem(self, target, *, remove_after=False):
         """
         This is not technically an 'undo'; it does not walk the revision stack, but instead updates the target so that its current attributes match the values from its initial state. The `revert` itself is pushed to the revision stack and treated as a normal operation that can itself be subject to Undo/Redo.
@@ -511,7 +533,8 @@ class RevisionTracker:
                 dgroup.append(Delta(target_id, s, currval, istate[s]))
 
         if dgroup:
-            self._appendAndDo(self.stackitem(dgroup, desc="Revert Item Changes"))
+            self._appendAndDo(
+                self.stackitem(dgroup, desc="Revert Item Changes"))
 
         if remove_after:
             self.untrack(target_id)
@@ -528,17 +551,23 @@ class RevisionTracker:
         # rotate through the deques and remove items w/ this id
         for d in [self.redostack, self.undostack]:
             for _ in range(len(d)):
-                sitem=d.pop() #type: RevisionTracker.stackitem
+                sitem = d.pop()  # type: RevisionTracker.stackitem
+
                 if isinstance(sitem.delta, Delta):
                     if sitem.delta.id != target_id:
                         d.appendleft(sitem)
-                else: #delta group
-                    newgroup = tuple(filter(lambda g: g.id !=target_id, sitem.delta))
+
+                else:  # delta group
+                    newgroup = tuple(
+                        filter(lambda g: g.id != target_id,
+                               sitem.delta))
+
                     # if there's anything left
                     if len(newgroup) > 0:
                         if len(newgroup) < len(sitem.delta):
                             # if we filtered out some items
-                            d.appendleft(sitem._replace(delta=newgroup))
+                            d.appendleft(
+                                sitem._replace(delta=newgroup))
                         else:
                             # nothing was filtered, just put the original back on
                             d.appendleft(sitem)
