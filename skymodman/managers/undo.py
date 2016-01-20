@@ -2,7 +2,8 @@ import collections
 from skymodman.utils import singledispatch_m, dispatch_on
 from pprint import pprint
 
-Delta = collections.namedtuple("Delta", "attrname previous current")
+# Delta = collections.namedtuple("Delta", "attrname previous current")
+Delta = collections.namedtuple("Delta", "id attrname previous current")
 
 class delta_:
 
@@ -54,26 +55,26 @@ class RevisionTracker:
     stackitem = collections.namedtuple("stackitem", "id delta description")
     """These make up the elements of the master undo stack; they hold a reference to the object that was modified for a specific change operation, as well as a text description of the change that can be displayed e.g. in a menu"""
 
-    def __init__(self, target_type, *slots, attrgetter=None,attrsetter=None):
+    # def __init__(self, target_type, keyfunc, *slots, attrgetter=None,attrsetter=None):
+    def __init__(self, target_type=None, keyfunc=None, *slots, attrgetter=None, attrsetter=None, descriptions=None):
+        """Initialize the Revision Tracker, allowing the pushing of change operations and performing undo/redo commands. To register a type during construction, pass values for the optional arguments: at a minumum `target_type`, `keyfunc`, and some number of `slots` must be provided to register a type. Types can also be registered after construction with the ``register()`` method. See that method for descriptions of the parameters."""
 
-
-        self._type = target_type
-        self._slots = slots
 
         self._savepoint = 0
-
-        # default descriptions to use when adding a new Delta. New defaults can be registered, and the text can be overridden for an individual change when it is created.
-        self._descriptions = {s: "Change ".format(s) for s in slots}
 
         # -----------------------------------------------
         # Mappings and collections
         # -----------------------------------------------
+        self._descriptions = {}
 
-        self.undostack = collections.deque()
-        self.redostack = collections.deque()
+        self._slots = {}    #dict[type, tuple[str]]
+        self._keyfuncs = {} #dict[type, func(type)->id]
 
-        # self.stack_by_id = {id(self.undostack):self.undostack,
-        #                     id(self.redostack):self.redostack}
+        self.attr_getters = {} #dict[type, func(object, str)->val]
+        self.attr_setters = {} #dict[type, func(object, str, val)]
+
+        self.undostack = collections.deque() #type: collections.deque[RevisionTracker.stackitem]
+        self.redostack = collections.deque() #type: collections.deque[RevisionTracker.stackitem]
 
         # determines which Delta field to get without knowing
         # precisely which stack you're dealing with.
@@ -83,35 +84,41 @@ class RevisionTracker:
         }
 
         # dict of target_ids to target_objects
-        self._tracked = {}
+        self._tracked = {}  # {id: object}
         # a dictview collection on the keys of the tracked objects for easy access to the target ids
         self._ids = self._tracked.keys()
 
         # mapping of ids to a full description of the item attributes at the time tracking began. Used for the final undo.
-        self._initialstates = {}
+        self._initialstates = {} # {id: {attr:val, ...}, ...}
         # mapping of ids to a full description of the item attributes at the time of the last save. Used for the detecting 'manual' undos.
         # todo: maybe it would be better to just check a few items earlier in the undo stack to see if the target has been reverted...
-        self._cleanstates = {}
+        self._cleanstates = {} # {id: {attr:val, ...}, ...}
 
         # -----------------------------------------------
-        # define attribute getter/setter
+        # register initial type if one was passed
         # -----------------------------------------------
 
-        if attrgetter is not None:
-            assert callable(attrgetter)
-            self._getattr = lambda tid, n: attrgetter(self._tracked[tid], n)
-        else:
-            self._getattr = lambda t, n: getattr(self._tracked[t], n)
+        if target_type and keyfunc and len(slots)>0:
+            self.register(target_type, keyfunc, *slots,
+                          attrgetter=attrgetter,
+                          attrsetter=attrsetter,
+                          descriptions=descriptions)
 
-        if attrsetter is not None:
-            assert callable(attrsetter)
-
-            def __sattr(tid, attr, val):
-                self._tracked[tid] = attrsetter(self._tracked[tid], attr, val)
-
-            self._setattr = lambda t, n, v: __sattr(t, n, v)
-        else:
-            self._setattr = lambda t, n, v: setattr(self._tracked[t], n, v)
+        # if attrgetter is not None:
+        #     assert callable(attrgetter)
+        #     self._getattr = lambda tid, n: attrgetter(self._tracked[tid], n)
+        # else:
+        #     self._getattr = lambda t, n: getattr(self._tracked[t], n)
+        #
+        # if attrsetter is not None:
+        #     assert callable(attrsetter)
+        #
+        #     def __sattr(tid, attr, val):
+        #         self._tracked[tid] = attrsetter(self._tracked[tid], attr, val)
+        #
+        #     self._setattr = lambda t, n, v: __sattr(t, n, v)
+        # else:
+        #     self._setattr = lambda t, n, v: setattr(self._tracked[t], n, v)
 
 
     @property
@@ -125,6 +132,10 @@ class RevisionTracker:
     @property
     def total_stack_size(self):
         return self.max_undos+self.max_redos
+
+    @property
+    def num_tracked(self):
+        return len(self._ids)
 
     def __getitem__(self, target_id):
         return self._tracked[target_id]
@@ -154,51 +165,168 @@ class RevisionTracker:
             raise IndexError("No valid savepoint is active.")
         return self.max_undos - self._savepoint
 
+    ##===============================================
+    ## Registering types
+    ##===============================================
+    def register(self, target_type, keyfunc, *slots, attrgetter=None, attrsetter = None, descriptions = None):
+        """
+
+        :param target_type:
+            a type (class or baseclass) that added targets may be an instance of.
+        :param (object)->Any keyfunc:
+            a callable object that takes an instance of the `target_type` and returns a unique id value that can be used to distinguish that instance from all other tracked targets (must be unique re: ALL other tracked items, not just items of the same type)
+        :param tuple[str] slots:
+            each `slots` argument is the name of an attribute that instances of `target_type` may possess; only changes to registered slots will be tracked.
+
+        :param (object, str)->Any attrgetter:
+            if specified, must be a callable object that takes two parameters--an instance of `target_type`; and the name of a property or attribute--and returns the value of that attribute for the passed instance. This callback will be used instead of getattr() to get values from tracked targets.
+        :param (object, str, Any)->object attrsetter:
+            if specified, must be a callable object that takes three parameters--an instance of `target_type`; the name of a property or attribute; and some value--and updates that attribute on the instance to match the passed value. It should then return the modified object. This callback will be used instead of setattr() to set values on tracked targets.
+
+        :param dict[str, str] descriptions:
+            if provided, should be a mapping of attribute names (each of which must be specified in `*slots`) to strings that will be inserted as the default description for changes to the corresponding attribute on instances of this `target_type`. If not specified, the description text defaults to "Change <attrname>". The description will most likely be displayed in a user-facing menu as 'Undo/Redo <desc>', so the default would be e.g. "Undo Change attributename". Which is very generic. It may, however, be enough for some simple cases.
+
+            Default descriptions can be modified at any time using the ``registerDescription()`` method, and individual changes can be passed a specialized description text when pushing them to the stack, allowing very fine control over the displayed text.
+        """
+        # copy slots over to a tuple keyed by the target type
+        self._slots[target_type] = tuple(s for s in slots)
+
+        assert callable(keyfunc)
+        # will be used to get a unique id from passed targets
+        self._keyfuncs[target_type] = keyfunc
+
+        # default descriptions to use when adding a new Delta.
+        # New defaults can be registered later, and the text can be
+        # overridden for an individual change when it is pushed.
+        self._descriptions[target_type] = {
+            s:
+                descriptions[s]
+                    if s in descriptions
+                else "Change ".format(s)
+            for s in slots
+        }
+
+        # -----------------------------------------------
+        # define attribute getter/setter
+        # -----------------------------------------------
+
+        if attrgetter is not None:
+            assert callable(attrgetter)
+            self.attr_getters[target_type] = lambda tid, n: attrgetter(self._tracked[tid], n)
+        else:
+            self.attr_getters[target_type] = lambda t, n: getattr(self._tracked[t], n)
+
+        if attrsetter is not None:
+            assert callable(attrsetter)
+            def __sattr(tid, attr, val):
+                self._tracked[tid] = attrsetter(self._tracked[tid], attr, val)
+
+            self.attr_setters[target_type] = lambda t, n, v: __sattr(t, n, v)
+        else:
+            self.attr_setters[target_type] = lambda t, n, v: setattr(self._tracked[t], n, v)
+
+    ##==============
     ## Attr get/set
     ##==============
-    def get_attr(self, target_id, attr_name):
-        return self._getattr(target_id, attr_name)
+    def get_attr(self, target, attr_name):
+        t = type(target)
+        tid = self._targetID_fortype(target, t)
+        return self._get_attr(t, tid, attr_name)
 
-    def set_attr(self, target_id, attr_name, value):
-        self._setattr(target_id, attr_name, value)
+    def _get_attr(self, target_type, target_id, attr_name):
+        return self.attr_getters[target_type](target_id, attr_name)
+
+    def set_attr(self, target, attr_name, value):
+        t = type(target)
+        tid = self._targetID_fortype(target, t)
+        self._set_attr(t, tid, attr_name, value)
+
+    def _set_attr(self, target_type, target_id, attr_name, value):
+        self.attr_setters[target_type](target_id, attr_name, value)
+
+    # get id
+    def _targetID(self, target):
+        """Get the id for the target by calling the key function for the target's type"""
+        return self._keyfuncs[type(target)](target)
+
+    def _targetID_fortype(self, target, target_type):
+        """Can be used to avoid lookup of a target's type if it is already know, or to 'fake' a target's type if needed for some reason"""
+        return self._keyfuncs[target_type](target)
+
 
     bstr = (str, bytes)
+    #
+    # def pushNew(self, target, *args, desc=None):
+    #     """Use the first time a change is added for an object;
+    #     this causes the tracker to register `target` as a tracked item and begin managing its undo/redo state.
+    #
+    #     For subsequent changes to this target, use the ``push()`` method
+    #
+    #     :param target:
+    #         the actual object to tracked. To prevent state corruption, any changes to the target should only be done through the DiffTracker after tracking has begun.
+    #     :param target_id:
+    #         must be a unique, hashable value that can be used to identify this object among all the other tracked items
+    #     :param args: see description for the ``push()`` method.
+    #     """
+    #     target_id = self._targetID(target)
+    #
+    #     if target_id not in self._ids:
+    #         self._tracked[target_id] = target
+    #         self._initialstates[target_id] = \
+    #             self._cleanstates[target_id] = \
+    #             self._get_current_state(target_id)
+    #
+    #     self.push(target_id, *args, desc=None)
 
-    def pushNew(self, target, target_id, *args, desc=None):
-        """Use the first time a change is added for an object;
-        this causes the tracker to register `target` as a tracked item and begin managing its undo/redo state.
 
-        For subsequent changes to this target, use the ``push()`` method
+    def _start_tracking(self, target, target_id):
+        self._tracked[target_id] = target
+        self._initialstates[target_id] = \
+            self._cleanstates[target_id] = \
+            self._get_current_state(target_id)
 
-        :param target:
-            the actual object to tracked. To prevent state corruption, any changes to the target should only be done through the DiffTracker after tracking has begun.
-        :param target_id:
-            must be a unique, hashable value that can be used to identify this object among all the other tracked items
-        :param args: see description for the ``push()`` method.
-        """
-
-        if target_id not in self._ids:
-            self._tracked[target_id] = target
-            self._initialstates[target_id] = \
-                self._cleanstates[target_id] = \
-                self._get_current_state(target_id)
-
-        self.push(target_id, *args, desc=None)
-
-
-    def push(self, target_id, *args, desc=None):
+    def push(self, target, *args, desc=None):
         """Basically an overloaded method for recording changes in several ways (Change, Delta, DeltaGroup)
-            * ``push(target_id, attrname, prev_value, curr_value, description=None)``
-            * ``push(target_id, Delta, description=None)``
-            * ``push(target_id, list(Delta), description=None)``
+            * ``push(target, attrname, prev_value, curr_value, desc=None)``
+            * ``push(target, attrname, curr_value, desc=None)``
+            * ``push(target, Delta, description=None)``
+        or
+            * ``push(List[targets], List[Delta], desc=None)``
+            * ``push(List[targets], List[tuple(attrname, prev_value, new_value)], desc=None)``
+            * ``push(List[targets], List[tuple(attrname, new_value)], desc=None)``
+
+        :param target: in all cases except for the last few (List[targets]), this is the target object of the change.
+
+        The latter cases are for pushing a 'Delta Group' to the stack. A 'Delta Group' is simply a list of regular revision deltas (of arbitrary length, and can contain targets of mixed types) that will be undone/redone as a group: a single undo or redo operation will undo or redo every change recorded by the group deltas.
+
+        For these Delta Group cases, the `target` argument to push should be a list or other flat iterable of all the changed targets in the group, in the order the changes are meant to happen. Each item in this iterable should correspond by index to an item in the second argument, described below.
+
 
         :param args:
-            should either be three arguments in the order (attribute_name, previous_value, current_value); a ``Delta`` object with the corresponding fields set; or several ``Delta`` objects contained in an ordered iterable such as a list. All the changes in a 'Delta group' will be undone/redone by a single undo or redo operation.
-            Each overload also takes an optional `description` argument which can be used to override the default text description for this type of change.
+            For the forms of push that take a single `target` argument, this should either be three arguments in the order (attribute_name, previous_value, current_value); two arguments in the order (attribute_name, current_value); or a ``Delta`` object with the corresponding fields set.
+
+            For the Delta Group forms, the second argument (the actual 'Delta Group') is another list composed of either:
+            ``Delta`` objects describing the changes per target;
+            3-tuples with the attribute name, previous value, and updated value all provided;
+            or 2-tuples with only the attribute name and new value provided. For this final situation, the previous value will be read from the target object before the change is made.
+
+        :param str desc:
+            Each overload also takes an optional `desc` argument which can be used to override the default text description of the change being made. Note that for Delta Groups, if `desc` is not provided, the default description will be taken from the type and changed attribute of the final target in the group.
         """
 
+        # ttype = type(target)
+        # target_id = self._targetID_fortype(target, ttype)
 
-        sitem = self._push(*args, target_id=target_id, desc=desc) #type: RevisionTracker.stackitem
+        # if target_id not in self._ids:
+        #     self._start_tracking(target, target_id)
+            # self._tracked[target_id] = target
+            # self._initialstates[target_id] = \
+            #     self._cleanstates[target_id] = \
+            #     self._get_current_state(target_id)
+
+        # sitem = self._push(*args, target_id=target_id, target_type=ttype, desc=desc) #type: RevisionTracker.stackitem
+
+        sitem = self._push(*args, target=target, desc=desc)
 
         # self._truncate_redos()
         # adding a new change invalidates the redos
@@ -209,41 +337,143 @@ class RevisionTracker:
         # now need to actually apply the change
         self.redo()
 
+    def pushGroup(self, *changes, desc=None):
+        """Push a grouped block of revisions to the stack. All changes in a group will be undone/redone in a single undo/redo operation.
+        :param changes: Each change should be either a 4-tuple with form(target, attr_name, old_val, new_val) or a 3-tuple with form (target, attr_name, new_val). In the latter case, the 'old_val' will be read from the target before the update is made.
+
+        """
+        if len(changes)==1: self.push(*changes[0], desc)
+
+        tids = []
+        dgroup = []
+        ttype = None # for access after loop
+        attr = None  # for access after loop
+        for t in changes:
+            ttype = type(t[0])
+            tid = self._targetID_fortype(t[0], ttype)
+            if tid not in self._ids:
+                self._start_tracking(t[0], tid)
+
+            tids.append(tid)
+            assert 2 < len(t) < 5
+
+            attr = t[1]
+
+            dgroup.append(Delta( tid,
+                    attr,
+                    self._get_attr(ttype, tid, attr) if len(t)==3 else t[2],
+                    t[-1]))
+
+        if not desc:
+            # take default desc from type and attrname of last
+            # seen item in change list
+            desc = self._descriptions[ttype][attr]
+
+        self._finish_pushDeltaGroup(tids, dgroup, desc=desc)
+
+
+    def pushDeltaGroup(self, targets, deltas, desc=None):
+
+        pass
+
+    # def _finish_pushDeltaGroup(self, deltas, desc):
+
+
+
+
+
     @singledispatch_m
-    def _push(self, *args, target_id, desc=None):
+    def _push(self, *args, **kwargs):
         raise TypeError("Unrecognized type for arguments to push()")
 
     @_push.register(str)
     @_push.register(bytes) #attribute name (raw change data)
-    def _(self, attr, val1, val2=..., *, target_id, desc=None):
+    def _(self, attr, val1, val2=..., *, target, desc=None):
+        target_type = type(target)
+        target_id = self._targetID_fortype(target, target_type)
+
         if not desc:
-            desc = self._descriptions[attr]
+            desc = self._descriptions[target_type][attr]
 
         if val2 is ...:
             # ... is our `None` placeholder, so that `None` can actually
             # be passed as a value. Thus, this means that val2 was not
             # specified, indicating that val1 is the new value and we should
             # pull the old value from the object itself.
-            return self.stackitem(target_id, Delta(attr, self.get_attr(target_id, attr), val1), desc)
+            return self.stackitem(Delta(target_id, attr, self._get_attr(target_type, target_id, attr), val1), desc)
 
         # otherwise assume val1 is oldval and val2 is newval
         return self.stackitem(target_id, Delta(attr, val1, val2), desc)
 
-    @_push.register(Delta) #preconstructed Delta obj
-    def _(self, delta, *, target_id, desc=None):
-        if not desc:
-            desc = self._descriptions[delta.attrname]
-        return self.stackitem(target_id, delta, desc)
+    @_push.register(Delta)
+    def _(self, delta, *, target, desc=None):
+        target_type = type(target)
 
-    @_push.register(list) # list of (we assume) Delta objects
-    def _(self, delta_group, *, target_id, desc=None):
-        # for delta groups, base the description on the last
-        # attribute changed
-        if not desc:
-            desc = self._descriptions[delta_group[-1].attrname]
+        if delta.id not in self._ids:
+            self._start_tracking(target, delta.id)
 
-        # convert list to tuple for hashability
-        return self.stackitem(target_id, tuple(delta_group), desc)
+        if not desc:
+            desc = self._descriptions[target_type][delta.attrname]
+        return self.stackitem(delta, desc)
+
+    @_push.register(list)
+    def _(self, delta_group, *, target, desc=None):
+        """
+        :param delta_group: list[Delta|tuple(str,Any,Any)|tuple(str,Any)]
+        :param target: list of targets
+        :param desc:
+        :return:
+        """
+
+        tids = []
+        dgroup = []
+        ttype = None  # for access after loop
+        attr = None  # for access after loop
+        for t,d in zip(target, delta_group):
+            ttype = type(t)
+
+            # preconstructed Deltas
+            if isinstance(d, Delta):
+                attr = d.attrname
+                dgroup.append(d)
+                tids.append(d.id)
+                if d.id not in self._ids:
+                    self._start_tracking(t, d.id)
+
+            # tuples w/ raw change data
+            else:
+                #verify appropriate number of elements
+                assert 1 < len(d) < 4
+
+                tid = self._targetID_fortype(t, ttype)
+                if tid not in self._ids:
+                    self._start_tracking(t, tid)
+                tids.append(tid)
+
+                attr = d[0]
+
+                dgroup.append(
+                        Delta(
+                            tid,
+                            attr,
+                            self._get_attr(ttype, tid, attr)
+                                if len(d) == 2 # (name, newval)
+                            else d[2], # (name, oldval, newval)
+                            d[-1])) #always newval
+
+        if not desc:
+            # take default desc from type and attrname of last
+            # seen item in change list
+            desc = self._descriptions[ttype][attr]
+
+        return self.stackitem(dgroup, desc)
+
+
+        # if not desc:
+        #     desc = self._descriptions[delta_group[-1].attrname]
+        #
+        # # convert list to tuple for hashability
+        # return self.stackitem(target_id, tuple(delta_group), desc)
 
 
 

@@ -215,6 +215,23 @@ def test_save(randentries, tracker2:RevTrak):
     assert tracker.steps_to_revert == 0
     assert tracker.max_undos == 3
 
+    assert tracker.isclean
+
+def test_truncate_redos(tracker2:RevTrak):
+    re = random_mock_modentry()
+    tracker = tracker2
+
+
+    assert tracker.max_redos == 2
+    tracker.pushNew(re, re.directory, 'ordinal', re.ordinal*2)
+
+    assert tracker.max_redos == 0
+    assert not tracker.isclean
+
+    assert tracker.max_undos == 4
+    assert tracker.total_stack_size == 4
+    assert tracker.num_tracked == 6
+
 
 
 
