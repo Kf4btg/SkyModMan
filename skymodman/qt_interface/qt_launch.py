@@ -1,5 +1,4 @@
 import sys
-from functools import partial
 
 from PyQt5.QtCore import (Qt,
                           pyqtSignal,
@@ -16,12 +15,13 @@ from PyQt5.QtWidgets import (QApplication,
                              QMessageBox,
                              QFileDialog)
 
-
 from skymodman import skylog
-from skymodman.constants import (Tab as TAB, INIKey, INISection, qModels as M, qFilters as F)
+from skymodman.constants import (Tab as TAB, INIKey, INISection,
+                                 qModels as M, qFilters as F)
 from skymodman.qt_interface.qt_manager_ui import Ui_MainWindow
 from skymodman.qt_interface.widgets import message, NewProfileDialog
-from skymodman.qt_interface.models import ProfileListModel, ModTableView, ModFileTreeModel, ModTable_TreeView
+from skymodman.qt_interface.models import ProfileListModel, \
+    ModTableView, ModFileTreeModel, ModTable_TreeView
 from skymodman.utils import withlogger, Notifier, checkPath
 
 
@@ -31,21 +31,19 @@ from skymodman.utils import withlogger, Notifier, checkPath
 
 @withlogger
 class ModManagerWindow(QMainWindow, Ui_MainWindow):
+    modListModified     = pyqtSignal()
+    modListSaved        = pyqtSignal()
 
-    modListModified = pyqtSignal()
-    modListSaved = pyqtSignal()
-
-    windowInitialized = pyqtSignal()
-    modNameBeingEdited = pyqtSignal(str)
+    windowInitialized   = pyqtSignal()
+    modNameBeingEdited  = pyqtSignal(str)
 
     deleteProfileAction = pyqtSignal(str)
 
-    moveModsUpOne = pyqtSignal()
-    moveModsDownOne = pyqtSignal()
+    moveModsUpOne       = pyqtSignal()
+    moveModsDownOne     = pyqtSignal()
 
-    moveModsUp = pyqtSignal(int)
-    moveModsDown = pyqtSignal(int)
-
+    moveModsUp          = pyqtSignal(int)
+    moveModsDown        = pyqtSignal(int)
 
     def __init__(self, *, manager, **kwargs):
         """
@@ -61,15 +59,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # setup trackers for all of our models and proxies
         # self.all_models = { "models":{}, "filters":{} } # tracks all models by name
-        self.models = {} #tracks the
-        self.filters = {} #tracks the
+        self.models  = {}  # tracks the
+        self.filters = {}  # tracks the
 
         # slots (methods) to be called after __init__ is finished
         setupSlots = [
             self.setupProfileSelector,
             self.setupTable,
             self.setupFileTree,
-                      ]
+        ]
 
         # connect the windowinit signal to the setup slots
         for s in setupSlots:
@@ -84,39 +82,50 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # setup the base ui
         self.setupUi(self)
 
-        #init mod table
-        self.mod_table = ModTable_TreeView(parent=self, manager=self.Manager)
+        # init mod table
+        self.mod_table = ModTable_TreeView(parent=self,
+                                           manager=self.Manager)
 
         #########################
         ## connect the buttons ##
 
         # use a dialog-button-box for save/cancel
         # have to specify by standard button type
-        self.save_cancel_btnbox.button(QDialogButtonBox.Apply).clicked.connect(self.saveModsList)
-        self.save_cancel_btnbox.button(QDialogButtonBox.Reset).clicked.connect(self.revertTable)
+        self.save_cancel_btnbox.button(
+            QDialogButtonBox.Apply).clicked.connect(
+                self.saveModsList)
+        self.save_cancel_btnbox.button(
+            QDialogButtonBox.Reset).clicked.connect(
+                self.revertTable)
 
         # connect mod move-up/down
-        self.mod_up_button  .clicked.connect(self.emitMoveModUpOne)
-        self.mod_down_button.clicked.connect(self.emitMoveModDownOne)
+        self.mod_up_button.clicked.connect(
+                self.emitMoveModUpOne)
+        self.mod_down_button.clicked.connect(
+                self.emitMoveModDownOne)
 
         #########################
         ## connect the actions ##
-        self.action_Quit         .triggered.connect(self.safeQuitApp)
-        self.action_Install_Fomod.triggered.connect(self.loadFomod)
-        self.actionChoose_Mod_Folder.triggered.connect(self.chooseModFolder)
+        self.action_Quit.triggered.connect(
+                self.safeQuitApp)
+        self.action_Install_Fomod.triggered.connect(
+                self.loadFomod)
+        self.actionChoose_Mod_Folder.triggered.connect(
+                self.chooseModFolder)
 
         # keep track of changes made to mod list
         self.file_tree_modified = False
 
         # set placeholder fields
         self.loaded_fomod = None
-        
+
         # make some UI adjustments
-        self.manager_tabs  .setCurrentIndex(0)
+        self.manager_tabs.setCurrentIndex(0)
         self.installerpages.setCurrentIndex(0)
 
         # connect other signals
-        self.manager_tabs.currentChanged.connect(self.updateUI)
+        self.manager_tabs.currentChanged.connect(
+                self.updateUI)
 
         # Let sub-widgets know the main window is initialized
         self.windowInitialized.emit()
@@ -136,7 +145,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         curtab = self.manager_tabs.currentIndex()
 
-        self.save_cancel_btnbox.setVisible(curtab in [TAB.MODLIST, TAB.FILETREE])
+        self.save_cancel_btnbox.setVisible(
+            curtab in [TAB.MODLIST, TAB.FILETREE])
 
         # if self.save_cancel_btnbox.isVisible():
         #     self.save_cancel_btnbox.setEnabled(
@@ -152,7 +162,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # print(mimes)
         # mimes = ['application/x-7z-compressed']
         mimes = ['application/xml']
-        start_locs = QStandardPaths.standardLocations(QStandardPaths.HomeLocation)
+        start_locs = QStandardPaths.standardLocations(
+            QStandardPaths.HomeLocation)
         dialog = QFileDialog(self, "Choose ModuleConfig.xml file",
                              QDir.currentPath()
                              # start_locs.pop() if start_locs else QDir.currentPath()
@@ -173,22 +184,22 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     def chooseModFolder(self):
         """
         Show dialog allowing user to choose a mod folder.
-
-        :return:
         """
-        moddir = QFileDialog.getExistingDirectory(self, "Choose Directory Containing Installed Mods", self.Manager.Config['dir_mods'])
+        moddir = QFileDialog.getExistingDirectory(
+                self,
+                "Choose Directory Containing Installed Mods",
+                self.Manager.Config['dir_mods'])
 
         # update config with new path
         if checkPath(moddir):
-            self.Manager.Config.updateConfig(moddir, INIKey.MODDIR, INISection.GENERAL)
+            self.Manager.Config.updateConfig(moddir, INIKey.MODDIR,
+                                             INISection.GENERAL)
 
             # reverify and reload the mods.
             if not self.Manager.validateModInstalls():
                 self.mod_table.model().reloadErrorsOnly()
 
-
-
-    def getTab(self, index:int):
+    def getTab(self, index: int):
         return self.manager_tabs.widget(index)
 
     # </editor-fold>
@@ -201,7 +212,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     def setupFileTree(self):
         """
         Create and populate the list of mod-folders shown on the filetree tab, as well as prepare the fileviewer pane to show files when a mod is selected
-
         """
 
         ##################################
@@ -210,40 +220,48 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         list_model.setStringList(list(self.Manager.enabledMods()))
 
         # and now the filter proxy
-        mod_filter = self.filters[F.mod_list] = QSortFilterProxyModel(self.filetree_modlist)
+        mod_filter = self.filters[F.mod_list] = QSortFilterProxyModel(
+            self.filetree_modlist)
         mod_filter.setSourceModel(list_model)
         mod_filter.setFilterCaseSensitivity(Qt.CaseInsensitive)
 
         # connect proxy to textchanged of filter box
-        self.filetree_modfilter.textChanged.connect(mod_filter.setFilterWildcard)
+        self.filetree_modfilter.textChanged.connect(
+            mod_filter.setFilterWildcard)
 
         # finally, set the filter as the model for the modlist
         self.filetree_modlist.setModel(mod_filter)
 
-        self.splitter.setSizes([1, 500]) # just make the left one smaller ok?
+        self.splitter.setSizes(
+                [1, 500])  # just make the left one smaller ok?
 
         ## model for tree view of files
-        fileviewer_model = self.models[M.file_viewer] = ModFileTreeModel(manager=self._manager, parent=self.filetree_fileviewer)
+        fileviewer_model = self.models[
+            M.file_viewer] = ModFileTreeModel(manager=self._manager,
+                                              parent=self.filetree_fileviewer)
 
         ## filter
-        fileviewer_filter = self.filters[F.file_viewer] = QSortFilterProxyModel(self.filetree_fileviewer)
+        fileviewer_filter = self.filters[
+            F.file_viewer] = QSortFilterProxyModel(
+                                self.filetree_fileviewer)
         fileviewer_filter.setSourceModel(fileviewer_model)
         fileviewer_filter.setFilterCaseSensitivity(Qt.CaseInsensitive)
 
         ## connect proxy to textchanged of filter box
-        self.filetree_filefilter.textChanged.connect(fileviewer_filter.setFilterWildcard)
+        self.filetree_filefilter.textChanged.connect(
+            fileviewer_filter.setFilterWildcard)
 
         ## set model
         self.filetree_fileviewer.setModel(fileviewer_filter)
 
         ## show new files when mod selection in list
-        proxy2source = lambda c,p: self.showModFiles(
+        proxy2source = lambda c, p: self.showModFiles(
                 mod_filter.mapToSource(c), mod_filter.mapToSource(p))
-        self.filetree_modlist.selectionModel().currentChanged.connect(proxy2source)
+        self.filetree_modlist.selectionModel().currentChanged.connect(
+            proxy2source)
 
         # let setup know we're done here
         self.SetupDone()
-
 
     def showModFiles(self, indexCur, indexPre):
         """
@@ -254,12 +272,14 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         mod = self.models[M.mod_list].stringList()[indexCur.row()]
 
-        p = self.Manager.Config.paths.dir_mods / self.Manager.getModDir(mod)
+        p = self.Manager.Config.paths.dir_mods / \
+            self.Manager.getModDir(mod)
 
         self.models[M.file_viewer].setRootPath(str(p))
 
     def updateFileTreeModList(self):
-        self.models[M.mod_list].setStringList(list(self.Manager.enabledMods()))
+        self.models[M.mod_list].setStringList(
+            list(self.Manager.enabledMods()))
 
     # </editor-fold>
 
@@ -269,7 +289,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     # <editor-fold desc="...">
 
     def setupTable(self):
-        # self.logger << "setupTable begin" + " now"
         self.Manager.loadActiveProfileData()
         self.mod_table.initUI(self.installed_mods_layout)
 
@@ -279,13 +298,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # when the list of modified rows changes from empty to
         # non-empty or v.v., enabled/disable the save/cancel btns
-        self.models[M.mod_table].tableDirtyStatusChange.connect(self.markTableUnsaved)
+        self.models[M.mod_table
+            ].tableDirtyStatusChange.connect(
+                self.markTableUnsaved)
 
-        self.mod_table.itemsSelected   .connect(self.onModsSelected)
+        self.mod_table.itemsSelected.connect(self.onModsSelected)
         self.mod_table.selectionCleared.connect(self.onSelectionCleared)
-        self.mod_table.itemsMoved      .connect(self.updateModMoveButtons)
+        self.mod_table.itemsMoved.connect(self.updateModMoveButtons)
 
-        self.moveModsUp  .connect(self.mod_table.onMoveModsUpAction)
+        self.moveModsUp.connect(self.mod_table.onMoveModsUpAction)
         self.moveModsDown.connect(self.mod_table.onMoveModsDownAction)
 
         self.SetupDone()
@@ -299,7 +320,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     def onModsSelected(self):
         """
         Enable or disable movement buttons as needed
-        :return:
         """
         self.move_mod_box.setEnabled(True)
         self.updateModMoveButtons(self.mod_table.selectedIndexes(),
@@ -307,17 +327,20 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def updateModMoveButtons(self, selected_indexes, model):
         """
-        Enabled/disable the mod-up/down buttons depending on whether the first or last
-        items in the table are selected.
+        Enabled/disable the mod-up/down buttons depending
+        on whether the first or last items in the table are selected.
 
-        :param list[QModelIndex] selected_indexes: list of QModelIndex in the selection
+        :param list[QModelIndex] selected_indexes:
+            list of QModelIndex in the selection
         :param model: the table's model
         """
-        index1 = model.index(0,0)
-        index_last = model.index(model.rowCount()-1, 0)
+        index1 = model.index(0, 0)
+        index_last = model.index(model.rowCount() - 1, 0)
 
-        self.mod_up_button.setEnabled(index1 not in selected_indexes)
-        self.mod_down_button.setEnabled(index_last not in selected_indexes)
+        self.mod_up_button.setEnabled(
+            index1 not in selected_indexes)
+        self.mod_down_button.setEnabled(
+            index_last not in selected_indexes)
 
     def onSelectionCleared(self):
         """With nothing selected, there's nothing to move, so disable the movement buttons"""
@@ -348,9 +371,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     # </editor-fold>
 
-    #===============================
+    # ===============================
     #  Profile-handling UI
-    #==============================
+    # ==============================
     # <editor-fold desc="...">
 
     def setupProfileSelector(self):
@@ -360,21 +383,25 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         model = ProfileListModel()
 
         start_idx = 0
-        for name, profile in self.Manager.getProfiles(names_only=False):
+        for name, profile in self.Manager.getProfiles(
+                names_only=False):
             # self.LOGGER.debug("{}: {}".format(name, profile))
             model.insertRows(data=profile)
-            if name==self.Manager.active_profile.name:
-                self.logger.debug("Setting {} as chosen profile".format(name))
-                start_idx=model.rowCount()-1
+            if name == self.Manager.active_profile.name:
+                self.logger << "Setting {} as chosen profile".format(name)
+                start_idx = model.rowCount() - 1
 
                 # see if we should enable the remove-profile button
                 self.checkEnableProfileDelete(name)
 
         self.profile_selector.setModel(model)
         self.profile_selector.setCurrentIndex(start_idx)
-        self.profile_selector.currentIndexChanged.connect(self.onProfileChange)
-        self.new_profile_button.clicked.connect(self.onNewProfileClick)
-        self.remove_profile_button.clicked.connect(self.onRemoveProfileClick)
+        self.profile_selector.currentIndexChanged.connect(
+            self.onProfileChange)
+        self.new_profile_button.clicked.connect(
+            self.onNewProfileClick)
+        self.remove_profile_button.clicked.connect(
+            self.onRemoveProfileClick)
 
         # let setup know we're done here
         self.SetupDone()
@@ -383,19 +410,21 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         When the 'add profile' button is clicked, create and show a small dialog for the user to choose a name for the new profile.
         """
-        popup = NewProfileDialog(combobox_model= self.profile_selector.model())
-        # popup.comboBox.setModel(self.profile_selector.model())
-        # popup.setComboboxModel(self.profile_selector.model())
+        popup = NewProfileDialog(
+            combobox_model=self.profile_selector.model())
 
         # display popup, wait for close and check signal
         if popup.exec_() == popup.Accepted:
             # add new profile if they clicked ok
-            new_profile = self.Manager.newProfile(popup.final_name, popup.copy_from)
+            new_profile = self.Manager.newProfile(popup.final_name,
+                                                  popup.copy_from)
 
             self.profile_selector.model().addProfile(new_profile)
 
             # set new profile as active and load data
-            self.profile_selector.setCurrentIndex(self.profile_selector.findText(new_profile.name, Qt.MatchFixedString))
+            self.profile_selector.setCurrentIndex(
+                self.profile_selector.findText(new_profile.name,
+                                               Qt.MatchFixedString))
 
     def onRemoveProfileClick(self):
         """
@@ -403,9 +432,17 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         profile = self.Manager.active_profile
 
-        if message('warning', 'Confirm Delete Profile', 'Delete "'+profile.name+'"?','Choosing "Yes" below will remove this profile and all saved information within it, including customized load-orders, ini-edits, etc. Note that installed mods will not be affected. This cannot be undone. Are you sure you wish to continue?'):
-            self.Manager.deleteProfile(self.profile_selector.currentData())
-            self.profile_selector.removeItem(self.profile_selector.currentIndex())
+        if message('warning', 'Confirm Delete Profile',
+                   'Delete "' + profile.name + '"?',
+                   'Choosing "Yes" below will remove this profile '
+                   'and all saved information within it, including '
+                   'customized load-orders, ini-edits, etc. Note '
+                   'that installed mods will not be affected. This '
+                   'cannot be undone. Do you wish to continue?'):
+            self.Manager.deleteProfile(
+                self.profile_selector.currentData())
+            self.profile_selector.removeItem(
+                self.profile_selector.currentIndex())
 
             # self.deleteProfileAction.emit(profile.name)
 
@@ -414,13 +451,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         When a new profile is chosen from the dropdown list, load all the appropriate data for that profile and replace the current data with it. Also show a message about unsaved changes to the current profile.
         :param index:
-        :return:
         """
-        if index<0:
+        if index < 0:
             # we have a problem...
             self.LOGGER.error("No profile chosen?!")
         else:
-            new_profile = self.profile_selector.currentData(Qt.UserRole).name
+            new_profile = self.profile_selector.currentData(
+                Qt.UserRole).name
             if new_profile == self.Manager.active_profile.name:
                 # somehow selected the same profile; do nothing
                 return
@@ -428,7 +465,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             # check for unsaved changes to the mod-list
             self.checkUnsavedChanges()
 
-            self.LOGGER.info("Activating profile '{}'".format(new_profile))
+            self.LOGGER.info(
+                "Activating profile '{}'".format(new_profile))
             self.Manager.active_profile = new_profile
 
             # if this is the profile 'default', disable the remove button
@@ -438,7 +476,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def loadActiveProfile(self):
         """For now, this just repopulates the mod-table. There might be more to it later"""
-        self.LOGGER.debug("About to repopulate table")
+        self.LOGGER << "About to repopulate table"
         self.mod_table.loadData()
         self.updateFileTreeModList()
 
@@ -449,11 +487,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         If the profile name is anything other than the default profile
         (likely 'default') enable the remove_profile button
         :param profile_name:
-        :return:
         """
         if profile_name.lower() == 'default':
             self.remove_profile_button.setEnabled(False)
-            self.remove_profile_button.setToolTip('Cannot Remove Default Profile')
+            self.remove_profile_button.setToolTip(
+                'Cannot Remove Default Profile')
         else:
             self.remove_profile_button.setEnabled(True)
             self.remove_profile_button.setToolTip('Remove Profile')
@@ -471,13 +509,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # check for unsaved changes to the mod-list
         if self.mod_table.model().isDirty:
             ok = QMessageBox(QMessageBox.Warning, 'Unsaved Changes',
-                                 'Your mod install-order has unsaved changes. Would you like to save them before continuing?',
-                                 QMessageBox.No | QMessageBox.Yes).exec_()
+                             'Your mod install-order has unsaved changes. '
+                             'Would you like to save them before continuing?',
+                             QMessageBox.No | QMessageBox.Yes).exec_()
 
             if ok == QMessageBox.Yes:
                 self.saveModsList()
             else:
-                # don't bother reverting, mods list is getting reset; just disable the buttons
+                # don't bother reverting, mods list is getting reset;
+                # just disable the buttons
                 self.markTableUnsaved(False)
 
     def safeQuitApp(self):
@@ -490,22 +530,21 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         quit_app()
 
 
-
 def quit_app():
     skylog.stop_listener()
     QApplication.quit()
 
+
 # <editor-fold desc="__main__">
 if __name__ == '__main__':
-
     from skymodman import managers
 
     app = QApplication(sys.argv)
 
     MM = managers.ModManager()
 
-    w = ModManagerWindow(manager= MM)
-    w.resize(QGuiApplication.primaryScreen().availableSize()*3/5)
+    w = ModManagerWindow(manager=MM)
+    w.resize(QGuiApplication.primaryScreen().availableSize() * 3 / 5)
     w.show()
 
     sys.exit(app.exec_())
