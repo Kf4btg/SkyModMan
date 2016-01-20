@@ -40,9 +40,12 @@ def tracker():
     return undo.RevisionTracker(ModEntry, lambda e: e.directory, *ModEntry._fields, attrsetter=testattrsetter)
     # return undo.RevisionTracker()
 
+class Thing:pass
 
 def random_mock_modentry():
-    me = mock.Mock(spec=ModEntry)
+    # me = mock.MagicMock(spec=ModEntry, instance=True)
+    # me = mock.Mock()
+    me = Thing()
     me.enabled=random.randint(0,1)
     me.directory = random.sample(testwords, random.randint(4,7))
     me.name = " ".join(random.sample(me.directory, random.randint(1,4)))
@@ -53,7 +56,7 @@ def random_mock_modentry():
     me.version = _v1+_v2
     me.ordinal = random.randint(1,255)
 
-    return me
+    return ModEntry(me.enabled, me.name, me.modid, me.version, me.directory, me.ordinal)
 
 def test_tracker_init_noargs():
     t = RevTrak()
@@ -169,150 +172,219 @@ def test_push_new(modentry, tracker:RevTrak):
     assert tracker.max_redos == 0
     assert tracker.max_undos == 1
 
-#
-# def test_push_more(modentry, tracker:RevTrak):
-#     tid = modentry.directory
-#
-#     # test different push() overloads
-#     tracker.push(modentry, "enabled", modentry.enabled, 0)
-#     tracker.push(modentry, "ordinal", 100)
-#     tracker.push(modentry, undo.Delta("version", modentry.version, "v2.0"))
-#
-#
-#     me = tracker[modentry.directory] #type:ModEntry
-#     assert me.enabled==0
-#     assert me.ordinal == 100
-#     assert me.version == "v2.0"
-#     assert me.name == "Rather Boring Name"
-#     assert me.modid == modentry.modid # unchanged
-#
-#     assert len(tracker._types) == 1
-#
-#     assert tracker.max_redos == 0
-#     assert tracker.max_undos == 4
-#
-#
-# def test_push_group(modentry, tracker:RevTrak):
-#     current = tracker[modentry.directory]
-#
-#     dgroup = []
-#     for change in [("name",
-#                     current.name,
-#                     "Super Awesome Name"),
-#                    ("version",
-#                     current.version,
-#                     "vWhat.0"),
-#                    ("ordinal",
-#                     current.ordinal,
-#                     255)]:
-#         dgroup.append(undo.Delta._make(change))
-#
-#     assert len(dgroup) == 3
-#     assert all(isinstance(d, undo.Delta) for d in dgroup)
-#
-#     tracker.push(current.directory, dgroup)
-#
-#     assert tracker.max_redos == 0
-#     assert tracker.max_undos == 5
-#
-#     check_obj_state(modentry.directory, tracker, 15602, 0, 255, "vWhat.0", "Super Awesome Name")
-#
-# def test_undo(modentry, tracker):
-#
-#     check_obj_state(modentry.directory, tracker, 15602, 0, 255, "vWhat.0", "Super Awesome Name")
-#
-#     assert tracker.undo(5)
-#
-#     # should be back to original values
-#     check_obj_state(modentry.directory, tracker, modentry.modid, modentry.enabled, modentry.ordinal, modentry.version, modentry.name)
-#
-#
-# @pytest.fixture(scope='module')
-# def tracker2():
-#     return undo.RevisionTracker(ModEntry, *ModEntry._fields)
-#
-# @pytest.fixture(scope='module')
-# def randentries():
-#     entries = [random_mock_modentry() for _ in range(5)]
-#
-#     for e in entries: assert isinstance(e, ModEntry)
-#     return entries
-#
-# def test_track_multiple(randentries, tracker2):
-#
-#     tracker = tracker2
-#
-#     entries = randentries
-#
-#     changes = [['modid', lambda v: v+111],
-#                ['name', lambda v: v+"morename"],
-#                ['version', lambda v: 'vABC.D'],
-#                ['enabled', lambda v: int(not v)],
-#                ['ordinal', lambda v: v+101,]]
-#
-#     ovals = {}
-#     for e,c in zip(entries, changes):
-#         ovals[e.directory] = {c[0]: getattr(e, c[0])}
-#         tracker.pushNew(e, e.directory, c[0], c[1](getattr(e, c[0])))
-#
-#     assert tracker.max_redos == 0
-#     assert tracker.max_undos == 5
-#
-#     assert tracker[entries[0].directory] is entries[0]
-#
-#     assert entries[0].modid == ovals[entries[0].directory]['modid'] + 111
-#     assert entries[1].name == ovals[entries[1].directory]['name'] + 'morename'
-#     assert entries[2].version == 'vABC.D'
-#     assert entries[3].enabled == int(not ovals[entries[3].directory]['enabled'])
-#     assert entries[4].ordinal == ovals[entries[4].directory]['ordinal']+101
-#
-#     tracker.undo()
-#
-#     assert tracker.max_redos == 1
-#     assert tracker.max_undos == 4
-#     assert entries[4].ordinal == ovals[entries[4].directory]['ordinal']
-#
-#     tracker.undo(2)
-#     assert tracker.max_redos == 3
-#     assert tracker.max_undos == 2
-#
-#     assert entries[3].enabled == ovals[entries[3].directory]['enabled']
-#     assert entries[2].version == ovals[entries[2].directory]['version']
-#
-#     tracker.redo()
-#     assert tracker.max_redos == 2
-#     assert tracker.max_undos == 3
-#     assert entries[2].version == 'vABC.D'
-#
-#
-# def test_save(randentries, tracker2:RevTrak):
-#     entries, tracker = randentries, tracker2
-#
-#
-#     assert tracker.steps_to_revert == 3 == tracker.max_undos
-#     tracker.save()
-#
-#     assert tracker.steps_to_revert == 0
-#     assert tracker.max_undos == 3
-#
-#     assert tracker.isclean
-#
-# def test_truncate_redos(tracker2:RevTrak):
-#     re = random_mock_modentry()
-#     tracker = tracker2
-#
-#
-#     assert tracker.max_redos == 2
-#     tracker.pushNew(re, re.directory, 'ordinal', re.ordinal*2)
-#
-#     assert tracker.max_redos == 0
-#     assert not tracker.isclean
-#
-#     assert tracker.max_undos == 4
-#     assert tracker.total_stack_size == 4
-#     assert tracker.num_tracked == 6
-#
-#
+
+def test_push_more(modentry, tracker:RevTrak):
+    tid = modentry.directory
+
+    # test different push() overloads
+    tracker.push(modentry, "enabled", modentry.enabled, 0)
+    tracker.push(modentry, "ordinal", 100)
+    tracker.push(modentry, undo.Delta(tid, "version", modentry.version, "v2.0"))
+
+
+    me = tracker[modentry.directory] #type:ModEntry
+    assert me.enabled==0
+    assert me.ordinal == 100
+    assert me.version == "v2.0"
+    assert me.name == "Rather Boring Name"
+    assert me.modid == modentry.modid # unchanged
+
+    assert len(tracker._types) == 1
+
+    assert tracker.max_redos == 0
+    assert tracker.max_undos == 4
+
+
+dgroup_params = [("name", "Super Awesome Name"),
+                 ("version", "vWhat.0"),
+                 ("ordinal", 255)]
+
+
+def test_push_group(modentry, tracker:RevTrak):
+    current = tracker[modentry.directory]
+
+    # dict
+    dgroup = [dgroup_dict(id=modentry.directory, attrname=p[0], prev=getattr(current, p[0]), curr=p[1]) for p in dgroup_params ]
+    assert len(dgroup) == 3
+    assert all(isinstance(d, dict) for d in dgroup)
+    tracker.push(current, dgroup)
+
+
+    assert tracker.max_redos == 0
+    assert tracker.max_undos == 5
+
+    check_obj_state(modentry.directory, tracker, 15602, 0, 255, "vWhat.0", "Super Awesome Name")
+
+    tracker.undo(1)
+    check_obj_state(modentry.directory, tracker, 15602, 0, 100, "v2.0", "Rather Boring Name")
+
+    assert tracker.max_redos == 1
+    assert tracker.max_undos == 4
+
+    # dict no prev
+    dgroup = [dgroup_dict(id=modentry.directory, attrname=p[0], curr=p[1]) for p in
+              dgroup_params]
+    tracker.push(current, dgroup)
+    check_obj_state(modentry.directory, tracker, 15602, 0, 255, "vWhat.0", "Super Awesome Name")
+    assert tracker.max_redos == 0
+    assert tracker.max_undos == 5
+
+    assert tracker.undo()
+    check_obj_state(modentry.directory, tracker, 15602, 0, 100, "v2.0", "Rather Boring Name")
+
+    ## tuple no prev
+    dgroup = [dgroup_tuple(id=modentry.directory, attrname=p[0], curr=p[1]) for p in
+              dgroup_params]
+    tracker.push(current, dgroup)
+    check_obj_state(modentry.directory, tracker, 15602, 0, 255, "vWhat.0", "Super Awesome Name")
+
+    assert tracker.undo()
+    check_obj_state(modentry.directory, tracker, 15602, 0, 100, "v2.0", "Rather Boring Name")
+
+    ## tuple
+    dgroup = [dgroup_tuple(id=modentry.directory, attrname=p[0], prev=getattr(current, p[0]), curr=p[1]) for p in dgroup_params ]
+    tracker.push(current, dgroup)
+    check_obj_state(modentry.directory, tracker, 15602, 0, 255, "vWhat.0", "Super Awesome Name")
+
+
+    assert tracker.undo()
+    check_obj_state(modentry.directory, tracker, 15602, 0, 100, "v2.0", "Rather Boring Name")
+
+    ## delta
+    dgroup = [dgroup_delta(id=modentry.directory, attrname=p[0], prev=getattr(current, p[0]), curr=p[1]) for p in
+              dgroup_params]
+    tracker.push(current, dgroup)
+    check_obj_state(modentry.directory, tracker, 15602, 0, 255, "vWhat.0", "Super Awesome Name")
+
+    assert tracker.max_redos == 0
+    assert tracker.max_undos == 5
+
+
+
+
+
+
+
+    # for change in [
+    #     ("name", current.name, "Super Awesome Name"),
+    #     ("version", current.version, "vWhat.0"),
+    #     ("ordinal", current.ordinal, 255)]:
+    #     dgroup.append((modentry.directory, ) + change)
+
+    # assert len(dgroup) == 3
+    # assert all(isinstance(d, undo.Delta) for d in dgroup)
+
+    # tracker.push(current, dgroup)
+
+
+    # check_obj_state(modentry.directory, tracker, 15602, 0, 255, "vWhat.0", "Super Awesome Name")
+
+def test_undo(modentry, tracker):
+
+    check_obj_state(modentry.directory, tracker, 15602, 0, 255, "vWhat.0", "Super Awesome Name")
+
+    assert tracker.undo(5)
+
+    # should be back to original values
+    check_obj_state(modentry.directory, tracker, modentry.modid, modentry.enabled, modentry.ordinal, modentry.version, modentry.name)
+
+
+@pytest.fixture(scope='module')
+def tracker2():
+    track = undo.RevisionTracker()
+    testattrsetter = lambda m, n, v: m._replace(**{n: v})
+
+    track.registerType(type(random_mock_modentry()), lambda v: v.directory, *ModEntry._fields, attrsetter=testattrsetter )
+
+    return track
+
+@pytest.fixture(scope='module')
+def randentries():
+    entries = [random_mock_modentry() for _ in range(5)]
+
+    for e in entries: assert isinstance(e, ModEntry)
+    return entries
+
+
+
+def test_track_multiple(randentries, tracker2:RevTrak):
+
+    tracker = tracker2
+
+    entries = randentries
+
+    changes = [['modid', lambda v: v+111],
+               ['name', lambda v: v+"morename"],
+               ['version', lambda v: 'vABC.D'],
+               ['enabled', lambda v: int(not v)],
+               ['ordinal', lambda v: v+101,]]
+
+    ovals = {}
+    for entry, change in zip(entries, changes):
+        attr_ = change[0]
+        newval_ = change[1](getattr(entry, attr_))
+
+        ovals[entry.directory] = {attr_: getattr(entry, attr_)} # save original value
+        tracker.push(entry, attr_, newval_)
+
+    assert tracker.max_redos == 0
+    assert tracker.max_undos == 5
+
+    modif = lambda i: tracker[entries[i].directory]
+
+    assert modif(0).modid == ovals[entries[0].directory]['modid'] + 111
+    assert modif(1).name == ovals[entries[1].directory]['name'] + 'morename'
+    assert modif(2).version == 'vABC.D'
+    assert modif(3).enabled == int(not ovals[entries[3].directory]['enabled'])
+    assert modif(4).ordinal == ovals[entries[4].directory]['ordinal']+101
+
+    tracker.undo()
+
+    assert tracker.max_redos == 1
+    assert tracker.max_undos == 4
+    assert modif(4).ordinal == ovals[entries[4].directory]['ordinal']
+
+    tracker.undo(2)
+    assert tracker.max_redos == 3
+    assert tracker.max_undos == 2
+
+    assert modif(3).enabled == ovals[entries[3].directory]['enabled']
+    assert modif(2).version == ovals[entries[2].directory]['version']
+
+    tracker.redo()
+    assert tracker.max_redos == 2
+    assert tracker.max_undos == 3
+    assert modif(2).version == 'vABC.D'
+
+
+def test_save(randentries, tracker2:RevTrak):
+    entries, tracker = randentries, tracker2
+
+
+    assert tracker.steps_to_revert == 3 == tracker.max_undos
+    tracker.save()
+
+    assert tracker.steps_to_revert == 0
+    assert tracker.max_undos == 3
+
+    assert tracker.isclean
+
+def test_truncate_redos(tracker2:RevTrak):
+    re = random_mock_modentry()
+    tracker = tracker2
+
+
+    assert tracker.max_redos == 2
+    tracker.push(re, 'ordinal', re.ordinal*2)
+
+    assert tracker.max_redos == 0
+    assert not tracker.isclean
+
+    assert tracker.max_undos == 4
+    assert tracker.total_stack_size == 4
+    assert tracker.num_tracked == 6
+
+
 
 
 
@@ -326,6 +398,22 @@ def check_obj_state(key, _tracker, x_modid, x_enabled, x_ord, x_version, x_name)
     assert curr_obj.ordinal == x_ord
     assert curr_obj.version == x_version
     assert curr_obj.name == x_name
+
+def dgroup_delta(*, id, attrname, prev, curr):
+    return undo.Delta(id, attrname, prev, curr)
+
+def dgroup_dict(*, id, attrname, curr, prev=None):
+    d = {"id": id, "attrname": attrname, "current": curr}
+    if prev:
+        d["previous"] = prev
+    return d
+
+def dgroup_tuple(*, id, attrname, curr, prev=None):
+    if prev:
+        return id, attrname, prev, curr
+    else:
+        return id, attrname, curr
+
 
 
 
