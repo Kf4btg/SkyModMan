@@ -339,13 +339,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             list of QModelIndex in the selection
         :param model: the table's model
         """
-        index1 = model.index(0, 0)
-        index_last = model.index(model.rowCount() - 1, 0)
+        sel = [i.row() for i in selected_indexes]
 
         self.mod_up_button.setEnabled(
-            index1 not in selected_indexes)
+            0 not in sel)
         self.mod_down_button.setEnabled(
-            index_last not in selected_indexes)
+            model.rowCount()-1 not in sel)
 
     def onSelectionCleared(self):
         """With nothing selected, there's nothing to move, so disable the movement buttons"""
@@ -353,9 +352,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def afterUndoRedo(self, undo_text, redo_text):
         """Update the undo/redo text to reflect the passed text.  If an argument is passed as ``None``, that button will instead be disabled."""
-        # self.logger << "undotext: " + undo_text
-        # self.logger << "redotext: " + redo_text
-
         for action, text, default_text in [
             (self.actionUndo, undo_text, "Undo"),
             (self.actionRedo, redo_text, "Redo")]:

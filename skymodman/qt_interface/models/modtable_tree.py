@@ -40,6 +40,8 @@ VISIBLE_COLS = [COL.ORDER, COL.ENABLED, COL.NAME, COL.MODID, COL.VERSION, COL.ER
 DBLCLICK_COLS = {COL.MODID, COL.VERSION}
 
 
+
+
 @total_ordering
 class QModEntry(ModEntry):
     """
@@ -47,6 +49,9 @@ class QModEntry(ModEntry):
     """
     # from the python docs: [Set] __slots__ to an empty tuple. This helps keep memory requirements low by preventing the creation of instance dictionaries.
     __slots__=()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     @property
     def checkState(self):
@@ -235,8 +240,9 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         #do/redo code:
         old_value = getattr(mod, field)
-        updated = mod._replace(**{field: value})
-        self.mod_entries[row] = updated
+        # updated = mod._replace(**{field: value})
+        # setattr(self.mod_entries[row], field, value)
+        setattr(mod, field, value)
 
         # record this row numnber in the modified rows stack
         self._modifications.append(row)
@@ -246,9 +252,9 @@ class ModTable_TreeModel(QAbstractItemModel):
         yield "Change {}".format(field)
 
         # undo code:
-        reverted = self.mod_entries[row]._replace(**{field:old_value})
-        self.mod_entries[row] = reverted
-
+        # reverted = self.mod_entries[row]._replace(**{field:old_value})
+        # self.mod_entries[row] = reverted
+        setattr(mod,field, old_value)
         # remove this row number from the modified rows stack
         self._modifications.pop()
 
@@ -301,9 +307,9 @@ class ModTable_TreeModel(QAbstractItemModel):
         :param parent:
         :return:
         """
-        self.LOGGER << "Moving rows {}-{} to row {}.".format(start_row, end_row, move_to_row)
-        self.LOGGER << len(self._parent.selectedIndexes())
-        self.LOGGER << [(idx.row(), idx.column()) for idx in self._parent.selectedIndexes()]
+        # self.LOGGER << "Moving rows {}-{} to row {}.".format(start_row, end_row, move_to_row)
+        # self.LOGGER << len(self._parent.selectedIndexes())
+        # self.LOGGER << [(idx.row(), idx.column()) for idx in self._parent.selectedIndexes()]
 
 
         count       = 1 + end_row - start_row
@@ -374,17 +380,22 @@ class ModTable_TreeModel(QAbstractItemModel):
     def _doshift(self, slice_start, slice_end, count, uvector):
         # copy the slice for reference afterwards
         # s_copy = self.mod_entries[slice_start:slice_end]
+        me = self.mod_entries
 
         # now copy the slice into a deque;
-        deck = deque(self.mod_entries[slice_start:slice_end]) #type: deque[QModEntry]
+        deck = deque(me[slice_start:slice_end]) #type: deque[QModEntry]
 
         # rotate the deck in the opposite direction and voila its like we shifted everything.
         deck.rotate(count * uvector)
 
+        for i in range(slice_start, slice_end):
+            me[i]=deck.popleft()
+            me[i].ordinal = i+1
+
         # slice em back in, but first replace the ordinal to reflect the mod's new position
-        self.mod_entries[slice_start:slice_end] = [
-            me._replace(ordinal=slice_start + i)
-            for i, me in enumerate(deck, start=1)]  # ordinal is 1 higher than index
+        # self.mod_entries[slice_start:slice_end] = [
+        #     me._replace(ordinal=slice_start + i)
+        #     for i, me in enumerate(deck, start=1)]  # ordinal is 1 higher than index
 
 
     def _check_dirty_status(self):
@@ -533,23 +544,6 @@ class ModTable_TreeView(QTreeView):
 
     def _selection_moved(self):
         self.itemsMoved.emit(self.selectedIndexes(), self._model)
-
-    def onMoveModsUpAction(self, distance=1):
-        rows = list(set([idx.row() for idx in self.selectedIndexes()]))
-        if rows:
-            self.LOGGER << "Moving rows {}-{} to row {}.".format(rows[0], rows[-1], rows[0] - distance)
-            self._model.shiftRows(rows[0], rows[-1], rows[0] - distance, self.rootIndex())
-
-        # self.itemsMoved.emit(self.selectedIndexes(), self._model)
-
-    def onMoveModsDownAction(self, distance=1):
-        rows = list(set([idx.row() for idx in self.selectedIndexes()]))
-
-        if rows:
-            self.LOGGER << "Moving rows {}-{} to row {}.".format(rows[0], rows[-1], rows[0] + distance)
-            self._model.shiftRows(rows[0], rows[-1], rows[0] + distance, self.rootIndex())
-
-        # self.itemsMoved.emit(self.selectedIndexes(), self._model)
 
     def onMoveModsAction(self, distance):
         """
