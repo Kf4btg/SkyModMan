@@ -131,7 +131,7 @@ class ModTable_TreeModel(QAbstractItemModel):
     def stack(self):
         return stack()
 
-    def parent(self, child_index):
+    def parent(self, child_index=None):
         # There are no children (yet...) so I guess this should always return invalid??
         return QModelIndex()
 
@@ -146,14 +146,16 @@ class ModTable_TreeModel(QAbstractItemModel):
                  to the given  parent index. (or the root index if parent is invalid)
         """
 
-        if parent.isValid() and parent.column() != 0:
-            return QModelIndex()
+        # This never happens:
+        # if parent.isValid() and parent.column() != 0:
+        #     self.logger << "parent is valid: {}".format(parent.data())
+        #     return QModelIndex()
 
-        child = self.mod_entries[row]
-        if child:
+        try:
+            child = self.mod_entries[row]
             return self.createIndex(row, col, child)
-
-        return QModelIndex()
+        except IndexError:
+            return QModelIndex()
 
     ##===============================================
     ## Getting and Setting Data
@@ -189,23 +191,36 @@ class ModTable_TreeModel(QAbstractItemModel):
             except KeyError:
                 # no errors for this mod
                 pass
+        elif col == COL.ENABLED:
+            if role == Qt.CheckStateRole:
+                return self.mod_entries[index.row()].checkState
+
         else:
-            # switch on combinations of role and column type
-            for case in self.rol_col_switch(role, col):
-
-                if case(Qt.CheckStateRole, COL.ENABLED):
-                    return self.mod_entries[index.row()].checkState
-
-                if case(Qt.EditRole, COL.NAME):
+            if col == COL.NAME:
+                if role == Qt.EditRole:
                     return self.mod_entries[index.row()].name
-
-                if case(Qt.ToolTipRole, COL.NAME):
-                    # return directory name as tooltip for name field
+                if role == Qt.ToolTipRole:
                     return self.mod_entries[index.row()].directory
-
-            else:
-                if role == Qt.DisplayRole and col != COL.ENABLED:
-                    return getattr(self.mod_entries[index.row()], col2field[col])
+            if role==Qt.DisplayRole:
+                return getattr(self.mod_entries[index.row()], col2field[col])
+        #
+        # else:
+        #     # switch on combinations of role and column type
+        #     for case in self.rol_col_switch(role, col):
+        #
+        #         if case(Qt.CheckStateRole, COL.ENABLED):
+        #             return self.mod_entries[index.row()].checkState
+        #
+        #         if case(Qt.EditRole, COL.NAME):
+        #             return self.mod_entries[index.row()].name
+        #
+        #         if case(Qt.ToolTipRole, COL.NAME):
+        #             # return directory name as tooltip for name field
+        #             return self.mod_entries[index.row()].directory
+        #
+        #     else:
+        #         if role == Qt.DisplayRole and col != COL.ENABLED:
+        #             return getattr(self.mod_entries[index.row()], col2field[col])
 
 
     def setData(self, index, value, role=None):
