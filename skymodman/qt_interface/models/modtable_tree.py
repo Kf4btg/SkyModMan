@@ -301,6 +301,10 @@ class ModTable_TreeModel(QAbstractItemModel):
         :param parent:
         :return:
         """
+        self.LOGGER << "Moving rows {}-{} to row {}.".format(start_row, end_row, move_to_row)
+        self.LOGGER << len(self._parent.selectedIndexes())
+        self.LOGGER << [(idx.row(), idx.column()) for idx in self._parent.selectedIndexes()]
+
 
         count       = 1 + end_row - start_row
         d_shift     = move_to_row - start_row      # shift distance; could be +-
@@ -362,7 +366,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         for _ in range(slice_end-slice_start):
             self._modifications.pop()
 
-        self.notifyViewRowsMoved.emit()
+        self._parent.clearSelection()
 
         # self._check_dirty_status()
 
@@ -438,9 +442,15 @@ class ModTable_TreeModel(QAbstractItemModel):
         self._undo_event()
 
     def revert(self):
+        self.beginResetModel()
+        self.LOGGER << self.signalsBlocked()
+        self.blockSignals(True)
         while stack().canundo():
             # todo: this doesn't block signals...should it?
             stack().undo()
+
+        self.blockSignals(False)
+        self.endResetModel()
 
     ##===============================================
     ## Undo Management
@@ -508,6 +518,7 @@ class ModTable_TreeView(QTreeView):
 
     def revertChanges(self):
         self._model.revert()
+        self.clearSelection()
 
     def saveChanges(self):
         self._model.save()
@@ -544,9 +555,8 @@ class ModTable_TreeView(QTreeView):
         """
         :param distance: if positive, we're increasing the mod install ordinal--i.e. moving the mod further down the list.  If negative, we're decreasing the ordinal, and moving the mod up the list.
         """
-        # we use set() first because it sends the row number once for each column in the row.
-        rows = list(
-            set([idx.row() for idx in self.selectedIndexes()]))
+        # we use set() first because Qt sends the row number once for each column in the row.
+        rows = sorted(set([idx.row() for idx in self.selectedIndexes()]))
         if rows and distance != 0:
 
             # uvector = -distance//abs(distance) #direction unit vector
@@ -559,9 +569,9 @@ class ModTable_TreeView(QTreeView):
 
 
     def undo(self):
-        stack().undo()
+        self._model.undo()
     def redo(self):
-        stack().redo()
+        self._model.redo()
 
 if __name__ == '__main__':
     from skymodman.managers import ModManager

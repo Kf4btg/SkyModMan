@@ -304,8 +304,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.mod_table.selectionCleared.connect(self.onSelectionCleared)
         self.mod_table.itemsMoved.connect(self.updateModMoveButtons)
 
-        # self.moveModsUp.connect(self.mod_table.onMoveModsUpAction)
-        # self.moveModsDown.connect(self.mod_table.onMoveModsDownAction)
         self.moveMods.connect(self.mod_table.onMoveModsAction)
 
         # connect undo/redo actions to table model
