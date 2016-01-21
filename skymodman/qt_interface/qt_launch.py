@@ -41,6 +41,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     moveModsUp          = pyqtSignal(int)
     moveModsDown        = pyqtSignal(int)
 
+    moveMods            = pyqtSignal(int)
+
     def __init__(self, *, manager, **kwargs):
         """
 
@@ -302,8 +304,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.mod_table.selectionCleared.connect(self.onSelectionCleared)
         self.mod_table.itemsMoved.connect(self.updateModMoveButtons)
 
-        self.moveModsUp.connect(self.mod_table.onMoveModsUpAction)
-        self.moveModsDown.connect(self.mod_table.onMoveModsDownAction)
+        # self.moveModsUp.connect(self.mod_table.onMoveModsUpAction)
+        # self.moveModsDown.connect(self.mod_table.onMoveModsDownAction)
+        self.moveMods.connect(self.mod_table.onMoveModsAction)
 
         # connect undo/redo actions to table model
         self.actionUndo.triggered.connect(self.mod_table.undo)
@@ -314,10 +317,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.SetupDone()
 
     def emitMoveModUpOne(self):
-        self.moveModsUp.emit(1)
+        self.moveMods.emit(-1)
+        # self.moveModsUp.emit(1)
 
     def emitMoveModDownOne(self):
-        self.moveModsDown.emit(1)
+        self.moveMods.emit(1)
+        # self.moveModsDown.emit(1)
 
     def onModsSelected(self):
         """
@@ -350,20 +355,18 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def afterUndoRedo(self, undo_text, redo_text):
         """Update the undo/redo text to reflect the passed text.  If an argument is passed as ``None``, that button will instead be disabled."""
-        if undo_text is None:
-            self.actionUndo.setEnabled(False)
-            self.actionUndo.setText('')
-        else:
-            self.actionUndo.setEnabled(True)
-            self.actionUndo.setText(undo_text)
+        # self.logger << "undotext: " + undo_text
+        # self.logger << "redotext: " + redo_text
 
-        if redo_text is None:
-            self.actionRedo.setEnabled(False)
-            self.actionRedo.setText('')
-        else:
-            self.actionRedo.setEnabled(True)
-            self.actionRedo.setText(redo_text)
-
+        for action, text, default_text in [
+            (self.actionUndo, undo_text, "Undo"),
+            (self.actionRedo, redo_text, "Redo")]:
+            if text:
+                action.setText(text)
+                action.setEnabled(True)
+            else:
+                action.setText(default_text)
+                action.setEnabled(False)
 
     def markTableUnsaved(self, unsaved_changes_present):
         self.save_cancel_btnbox.setEnabled(unsaved_changes_present)
