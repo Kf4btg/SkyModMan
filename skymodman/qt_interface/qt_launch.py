@@ -21,8 +21,11 @@ from skymodman.constants import (Tab as TAB, INIKey, INISection,
 from skymodman.qt_interface.qt_manager_ui import Ui_MainWindow
 from skymodman.qt_interface.widgets import message, NewProfileDialog
 from skymodman.qt_interface.models import ProfileListModel, \
-    ModTableView, ModFileTreeModel, ModTable_TreeView
+    ModFileTreeModel, ModTable_TreeView
 from skymodman.utils import withlogger, Notifier, checkPath
+
+from profilehooks import profile
+
 
 
 @withlogger
@@ -302,7 +305,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.mod_table.itemsSelected.connect(self.onModsSelected)
         self.mod_table.selectionCleared.connect(self.onSelectionCleared)
-        self.mod_table.itemsMoved.connect(self.updateModMoveButtons)
+        self.mod_table.canMoveItems.connect(self.setMoveButtonsEnabled)
 
         self.moveMods.connect(self.mod_table.onMoveModsAction)
 
@@ -314,11 +317,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.SetupDone()
 
-    def emitMoveModUpOne(self):
+    def emitMoveModUpOne(self, *args):
         self.moveMods.emit(-1)
         # self.moveModsUp.emit(1)
 
-    def emitMoveModDownOne(self):
+    def emitMoveModDownOne(self, *args):
         self.moveMods.emit(1)
         # self.moveModsDown.emit(1)
 
@@ -327,24 +330,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         Enable or disable movement buttons as needed
         """
         self.move_mod_box.setEnabled(True)
-        self.updateModMoveButtons(self.mod_table.selectedIndexes(),
-                                  self.models[M.mod_table])
+        self.mod_table._selection_moved()
+        # self.updateModMoveButtons(self.mod_table.selectedIndexes(),
+        #                           self.models[M.mod_table])
 
-    def updateModMoveButtons(self, selected_indexes, model):
-        """
-        Enabled/disable the mod-up/down buttons depending
-        on whether the first or last items in the table are selected.
-
-        :param list[QModelIndex] selected_indexes:
-            list of QModelIndex in the selection
-        :param model: the table's model
-        """
-        sel = [i.row() for i in selected_indexes]
-
-        self.mod_up_button.setEnabled(
-            0 not in sel)
-        self.mod_down_button.setEnabled(
-            model.rowCount()-1 not in sel)
+    def setMoveButtonsEnabled(self, enable_moveup, enable_movedown):
+        self.mod_up_button.setEnabled(enable_moveup)
+        self.mod_down_button.setEnabled(enable_movedown)
 
     def onSelectionCleared(self):
         """With nothing selected, there's nothing to move, so disable the movement buttons"""

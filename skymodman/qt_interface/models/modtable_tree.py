@@ -12,8 +12,11 @@ from enum import IntEnum
 from functools import total_ordering, partial
 from collections import  deque
 
+
 class COL(IntEnum):
     ENABLED, ORDER, NAME, DIRECTORY, MODID, VERSION, ERRORS = range(7)
+
+
 
 col2field = {
     COL.ORDER: "ordinal",
@@ -39,7 +42,24 @@ col2Header={
 VISIBLE_COLS = [COL.ORDER, COL.ENABLED, COL.NAME, COL.MODID, COL.VERSION, COL.ERRORS]
 DBLCLICK_COLS = {COL.MODID, COL.VERSION}
 
+# Locally binding some names to improve resolution speed in some of the constantly-called methods like data()
+Col_Enabled = COL.ENABLED.value
+Col_Name = COL.NAME.value
+Col_Errors = COL.ERRORS.value
 
+Qt_DisplayRole    = Qt.DisplayRole
+Qt_CheckStateRole = Qt.CheckStateRole
+Qt_EditRole       = Qt.EditRole
+Qt_ToolTipRole    = Qt.ToolTipRole
+Qt_DecorationRole = Qt.DecorationRole
+
+Qt_Checked = Qt.Checked
+Qt_Unchecked = Qt.Unchecked
+
+Qt_ItemIsSelectable = Qt.ItemIsSelectable
+Qt_ItemIsEnabled = Qt.ItemIsEnabled
+Qt_ItemIsEditable = Qt.ItemIsEditable
+Qt_ItemIsUserCheckable = Qt.ItemIsUserCheckable
 
 
 @total_ordering
@@ -55,7 +75,7 @@ class QModEntry(ModEntry):
 
     @property
     def checkState(self):
-        return Qt.Checked if self.enabled else Qt.Unchecked
+        return Qt_Checked if self.enabled else Qt_Unchecked
 
     def __lt__(self, other):
         return self.ordinal < other.ordinal #ordinal is unique, but not constant
@@ -165,20 +185,20 @@ class ModTable_TreeModel(QAbstractItemModel):
     def rol_col_switch(role, column):
         return [lambda r,c: role==r and column==c]
 
-    def data(self, index, role=Qt.DisplayRole):
+    def data(self, index, role=Qt_DisplayRole):
         col = index.column()
 
         # handle errors first
-        if col == COL.ERRORS:
+        if col == Col_Errors:
             try:
                 err = self.errors[self.mod_entries[index.row()].directory]
                 for case, choices in [(lambda r: role == r, lambda d: d[err])]:
 
-                    if case(Qt.DecorationRole): return QtGui.QIcon.fromTheme(
+                    if case(Qt_DecorationRole): return QtGui.QIcon.fromTheme(
                             choices({SyncError.NOTFOUND: 'dialog-error',
                                      SyncError.NOTLISTED: 'dialog-warning'}))
 
-                    if case(Qt.ToolTipRole): return choices(
+                    if case(Qt_ToolTipRole): return choices(
                             {SyncError.NOTFOUND: "The data for this mod was not found"
                                                  "in the currently configured mod directory."
                                                  "Have the files been moved? The mod"
@@ -190,19 +210,19 @@ class ModTable_TreeModel(QAbstractItemModel):
                              })
             except KeyError:
                 # no errors for this mod
-                pass
-        elif col == COL.ENABLED:
-            if role == Qt.CheckStateRole:
+                return
+        elif col == Col_Enabled:
+            if role == Qt_CheckStateRole:
                 return self.mod_entries[index.row()].checkState
 
         else:
-            if col == COL.NAME:
-                if role == Qt.EditRole:
-                    return self.mod_entries[index.row()].name
-                if role == Qt.ToolTipRole:
-                    return self.mod_entries[index.row()].directory
-            if role==Qt.DisplayRole:
+            if role==Qt_DisplayRole:
                 return getattr(self.mod_entries[index.row()], col2field[col])
+            if col == Col_Name:
+                if role == Qt_EditRole:
+                    return self.mod_entries[index.row()].name
+                if role == Qt_ToolTipRole:
+                    return self.mod_entries[index.row()].directory
         #
         # else:
         #     # switch on combinations of role and column type
@@ -230,12 +250,12 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         for case in self.rol_col_switch(role, col):
 
-            if case(Qt.CheckStateRole, COL.ENABLED):
+            if case(Qt_CheckStateRole, Col_Enabled):
                 # perform change and add to undo stack
-                self.changeModField(index, row, mod, 'enabled', value==Qt.Checked)
+                self.changeModField(index, row, mod, 'enabled', value==Qt_Checked)
                 break
 
-            if case(Qt.EditRole, COL.NAME):
+            if case(Qt_EditRole, Col_Name):
                 new_name = value.strip()  # remove trailing/leading space
                 if new_name in [mod.name, ""]: return False
 
@@ -290,13 +310,13 @@ class ModTable_TreeModel(QAbstractItemModel):
     def flags(self, index):
         col = index.column()
 
-        _flags = Qt.ItemIsEnabled | Qt.ItemIsSelectable
+        _flags = Qt_ItemIsEnabled | Qt_ItemIsSelectable
 
-        if col == COL.ENABLED:
-            return _flags | Qt.ItemIsUserCheckable
+        if col == Col_Enabled:
+            return _flags | Qt_ItemIsUserCheckable
 
-        if col == COL.NAME:
-            return _flags | Qt.ItemIsEditable
+        if col == Col_Name:
+            return _flags | Qt_ItemIsEditable
 
         return _flags
 
@@ -391,7 +411,6 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         # self._check_dirty_status()
 
-
     def _doshift(self, slice_start, slice_end, count, uvector):
         # copy the slice for reference afterwards
         # s_copy = self.mod_entries[slice_start:slice_end]
@@ -469,7 +488,7 @@ class ModTable_TreeModel(QAbstractItemModel):
 
     def revert(self):
         self.beginResetModel()
-        self.LOGGER << self.signalsBlocked()
+        # self.LOGGER << self.signalsBlocked()
         self.blockSignals(True)
         while stack().canundo():
             # todo: this doesn't block signals...should it?
@@ -505,12 +524,14 @@ class ModTable_TreeView(QTreeView):
     itemsSelected = pyqtSignal()
     selectionCleared = pyqtSignal()
 
-    itemsMoved = pyqtSignal(list, QtCore.QAbstractTableModel)
+    # itemsMoved = pyqtSignal(list, QtCore.QAbstractTableModel)
+    canMoveItems = pyqtSignal(bool, bool)
 
     def __init__(self, *, manager, **kwargs):
         super().__init__(**kwargs)
         self.manager = manager
         self._model = None  # type: ModTable_TreeModel
+        self._selection_model = None # type: QtCore.QItemSelectionModel
         self.LOGGER << "Init ModTable_TreeView"
 
     def initUI(self, grid):
@@ -526,7 +547,9 @@ class ModTable_TreeView(QTreeView):
         self.header().setStretchLastSection(False)
         self.header().setSectionResizeMode(COL.NAME, QHeaderView.Stretch)
 
+        self._selection_model = self.selectionModel()
         self._model.notifyViewRowsMoved.connect(self._selection_moved)
+
 
 
 
@@ -550,7 +573,8 @@ class ModTable_TreeView(QTreeView):
         self._model.save()
 
     def selectionChanged(self, selected, deselected):
-        if len(self.selectedIndexes()) > 0:
+        # if len(self.selectedIndexes()) > 0:
+        if self._selection_model.hasSelection():
             self.itemsSelected.emit()
         else:
             self.selectionCleared.emit()
@@ -558,7 +582,14 @@ class ModTable_TreeView(QTreeView):
         super().selectionChanged(selected, deselected)
 
     def _selection_moved(self):
-        self.itemsMoved.emit(self.selectedIndexes(), self._model)
+        issel = self._selection_model.isSelected
+        model = self._model
+        self.canMoveItems.emit(
+            not issel(model.index(0,0)),
+            not issel(model.index(model.rowCount()-1, 0))
+        )
+
+        # self.itemsMoved.emit(self.selectedIndexes(), self._model)
 
     def onMoveModsAction(self, distance):
         """
