@@ -237,6 +237,10 @@ class RevisionTracker:
     def getTarget(self, target_id):
         return self._tracked[target_id]
 
+    ##===============================================
+    ## Pushing Changes
+    ##===============================================
+
     def _start_tracking(self, target, target_id):
         self._tracked[target_id] = target
         self._initialstates[target_id] = \
@@ -273,8 +277,12 @@ class RevisionTracker:
             Each overload also takes an optional `desc` argument which can be used to override the default text description of the change being made. Note that for Delta Groups, if `desc` is not provided, the default description will be taken from the type and changed attribute of the final target in the group.
         """
 
+
         sitem = self._push(*args, target=target, desc=desc)
+
+        # if the do() operation was successful, return the actual modified objects
         return self._appendAndDo(sitem)
+
 
     def _appendAndDo(self, stackitem):
         # adding a new change invalidates the redos
@@ -427,12 +435,25 @@ class RevisionTracker:
         if not steps:  # if steps==0 or maxops == 0
             return False
 
-        self._apply_changes(
-                self._accum_changes(
-                        fromstack,
-                        tostack,
-                        steps))
-        return True
+        changes = self._accum_changes(fromstack,
+                                      tostack,
+                                      steps)
+
+        _ids = tuple(changes.keys())
+
+        if changes:
+            self._apply_changes(changes)
+                    # self._accum_changes(
+                    #         fromstack,
+                    #         tostack,
+                    #         steps))
+
+            # return the actual modified objects
+            targs = tuple(self.getTarget(i) for i in _ids)
+            if len(targs) == 1:
+                return targs[0]
+            return targs
+
 
     def undo(self, steps=1):
         return self._do(-steps)
@@ -459,7 +480,7 @@ class RevisionTracker:
         :return:
         """
 
-        changed = collections.OrderedDict()  # {target: {attr: value, ...}, ...}
+        changed = collections.OrderedDict()  # {targetid: {attr: value, ...}, ...}
 
         for s in range(steps):
             sitem = fromstack.pop()

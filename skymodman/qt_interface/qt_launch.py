@@ -25,10 +25,6 @@ from skymodman.qt_interface.models import ProfileListModel, \
 from skymodman.utils import withlogger, Notifier, checkPath
 
 
-# because it's getting a bit unwieldy trying to keep track of all these models,
-# let's let this thing help
-
-
 @withlogger
 class ModManagerWindow(QMainWindow, Ui_MainWindow):
     modListModified     = pyqtSignal()
@@ -299,7 +295,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # when the list of modified rows changes from empty to
         # non-empty or v.v., enabled/disable the save/cancel btns
         self.models[M.mod_table
-            ].tableDirtyStatusChange.connect(
+            ].tablehaschanges.connect(
                 self.markTableUnsaved)
 
         self.mod_table.itemsSelected.connect(self.onModsSelected)
@@ -308,6 +304,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.moveModsUp.connect(self.mod_table.onMoveModsUpAction)
         self.moveModsDown.connect(self.mod_table.onMoveModsDownAction)
+
+        # connect undo/redo actions to table model
+        self.actionUndo.triggered.connect(self.mod_table.undo)
+        self.actionRedo.triggered.connect(self.mod_table.redo)
+
+        self.models[M.mod_table].undoevent.connect(self.afterUndoRedo)
 
         self.SetupDone()
 
@@ -345,6 +347,23 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     def onSelectionCleared(self):
         """With nothing selected, there's nothing to move, so disable the movement buttons"""
         self.move_mod_box.setEnabled(False)
+
+    def afterUndoRedo(self, undo_text, redo_text):
+        """Update the undo/redo text to reflect the passed text.  If an argument is passed as ``None``, that button will instead be disabled."""
+        if undo_text is None:
+            self.actionUndo.setEnabled(False)
+            self.actionUndo.setText('')
+        else:
+            self.actionUndo.setEnabled(True)
+            self.actionUndo.setText(undo_text)
+
+        if redo_text is None:
+            self.actionRedo.setEnabled(False)
+            self.actionRedo.setText('')
+        else:
+            self.actionRedo.setEnabled(True)
+            self.actionRedo.setText(redo_text)
+
 
     def markTableUnsaved(self, unsaved_changes_present):
         self.save_cancel_btnbox.setEnabled(unsaved_changes_present)
