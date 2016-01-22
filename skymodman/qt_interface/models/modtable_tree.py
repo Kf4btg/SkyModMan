@@ -98,6 +98,7 @@ class ModTable_TreeModel(QAbstractItemModel):
     tablehaschanges = pyqtSignal(bool)
     undoevent = pyqtSignal(str, str) # undotext, redotext
     notifyViewRowsMoved = pyqtSignal() # let view know selection may have moved
+    hideErrorColumn = pyqtSignal(bool)
 
     def __init__(self, *, manager, parent, **kwargs):
         """
@@ -487,6 +488,13 @@ class ModTable_TreeModel(QAbstractItemModel):
         for err in self.manager.getErrors(SyncError.NOTLISTED):
             self.errors[err] = SyncError.NOTLISTED
 
+        if self.errors:
+            self.logger << "show error column"
+            self.hideErrorColumn.emit(False)
+        else:
+            self.logger << "hide error column"
+            self.hideErrorColumn.emit(True)
+
     def reloadErrorsOnly(self):
         self.beginResetModel()
         self.getErrors()
@@ -519,16 +527,11 @@ class ModTable_TreeModel(QAbstractItemModel):
         self.blockSignals(False)
         self.endResetModel()
 
-    ##===============================================
-    ## Undo Management
-    ##===============================================
-
 
 
 
 @withlogger
 class ModTable_TreeView(QTreeView):
-
 
     itemsSelected = pyqtSignal(bool)
 
@@ -549,18 +552,20 @@ class ModTable_TreeView(QTreeView):
         self.setObjectName("mod_table")
         grid.addWidget(self, 1, 0, 1, 5)
 
-        # self.setModel(ModTableModel(parent=self, manager=self.manager))
         self.setModel(ModTable_TreeModel(parent=self, manager=self.manager))
-        self.setColumnHidden(COL.DIRECTORY, True)
+        self.setColumnHidden(COL.DIRECTORY, True) # hide directory column by default
         # h=self.header() #type:QHeaderView
-        self.header().setStretchLastSection(False)
-        self.header().setSectionResizeMode(COL.NAME, QHeaderView.Stretch)
+        self.header().setStretchLastSection(False) # don't stretch the last section...
+        self.header().setSectionResizeMode(Col_Name, QHeaderView.Stretch)  # ...stretch the Name section!
 
-        self._selection_model = self.selectionModel()
-        self._model.notifyViewRowsMoved.connect(self._selection_moved)
+        self._selection_model = self.selectionModel()  # keep a local reference to the selection model
+        self._model.notifyViewRowsMoved.connect(self._selection_moved) # called from model's shiftrows() method
+        self._model.hideErrorColumn.connect(self._hideErrorColumn) # only show error col if there are errors
 
-
-
+    def _hideErrorColumn(self, hide):
+        self.setColumnHidden(Col_Errors, hide)
+        if not hide:
+            self.resizeColumnToContents(Col_Errors)
 
     def setModel(self, model):
         super().setModel(model)
@@ -582,7 +587,6 @@ class ModTable_TreeView(QTreeView):
         self._model.save()
 
     def selectionChanged(self, selected, deselected):
-        # if len(self.selectedIndexes()) > 0:
         if self._selection_model.hasSelection():
             self.itemsSelected.emit(True) # enable the button box
             self._selection_moved()   # check for disable up/down buttons
@@ -599,8 +603,6 @@ class ModTable_TreeView(QTreeView):
             not issel(model.index(model.rowCount()-1, 0))
         )
 
-        # self.itemsMoved.emit(self.selectedIndexes(), self._model)
-
     def onMoveModsAction(self, distance):
         """
         :param distance: if positive, we're increasing the mod install ordinal--i.e. moving the mod further down the list.  If negative, we're decreasing the ordinal, and moving the mod up the list.
@@ -609,14 +611,9 @@ class ModTable_TreeView(QTreeView):
         rows = sorted(set([idx.row() for idx in self.selectedIndexes()]))
         if rows and distance != 0:
 
-            # uvector = -distance//abs(distance) #direction unit vector
-
             self._model.shiftRows(rows[0], rows[-1],
                                   rows[0] + distance,
                                   self.rootIndex())
-
-            # self.itemsMoved.emit(self.selectedIndexes(), self._model)
-
 
     def undo(self):
         self._model.undo()
