@@ -152,6 +152,8 @@ class Ui_MainWindow(object):
         self.fileviewer_box.setContentsMargins(6, 6, 6, 6)
         self.fileviewer_box.setObjectName("fileviewer_box")
         self.filetree_fileviewer = QtWidgets.QTreeView(self.filetree_filebox)
+        self.filetree_fileviewer.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.filetree_fileviewer.setUniformRowHeights(True)
         self.filetree_fileviewer.setObjectName("filetree_fileviewer")
         self.fileviewer_box.addWidget(self.filetree_fileviewer)
         self.filetree_filefilter = QtWidgets.QLineEdit(self.filetree_filebox)
@@ -300,7 +302,7 @@ class Ui_MainWindow(object):
         self.profile_label.setBuddy(self.profile_selector)
 
         self.retranslateUi(MainWindow)
-        self.manager_tabs.setCurrentIndex(0)
+        self.manager_tabs.setCurrentIndex(1)
         self.installerpages.setCurrentIndex(0)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
@@ -365,8 +367,8 @@ class Ui_MainWindow(object):
         self.actionDelete.setText(_translate("MainWindow", "D&elete"))
         self.actionSkyrim_ini.setText(_translate("MainWindow", "&Skyrim.ini"))
         self.actionSkyrimPrefs_ini.setText(_translate("MainWindow", "SkyrimPrefs.&ini"))
-        self.actionUndo.setText(_translate("MainWindow", "Undo"))
+        self.actionUndo.setText(_translate("MainWindow", "&Undo"))
         self.actionUndo.setShortcut(_translate("MainWindow", "Ctrl+Z"))
-        self.actionRedo.setText(_translate("MainWindow", "Redo"))
+        self.actionRedo.setText(_translate("MainWindow", "&Redo"))
         self.actionRedo.setShortcut(_translate("MainWindow", "Ctrl+Shift+Z"))
 

@@ -61,7 +61,7 @@
     <item row="0" column="0" colspan="4">
      <widget class="QTabWidget" name="manager_tabs">
       <property name="currentIndex">
-       <number>0</number>
+       <number>1</number>
       </property>
       <widget class="QWidget" name="installed_mods_tab">
        <property name="sizePolicy">
@@ -340,7 +340,14 @@
              <number>6</number>
             </property>
             <item>
-             <widget class="QTreeView" name="filetree_fileviewer"/>
+             <widget class="QTreeView" name="filetree_fileviewer">
+              <property name="horizontalScrollBarPolicy">
+               <enum>Qt::ScrollBarAlwaysOff</enum>
+              </property>
+              <property name="uniformRowHeights">
+               <bool>true</bool>
+              </property>
+             </widget>
             </item>
             <item>
              <widget class="QLineEdit" name="filetree_filefilter">
@@ -634,10 +641,11 @@
   </action>
   <action name="actionUndo">
    <property name="icon">
-    <iconset theme="edit-undo"/>
+    <iconset theme="edit-undo">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
-    <string>Undo</string>
+    <string>&amp;Undo</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+Z</string>
@@ -645,10 +653,11 @@
   </action>
   <action name="actionRedo">
    <property name="icon">
-    <iconset theme="edit-redo"/>
+    <iconset theme="edit-redo">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
-    <string>Redo</string>
+    <string>&amp;Redo</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+Shift+Z</string>

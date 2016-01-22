@@ -393,7 +393,7 @@ class ModFileTreeModel(QAbstractItemModel):
         return item
 
     def columnCount(self, *args, **kwargs) -> int:
-        return 1
+        return 2
 
     def rowCount(self, index=QModelIndex(), *args, **kwargs) -> int:
         """Number of children contained by the item referenced by `index`
@@ -413,7 +413,8 @@ class ModFileTreeModel(QAbstractItemModel):
         :param role:
         """
         if orient == Qt.Horizontal and role==Qt.DisplayRole:
-            return "Name"
+            return ["Name", "Path"][section]
+            # return "Name"
         return super().headerData(section, orient, role)
 
     def index(self, row, col, parent=QModelIndex(), *args, **kwargs) -> QModelIndex:
@@ -463,8 +464,8 @@ class ModFileTreeModel(QAbstractItemModel):
 
         :param QModelIndex index:
         """
-        item = self.getItem(index)
-        return item.itemflags
+        # item = self.getItem(index)
+        return self.getItem(index).itemflags
 
     def data(self, index, role=Qt.DisplayRole):
         """
@@ -476,13 +477,17 @@ class ModFileTreeModel(QAbstractItemModel):
 
         item = self.getItem(index)
 
-        if role == Qt.DisplayRole:
-            return item.name
-        elif role == Qt.CheckStateRole:
-            # hides the complexity of the tristate workings
-            return item.checkState
-        elif role == Qt.DecorationRole:
-            return item.icon
+        if index.column() == 1:
+            if role == Qt.DisplayRole: #second column is path
+                return item.parent.path + "/"
+        else:
+            if role == Qt.DisplayRole:
+                return item.name
+            elif role == Qt.CheckStateRole:
+                # hides the complexity of the tristate workings
+                return item.checkState
+            elif role == Qt.DecorationRole:
+                return item.icon
 
     # noinspection PyTypeChecker
     def setData(self, index, value, role=Qt.CheckStateRole):

@@ -14,7 +14,8 @@ from PyQt5.QtWidgets import (QApplication,
                              QMainWindow,
                              QDialogButtonBox,
                              QMessageBox,
-                             QFileDialog)
+                             QFileDialog,
+                             QHeaderView)
 
 from skymodman import skylog
 from skymodman.constants import (Tab as TAB, INIKey, INISection,
@@ -212,7 +213,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         Create and populate the list of mod-folders shown on the filetree tab, as well as prepare the fileviewer pane to show files when a mod is selected
         """
-
+        ##################################
+        ## Mods List
         ##################################
         # setup model for active mods list
         list_model = self.models[M.mod_list] = QStringListModel()
@@ -234,10 +236,14 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.splitter.setSizes(
                 [1, 500])  # just make the left one smaller ok?
 
+        ##################################
+        ## File Viewer
+        ##################################
         ## model for tree view of files
         fileviewer_model = self.models[
             M.file_viewer] = ModFileTreeModel(manager=self._manager,
                                               parent=self.filetree_fileviewer)
+
 
         ## filter
         fileviewer_filter = self.filters[
@@ -253,6 +259,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         ## set model
         self.filetree_fileviewer.setModel(fileviewer_filter)
 
+        ## resize 'name' column to be larger at first than 'path' column
+        self.filetree_fileviewer.header().resizeSection(0,400)
+        # todo: remember user column resizes
+        # self.models[M.file_viewer].rootPathChanged.connect(self.on_filetree_fileviewer_rootpathchanged)
+
         ## show new files when mod selection in list
         proxy2source = lambda c, p: self.showModFiles(
                 mod_filter.mapToSource(c), mod_filter.mapToSource(p))
@@ -261,6 +272,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # let setup know we're done here
         self.SetupDone()
+
+    # todo: change window title (or something) to reflect current folder
+    # def on_filetree_fileviewer_rootpathchanged(self, newpath):
+    #     self.filetree_fileviewer.resizeColumnToContents(0)
 
     def showModFiles(self, indexCur, indexPre):
         """
