@@ -26,7 +26,7 @@ class FSItem:
 
         :param str path: a relative path from an arbitray root to this file
         :param str name: the name that will displayed for this file; usually just the basename
-        :param FSItem parent: this Item's parent, if any. will be None for top-level items
+        :param parent: this Item's parent, if any. will be None for top-level items
         :param bool isdir: Is this a directory? If not, it will be marked as never being able to hold children
         """
         # noinspection PyArgumentList
@@ -291,6 +291,8 @@ class QFSItem(FSItem):
         # checked and partially-checked directories will not be hidden
         self._hidden = state == Qt.Unchecked
 
+        # add final check for if this was the last unhidden file in a directory:
+
     def childrenCheckState(self):
         """  Calculates the checked state of the item based on the checked state
           of its children. E.g. if all children checked => this item is also
@@ -523,11 +525,22 @@ class ModFileTreeModel(QAbstractItemModel):
 
             item.checkState = value #triggers cascade if this a dir
 
+            # if this item is the last checked/unchecked item in a dir,
+            # make sure the change is propagated up through the parent
+            # hierarchy, to make sure that no folders remain checked
+            # when none of their descendants are.
+            ancestor = self._getHighestAffectedAncestor(item, value)
+
+            if ancestor is not item:
+                index1 = self.getIndexFromItem(ancestor)
+            else:
+                index1 = index
+
             # using the "last_child_seen" value--which SHOULD be the most
             # "bottom-right" child that was just changed--to feed to
             # datachanged saves a lot of individual calls. Hopefully there
             # won't be any concurrency issues to worry about later on.
-            self.sendDataThroughProxy(index, self.getIndexFromItem(QFSItem.last_child_seen))
+            self.sendDataThroughProxy(index1, self.getIndexFromItem(QFSItem.last_child_seen))
             # self.logger << "Last row touched: {}".format(QFSItem.last_row_touched)
 
             # self.dumpsHidden()
@@ -535,6 +548,12 @@ class ModFileTreeModel(QAbstractItemModel):
 
             return True
         return super().setData(index, value, role)
+
+    def _getHighestAffectedAncestor(self, item, value):
+        if item.parent and item.parent.childrenCheckState() == value:
+            return self._getHighestAffectedAncestor(item.parent, value)
+        else:
+            return item
 
     # noinspection PyUnresolvedReferences
     def sendDataThroughProxy(self, index1, index2, *args):
