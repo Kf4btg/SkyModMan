@@ -9,7 +9,6 @@ from pathlib import Path
 from skymodman.utils import withlogger, tree
 # from skymodman.utils import humanizer
 
-bstr = (str, bytes)
 # @withlogger
 # @humanizer.humanize
 class FSItem:
@@ -50,7 +49,6 @@ class FSItem:
 
         self._level = len(self.ppath.parts)
 
-
     @property
     def path(self)->str: return self._path
 
@@ -80,7 +78,6 @@ class FSItem:
         """How deep is this item from the root"""
         return self._level
 
-
     @property
     def isdir(self)->bool:
         """Whether this item represents a directory"""
@@ -99,17 +96,12 @@ class FSItem:
     def child_count(self):
         """Number of **direct** children"""
         return len(self._children) if self._isdir else 0
-        # try:
-        #     return len(self._children)
-        # except TypeError: # _children is None
-        #     return 0
 
     @property
     def parent(self):
         """Reference to the parent (containing directory) of this item,
         or None if this is the root item"""
         return self._parent
-
 
     def __getitem__(self, item):
         """Access children using list notation: thisitem[0] or thisitem["childfile.nif"]
@@ -124,13 +116,6 @@ class FSItem:
                 return self._children[self._childnames.index(item)] # assume string name passed
             except (ValueError, AttributeError):
                 return None
-            # if isinstance(item, bstr): #passed a filename
-            #     for c in self._children:
-            #         if c.name==item: return c
-            # else:
-            #     return self._children[item]
-        # except (IndexError, TypeError):
-        #     return None
 
     @property
     def children(self):
@@ -151,16 +136,6 @@ class FSItem:
                     yield from child.iterchildren(True)
         else:
             yield from self._children
-
-    # def append(self, child):
-    #     """Add a child FSItem to this instance. Also sets that child's 'row' attribute
-    #     based on its position in the parent's list
-    #     :param FSItem child:
-    #     """
-    #     # position after the end of the list, aka where the
-    #     # child is about to be inserted
-    #     child.row = len(self._children)
-    #     self._children.append(child)
 
     def loadChildren(self, rel_root, namefilter = None):
         """
@@ -540,7 +515,7 @@ class ModFileTreeModel(QAbstractItemModel):
             # "bottom-right" child that was just changed--to feed to
             # datachanged saves a lot of individual calls. Hopefully there
             # won't be any concurrency issues to worry about later on.
-            self.sendDataThroughProxy(index1, self.getIndexFromItem(QFSItem.last_child_seen))
+            self._sendDataThroughProxy(index1, self.getIndexFromItem(QFSItem.last_child_seen))
             # self.logger << "Last row touched: {}".format(QFSItem.last_row_touched)
 
             # self.dumpsHidden()
@@ -556,7 +531,7 @@ class ModFileTreeModel(QAbstractItemModel):
             return item
 
     # noinspection PyUnresolvedReferences
-    def sendDataThroughProxy(self, index1, index2, *args):
+    def _sendDataThroughProxy(self, index1, index2, *args):
         proxy = self._parent.model()
         """:type: PyQt5.QtCore.QSortFilterProxyModel.QSortFilterProxyModel"""
 
