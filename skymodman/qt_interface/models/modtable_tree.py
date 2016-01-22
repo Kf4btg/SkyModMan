@@ -1,6 +1,6 @@
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import QHeaderView, QTreeView, QAbstractItemView
-from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex
+from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData
 
 from skymodman import ModEntry
 # from skymodman.constants import (Column as COL, SyncError, DBLCLICK_COLS, VISIBLE_COLS)
@@ -61,6 +61,8 @@ Qt_ItemIsSelectable    = Qt.ItemIsSelectable
 Qt_ItemIsEnabled       = Qt.ItemIsEnabled
 Qt_ItemIsEditable      = Qt.ItemIsEditable
 Qt_ItemIsUserCheckable = Qt.ItemIsUserCheckable
+Qt_ItemIsDragEnabled   = Qt.ItemIsDragEnabled
+Qt_ItemIsDropEnabled   = Qt.ItemIsDropEnabled
 
 
 
@@ -90,6 +92,8 @@ class QModEntry(ModEntry):
         return self.name == other.name \
                and self.enabled == other.enabled \
                and self.ordinal == other.ordinal
+
+
 
 
 @withlogger
@@ -124,6 +128,9 @@ class ModTable_TreeModel(QAbstractItemModel):
         # remove the most recent changes without losing track of any previous changes
         # made to that row.
         self._modifications = deque()
+
+        # used to store removed rows during DnD operations
+        self.removed = []
 
         stack().undocallback = partial(self._undo_event, 'undo')
         stack().docallback = partial(self._undo_event, 'redo')
@@ -299,9 +306,11 @@ class ModTable_TreeModel(QAbstractItemModel):
         return super().headerData(section, orientation, role)
 
     def flags(self, index):
+        if not index.isValid():
+            return Qt_ItemIsEnabled
         col = index.column()
 
-        _flags = Qt_ItemIsEnabled | Qt_ItemIsSelectable
+        _flags = Qt_ItemIsEnabled | Qt_ItemIsSelectable | Qt_ItemIsDragEnabled | Qt_ItemIsDropEnabled
 
         if col == Col_Enabled:
             return _flags | Qt_ItemIsUserCheckable
@@ -340,12 +349,6 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         self.dataChanged.emit(index, index)
 
-
-
-
-    ##===============================================
-    ## Adding and Removing Rows/Columns
-    ##===============================================
 
 
 
@@ -527,6 +530,95 @@ class ModTable_TreeModel(QAbstractItemModel):
         self.blockSignals(False)
         self.endResetModel()
 
+    ##===============================================
+    ## Adding and Removing Rows/Columns
+    ##===============================================
+
+    def supportedDropActions(self):
+        return Qt.MoveAction
+
+    def mimeTypes(self):
+        return ['text/plain']
+
+    def mimeData(self, indexes):
+        """
+
+        :param list[QModelIndex] indexes:
+        :return: A string that is 2 ints separated by spaces, e.g.:  '4 8'
+            This string corresponds to the first and last row in the block of rows being dragged.
+        """
+        count = len(indexes)
+        rows = sorted(set(i.row() for i in indexes))
+        mimedata = QMimeData()
+        mimedata.setText("{} {}".format(rows[0], rows[-1]))
+        return mimedata
+
+    def dropMimeData(self, data, action, row, column, parent):
+        """
+
+        :param QMimeData data:
+        :param Qt.DropAction action:
+        :param int row:
+        :param int column:
+        :param QModelIndex parent:
+        :return:
+        """
+
+        if not parent.isValid():
+            return False
+        p = parent.internalPointer() #type: QModEntry
+
+        dest = p.ordinal - 1
+        start, end = [int(r) for r in data.text().split()]
+
+        self.shiftRows(start, end, dest)
+        # self.logger << "dropMimeData '{}' a{} r{} c{} p{}".format(data.text(), action, row, column, p )
+        return True
+
+    # def removeRows(self, row, count, parent=QModelIndex()):
+    #     """
+    #
+    #     :param int row:
+    #     :param int count:
+    #     :param QModelIndex parent:
+    #     :return:
+    #     """
+    #
+    #     self.beginRemoveRows(parent, row, row + count - 1)
+    #
+    #     self.removed = self.mod_entries[row:row+count]
+    #     self.mod_entries[row:row+count] = []
+    #
+    #     self.endRemoveRows()
+    #     return True
+    #
+    #
+    # def insertRows(self, row, count, parent = QModelIndex()):
+    #     """
+    #
+    #     :param row:
+    #     :param count:
+    #     :param parent:
+    #     :return:
+    #     """
+    #     me = self.mod_entries
+    #
+    #     self.beginInsertRows(parent, row, row+count-1)
+    #     # left = self.mod_entries[:row]
+    #     right = me[row:]
+    #     me = me[:row]
+    #
+    #     me.extend([None]*count)
+    #     me+=right
+    #
+    #     self.endInsertRows()
+
+
+
+
+
+
+
 
 
 
@@ -548,9 +640,11 @@ class ModTable_TreeView(QTreeView):
 
     def initUI(self, grid):
         self.setRootIsDecorated(False) # no collapsing
-        self.setSelectionMode(QAbstractItemView.ContiguousSelection)
         self.setObjectName("mod_table")
         grid.addWidget(self, 1, 0, 1, 5)
+
+        self.setSelectionMode(QAbstractItemView.ContiguousSelection)
+        self.setDragDropMode(QAbstractItemView.InternalMove)
 
         self.setModel(ModTable_TreeModel(parent=self, manager=self.manager))
         self.setColumnHidden(COL.DIRECTORY, True) # hide directory column by default
@@ -620,6 +714,23 @@ class ModTable_TreeView(QTreeView):
     def redo(self):
         self._model.redo()
 
+    def dragEnterEvent(self, event):
+        """
+
+        :param QDragEnterEvent event:
+        :return:
+        """
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event):
+        super().dragMoveEvent(event)
+
+
+
 if __name__ == '__main__':
     from skymodman.managers import ModManager
     from skymodman.qt_interface.qt_launch import ModManagerWindow
+    from PyQt5.QtGui import QDragEnterEvent

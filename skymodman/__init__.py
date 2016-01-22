@@ -1,9 +1,10 @@
 # from collections import namedtuple
-
-# TModEntry = namedtuple("ModEntry", ['enabled', 'name', 'modid', 'version', 'directory', 'ordinal'])
+# TModEntry = namedtuple("TModEntry", ['enabled', 'name', 'modid', 'version', 'directory', 'ordinal'])
 
 class ModEntry:
     __slots__ = 'enabled', 'name', 'modid', 'version', 'directory', 'ordinal'
+    _fields= __slots__
+
 
     def __init__(self, enabled=None, name=None, modid=None, version=None, directory=None, ordinal=None):
         self.enabled   = enabled
@@ -26,6 +27,6 @@ class ModEntry:
         else:
             return cls(*iterrible)
 
-    @property
-    def _fields(self):
-        return ('enabled', 'name', 'modid', 'version', 'directory', 'ordinal')
+
+    def __repr__(self):
+        return self.__class__.__name__ + "(enabled={0.enabled}, name='{0.name}', modid={0.modid}, version='{0.version}', directory='{0.directory}', ordinal={0.ordinal})".format(self)
