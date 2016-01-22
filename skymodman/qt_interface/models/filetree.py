@@ -19,7 +19,7 @@ class FSItem:
 
     #Since we may be creating LOTS of these things (some mods have gajiblions of files), we'll define
     # __slots__ to keep the memory footprint as low as possible
-    __slots__=("_path", "_lpath", "_name", "_parent", "_isdir", "_children", "_row", "_hidden", "_level")
+    __slots__=("_path", "_lpath", "_name", "_parent", "_isdir", "_children", "_childnames", "_row", "_hidden", "_level")
 
     def __init__(self, *, path, name, parent=None, isdir=True, **kwargs):
         """
@@ -39,8 +39,10 @@ class FSItem:
         self._isdir = isdir
         if self._isdir:
             self._children = []
+            self._childnames = []
         else:
             self._children = None #type: List[FSItem]
+            self._childnames = None
 
         self._row=0
 
@@ -70,6 +72,9 @@ class FSItem:
         """Which row (relative to its parent) does this item appear on"""
         return self._row
 
+    @row.setter
+    def row(self, value:int): self._row = value
+
     @property
     def level(self):
         """How deep is this item from the root"""
@@ -80,9 +85,6 @@ class FSItem:
     def isdir(self)->bool:
         """Whether this item represents a directory"""
         return self._isdir
-
-    @row.setter
-    def row(self, value:int): self._row = value
 
     @property
     def hidden(self):
@@ -96,10 +98,11 @@ class FSItem:
     @property
     def child_count(self):
         """Number of **direct** children"""
-        try:
-            return len(self._children)
-        except TypeError: # _children is None
-            return 0
+        return len(self._children) if self._isdir else 0
+        # try:
+        #     return len(self._children)
+        # except TypeError: # _children is None
+        #     return 0
 
     @property
     def parent(self):
@@ -110,19 +113,24 @@ class FSItem:
 
     def __getitem__(self, item):
         """Access children using list notation: thisitem[0] or thisitem["childfile.nif"]
-        Returns none if given an invalid item number or childlist is None
+        Returns none if given an invalid item number/name or childlist is None
 
         :param int|str item:
         """
-
         try:
-            if isinstance(item, bstr): #passed a filename
-                for c in self._children:
-                    if c.name==item: return c
-            else:
-                return self._children[item]
-        except (IndexError, TypeError):
-            return None
+            return self._children[item]
+        except TypeError:
+            try:
+                return self._children[self._childnames.index(item)] # assume string name passed
+            except (ValueError, AttributeError):
+                return None
+            # if isinstance(item, bstr): #passed a filename
+            #     for c in self._children:
+            #         if c.name==item: return c
+            # else:
+            #     return self._children[item]
+        # except (IndexError, TypeError):
+        #     return None
 
     @property
     def children(self):
@@ -144,15 +152,15 @@ class FSItem:
         else:
             yield from self._children
 
-    def append(self, child):
-        """Add a child FSItem to this instance. Also sets that child's 'row' attribute
-        based on its position in the parent's list
-        :param FSItem child:
-        """
-        # position after the end of the list, aka where the
-        # child is about to be inserted
-        child.row = len(self._children)
-        self._children.append(child)
+    # def append(self, child):
+    #     """Add a child FSItem to this instance. Also sets that child's 'row' attribute
+    #     based on its position in the parent's list
+    #     :param FSItem child:
+    #     """
+    #     # position after the end of the list, aka where the
+    #     # child is about to be inserted
+    #     child.row = len(self._children)
+    #     self._children.append(child)
 
     def loadChildren(self, rel_root, namefilter = None):
         """
@@ -163,25 +171,31 @@ class FSItem:
         of the new FSItem with the same root given here.
 
         :param str rel_root:
-        :param typing.Callable namefilter: When implemented, will allow name-filtering to exclude some
+        :param (str)->bool namefilter: When implemented, will allow name-filtering to exclude some
         files from the results
         """
 
         rpath = Path(rel_root)
         path = rpath / self.path
 
-        # sort by name  ### TODO: folders first?
-        entries = sorted(list(path.iterdir()), key = lambda p: p.name)
+        nfilter = None
+        if namefilter:
+            nfilter = lambda p:not namefilter(p.name)
 
-        for e in entries: #type: Path
+        # sort by name  ### TODO: folders first?
+        entries = sorted(filter(nfilter, path.iterdir()), key=lambda p:p.name)
+                         # , key = lambda p: p.name)
+        for r,e in enumerate(sorted(entries, key=lambda p:p.is_file())): #type: int, Path
             rel = str(e.relative_to(rpath))
+
             # using type(self) here to make sure we get an instance of the subclass we're using
             # instead of the base FSItem
             child = type(self)(path=rel, name=e.name, parent=self, isdir=e.is_dir())
             if e.is_dir():
                 child.loadChildren(rel_root, namefilter)
-            self.append(child)
-
+            child.row = r
+            self._children.append(child)
+            self._childnames.append(child.name)
 
     def __eq__(self, other):
         """Return true when these 2 items refer to the same relative path.
@@ -371,7 +385,7 @@ class ModFileTreeModel(QAbstractItemModel):
             self.rootpath = path
             # name for this item is never actually seen
             self.rootitem = QFSItem(path="", name="data", parent=None)
-            self.rootitem.loadChildren(self.rootpath)
+            self.rootitem.loadChildren(self.rootpath, namefilter=lambda n: n.lower()=='meta.ini')
 
             self.endResetModel()  # tells the view it should get new data from model & reset itself
 
