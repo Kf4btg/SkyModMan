@@ -4,7 +4,7 @@ from functools import partial
 from PyQt5.QtCore import (Qt,
                           pyqtSignal,
                           pyqtSlot,
-                          QStringListModel,
+                          # QStringListModel,
                           QModelIndex,
                           QDir,
                           QStandardPaths,
@@ -15,11 +15,17 @@ from PyQt5.QtWidgets import (QApplication,
                              QDialogButtonBox,
                              QMessageBox,
                              QFileDialog,
-                             QHeaderView)
+                             # QHeaderView,
+                             # QListView
+                             )
 
 from skymodman import skylog
-from skymodman.constants import (Tab as TAB, INIKey, INISection,
-                                 qModels as M, qFilters as F)
+from skymodman.constants import (Tab as TAB,
+                                 INIKey,
+                                 INISection,
+                                 qModels as M,
+                                 qFilters as F,
+                                 Column)
 from skymodman.qt_interface.qt_manager_ui import Ui_MainWindow
 from skymodman.qt_interface.widgets import message, NewProfileDialog
 from skymodman.qt_interface.models import ProfileListModel, \
@@ -216,15 +222,14 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         ##################################
         ## Mods List
         ##################################
-        # setup model for active mods list
-        list_model = self.models[M.mod_list] = QStringListModel()
-        list_model.setStringList(list(self.Manager.enabledMods()))
 
-        # and now the filter proxy
+        #setup filter proxy for active mods list
         mod_filter = self.filters[F.mod_list] = QSortFilterProxyModel(
             self.filetree_modlist)
-        mod_filter.setSourceModel(list_model)
+        mod_filter.setSourceModel(self.models[M.mod_table])
         mod_filter.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        # tell filter to read mod name
+        mod_filter.setFilterKeyColumn(Column.NAME.value)
 
         # connect proxy to textchanged of filter box
         self.filetree_modfilter.textChanged.connect(
@@ -232,6 +237,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # finally, set the filter as the model for the modlist
         self.filetree_modlist.setModel(mod_filter)
+        # make sure we're just showing the mod name
+        self.filetree_modlist.setModelColumn(Column.NAME.value)
 
         self.splitter.setSizes(
                 [1, 500])  # just make the left one smaller ok?
@@ -243,7 +250,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         fileviewer_model = self.models[
             M.file_viewer] = ModFileTreeModel(manager=self._manager,
                                               parent=self.filetree_fileviewer)
-
 
         ## filter
         fileviewer_filter = self.filters[
@@ -268,6 +274,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         proxy2source = lambda c, p: self.showModFiles(
                 mod_filter.mapToSource(c), mod_filter.mapToSource(p))
         self.filetree_modlist.selectionModel().currentChanged.connect(
+            # self.showModFiles)
             proxy2source)
 
         # let setup know we're done here
@@ -277,23 +284,22 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     # def on_filetree_fileviewer_rootpathchanged(self, newpath):
     #     self.filetree_fileviewer.resizeColumnToContents(0)
 
+
     def showModFiles(self, indexCur, indexPre):
         """
-        When the currently item changes in the modlist, change the fileviewer to show the files from the new mod's folder.
+        When the currently selected item changes in the modlist, change the fileviewer to show the files from the new mod's folder.
 
         :param QModelIndex indexCur: Currently selected index
         :param QModelIndex indexPre: Previously selected index
         """
-        mod = self.models[M.mod_list].stringList()[indexCur.row()]
+        if not indexCur.isValid(): return
+
+        modname = self.models[M.mod_list].data(indexCur)
 
         p = self.Manager.Config.paths.dir_mods / \
-            self.Manager.getModDir(mod)
+            self.Manager.getModDir(modname)
 
         self.models[M.file_viewer].setRootPath(str(p))
-
-    def updateFileTreeModList(self):
-        self.models[M.mod_list].setStringList(
-            list(self.Manager.enabledMods()))
 
     # </editor-fold>
 
@@ -369,7 +375,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.mod_table.saveChanges()
 
         # update the filetree list
-        self.updateFileTreeModList()
+        # self.updateFileTreeModList()
 
         # self.modListSaved.emit()
         # self.updateUI()
@@ -483,7 +489,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """For now, this just repopulates the mod-table. There might be more to it later"""
         self.LOGGER << "About to repopulate table"
         self.mod_table.loadData()
-        self.updateFileTreeModList()
+        # self.updateFileTreeModList()
 
         self.updateUI()
 
@@ -543,6 +549,8 @@ def quit_app():
 # <editor-fold desc="__main__">
 if __name__ == '__main__':
     from skymodman import managers
+    from skymodman.qt_interface.models.modtable_tree import \
+        ModTable_TreeModel
 
     app = QApplication(sys.argv)
 

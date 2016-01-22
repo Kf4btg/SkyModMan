@@ -3,8 +3,9 @@ from PyQt5.QtWidgets import QHeaderView, QTreeView, QAbstractItemView
 from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData
 
 from skymodman import ModEntry
-# from skymodman.constants import (Column as COL, SyncError, DBLCLICK_COLS, VISIBLE_COLS)
-from skymodman.constants import SyncError
+from skymodman.constants import (Column as COL, SyncError)
+# , DBLCLICK_COLS, VISIBLE_COLS)
+# from skymodman.constants import SyncError
 from skymodman.utils import withlogger
 from skymodman.thirdparty.undo import undoable, stack
 
@@ -13,29 +14,9 @@ from functools import total_ordering, partial
 from collections import deque
 
 
-class COL(IntEnum):
-    ENABLED, ORDER, NAME, DIRECTORY, MODID, VERSION, ERRORS = range(7)
-
-
-
-col2field = {
-    COL.ORDER: "ordinal",
-    COL.ENABLED: "enabled",
-    COL.NAME: "name",
-    COL.DIRECTORY: "directory",
-    COL.MODID: "modid",
-    COL.VERSION:   "version",
-}
-
-col2Header={
-    COL.ORDER:     "#",
-    COL.ENABLED:   " ",
-    COL.NAME:      "Name",
-    COL.DIRECTORY: "Folder",
-    COL.MODID:     "Mod ID",
-    COL.VERSION:   "Version",
-    COL.ERRORS:    "Errors",
-}
+# <editor-fold desc="ModuleConstants">
+# class COL(IntEnum):
+#     ENABLED, ORDER, NAME, DIRECTORY, MODID, VERSION, ERRORS = range(7)
 
 # HEADERS =   ["Order", "", "Name", "Folder", "Mod ID", "Version", "Errors"]
 # COLUMNS = {COL.ORDER, COL.ENABLED, COL.NAME, COL.DIRECTORY, COL.MODID, COL.VERSION, COL.ERRORS}
@@ -43,10 +24,12 @@ VISIBLE_COLS  = [COL.ORDER, COL.ENABLED, COL.NAME, COL.MODID, COL.VERSION, COL.E
 DBLCLICK_COLS = {COL.MODID, COL.VERSION}
 
 # Locally binding some names to improve resolution speed in some of the constantly-called methods like data()
-Col_Enabled = COL.ENABLED.value
-Col_Name    = COL.NAME.value
-Col_Errors  = COL.ERRORS.value
-Col_Order   = COL.ORDER.value
+COL_ENABLED = COL.ENABLED.value
+COL_NAME    = COL.NAME.value
+COL_ERRORS  = COL.ERRORS.value
+COL_ORDER   = COL.ORDER.value
+COL_VERSION = COL.VERSION.value
+COL_MODID   = COL.MODID.value
 
 Qt_DisplayRole    = Qt.DisplayRole
 Qt_CheckStateRole = Qt.CheckStateRole
@@ -64,7 +47,25 @@ Qt_ItemIsUserCheckable = Qt.ItemIsUserCheckable
 Qt_ItemIsDragEnabled   = Qt.ItemIsDragEnabled
 Qt_ItemIsDropEnabled   = Qt.ItemIsDropEnabled
 
+col2field = {
+    COL_ORDER: "ordinal",
+    COL_ENABLED: "enabled",
+    COL_NAME: "name",
+    COL.DIRECTORY: "directory",
+    COL_MODID: "modid",
+    COL_VERSION:   "version",
+}
 
+col2Header={
+    COL.ORDER:     "#",
+    COL.ENABLED:   " ",
+    COL.NAME:      "Name",
+    COL.DIRECTORY: "Folder",
+    COL.MODID:     "Mod ID",
+    COL.VERSION:   "Version",
+    COL.ERRORS:    "Errors",
+}
+# </editor-fold>
 
 @total_ordering
 class QModEntry(ModEntry):
@@ -117,7 +118,7 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         self.errors = {}  # dict[str, int] of {mod_directory_name: err_type}
 
-        self.vheader_field = Col_Order
+        self.vheader_field = COL_ORDER
         # self.visible_columns = [COL.ENABLED, COL.ORDER, COL.NAME, COL.MODID, COL.VERSION]
 
         self._datahaschanged = None # placeholder for first start
@@ -144,6 +145,15 @@ class ModTable_TreeModel(QAbstractItemModel):
     @property
     def isDirty(self) -> bool:
         return stack().haschanged()
+
+    def getModForIndex(self, index):
+        """
+        Return the ModEntry for the row that `index` appears in
+
+        :param index:
+        :return:
+        """
+        if index.isValid(): return self.mod_entries[index.row()]
 
     ##===============================================
     ## Undo/Redo
@@ -215,7 +225,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         col = index.column()
 
         # handle errors first
-        if col == Col_Errors:
+        if col == COL_ERRORS:
             try:
                 err = self.errors[self.mod_entries[index.row()].directory]
                 for case, choices in [(lambda r: role == r, lambda d: d[err])]:
@@ -239,14 +249,14 @@ class ModTable_TreeModel(QAbstractItemModel):
                 # no errors for this mod
                 return
 
-        elif col == Col_Enabled:
+        elif col == COL_ENABLED:
             if role == Qt_CheckStateRole:
                 return self.mod_entries[index.row()].checkState
 
         else:
             if role==Qt_DisplayRole:
                 return getattr(self.mod_entries[index.row()], col2field[col])
-            if col == Col_Name:
+            if col == COL_NAME:
                 if role == Qt_EditRole:
                     return self.mod_entries[index.row()].name
                 if role == Qt_ToolTipRole:
@@ -267,13 +277,13 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
 
         if role == Qt_CheckStateRole:
-            if index.column() == Col_Enabled:
+            if index.column() == COL_ENABLED:
                 row = index.row()
                 self.changeModField(index, row, self.mod_entries[row],
                                     'enabled', value == Qt_Checked)
                 return True
         elif role == Qt_EditRole:
-            if index.column() == Col_Name:
+            if index.column() == COL_NAME:
                 row = index.row()
                 mod = self.mod_entries[row]
                 new_name = value.strip()  # remove trailing/leading space
@@ -312,10 +322,10 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         _flags = Qt_ItemIsEnabled | Qt_ItemIsSelectable | Qt_ItemIsDragEnabled | Qt_ItemIsDropEnabled
 
-        if col == Col_Enabled:
+        if col == COL_ENABLED:
             return _flags | Qt_ItemIsUserCheckable
 
-        if col == Col_Name:
+        if col == COL_NAME:
             return _flags | Qt_ItemIsEditable
 
         return _flags
@@ -650,16 +660,16 @@ class ModTable_TreeView(QTreeView):
         self.setColumnHidden(COL.DIRECTORY, True) # hide directory column by default
         # h=self.header() #type:QHeaderView
         self.header().setStretchLastSection(False) # don't stretch the last section...
-        self.header().setSectionResizeMode(Col_Name, QHeaderView.Stretch)  # ...stretch the Name section!
+        self.header().setSectionResizeMode(COL_NAME, QHeaderView.Stretch)  # ...stretch the Name section!
 
         self._selection_model = self.selectionModel()  # keep a local reference to the selection model
         self._model.notifyViewRowsMoved.connect(self._selection_moved) # called from model's shiftrows() method
         self._model.hideErrorColumn.connect(self._hideErrorColumn) # only show error col if there are errors
 
     def _hideErrorColumn(self, hide):
-        self.setColumnHidden(Col_Errors, hide)
+        self.setColumnHidden(COL_ERRORS, hide)
         if not hide:
-            self.resizeColumnToContents(Col_Errors)
+            self.resizeColumnToContents(COL_ERRORS)
 
     def setModel(self, model):
         super().setModel(model)

@@ -8,14 +8,15 @@ class Tab(IntEnum):
     MODLIST, FILETREE, INSTALLER = range(3)
 
 class Column(IntEnum):
-    ENABLED, NAME, MODID, VERSION, DIRECTORY, ORDER = range(6)
+    ENABLED, ORDER, NAME, DIRECTORY, MODID, VERSION, ERRORS = range(7)
 
-VISIBLE_COLS = [Column.ENABLED, Column.NAME, Column.MODID, Column.VERSION]
+# VISIBLE_COLS = [Column.ENABLED, Column.NAME, Column.MODID, Column.VERSION]
 
-DBLCLICK_COLS = [Column.MODID, Column.VERSION]
+# DBLCLICK_COLS = [Column.MODID, Column.VERSION]
 
 class qModels(Enum):
-    mod_table, profile_list, mod_list, file_viewer = range(4)
+    mod_table, profile_list, file_viewer = range(3)
+    mod_list = mod_table
 
 class qFilters(Enum):
     mod_list, file_viewer, mod_table = range(3)
