@@ -10,14 +10,6 @@ from skymodman.constants import (EnvVars, INIKey, INISection)
 
 __myname = "skymodman"
 
-# Messenger Idiom shamelessly pilfered from:
-# http://python-3-patterns-idioms-test.readthedocs.org/en/latest/Messenger.html
-# (aka "Do I need to use addict anymore?" idiom)
-# class Messenger:
-#     def __init__(self, **kwargs):
-#         self.__dict__ = kwargs
-
-
 # bind these values locally, since we need the actual string more often than not here
 _S_GENERAL = INISection.GENERAL.value
 _K_LASTPRO = INIKey.LASTPROFILE.value
@@ -126,7 +118,6 @@ class ConfigManager:
             self.paths.dir_mods = Path(config[_S_GENERAL][_K_MODDIR])
 
 
-
         ######################################################################
         ######################################################################
         # then, which profile is loaded on boot
@@ -144,7 +135,6 @@ class ConfigManager:
         # if it wasn't set above, get the value from config file
         if not self._lastprofile:
             self._lastprofile = config[_S_GENERAL][_K_LASTPRO]
-
 
 
         ######################################################################

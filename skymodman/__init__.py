@@ -1,9 +1,6 @@
-from collections import namedtuple
+# from collections import namedtuple
 
-
-TModEntry = namedtuple("ModEntry", ['enabled', 'name', 'modid', 'version', 'directory', 'ordinal'])
-
-
+# TModEntry = namedtuple("ModEntry", ['enabled', 'name', 'modid', 'version', 'directory', 'ordinal'])
 
 class ModEntry:
     __slots__ = 'enabled', 'name', 'modid', 'version', 'directory', 'ordinal'

@@ -1,7 +1,7 @@
-from skymodman import exceptions, ModEntry
+from skymodman import ModEntry #exceptions,
 from skymodman.utils import withlogger
 from skymodman.managers import config, database, profiles
-from skymodman.constants import SyncError, db_fields
+from skymodman.constants import db_fields #SyncError,
 
 # from skymodman.utils import humanizer
 # @humanizer.humanize

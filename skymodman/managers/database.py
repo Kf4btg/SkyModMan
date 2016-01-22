@@ -450,11 +450,6 @@ class DBManager:
                 mods_list.append(
                     self.makeModEntry(ordinal = order, directory=dirname))
 
-
-        # with open("res/testdump.txt", 'w') as f:
-        #     for s in self._con.execute("select * from modfiles"):
-        #         f.write(s['directory']+" | "+s["filepath"]+"\n")
-
         self.fillTable(mods_list)
 
     def loadAllModFiles(self, directory, ordinal):

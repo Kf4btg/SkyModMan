@@ -4,8 +4,6 @@ from logging import config
 from queue import Queue
 
 import sys
-from os.path import relpath
-
 
 __logging_queue = None # type: Queue
 __listener = None # type: handlers.QueueListener
@@ -104,7 +102,7 @@ def __lshift(caller, value):
     """
     Overload the << op to allow a shortcut to debug() calls:
 
-    logger << "Here's your problem: {}".format(thisiswrong)
+    logger << "Here's your problem: " + str(thisiswrong)
 
     ==
 

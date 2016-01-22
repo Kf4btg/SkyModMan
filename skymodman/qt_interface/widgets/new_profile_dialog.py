@@ -24,8 +24,6 @@ class NewProfileDialog(QDialog,  Ui_NewProfileDialog):
 
         self.comboBox.setModel(combobox_model)
 
-        # self.re = "^(" + "|".join([p.name for p in combobox_model.profiles]) + ")$"
-
         # according to timeit, checking if a word is in a list is faster than checking against
         # a RegExp--even a compiled RE, and even if you pre-process the word to check each time
         # (e.g.: word.lower() in wordlist)
@@ -68,7 +66,7 @@ class NewProfileDialog(QDialog,  Ui_NewProfileDialog):
         """
         if text:
             if text.lower() in self.name_list: # they entered a pre-existing name
-                # we only want to update things when switching from valid->invalid p r vv.
+                # we only want to update things when switching from valid->invalid or v-v.
                 if self.okbutton.isEnabled(): self.okbutton.setEnabled(False)
                 if not self.lineEdit.styleSheet():
                     self.lineEdit.setStyleSheet(self.ss_invalid)

@@ -1,4 +1,5 @@
 import sys
+from functools import partial
 
 from PyQt5.QtCore import (Qt,
                           pyqtSignal,
@@ -23,9 +24,6 @@ from skymodman.qt_interface.widgets import message, NewProfileDialog
 from skymodman.qt_interface.models import ProfileListModel, \
     ModFileTreeModel, ModTable_TreeView
 from skymodman.utils import withlogger, Notifier, checkPath
-
-from functools import partial
-
 
 
 @withlogger

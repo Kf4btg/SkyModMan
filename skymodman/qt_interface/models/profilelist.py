@@ -12,6 +12,7 @@ class ProfileListModel(QAbstractListModel):
         self.profiles = []
         """:type: list[Profile]"""
 
+    # noinspection PyUnresolvedReferences
     def addProfile(self, new_profile):
         """
         implement my own API for adding stuff because the QCombobox is STUPID

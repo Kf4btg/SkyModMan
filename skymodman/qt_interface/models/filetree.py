@@ -265,7 +265,6 @@ class QFSItem(FSItem):
 
                 QFSItem.last_row_touched = c.row  # using a class variable, track which items were changed
 
-
                 # this will trigger any child dirs to do the same
                 c.checkState = state
                 c.setEnabled(state == Qt.Checked)

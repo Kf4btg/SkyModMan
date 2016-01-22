@@ -1,6 +1,6 @@
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import QHeaderView, QTreeView, QAbstractItemView
-from PyQt5.QtCore import Qt, pyqtSignal, QItemSelection, QAbstractItemModel, QModelIndex
+from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex
 
 from skymodman import ModEntry
 # from skymodman.constants import (Column as COL, SyncError, DBLCLICK_COLS, VISIBLE_COLS)
@@ -10,7 +10,7 @@ from skymodman.thirdparty.undo import undoable, stack
 
 from enum import IntEnum
 from functools import total_ordering, partial
-from collections import  deque
+from collections import deque
 
 
 class COL(IntEnum):
