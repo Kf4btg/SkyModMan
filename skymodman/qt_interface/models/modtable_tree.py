@@ -39,13 +39,14 @@ col2Header={
 
 # HEADERS =   ["Order", "", "Name", "Folder", "Mod ID", "Version", "Errors"]
 # COLUMNS = {COL.ORDER, COL.ENABLED, COL.NAME, COL.DIRECTORY, COL.MODID, COL.VERSION, COL.ERRORS}
-VISIBLE_COLS = [COL.ORDER, COL.ENABLED, COL.NAME, COL.MODID, COL.VERSION, COL.ERRORS]
+VISIBLE_COLS  = [COL.ORDER, COL.ENABLED, COL.NAME, COL.MODID, COL.VERSION, COL.ERRORS]
 DBLCLICK_COLS = {COL.MODID, COL.VERSION}
 
 # Locally binding some names to improve resolution speed in some of the constantly-called methods like data()
 Col_Enabled = COL.ENABLED.value
-Col_Name = COL.NAME.value
-Col_Errors = COL.ERRORS.value
+Col_Name    = COL.NAME.value
+Col_Errors  = COL.ERRORS.value
+Col_Order   = COL.ORDER.value
 
 Qt_DisplayRole    = Qt.DisplayRole
 Qt_CheckStateRole = Qt.CheckStateRole
@@ -53,13 +54,14 @@ Qt_EditRole       = Qt.EditRole
 Qt_ToolTipRole    = Qt.ToolTipRole
 Qt_DecorationRole = Qt.DecorationRole
 
-Qt_Checked = Qt.Checked
+Qt_Checked   = Qt.Checked
 Qt_Unchecked = Qt.Unchecked
 
-Qt_ItemIsSelectable = Qt.ItemIsSelectable
-Qt_ItemIsEnabled = Qt.ItemIsEnabled
-Qt_ItemIsEditable = Qt.ItemIsEditable
+Qt_ItemIsSelectable    = Qt.ItemIsSelectable
+Qt_ItemIsEnabled       = Qt.ItemIsEnabled
+Qt_ItemIsEditable      = Qt.ItemIsEditable
 Qt_ItemIsUserCheckable = Qt.ItemIsUserCheckable
+
 
 
 @total_ordering
@@ -99,17 +101,18 @@ class ModTable_TreeModel(QAbstractItemModel):
 
     def __init__(self, *, manager, parent, **kwargs):
         """
-        :param skymodman.managers.ModManager manager:
+        :param ModManager manager:
         """
         super().__init__(**kwargs)
         self._parent = parent
         self.manager = manager
 
+        # noinspection PyUnresolvedReferences
         self.mod_entries = [] #type: list[QModEntry]
 
         self.errors = {}  # dict[str, int] of {mod_directory_name: err_type}
 
-        self.vheader_field = COL.ORDER
+        self.vheader_field = Col_Order
         # self.visible_columns = [COL.ENABLED, COL.ORDER, COL.NAME, COL.MODID, COL.VERSION]
 
         self._datahaschanged = None # placeholder for first start
@@ -127,12 +130,6 @@ class ModTable_TreeModel(QAbstractItemModel):
         self.LOGGER << "init ModTable_TreeModel"
 
     ##===============================================
-    ## Undo/Redo callbacks
-    ##===============================================
-
-
-
-    ##===============================================
     ## PROPERTIES
     ##===============================================
 
@@ -140,21 +137,46 @@ class ModTable_TreeModel(QAbstractItemModel):
     def isDirty(self) -> bool:
         return stack().haschanged()
 
+    ##===============================================
+    ## Undo/Redo
+    ##===============================================
+    @property
+    def stack(self):
+        return stack()
+
+    def undo(self):
+        stack().undo()
+
+    def redo(self):
+        stack().redo()
+
+    def _undo_event(self, action=None):
+        """
+        Passed to the undo stack as ``undocallback``, so that we can notify the UI of the new text
+        :param action:
+        :return:
+        """
+        if action is None:  # Reset
+            self.tablehaschanges.emit(False)
+            self.undoevent.emit(None, None)
+        else:
+            self._check_dirty_status()
+            self.undoevent.emit(stack().undotext(),
+                                stack().redotext())
+
+    ##===============================================
+    ## Required Qt Abstract Method Overrides
+    ##===============================================
+
     def rowCount(self, *args, **kwargs) -> int:
         return len(self.mod_entries)
 
     def columnCount(self, *args, **kwargs) -> int:
         return len(col2Header)
 
-
-    @property
-    def stack(self):
-        return stack()
-
     def parent(self, child_index=None):
         # There are no children (yet...) so I guess this should always return invalid??
         return QModelIndex()
-
 
     def index(self, row, col=0, parent=QModelIndex(), *args,
               **kwargs) -> QModelIndex:
@@ -177,14 +199,10 @@ class ModTable_TreeModel(QAbstractItemModel):
         except IndexError:
             return QModelIndex()
 
-    ##===============================================
-    ## Getting and Setting Data
-    ##===============================================
 
-    @staticmethod
-    def rol_col_switch(role, column):
-        return [lambda r,c: role==r and column==c]
-
+    ## Data Provider
+    ##===============================================
+    # noinspection PyArgumentList
     def data(self, index, role=Qt_DisplayRole):
         col = index.column()
 
@@ -193,6 +211,7 @@ class ModTable_TreeModel(QAbstractItemModel):
             try:
                 err = self.errors[self.mod_entries[index.row()].directory]
                 for case, choices in [(lambda r: role == r, lambda d: d[err])]:
+
 
                     if case(Qt_DecorationRole): return QtGui.QIcon.fromTheme(
                             choices({SyncError.NOTFOUND: 'dialog-error',
@@ -211,6 +230,7 @@ class ModTable_TreeModel(QAbstractItemModel):
             except KeyError:
                 # no errors for this mod
                 return
+
         elif col == Col_Enabled:
             if role == Qt_CheckStateRole:
                 return self.mod_entries[index.row()].checkState
@@ -223,49 +243,73 @@ class ModTable_TreeModel(QAbstractItemModel):
                     return self.mod_entries[index.row()].name
                 if role == Qt_ToolTipRole:
                     return self.mod_entries[index.row()].directory
-        #
-        # else:
-        #     # switch on combinations of role and column type
-        #     for case in self.rol_col_switch(role, col):
-        #
-        #         if case(Qt.CheckStateRole, COL.ENABLED):
-        #             return self.mod_entries[index.row()].checkState
-        #
-        #         if case(Qt.EditRole, COL.NAME):
-        #             return self.mod_entries[index.row()].name
-        #
-        #         if case(Qt.ToolTipRole, COL.NAME):
-        #             # return directory name as tooltip for name field
-        #             return self.mod_entries[index.row()].directory
-        #
-        #     else:
-        #         if role == Qt.DisplayRole and col != COL.ENABLED:
-        #             return getattr(self.mod_entries[index.row()], col2field[col])
 
+    ##===============================================
+    ## Setting Data
+    ##===============================================
 
     def setData(self, index, value, role=None):
+        """
+        Currently, the only editable fields are the enabled column (checkbox) and the name field (lineedit)
 
-        row, col = index.row(), index.column()
-        mod = self.mod_entries[row]
+        :param index:
+        :param value:
+        :param role:
+        :return:
+        """
 
-        for case in self.rol_col_switch(role, col):
-
-            if case(Qt_CheckStateRole, Col_Enabled):
-                # perform change and add to undo stack
-                self.changeModField(index, row, mod, 'enabled', value==Qt_Checked)
-                break
-
-            if case(Qt_EditRole, Col_Name):
+        if role == Qt_CheckStateRole:
+            if index.column() == Col_Enabled:
+                row = index.row()
+                self.changeModField(index, row, self.mod_entries[row],
+                                    'enabled', value == Qt_Checked)
+                return True
+        elif role == Qt_EditRole:
+            if index.column() == Col_Name:
+                row = index.row()
+                mod = self.mod_entries[row]
                 new_name = value.strip()  # remove trailing/leading space
                 if new_name in [mod.name, ""]: return False
 
                 self.changeModField(index, row, mod, 'name', new_name)
-                break
+                return True
         else:
             return super().setData(index, value, role)
 
-        # one of the cases must have been satisfied to get here
-        return True
+        return False # if role was checkstate or edit, but column was not enabled/name, just ret false
+
+    def headerData(self, section, orientation, role=Qt.DisplayRole):
+        """
+        Return column header for the specified section (column) number.
+
+        :param section:
+        :param orientation:
+        :param role:
+        :return:
+        """
+        if role == Qt.DisplayRole:
+
+            if orientation == Qt.Horizontal:
+                return col2Header[section]
+
+            else:  # vertical header
+                return self.mod_entries[section].ordinal
+
+        return super().headerData(section, orientation, role)
+
+    def flags(self, index):
+        col = index.column()
+
+        _flags = Qt_ItemIsEnabled | Qt_ItemIsSelectable
+
+        if col == Col_Enabled:
+            return _flags | Qt_ItemIsUserCheckable
+
+        if col == Col_Name:
+            return _flags | Qt_ItemIsEditable
+
+        return _flags
+
 
     # noinspection PyUnresolvedReferences
     @undoable
@@ -296,29 +340,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         self.dataChanged.emit(index, index)
 
 
-    def headerData(self, section, orientation, role=Qt.DisplayRole):
-        if role == Qt.DisplayRole:
 
-            if orientation == Qt.Horizontal:
-                return col2Header[section]
-
-            else:  # vertical header
-                return self.mod_entries[section].ordinal
-
-        return super().headerData(section, orientation, role)
-
-    def flags(self, index):
-        col = index.column()
-
-        _flags = Qt_ItemIsEnabled | Qt_ItemIsSelectable
-
-        if col == Col_Enabled:
-            return _flags | Qt_ItemIsUserCheckable
-
-        if col == Col_Name:
-            return _flags | Qt_ItemIsEditable
-
-        return _flags
 
     ##===============================================
     ## Adding and Removing Rows/Columns
@@ -501,20 +523,7 @@ class ModTable_TreeModel(QAbstractItemModel):
     ## Undo Management
     ##===============================================
 
-    def undo(self):
-        stack().undo()
 
-    def redo(self):
-        stack().redo()
-
-    def _undo_event(self, action=None):
-        if action is None: # Reset
-            self.tablehaschanges.emit(False)
-            self.undoevent.emit(None, None)
-        else:
-            self._check_dirty_status()
-            self.undoevent.emit(stack().undotext(),
-                                stack().redotext())
 
 
 @withlogger
@@ -526,6 +535,7 @@ class ModTable_TreeView(QTreeView):
     canMoveItems = pyqtSignal(bool, bool)
 
     def __init__(self, *, parent, manager, **kwargs):
+        # noinspection PyArgumentList
         super().__init__(parent, **kwargs)
         self.manager = manager
         self._parent = parent # type: ModManagerWindow
