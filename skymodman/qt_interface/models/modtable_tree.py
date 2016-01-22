@@ -521,15 +521,14 @@ class ModTable_TreeModel(QAbstractItemModel):
 class ModTable_TreeView(QTreeView):
 
 
-    itemsSelected = pyqtSignal()
-    selectionCleared = pyqtSignal()
+    itemsSelected = pyqtSignal(bool)
 
-    # itemsMoved = pyqtSignal(list, QtCore.QAbstractTableModel)
     canMoveItems = pyqtSignal(bool, bool)
 
-    def __init__(self, *, manager, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, *, parent, manager, **kwargs):
+        super().__init__(parent, **kwargs)
         self.manager = manager
+        self._parent = parent # type: ModManagerWindow
         self._model = None  # type: ModTable_TreeModel
         self._selection_model = None # type: QtCore.QItemSelectionModel
         self.LOGGER << "Init ModTable_TreeView"
@@ -575,9 +574,10 @@ class ModTable_TreeView(QTreeView):
     def selectionChanged(self, selected, deselected):
         # if len(self.selectedIndexes()) > 0:
         if self._selection_model.hasSelection():
-            self.itemsSelected.emit()
+            self.itemsSelected.emit(True) # enable the button box
+            self._selection_moved()   # check for disable up/down buttons
         else:
-            self.selectionCleared.emit()
+            self.itemsSelected.emit(False) # disable the button box
 
         super().selectionChanged(selected, deselected)
 
@@ -615,3 +615,4 @@ class ModTable_TreeView(QTreeView):
 
 if __name__ == '__main__':
     from skymodman.managers import ModManager
+    from skymodman.qt_interface.qt_launch import ModManagerWindow

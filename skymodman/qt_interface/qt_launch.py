@@ -24,7 +24,7 @@ from skymodman.qt_interface.models import ProfileListModel, \
     ModFileTreeModel, ModTable_TreeView
 from skymodman.utils import withlogger, Notifier, checkPath
 
-from profilehooks import profile
+from functools import partial
 
 
 
@@ -101,9 +101,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # connect mod move-up/down
         self.mod_up_button.clicked.connect(
-                self.emitMoveModUpOne)
+                partial(self.moveMods.emit, -1))
         self.mod_down_button.clicked.connect(
-                self.emitMoveModDownOne)
+                partial(self.moveMods.emit,  1))
 
         #########################
         ## connect the actions ##
@@ -303,8 +303,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             ].tablehaschanges.connect(
                 self.markTableUnsaved)
 
-        self.mod_table.itemsSelected.connect(self.onModsSelected)
-        self.mod_table.selectionCleared.connect(self.onSelectionCleared)
+        self.mod_table.itemsSelected.connect(self.on_makeOrClearModSelection)
         self.mod_table.canMoveItems.connect(self.setMoveButtonsEnabled)
 
         self.moveMods.connect(self.mod_table.onMoveModsAction)
@@ -317,30 +316,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.SetupDone()
 
-    def emitMoveModUpOne(self, *args):
-        self.moveMods.emit(-1)
-        # self.moveModsUp.emit(1)
-
-    def emitMoveModDownOne(self, *args):
-        self.moveMods.emit(1)
-        # self.moveModsDown.emit(1)
-
-    def onModsSelected(self):
+    def on_makeOrClearModSelection(self, has_selection):
         """
         Enable or disable movement buttons as needed
         """
-        self.move_mod_box.setEnabled(True)
-        self.mod_table._selection_moved()
-        # self.updateModMoveButtons(self.mod_table.selectedIndexes(),
-        #                           self.models[M.mod_table])
+        self.move_mod_box.setEnabled(has_selection)
 
     def setMoveButtonsEnabled(self, enable_moveup, enable_movedown):
         self.mod_up_button.setEnabled(enable_moveup)
         self.mod_down_button.setEnabled(enable_movedown)
-
-    def onSelectionCleared(self):
-        """With nothing selected, there's nothing to move, so disable the movement buttons"""
-        self.move_mod_box.setEnabled(False)
 
     def afterUndoRedo(self, undo_text, redo_text):
         """Update the undo/redo text to reflect the passed text.  If an argument is passed as ``None``, that button will instead be disabled."""
