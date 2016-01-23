@@ -382,12 +382,13 @@ class ModTable_TreeModel(QAbstractItemModel):
 
     # let's try it a smarter way
     @undoable
-    def shiftRows(self, start_row, end_row, move_to_row, parent=QModelIndex()):
+    def shiftRows(self, start_row, end_row, move_to_row, parent=QModelIndex(), undotext="Reorder Mods"):
         """
-        :param start_row:
-        :param end_row:
-        :param move_to_row:
-        :param parent:
+        :param int start_row: start of shifted block
+        :param int end_row: end of shifted block
+        :param int move_to_row: destination row; where the `start_row` should end up
+        :param QModelIndex parent:
+        :param str undotext: optional text that will appear in the Undo/Redo menu items
         :return:
         """
         # self.LOGGER << "Moving rows {}-{} to row {}.".format(start_row, end_row, move_to_row)
@@ -442,7 +443,7 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         # self._check_dirty_status()
 
-        yield "Reorder Mods"
+        yield undotext
 
         self.beginMoveRows(parent, start_row, end_row, parent, dest_child)
 
@@ -660,6 +661,8 @@ class ModTable_TreeView(QTreeView):
         self._selection_model = None # type: QtCore.QItemSelectionModel
         self.LOGGER << "Init ModTable_TreeView"
 
+
+
     def initUI(self, grid):
         self.setRootIsDecorated(False) # no collapsing
         self.setObjectName("mod_table")
@@ -719,17 +722,41 @@ class ModTable_TreeView(QTreeView):
             not issel(model.index(model.rowCount()-1, 0))
         )
 
+    def _selectedrownumbers(self):
+        # we use set() first because Qt sends the row number once for each column in the row.
+        return sorted(set(
+                [idx.row()
+                 for idx in
+                 self.selectedIndexes()]))
+
+    def _tellmodelshiftrows(self, dest, *, rows=None, text="Reorder Mods"):
+        """
+        :param int dest: either the destination row number or a callable that takes the sorted list of selected rows as an argument and returns the destination row number.
+        :param rows: the rows to shift. If None or not specified, will be derived from the current selection.
+        :param text: optional text that will appear after 'Undo' or 'Redo' in the Edit menu
+        """
+        if rows is None:
+            rows = self._selectedrownumbers()
+        if rows:
+            self._model.shiftRows(rows[0],
+                          rows[-1],
+                          dest,
+                          parent=self.rootIndex(),
+                          undotext=text)
+
+    def onMoveModsToTopAction(self):
+        self._tellmodelshiftrows(0, text="Move to Top")
+
+    def onMoveModsToBottomAction(self):
+        self._tellmodelshiftrows(self._model.rowCount()-1, text="Move to Bottom")
+
     def onMoveModsAction(self, distance):
         """
         :param distance: if positive, we're increasing the mod install ordinal--i.e. moving the mod further down the list.  If negative, we're decreasing the ordinal, and moving the mod up the list.
         """
-        # we use set() first because Qt sends the row number once for each column in the row.
-        rows = sorted(set([idx.row() for idx in self.selectedIndexes()]))
-        if rows and distance != 0:
-
-            self._model.shiftRows(rows[0], rows[-1],
-                                  rows[0] + distance,
-                                  self.rootIndex())
+        rows = self._selectedrownumbers()
+        if  distance != 0:
+            self._tellmodelshiftrows(rows[0]+distance, rows=rows)
 
     def undo(self):
         self._model.undo()

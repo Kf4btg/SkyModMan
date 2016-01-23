@@ -4,7 +4,6 @@ from functools import partial
 from PyQt5.QtCore import (Qt,
                           pyqtSignal,
                           pyqtSlot,
-                          # QStringListModel,
                           QModelIndex,
                           QDir,
                           QStandardPaths,
@@ -16,7 +15,6 @@ from PyQt5.QtWidgets import (QApplication,
                              QMessageBox,
                              QFileDialog,
                              # QHeaderView,
-                             # QListView
                              )
 
 from skymodman import skylog
@@ -43,13 +41,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     deleteProfileAction = pyqtSignal(str)
 
-    moveModsUpOne       = pyqtSignal()
-    moveModsDownOne     = pyqtSignal()
-
-    moveModsUp          = pyqtSignal(int)
-    moveModsDown        = pyqtSignal(int)
-
     moveMods            = pyqtSignal(int)
+    movemodstotop       = pyqtSignal()
+    movemodstobottom    = pyqtSignal()
 
     def __init__(self, *, manager, **kwargs):
         """
@@ -105,10 +99,14 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 self.revertTable)
 
         # connect mod move-up/down
-        self.mod_up_button.clicked.connect(
+        self.btn_modup.clicked.connect(
                 partial(self.moveMods.emit, -1))
-        self.mod_down_button.clicked.connect(
+        self.btn_moddown.clicked.connect(
                 partial(self.moveMods.emit,  1))
+        self.btn_modtotop.clicked.connect(
+            self.movemodstotop.emit)
+        self.btn_modtobottom.clicked.connect(
+            self.movemodstobottom.emit)
 
         #########################
         ## connect the actions ##
@@ -293,6 +291,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.SetupDone()
 
     def on_modlist_filterbox_textchanged(self, text):
+        # Updates the proxy filtering, and notifies the label
+        # to change its 'mods shown' count.
         filt = self.filters[F.mod_list]
         filt.setFilterWildcard(text)
         self.update_modlistlabel(filt.onlyShowActive)
@@ -352,7 +352,14 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.mod_table.itemsSelected.connect(self.on_makeOrClearModSelection)
         self.mod_table.canMoveItems.connect(self.setMoveButtonsEnabled)
 
+        # connect the move up/down by 1 signals
+        # to the appropriate slot on view
         self.moveMods.connect(self.mod_table.onMoveModsAction)
+        # same for the move to top/button signals
+        self.movemodstobottom.connect(
+            self.mod_table.onMoveModsToBottomAction)
+        self.movemodstotop.connect(
+            self.mod_table.onMoveModsToTopAction)
 
         # connect undo/redo actions to table model
         self.actionUndo.triggered.connect(self.mod_table.undo)
@@ -369,8 +376,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.move_mod_box.setEnabled(has_selection)
 
     def setMoveButtonsEnabled(self, enable_moveup, enable_movedown):
-        self.mod_up_button.setEnabled(enable_moveup)
-        self.mod_down_button.setEnabled(enable_movedown)
+        self.btn_modup.setEnabled(enable_moveup)
+        self.btn_modtotop.setEnabled(enable_moveup)
+
+        self.btn_moddown.setEnabled(enable_movedown)
+        self.btn_modtobottom.setEnabled(enable_movedown)
+
 
     def afterUndoRedo(self, undo_text, redo_text):
         """Update the undo/redo text to reflect the passed text.  If an argument is passed as ``None``, that button will instead be disabled."""
