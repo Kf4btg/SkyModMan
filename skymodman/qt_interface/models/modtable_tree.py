@@ -146,9 +146,21 @@ class ModTable_TreeModel(QAbstractItemModel):
     def isDirty(self) -> bool:
         return stack().haschanged()
 
+    def __getitem__(self, row):
+        """
+        Allows list-like access to the backing collection of ModEntries.
+
+        :param int row: Row number of the mod from the mod table
+        :return: QModEntry instance representing the mod in that row. If `row` is out of bounds or cannot be implicitly converted to an int, return None.
+        """
+        try:
+            return self.mod_entries[row]
+        except (TypeError, IndexError):
+            return None
+
     def getModForIndex(self, index):
         """
-        Return the ModEntry for the row that `index` appears in
+        Return the ModEntry for the row in which `index` appears.
 
         :param index:
         :return:

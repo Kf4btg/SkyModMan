@@ -29,7 +29,7 @@ from skymodman.constants import (Tab as TAB,
 from skymodman.qt_interface.qt_manager_ui import Ui_MainWindow
 from skymodman.qt_interface.widgets import message, NewProfileDialog
 from skymodman.qt_interface.models import ProfileListModel, \
-    ModFileTreeModel, ModTable_TreeView
+    ModFileTreeModel, ModTable_TreeView, ActiveModsListFilter
 from skymodman.utils import withlogger, Notifier, checkPath
 
 
@@ -224,16 +224,28 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         ##################################
 
         #setup filter proxy for active mods list
-        mod_filter = self.filters[F.mod_list] = QSortFilterProxyModel(
+        # mod_filter = self.filters[F.mod_list] = QSortFilterProxyModel(
+        #     self.filetree_modlist)
+        mod_filter = self.filters[F.mod_list] = ActiveModsListFilter(
             self.filetree_modlist)
         mod_filter.setSourceModel(self.models[M.mod_table])
         mod_filter.setFilterCaseSensitivity(Qt.CaseInsensitive)
         # tell filter to read mod name
         mod_filter.setFilterKeyColumn(Column.NAME.value)
+        mod_filter.onlyShowActive = \
+            self.filetree_activeonlytoggle.checkState() == Qt.Checked
+
+        # connect the checkbox directly to the filter property
+        self.filetree_activeonlytoggle.toggled['bool'].connect(mod_filter.setOnlyShowActive)
+        self.filetree_activeonlytoggle.toggled['bool'].connect(self.update_modlistlabel)
+
+        # and setup label text for first display
+        self.update_modlistlabel(mod_filter.onlyShowActive)
 
         # connect proxy to textchanged of filter box
         self.filetree_modfilter.textChanged.connect(
-            mod_filter.setFilterWildcard)
+            self.on_modlist_filterbox_textchanged)
+            # mod_filter.setFilterWildcard)
 
         # finally, set the filter as the model for the modlist
         self.filetree_modlist.setModel(mod_filter)
@@ -280,10 +292,25 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # let setup know we're done here
         self.SetupDone()
 
+    def on_modlist_filterbox_textchanged(self, text):
+        filt = self.filters[F.mod_list]
+        filt.setFilterWildcard(text)
+        self.update_modlistlabel(filt.onlyShowActive)
+
+
+    def update_modlistlabel(self, inactive_hidden):
+        if inactive_hidden:
+            text = "Active Mods ({shown}/{total})"
+        else:
+            text = "All Installed Mods ({shown}/{total})"
+        self.filetree_listlabel.setText(
+                text.format(
+                        shown=self.filters[F.mod_list].rowCount(),
+                        total=self.models[M.mod_list].rowCount()))
+
     # todo: change window title (or something) to reflect current folder
     # def on_filetree_fileviewer_rootpathchanged(self, newpath):
     #     self.filetree_fileviewer.resizeColumnToContents(0)
-
 
     def showModFiles(self, indexCur, indexPre):
         """
