@@ -103,14 +103,14 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 self.revertTable)
 
         # connect mod move-up/down
-        self.btn_modup.clicked.connect(
-                partial(self.moveMods.emit, -1))
-        self.btn_moddown.clicked.connect(
-                partial(self.moveMods.emit,  1))
-        self.btn_modtotop.clicked.connect(
-            self.movemodstotop.emit)
-        self.btn_modtobottom.clicked.connect(
-            self.movemodstobottom.emit)
+        # self.btn_modup.clicked.connect(
+        #         partial(self.moveMods.emit, -1))
+        # self.btn_moddown.clicked.connect(
+        #         partial(self.moveMods.emit,  1))
+        # self.btn_modtotop.clicked.connect(
+        #     self.movemodstotop.emit)
+        # self.btn_modtobottom.clicked.connect(
+        #     self.movemodstobottom.emit)
 
         #########################
         ## connect the actions ##
@@ -377,18 +377,19 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         Enable or disable buttons and actions that rely on having a selection in the mod table.
         """
-        self.move_mod_box.setEnabled(has_selection)
+        # self.edit_toolBar.setEnabled(has_selection)
+        self.setMoveButtonsEnabled(has_selection, has_selection)
+
         self.action_togglemod.setEnabled(has_selection)
 
     def setMoveButtonsEnabled(self, enable_moveup, enable_movedown):
-        for btn in [self.btn_modup,
-                    self.btn_modtotop,]:
-            btn.setEnabled(enable_moveup)
+        for action in [self.actionMove_Mod_To_Bottom,
+                       self.actionMove_Mod_Down]:
+            action.setEnabled(enable_movedown)
 
-        for btn in [self.btn_moddown,
-                    self.btn_modtobottom]:
-            btn.setEnabled(enable_movedown)
-
+        for action in [self.actionMove_Mod_To_Top,
+                       self.actionMove_Mod_Up]:
+            action.setEnabled(enable_moveup)
 
     def afterUndoRedo(self, undo_text, redo_text):
         """Update the undo/redo text to reflect the passed text.  If an argument is passed as ``None``, that button will instead be disabled."""
@@ -404,6 +405,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def markTableUnsaved(self, unsaved_changes_present):
         self.save_cancel_btnbox.setEnabled(unsaved_changes_present)
+        self.actionSave_Changes.setEnabled(unsaved_changes_present)
 
     def revertTable(self):
         self.mod_table.revertChanges()
@@ -585,13 +587,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         quit_app()
 
-    def _togglecmd(self):
-        idx, enab = self.toggle_cmd()
-
-        vals = self._togglebtnstuff(idx, enab)
-        self.action_togglemod.setText(vals['text'])
-        self.toggle_cmd = vals['cmd']
-
     def _toggleCurrentMod(self, index):
         pass
 
@@ -602,6 +597,24 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.actionRedo.setShortcut(QKeySequence.Redo)
 
         self.action_togglemod.triggered.connect(self.mod_table.toggleSelectionCheckstate)
+
+        self.actionSave_Changes.setShortcut(QKeySequence.Save)
+        self.actionSave_Changes.triggered.connect(self.saveModsList)
+
+
+        self.actionMove_Mod_Up.triggered.connect(partial(self.moveMods.emit, -1))
+        self.actionMove_Mod_Down.triggered.connect(partial(self.moveMods.emit,  1))
+
+        self.actionMove_Mod_To_Top.triggered.connect(self.movemodstotop.emit)
+        self.actionMove_Mod_To_Bottom.triggered.connect(self.movemodstobottom.emit)
+
+        self.action_Quit.triggered.connect(self.safeQuitApp)
+
+        self.action_Install_Fomod.triggered.connect(
+                self.loadFomod)
+        self.actionChoose_Mod_Folder.triggered.connect(
+                self.chooseModFolder)
+
 
 
         self.SetupDone()

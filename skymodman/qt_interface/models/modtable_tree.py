@@ -709,12 +709,14 @@ class ModTable_TreeView(QTreeView):
         super().selectionChanged(selected, deselected)
 
     def _selection_moved(self):
-        issel = self._selection_model.isSelected
-        model = self._model
-        self.canMoveItems.emit(
-            not issel(model.index(0,0)),
-            not issel(model.index(model.rowCount()-1, 0))
-        )
+        # check for selection to prevent movement buttons from reactivating on a redo()
+        if self._selection_model.hasSelection():
+            issel = self._selection_model.isSelected
+            model = self._model
+            self.canMoveItems.emit(
+                not issel(model.index(0,0)),
+                not issel(model.index(model.rowCount()-1, 0))
+            )
 
     def _selectedrownumbers(self):
         # we use set() first because Qt sends the row number once for each column in the row.
