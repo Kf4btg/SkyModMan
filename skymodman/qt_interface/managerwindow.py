@@ -14,8 +14,8 @@ from PyQt5.QtWidgets import (QApplication,
                              QDialogButtonBox,
                              QMessageBox,
                              QFileDialog,
-                             QAction,
-                             QActionGroup,
+                             # QAction,
+                             # QActionGroup,
                              # QHeaderView,
                              )
 
@@ -60,9 +60,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self._manager = manager
 
         # setup trackers for all of our models and proxies
-        # self.all_models = { "models":{}, "filters":{} } # tracks all models by name
-        self.models  = {}  # tracks the
-        self.filters = {}  # tracks the
+        self.models  = {}
+        self.filters = {}
 
         # slots (methods) to be called after __init__ is finished
         setupSlots = [
@@ -101,16 +100,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.save_cancel_btnbox.button(
             QDialogButtonBox.Reset).clicked.connect(
                 self.revertTable)
-
-        # connect mod move-up/down
-        # self.btn_modup.clicked.connect(
-        #         partial(self.moveMods.emit, -1))
-        # self.btn_moddown.clicked.connect(
-        #         partial(self.moveMods.emit,  1))
-        # self.btn_modtotop.clicked.connect(
-        #     self.movemodstotop.emit)
-        # self.btn_modtobottom.clicked.connect(
-        #     self.movemodstobottom.emit)
 
         #########################
         ## connect the actions ##
@@ -155,12 +144,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.save_cancel_btnbox.setVisible(
             curtab in [TAB.MODLIST, TAB.FILETREE])
-
-        # if self.save_cancel_btnbox.isVisible():
-        #     self.save_cancel_btnbox.setEnabled(
-        #         (curtab == TAB.MODLIST and len(self._modified_cells)>0)
-        #     or  (curtab == TAB.FILETREE and self.file_tree_modified)
-        #     )
 
         self.next_button.setVisible(curtab == TAB.INSTALLER)
 
@@ -226,8 +209,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         ##################################
 
         #setup filter proxy for active mods list
-        # mod_filter = self.filters[F.mod_list] = QSortFilterProxyModel(
-        #     self.filetree_modlist)
         mod_filter = self.filters[F.mod_list] = ActiveModsListFilter(
             self.filetree_modlist)
         mod_filter.setSourceModel(self.models[M.mod_table])
@@ -247,7 +228,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # connect proxy to textchanged of filter box
         self.filetree_modfilter.textChanged.connect(
             self.on_modlist_filterbox_textchanged)
-            # mod_filter.setFilterWildcard)
 
         # finally, set the filter as the model for the modlist
         self.filetree_modlist.setModel(mod_filter)
@@ -377,7 +357,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         Enable or disable buttons and actions that rely on having a selection in the mod table.
         """
-        # self.edit_toolBar.setEnabled(has_selection)
         self.setMoveButtonsEnabled(has_selection, has_selection)
 
         self.action_togglemod.setEnabled(has_selection)
@@ -420,9 +399,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         the modified status of the mods to a file
         """
         self.mod_table.saveChanges()
-
-        # update the filetree list
-        # self.updateFileTreeModList()
 
         # self.modListSaved.emit()
         # self.updateUI()
@@ -614,7 +590,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 self.loadFomod)
         self.actionChoose_Mod_Folder.triggered.connect(
                 self.chooseModFolder)
-
 
 
         self.SetupDone()

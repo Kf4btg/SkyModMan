@@ -564,7 +564,6 @@ class ModTable_TreeModel(QAbstractItemModel):
         :return: A string that is 2 ints separated by spaces, e.g.:  '4 8'
             This string corresponds to the first and last row in the block of rows being dragged.
         """
-        count = len(indexes)
         rows = sorted(set(i.row() for i in indexes))
         mimedata = QMimeData()
         mimedata.setText("{} {}".format(rows[0], rows[-1]))
@@ -635,11 +634,7 @@ class ModTable_TreeModel(QAbstractItemModel):
 @withlogger
 class ModTable_TreeView(QTreeView):
 
-    itemsSelected = pyqtSignal(bool)
     enableModActions = pyqtSignal(bool)
-
-    # selectionEnabledChanged = pyqtSignal(bool)
-    # selectedModEnabledChanged = pyqtSignal(bool)
 
     canMoveItems = pyqtSignal(bool, bool)
 
@@ -670,9 +665,6 @@ class ModTable_TreeView(QTreeView):
         self._model.notifyViewRowsMoved.connect(self._selection_moved) # called from model's shiftrows() method
         self._model.hideErrorColumn.connect(self._hideErrorColumn) # only show error col if there are errors
 
-
-
-
     def _hideErrorColumn(self, hide):
         self.setColumnHidden(COL_ERRORS, hide)
         if not hide:
@@ -699,12 +691,10 @@ class ModTable_TreeView(QTreeView):
 
     def selectionChanged(self, selected, deselected):
         if self._selection_model.hasSelection():
-            # self.itemsSelected.emit(True) # enable the button box
             self.enableModActions.emit(True) # enable the button box
             self._selection_moved()   # check for disable up/down buttons
         else:
             self.enableModActions.emit(False)
-            # self.itemsSelected.emit(False) # disable the button box
 
         super().selectionChanged(selected, deselected)
 
@@ -764,7 +754,6 @@ class ModTable_TreeView(QTreeView):
         Implementation needed for enabling drag and drop within the view.
 
         :param QDragEnterEvent event:
-        :return:
         """
         if event.mimeData().hasText():
             event.acceptProposedAction()
@@ -773,7 +762,6 @@ class ModTable_TreeView(QTreeView):
 
     def dragMoveEvent(self, event):
         super().dragMoveEvent(event)
-
 
     def contextMenuEvent(self, event):
         """
