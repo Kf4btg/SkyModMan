@@ -539,6 +539,7 @@
     <addaction name="action_Install_Fomod"/>
     <addaction name="actionChoose_Mod_Folder"/>
     <addaction name="separator"/>
+    <addaction name="actionSave_Changes"/>
     <addaction name="action_Quit"/>
    </widget>
    <widget class="QMenu" name="menuProfile">
@@ -564,6 +565,8 @@
     </property>
     <addaction name="actionUndo"/>
     <addaction name="actionRedo"/>
+    <addaction name="separator"/>
+    <addaction name="action_togglemod"/>
    </widget>
    <addaction name="menu_File"/>
    <addaction name="menuEdit"/>
@@ -675,6 +678,25 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+Shift+Z</string>
+   </property>
+  </action>
+  <action name="action_togglemod">
+   <property name="text">
+    <string>Toggle &amp;Enabled</string>
+   </property>
+   <property name="toolTip">
+    <string>Enable or Disable Selected Mod(s)</string>
+   </property>
+   <property name="shortcut">
+    <string>Space</string>
+   </property>
+  </action>
+  <action name="actionSave_Changes">
+   <property name="icon">
+    <iconset theme="edit-save"/>
+   </property>
+   <property name="text">
+    <string>&amp;Save Changes</string>
    </property>
   </action>
  </widget>

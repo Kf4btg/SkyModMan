@@ -8,12 +8,14 @@ from PyQt5.QtCore import (Qt,
                           QDir,
                           QStandardPaths,
                           QSortFilterProxyModel)
-from PyQt5.QtGui import QGuiApplication
+from PyQt5.QtGui import QGuiApplication, QKeySequence
 from PyQt5.QtWidgets import (QApplication,
                              QMainWindow,
                              QDialogButtonBox,
                              QMessageBox,
                              QFileDialog,
+                             QAction,
+                             QActionGroup,
                              # QHeaderView,
                              )
 
@@ -67,6 +69,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.setupProfileSelector,
             self.setupTable,
             self.setupFileTree,
+            self.setupActions,
         ]
 
         # connect the windowinit signal to the setup slots
@@ -85,6 +88,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # init mod table
         self.mod_table = ModTable_TreeView(parent=self,
                                            manager=self.Manager)
+        self.toggle_cmd = lambda:None
 
         #########################
         ## connect the buttons ##
@@ -349,7 +353,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             ].tablehaschanges.connect(
                 self.markTableUnsaved)
 
-        self.mod_table.itemsSelected.connect(self.on_makeOrClearModSelection)
+        self.mod_table.enableModActions.connect(self.on_makeOrClearModSelection)
         self.mod_table.canMoveItems.connect(self.setMoveButtonsEnabled)
 
         # connect the move up/down by 1 signals
@@ -371,16 +375,19 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def on_makeOrClearModSelection(self, has_selection):
         """
-        Enable or disable movement buttons as needed
+        Enable or disable buttons and actions that rely on having a selection in the mod table.
         """
         self.move_mod_box.setEnabled(has_selection)
+        self.action_togglemod.setEnabled(has_selection)
 
     def setMoveButtonsEnabled(self, enable_moveup, enable_movedown):
-        self.btn_modup.setEnabled(enable_moveup)
-        self.btn_modtotop.setEnabled(enable_moveup)
+        for btn in [self.btn_modup,
+                    self.btn_modtotop,]:
+            btn.setEnabled(enable_moveup)
 
-        self.btn_moddown.setEnabled(enable_movedown)
-        self.btn_modtobottom.setEnabled(enable_movedown)
+        for btn in [self.btn_moddown,
+                    self.btn_modtobottom]:
+            btn.setEnabled(enable_movedown)
 
 
     def afterUndoRedo(self, undo_text, redo_text):
@@ -577,6 +584,29 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.Manager.DB.shutdown()
 
         quit_app()
+
+    def _togglecmd(self):
+        idx, enab = self.toggle_cmd()
+
+        vals = self._togglebtnstuff(idx, enab)
+        self.action_togglemod.setText(vals['text'])
+        self.toggle_cmd = vals['cmd']
+
+    def _toggleCurrentMod(self, index):
+        pass
+
+    def setupActions(self):
+        """Create additional actions, and make some tweaks to pre-existing ones"""
+
+        self.actionUndo.setShortcut(QKeySequence.Undo)
+        self.actionRedo.setShortcut(QKeySequence.Redo)
+
+        self.action_togglemod.triggered.connect(self.mod_table.toggleSelectionCheckstate)
+
+
+        self.SetupDone()
+
+
 
 
 def quit_app():

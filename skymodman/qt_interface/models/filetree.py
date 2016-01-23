@@ -354,7 +354,7 @@ class ModFileTreeModel(QAbstractItemModel):
         """
         if path == self.rootpath: return
 
-        self.logger.debug("rootpath = "+path)
+        # self.logger.debug("rootpath = "+path)
         if os.path.exists(path):
 
             self.beginResetModel() # tells the view to get ready to redisplay its contents

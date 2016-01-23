@@ -1,5 +1,5 @@
 from PyQt5 import QtCore, QtGui
-from PyQt5.QtWidgets import QHeaderView, QTreeView, QAbstractItemView
+from PyQt5.QtWidgets import QHeaderView, QTreeView, QAbstractItemView, QMenu, QAction
 from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData
 
 from skymodman import ModEntry
@@ -7,16 +7,13 @@ from skymodman.constants import (Column as COL, SyncError)
 # , DBLCLICK_COLS, VISIBLE_COLS)
 # from skymodman.constants import SyncError
 from skymodman.utils import withlogger
-from skymodman.thirdparty.undo import undoable, stack
+from skymodman.thirdparty.undo import undoable, stack, group
 
-from enum import IntEnum
 from functools import total_ordering, partial
 from collections import deque
 
 
 # <editor-fold desc="ModuleConstants">
-# class COL(IntEnum):
-#     ENABLED, ORDER, NAME, DIRECTORY, MODID, VERSION, ERRORS = range(7)
 
 # HEADERS =   ["Order", "", "Name", "Folder", "Mod ID", "Version", "Errors"]
 # COLUMNS = {COL.ORDER, COL.ENABLED, COL.NAME, COL.DIRECTORY, COL.MODID, COL.VERSION, COL.ERRORS}
@@ -95,8 +92,6 @@ class QModEntry(ModEntry):
                and self.ordinal == other.ordinal
 
 
-
-
 @withlogger
 class ModTable_TreeModel(QAbstractItemModel):
 
@@ -162,7 +157,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
         Return the ModEntry for the row in which `index` appears.
 
-        :param index:
+        :param QModelIndex index:
         :return:
         """
         if index.isValid(): return self.mod_entries[index.row()]
@@ -184,7 +179,6 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
         Passed to the undo stack as ``undocallback``, so that we can notify the UI of the new text
         :param action:
-        :return:
         """
         if action is None:  # Reset
             self.tablehaschanges.emit(False)
@@ -292,7 +286,7 @@ class ModTable_TreeModel(QAbstractItemModel):
             if index.column() == COL_ENABLED:
                 row = index.row()
                 self.changeModField(index, row, self.mod_entries[row],
-                                    'enabled', value == Qt_Checked)
+                                    'enabled', int(value == Qt_Checked))
                 return True
         elif role == Qt_EditRole:
             if index.column() == COL_NAME:
@@ -310,12 +304,11 @@ class ModTable_TreeModel(QAbstractItemModel):
 
     def headerData(self, section, orientation, role=Qt.DisplayRole):
         """
-        Return column header for the specified section (column) number.
 
         :param section:
         :param orientation:
         :param role:
-        :return:
+        :return: column header for the specified section (column) number.
         """
         if role == Qt.DisplayRole:
 
@@ -392,9 +385,6 @@ class ModTable_TreeModel(QAbstractItemModel):
         :return:
         """
         # self.LOGGER << "Moving rows {}-{} to row {}.".format(start_row, end_row, move_to_row)
-        # self.LOGGER << len(self._parent.selectedIndexes())
-        # self.LOGGER << [(idx.row(), idx.column()) for idx in self._parent.selectedIndexes()]
-
 
         count       = 1 + end_row - start_row
         d_shift     = move_to_row - start_row      # shift distance; could be +-
@@ -493,6 +483,9 @@ class ModTable_TreeModel(QAbstractItemModel):
 
 
     def loadData(self):
+        """
+        Load fresh data and reset everything. Called when first loaded and when something major changes, like the active profile.
+        """
         self.beginResetModel()
         self._modifications.clear()
         self._datahaschanged = None
@@ -514,6 +507,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         for err in self.manager.getErrors(SyncError.NOTLISTED):
             self.errors[err] = SyncError.NOTLISTED
 
+        # only show error column when they are errors to report
         if self.errors:
             self.logger << "show error column"
             self.hideErrorColumn.emit(False)
@@ -638,17 +632,14 @@ class ModTable_TreeModel(QAbstractItemModel):
 
 
 
-
-
-
-
-
-
-
 @withlogger
 class ModTable_TreeView(QTreeView):
 
     itemsSelected = pyqtSignal(bool)
+    enableModActions = pyqtSignal(bool)
+
+    # selectionEnabledChanged = pyqtSignal(bool)
+    # selectedModEnabledChanged = pyqtSignal(bool)
 
     canMoveItems = pyqtSignal(bool, bool)
 
@@ -660,8 +651,6 @@ class ModTable_TreeView(QTreeView):
         self._model = None  # type: ModTable_TreeModel
         self._selection_model = None # type: QtCore.QItemSelectionModel
         self.LOGGER << "Init ModTable_TreeView"
-
-
 
     def initUI(self, grid):
         self.setRootIsDecorated(False) # no collapsing
@@ -680,6 +669,9 @@ class ModTable_TreeView(QTreeView):
         self._selection_model = self.selectionModel()  # keep a local reference to the selection model
         self._model.notifyViewRowsMoved.connect(self._selection_moved) # called from model's shiftrows() method
         self._model.hideErrorColumn.connect(self._hideErrorColumn) # only show error col if there are errors
+
+
+
 
     def _hideErrorColumn(self, hide):
         self.setColumnHidden(COL_ERRORS, hide)
@@ -707,10 +699,12 @@ class ModTable_TreeView(QTreeView):
 
     def selectionChanged(self, selected, deselected):
         if self._selection_model.hasSelection():
-            self.itemsSelected.emit(True) # enable the button box
+            # self.itemsSelected.emit(True) # enable the button box
+            self.enableModActions.emit(True) # enable the button box
             self._selection_moved()   # check for disable up/down buttons
         else:
-            self.itemsSelected.emit(False) # disable the button box
+            self.enableModActions.emit(False)
+            # self.itemsSelected.emit(False) # disable the button box
 
         super().selectionChanged(selected, deselected)
 
@@ -764,7 +758,8 @@ class ModTable_TreeView(QTreeView):
         self._model.redo()
 
     def dragEnterEvent(self, event):
-        """
+        """ Qt-override.
+        Implementation needed for enabling drag and drop within the view.
 
         :param QDragEnterEvent event:
         :return:
@@ -778,8 +773,35 @@ class ModTable_TreeView(QTreeView):
         super().dragMoveEvent(event)
 
 
+    def contextMenuEvent(self, event):
+        """
+
+        :param QContextMenuEvent event:
+        """
+        mw = self._parent # mainwindow
+        menu = QMenu(self)
+        menu.addActions([mw.action_togglemod
+                         ])
+        menu.exec_(event.globalPos())
+
+    def toggleSelectionCheckstate(self):
+        # to keep things simple, we base the first toggle off of the enabled state of the
+        # current index.  E.g., even if it's the only enabled mod in the selection,
+        # the first toggle will still be a disable command. It's rough, but the user may
+        # need to hit 'Space' **twice** to achieve their goal.  Might lose a lot of people over this.
+        currstate = self.currentIndex().internalPointer().enabled
+        sel = self.selectedIndexes()
+
+        # group these all into one undo command
+        with group(": {} Mod{}".format(
+                ["Enable", "Disable"][currstate],
+                "s" if len(sel)>self._model.columnCount() else "")):
+            for i in sel:
+                if i.column() == COL_ENABLED:
+                    self._model.setData(i, [Qt_Checked, Qt_Unchecked][currstate], Qt_CheckStateRole)
+
 
 if __name__ == '__main__':
     from skymodman.managers import ModManager
-    from skymodman.qt_interface.qt_launch import ModManagerWindow
-    from PyQt5.QtGui import QDragEnterEvent
+    from skymodman.qt_interface.managerwindow import ModManagerWindow
+    from PyQt5.QtGui import QDragEnterEvent, QContextMenuEvent
