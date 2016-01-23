@@ -28,8 +28,11 @@ from skymodman.constants import (Tab as TAB,
                                  Column)
 from skymodman.qt_interface.qt_manager_ui import Ui_MainWindow
 from skymodman.qt_interface.widgets import message, NewProfileDialog
-from skymodman.qt_interface.models import ProfileListModel, \
-    ModFileTreeModel, ModTable_TreeView, ActiveModsListFilter
+from skymodman.qt_interface.models import (
+    ProfileListModel,
+    ModFileTreeModel,
+    ActiveModsListFilter)
+from skymodman.qt_interface.views import ModTable_TreeView
 from skymodman.utils import withlogger, Notifier, checkPath
 
 
