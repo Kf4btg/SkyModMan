@@ -7,7 +7,9 @@ from skymodman.constants import (Column as COL, SyncError)
 # , DBLCLICK_COLS, VISIBLE_COLS)
 # from skymodman.constants import SyncError
 from skymodman.utils import withlogger
-from skymodman.thirdparty.undo import undoable, stack, group
+from skymodman.thirdparty.undo import undoable #, group #,stack
+# from skymodman.utils.timedundo import groupundoable, stack, _undoable
+from skymodman.utils.timedundo import stack
 
 from functools import total_ordering, partial
 from collections import deque
@@ -169,6 +171,7 @@ class ModTable_TreeModel(QAbstractItemModel):
     def stack(self):
         return stack()
 
+    # FIXME: on the FIRST undoable action (when there are no undos available), the timed stack implementation doesn't react to the undo key sequence until the timer runs out; this is because the the Undo QAction is disabled until something is in the **real** undo stack. The non-responsive shortcut is rather jarring. Later, when there are already undos in the stack, the undo command interrupts the timer as it's supposed to.
     def undo(self):
         stack().undo()
 
@@ -337,6 +340,7 @@ class ModTable_TreeModel(QAbstractItemModel):
 
 
     # noinspection PyUnresolvedReferences
+    # @groupundoable('Change Mod Field', .5)
     @undoable
     def changeModField(self, index, row, mod, field, value):
         # this is for changing a mod attribute *other* than ordinal
@@ -395,7 +399,7 @@ class ModTable_TreeModel(QAbstractItemModel):
             slice_end = 1 + end_row    # ... to the end of the rows to displace
         else: # if we're moving DOWN:
             slice_start = start_row
-            slice_end   = dest_child = move_to_row + count
+            slice_end   = dest_child = min(move_to_row + count, self.rowCount()) # don't go past last row
 
         # notes:
         # if we're moving DOWN:
@@ -431,13 +435,11 @@ class ModTable_TreeModel(QAbstractItemModel):
         self._modifications.extend(range(slice_start, slice_end))
         self.notifyViewRowsMoved.emit()
 
-        # self._check_dirty_status()
-
         yield undotext
 
         self.beginMoveRows(parent, start_row, end_row, parent, dest_child)
 
-        # hopefully, the undo just involves rotating in the opposite direction
+        # the undo just involves rotating in the opposite direction
         self._doshift(slice_start, slice_end, count, -rvector)
 
         self.endMoveRows()
@@ -448,9 +450,11 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         self._parent.clearSelection()
 
-        # self._check_dirty_status()
 
     def _doshift(self, slice_start, slice_end, count, uvector):
+        # self.LOGGER << "Rotating [{}:{}] by {}.".format(
+        #     slice_start, slice_end, count*uvector)
+
         # copy the slice for reference afterwards
         # s_copy = self.mod_entries[slice_start:slice_end]
         me = self.mod_entries
@@ -461,14 +465,10 @@ class ModTable_TreeModel(QAbstractItemModel):
         # rotate the deck in the opposite direction and voila its like we shifted everything.
         deck.rotate(count * uvector)
 
+        # pop em back in, replacing the ordinal to reflect the mod's new position
         for i in range(slice_start, slice_end):
             me[i]=deck.popleft()
             me[i].ordinal = i+1
-
-        # slice em back in, but first replace the ordinal to reflect the mod's new position
-        # self.mod_entries[slice_start:slice_end] = [
-        #     me._replace(ordinal=slice_start + i)
-        #     for i, me in enumerate(deck, start=1)]  # ordinal is 1 higher than index
 
 
     def _check_dirty_status(self):
@@ -555,6 +555,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         return Qt.MoveAction
 
     def mimeTypes(self):
+        """We just drag text around"""
         return ['text/plain']
 
     def mimeData(self, indexes):

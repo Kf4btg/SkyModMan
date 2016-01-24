@@ -2,8 +2,9 @@ from PyQt5.QtWidgets import QHeaderView, QTreeView, QAbstractItemView, QMenu
 from PyQt5.QtCore import Qt, pyqtSignal
 
 from skymodman.constants import Column
-from skymodman.thirdparty.undo import group
 from skymodman.utils import withlogger
+from skymodman.thirdparty.undo import group
+# from skymodman.utils.timedundo import group
 
 from skymodman.qt_interface.models.modtable_tree import ModTable_TreeModel
 
@@ -165,14 +166,19 @@ class ModTable_TreeView(QTreeView):
         currstate = self.currentIndex().internalPointer().enabled
         sel = self.selectedIndexes()
 
-        # group these all into one undo command
-        with group(": {} Mod{}".format(
-                ["Enable", "Disable"][currstate],
-                "s" if len(sel)>self._model.columnCount() else "")):
-            for i in sel:
-                if i.column() == COL_ENABLED:
-                    self._model.setData(i, [Qt_Checked, Qt_Unchecked][currstate], Qt_CheckStateRole)
+        # splitting these up may help with some undo weirdness...
+        if len(sel) > self._model.columnCount(): # multiple rows selected
+            with group(": {} Mods".format(["Enable", "Disable"][currstate])):
 
+                for i in sel:
+                    if i.column() == COL_ENABLED:
+                        self._model.setData(i, [Qt_Checked, Qt_Unchecked][
+                            currstate], Qt_CheckStateRole)
+        else:
+            # only one row
+            self._model.setData(sel[COL_ENABLED], [Qt_Checked,
+                                    Qt_Unchecked][currstate],
+                                Qt_CheckStateRole)
 
 if __name__ == '__main__':
     from skymodman.managers import ModManager

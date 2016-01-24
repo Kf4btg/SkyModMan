@@ -38,7 +38,7 @@ class ActiveModsListFilter(QSortFilterProxyModel):
 
         :param int row: row in the source
         :param PyQt5.QtCore.QModelIndex parent: parent of row in the source
-        :return:
+        :return: whether or not we allow the row to show. Y'know.
         """
 
         if self._onlyactive and not self.sourceModel()[row].enabled:
