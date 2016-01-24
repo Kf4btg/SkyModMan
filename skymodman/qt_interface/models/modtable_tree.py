@@ -425,11 +425,14 @@ class ModTable_TreeModel(QAbstractItemModel):
         #       >>> 7+3=10.
         # Moving up is simpler: the destination row and the target row are the same.
 
-        self.beginMoveRows(parent, start_row, end_row, parent, dest_child)
+        # self.beginMoveRows(parent, start_row, end_row, parent, dest_child)
+        bmr = partial(self.beginMoveRows, parent, start_row, end_row, parent, dest_child)
+        print("do: %d-%d -> %d" % (start_row, end_row, dest_child))
+        emr = self.endMoveRows
 
-        self._doshift(slice_start, slice_end, count, rvector)
+        self._doshift(slice_start, slice_end, count, rvector, bmr, emr)
 
-        self.endMoveRows()
+        # self.endMoveRows()
 
         # track all modified rows
         self._modifications.extend(range(slice_start, slice_end))
@@ -437,23 +440,27 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         yield undotext
 
-        self.beginMoveRows(parent, start_row, end_row, parent, dest_child)
-
+        # self.beginMoveRows(parent, start_row, end_row, parent, dest_child)
+        bmr = partial(self.beginMoveRows, parent, move_to_row, move_to_row+count, parent, start_row)
+        # self.logger << "undo: %d-%d -> %d" % (move_to_row,move_to_row+count, start_row)
+        print("undo: %d-%d -> %d" % (start_row+d_shift,end_row+d_shift, start_row))
+        emr = self.endMoveRows
         # the undo just involves rotating in the opposite direction
-        self._doshift(slice_start, slice_end, count, -rvector)
+        self._doshift(slice_start, slice_end, count, -rvector, bmr, emr)
 
-        self.endMoveRows()
+        # self.endMoveRows()
 
         # remove all un-modified row numbers
         for _ in range(slice_end-slice_start):
             self._modifications.pop()
+        self.notifyViewRowsMoved.emit()
 
-        self._parent.clearSelection()
+        # self._parent.clearSelection()
 
 
-    def _doshift(self, slice_start, slice_end, count, uvector):
-        # self.LOGGER << "Rotating [{}:{}] by {}.".format(
-        #     slice_start, slice_end, count*uvector)
+    def _doshift(self, slice_start, slice_end, count, uvector, callbefore, callafter):
+        self.LOGGER << "Rotating [{}:{}] by {}.".format(
+            slice_start, slice_end, count*uvector)
 
         # copy the slice for reference afterwards
         # s_copy = self.mod_entries[slice_start:slice_end]
@@ -464,11 +471,13 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         # rotate the deck in the opposite direction and voila its like we shifted everything.
         deck.rotate(count * uvector)
-
+        callbefore()
         # pop em back in, replacing the ordinal to reflect the mod's new position
         for i in range(slice_start, slice_end):
             me[i]=deck.popleft()
             me[i].ordinal = i+1
+
+        callafter()
 
 
     def _check_dirty_status(self):
