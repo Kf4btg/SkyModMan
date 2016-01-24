@@ -128,7 +128,8 @@ class ModTable_TreeModel(QAbstractItemModel):
         self._modifications = deque()
 
         # used to store removed rows during DnD operations
-        self.removed = []
+        # edit: no it's not
+        # self.removed = []
 
         stack().undocallback = partial(self._undo_event, 'undo')
         stack().docallback = partial(self._undo_event, 'redo')
@@ -239,7 +240,6 @@ class ModTable_TreeModel(QAbstractItemModel):
                 err = self.errors[self.mod_entries[index.row()].directory]
                 for case, choices in [(lambda r: role == r, lambda d: d[err])]:
 
-
                     if case(Qt_DecorationRole): return QtGui.QIcon.fromTheme(
                             choices({SyncError.NOTFOUND: 'dialog-error',
                                      SyncError.NOTLISTED: 'dialog-warning'}))
@@ -270,6 +270,39 @@ class ModTable_TreeModel(QAbstractItemModel):
                     return self.mod_entries[index.row()].name
                 if role == Qt_ToolTipRole:
                     return self.mod_entries[index.row()].directory
+
+    def headerData(self, section, orientation, role=Qt.DisplayRole):
+        """
+
+        :param section:
+        :param orientation:
+        :param role:
+        :return: column header for the specified section (column) number.
+        """
+        if role == Qt.DisplayRole:
+
+            if orientation == Qt.Horizontal:
+                return col2Header[section]
+
+            else:  # vertical header
+                return self.mod_entries[section].ordinal
+
+        return super().headerData(section, orientation, role)
+
+    def flags(self, index):
+        if not index.isValid():
+            return Qt_ItemIsEnabled
+        col = index.column()
+
+        _flags = Qt_ItemIsEnabled | Qt_ItemIsSelectable | Qt_ItemIsDragEnabled | Qt_ItemIsDropEnabled
+
+        if col == COL_ENABLED:
+            return _flags | Qt_ItemIsUserCheckable
+
+        if col == COL_NAME:
+            return _flags | Qt_ItemIsEditable
+
+        return _flags
 
     ##===============================================
     ## Setting Data
@@ -305,42 +338,7 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         return False # if role was checkstate or edit, but column was not enabled/name, just ret false
 
-    def headerData(self, section, orientation, role=Qt.DisplayRole):
-        """
-
-        :param section:
-        :param orientation:
-        :param role:
-        :return: column header for the specified section (column) number.
-        """
-        if role == Qt.DisplayRole:
-
-            if orientation == Qt.Horizontal:
-                return col2Header[section]
-
-            else:  # vertical header
-                return self.mod_entries[section].ordinal
-
-        return super().headerData(section, orientation, role)
-
-    def flags(self, index):
-        if not index.isValid():
-            return Qt_ItemIsEnabled
-        col = index.column()
-
-        _flags = Qt_ItemIsEnabled | Qt_ItemIsSelectable | Qt_ItemIsDragEnabled | Qt_ItemIsDropEnabled
-
-        if col == COL_ENABLED:
-            return _flags | Qt_ItemIsUserCheckable
-
-        if col == COL_NAME:
-            return _flags | Qt_ItemIsEditable
-
-        return _flags
-
-
     # noinspection PyUnresolvedReferences
-    # @groupundoable('Change Mod Field', .5)
     @undoable
     def changeModField(self, index, row, mod, field, value):
         # this is for changing a mod attribute *other* than ordinal
@@ -348,8 +346,6 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         #do/redo code:
         old_value = getattr(mod, field)
-        # updated = mod._replace(**{field: value})
-        # setattr(self.mod_entries[row], field, value)
         setattr(mod, field, value)
 
         # record this row numnber in the modified rows stack
@@ -360,18 +356,11 @@ class ModTable_TreeModel(QAbstractItemModel):
         yield "Change {}".format(field)
 
         # undo code:
-        # reverted = self.mod_entries[row]._replace(**{field:old_value})
-        # self.mod_entries[row] = reverted
         setattr(mod,field, old_value)
         # remove this row number from the modified rows stack
         self._modifications.pop()
 
         self.dataChanged.emit(index, index)
-
-
-
-
-
 
     ##===============================================
     ## Modifying Row Position
@@ -448,8 +437,6 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         yield undotext
 
-        # self.beginMoveRows(parent, start_row, end_row, parent, dest_child)
-
         # for the reverse beginMoveRows call, we know that what was `start_row` is now in `move_to_row`;
         # and the end_row is 'count'-1 rows beyond that; but an easier way to end_row is probably:
         #     start = move_to_row    (same as 'start_row+d_shift')
@@ -464,20 +451,19 @@ class ModTable_TreeModel(QAbstractItemModel):
                       move_to_row - _end_offset,
                       end_row + d_shift - _end_offset, parent,
                       slice_end if move_to_row < start_row else slice_start)
-        # self.logger << "undo: %d-%d -> %d" % (move_to_row,move_to_row+count, start_row)
         # print("undo: %d-%d -> %d" % (start_row + d_shift - _end_offset,
         #                              end_row + d_shift - _end_offset,
         #                              slice_end if move_to_row < start_row else slice_start))
-        # the undo just involves rotating in the opposite direction
+
+        # the internal undo just involves rotating in the opposite direction
         self._doshift(slice_start, slice_end, count, -rvector)
 
         self.endMoveRows()
 
-        # remove all un-modified row numbers
+        # remove all de-modified row numbers
         for _ in range(slice_end-slice_start):
             self._modifications.pop()
         self.notifyViewRowsMoved.emit()
-
 
     def _doshift(self, slice_start, slice_end, count, uvector):
         # self.LOGGER << "Rotating [{}:{}] by {}.".format(
@@ -497,8 +483,6 @@ class ModTable_TreeModel(QAbstractItemModel):
             me[i]=deck.popleft()
             me[i].ordinal = i+1
 
-
-
     def _check_dirty_status(self):
         """
         Checks whether the table has just gone from a saved to an unsaved state, or vice-versa, and sends a notification signal iff there is a state change.
@@ -509,6 +493,9 @@ class ModTable_TreeModel(QAbstractItemModel):
             self._datahaschanged = stack().haschanged()
             self.tablehaschanges.emit(self._datahaschanged)
 
+    ##===============================================
+    ## Getting data from disk into model
+    ##===============================================
 
     def loadData(self):
         """
@@ -657,5 +644,4 @@ class ModTable_TreeModel(QAbstractItemModel):
     #     me+=right
     #
     #     self.endInsertRows()
-
 
