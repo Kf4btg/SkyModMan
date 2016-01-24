@@ -392,14 +392,25 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         count       = 1 + end_row - start_row
         d_shift     = move_to_row - start_row      # shift distance; could be +-
-        rvector     = -(d_shift//abs(d_shift))      # get inverse normal vector (see below)
+        rvector     = -(d_shift//abs(d_shift))      # get inverse normal vector; this will be +1 for up, -1 for down (see below)
 
+        _end_offset = 0 # need this later
         if move_to_row < start_row: # If we're moving UP:
             slice_start = dest_child = move_to_row  # get a slice from smallest index
-            slice_end = 1 + end_row    # ... to the end of the rows to displace
+            slice_end   = 1 + end_row    # ... to the end of the rows to displace
         else: # if we're moving DOWN:
             slice_start = start_row
-            slice_end   = dest_child = min(move_to_row + count, self.rowCount()) # don't go past last row
+            # slice_end   = dest_child = min(move_to_row + count, self.rowCount()) # don't go past last row
+
+            slice_end   = move_to_row + count
+            # we want to make sure we don't try to move past the end;
+            # if we would, change the slice end to the max row number,
+            # but save the amount we would have gone over for later reference
+            _end_offset = max(0, slice_end - self.rowCount())
+            if _end_offset > 0:
+                slice_end -= _end_offset
+            dest_child = slice_end
+
 
         # notes:
         # if we're moving DOWN:
@@ -425,14 +436,11 @@ class ModTable_TreeModel(QAbstractItemModel):
         #       >>> 7+3=10.
         # Moving up is simpler: the destination row and the target row are the same.
 
-        # self.beginMoveRows(parent, start_row, end_row, parent, dest_child)
-        bmr = partial(self.beginMoveRows, parent, start_row, end_row, parent, dest_child)
-        print("do: %d-%d -> %d" % (start_row, end_row, dest_child))
-        emr = self.endMoveRows
+        self.beginMoveRows(parent, start_row, end_row, parent, dest_child)
 
-        self._doshift(slice_start, slice_end, count, rvector, bmr, emr)
+        self._doshift(slice_start, slice_end, count, rvector)
 
-        # self.endMoveRows()
+        self.endMoveRows()
 
         # track all modified rows
         self._modifications.extend(range(slice_start, slice_end))
@@ -441,26 +449,39 @@ class ModTable_TreeModel(QAbstractItemModel):
         yield undotext
 
         # self.beginMoveRows(parent, start_row, end_row, parent, dest_child)
-        bmr = partial(self.beginMoveRows, parent, move_to_row, move_to_row+count, parent, start_row)
-        # self.logger << "undo: %d-%d -> %d" % (move_to_row,move_to_row+count, start_row)
-        print("undo: %d-%d -> %d" % (start_row+d_shift,end_row+d_shift, start_row))
-        emr = self.endMoveRows
-        # the undo just involves rotating in the opposite direction
-        self._doshift(slice_start, slice_end, count, -rvector, bmr, emr)
 
-        # self.endMoveRows()
+        # for the reverse beginMoveRows call, we know that what was `start_row` is now in `move_to_row`;
+        # and the end_row is 'count'-1 rows beyond that; but an easier way to end_row is probably:
+        #     start = move_to_row    (same as 'start_row+d_shift')
+        #     end = end_row + d_shift
+        # since 'd_shift' is either + or - based on the original movement
+        # the dest index we can get by selecting the other possibility from the one we made above:
+        #     dchild2 = slice_end if move_to_row < start_row else slice_start
+
+        # here's where we use that offset we saved; have to subtract it from both start and
+        # end to make sure we're referencing the right block of rows when calling beginMoveRows
+        self.beginMoveRows(parent,
+                      move_to_row - _end_offset,
+                      end_row + d_shift - _end_offset, parent,
+                      slice_end if move_to_row < start_row else slice_start)
+        # self.logger << "undo: %d-%d -> %d" % (move_to_row,move_to_row+count, start_row)
+        # print("undo: %d-%d -> %d" % (start_row + d_shift - _end_offset,
+        #                              end_row + d_shift - _end_offset,
+        #                              slice_end if move_to_row < start_row else slice_start))
+        # the undo just involves rotating in the opposite direction
+        self._doshift(slice_start, slice_end, count, -rvector)
+
+        self.endMoveRows()
 
         # remove all un-modified row numbers
         for _ in range(slice_end-slice_start):
             self._modifications.pop()
         self.notifyViewRowsMoved.emit()
 
-        # self._parent.clearSelection()
 
-
-    def _doshift(self, slice_start, slice_end, count, uvector, callbefore, callafter):
-        self.LOGGER << "Rotating [{}:{}] by {}.".format(
-            slice_start, slice_end, count*uvector)
+    def _doshift(self, slice_start, slice_end, count, uvector):
+        # self.LOGGER << "Rotating [{}:{}] by {}.".format(
+        #     slice_start, slice_end, count*uvector)
 
         # copy the slice for reference afterwards
         # s_copy = self.mod_entries[slice_start:slice_end]
@@ -471,13 +492,11 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         # rotate the deck in the opposite direction and voila its like we shifted everything.
         deck.rotate(count * uvector)
-        callbefore()
         # pop em back in, replacing the ordinal to reflect the mod's new position
         for i in range(slice_start, slice_end):
             me[i]=deck.popleft()
             me[i].ordinal = i+1
 
-        callafter()
 
 
     def _check_dirty_status(self):
