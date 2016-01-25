@@ -227,7 +227,7 @@ class DBManager:
         """
 
         Note: I notice ModOrganizer adds a '.mohidden' extension to every file it hides (or to the parent directory);
-        hmm...I'd like to avoid changing the files on disk as much as possible
+        hmm...I'd like to avoid changing the files on disk if possible
 
         :param str|Path json_target: path to hiddenfiles.json file for current profile
         """
@@ -482,7 +482,7 @@ class DBManager:
 
         relpath = os.path.relpath
         join = os.path.join
-        listdir = os.listdir
+        # listdir = os.listdir
 
         # go through each folder indivually
         for modfolder in directory.iterdir():
@@ -492,10 +492,12 @@ class DBManager:
 
             mfiles = []
             for root, dirs, files in os.walk(modroot):
-                for d in dirs:
-                    if len(listdir(join(root,d)))==0:
+                # for d in dirs:
+                #     if len(listdir(join(root,d)))==0:
                         # remove empty directories from the list
-                        dirs.remove(d) ## todo: is this actually a good idea?
+                        # dirs.remove(d) ## todo: is this actually a good idea?
+                        ### I guess it wasn't a good idea, becuase it didn't actually work...
+
                 mfiles.extend(relpath(join(root, f), modroot).lower() for f in files)
             # put the mod's files in the db
             if mfiles:
@@ -504,18 +506,9 @@ class DBManager:
                     ((name, p) for p in mfiles))
 
 
-        #
-        # for root, dirs, files in os.walk(dpath):
-        #
-        #     for d in dirs:
-        #         if len(listdir(join(root,d)))==0:
-        #             dirs.remove(d) # remove empty directories from the list ## todo: is this a good idea?
-        #     modfiles+= [relpath(join(root, f), dpath) for f in files]
+            # try: mfiles.remove('meta.ini') #don't care about these
+            # except ValueError: pass
 
-        # try: modfiles.remove('meta.ini') #don't care about these
-        # except ValueError: pass
-
-        # self._con.executemany("INSERT into modfiles values (?, ?)", ((dname, p) for p in modfiles))
         # self.LOGGER << "dumping db contents to disk"
         # with open('res/test2.dump.sql', 'w') as f:
         #     for l in self._con.iterdump():
@@ -523,46 +516,41 @@ class DBManager:
 
     def detectFileConflicts(self):
         """
-        Using the data in the 'modfiles' table, detect any file conflicts amongs the installed mods
+        Using the data in the 'modfiles' table, detect any file conflicts among the installed mods
         :return:
         """
 
-        q="""CREATE VIEW filesbymodorder AS
-        SELECT ordinal, f.directory, filepath
-        FROM modfiles f, mods m
-        WHERE f.directory=m.directory
-        ORDER BY ordinal
+        # if we're reloading the status of conflicted mods, delete the view if it exists
+        self._con.execute("DROP VIEW IF EXISTS filesbymodorder")
+
+        q="""
+        CREATE VIEW filesbymodorder AS
+            SELECT ordinal, f.directory, filepath
+            FROM modfiles f, mods m
+            WHERE f.directory=m.directory
+            ORDER BY ordinal
         """
 
-        detect_dupes_query = """
-                    SELECT f.filepath, f.ordinal, f.directory
-                        FROM filesbymodorder f
-                        INNER JOIN (
-                            SELECT filepath, COUNT(*) as C
-                            FROM filesbymodorder
-                            GROUP BY filepath
-                            HAVING C > 1
-                        ) dups ON f.filepath=dups.filepath
-                        ORDER BY f.filepath, f.ordinal
-                        """
-
         with self._con:
-
             self._con.execute(q)
 
-            # [print(*r) for r in self._con.execute(detect_dupes_query)]
+        detect_dupes_query = """
+            SELECT f.filepath, f.ordinal, f.directory
+                FROM filesbymodorder f
+                INNER JOIN (
+                    SELECT filepath, COUNT(*) as C
+                    FROM filesbymodorder
+                    GROUP BY filepath
+                    HAVING C > 1
+                ) dups ON f.filepath=dups.filepath
+                ORDER BY f.filepath, f.ordinal
+                """
 
-        # this gets us 1 entry for each duplicated file, containing a list of which
-        # mods contain a file by that name.
-
-        # but we probably need a "conflicts" entry for each mod, along with fields denoting whether
-        # it's currently winning the conflict, which other mods it conflicts with, and whether any disabled
-        # mods have the same file...
         file=''
-
         conflicts = defaultdict(list)
         mods_with_conflicts = defaultdict(list)
 
+        # [print(*r) for r in self._con.execute(detect_dupes_query)]
         for r in self._con.execute(detect_dupes_query):
             if r['filepath'] != file:
                 file=r['filepath']
@@ -575,27 +563,11 @@ class DBManager:
         self.conflicts = conflicts
         self.mods_with_conflicts = mods_with_conflicts
 
-
-        # from pprint import pprint
-        # pprint(modswithconf)
-
-        # for c in modswithconf['Bethesda Hi-Res DLC Optimized']:
+        # for c in mods_with_conflicts['Bethesda Hi-Res DLC Optimized']:
         #     print("other mods containing file '%s'" % c)
-        #     for m in fconflicts[c]:
+        #     for m in conflicts[c]:
         #         if m!='Bethesda Hi-Res DLC Optimized':
         #             print('\t', m)
-
-
-
-                # print(file,":", sep="")
-            # print('\t',r['ordinal'],r['directory'], sep='\t')
-
-
-
-
-
-
-
 
     def makeModEntry(self, **kwargs):
         """generates a tuple representing a mod-entry by supplementing a possibly-incomplete mapping of keywords (`kwargs`) with default values for any missing fields"""
@@ -652,8 +624,8 @@ class DBManager:
             not_listed = installed_mods
 
 
-        # since i believe inserting into the database is faster when done in chunks,
-        # we accumulated the errors above and will not insert them all at once
+        # i think inserting into the database is faster when done in large chunks,
+        # so we accumulated the errors above and will insert them all at once
         if not_listed:
             with self._con:
                 self._con.executemany("INSERT INTO moderrors(mod, errortype) VALUES (?, ?)",
@@ -663,9 +635,6 @@ class DBManager:
             with self._con:
                 self._con.executemany("INSERT INTO moderrors(mod, errortype) VALUES (?, ?)",
                                      map(lambda v: (v, SyncError.NOTFOUND.value), not_found))
-
-            # from skymodman.exceptions import FilesystemDesyncError
-            # raise FilesystemDesyncError(not_found, not_listed)
 
         # return true only if all 3 are empty/0;
         # we return false on num_removed so that the GUI will still update its contents
@@ -700,8 +669,6 @@ class DBManager:
 if __name__ == '__main__':
     from skymodman.managers import ModManager
 
-    # test()
-    # testload()
     DB = DBManager(ModManager())
     DB._con.row_factory = sqlite3.Row
 

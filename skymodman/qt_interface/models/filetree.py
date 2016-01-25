@@ -234,10 +234,11 @@ class QFSItem(FSItem):
 
     @property
     def checkState(self):
-        if not self.isdir:
-            return self._checkstate
+        # if not self.isdir:
+        if self.isdir and self.child_count>0:
+            return self.childrenCheckState()
 
-        return self.childrenCheckState()
+        return self._checkstate
 
     # So, I think the protocol here is, when a directory is un/checked,
     # set the checkstates of all that directory's children to match.
@@ -572,7 +573,7 @@ class ModFileTreeModel(QAbstractItemModel):
 
             elif child.checkState == Qt.Unchecked:
                 pathparts = [os.path.basename(self.rootpath)]+list(child.ppath.parts[:-1])
-                # add unchecked dirs, but do not descend
+                # add unchecked dirs, but todo: do not descend
                 if child.isdir:
                     tree.treeInsert(hiddens, pathparts) # todo: don't descend; just mark folder excluded, assume contents
                 else:
@@ -615,20 +616,17 @@ class ModFileTreeModel(QAbstractItemModel):
             sections, remainder = divmod(len(toremove),maxatonce)
             for i in range(sections):
                 s=maxatonce*i
-
                 query = q.format(directory, ", ".join(['?']*maxatonce))
 
                 self.manager.DB.update_(query,toremove[s:s+maxatonce])
+
             if remainder:
                 query = q.format(directory, ", ".join(['?']*remainder))
 
-                # self.manager.DB.update_(q.format(directory,fpaths))
                 self.manager.DB.update_(query, toremove[sections*maxatonce:])
 
         if toadd:
             self.manager.DB.updatemany_("INSERT INTO hiddenfiles values (?, ?)", ((directory,a) for a in toadd))
-
-            # self.manager.DB.updatemany_("INSERT INTO hiddenfiles values (?, ?)", map(lambda v: (directory, v), toadd))
 
 
             # with self.manager.DB.conn:
@@ -664,22 +662,8 @@ class ModFileTreeModel(QAbstractItemModel):
                         uhBasket.append(child.lpath)
 
 
-                #
-                # if child.isdir: _(child)
-                # elif child.checkState == Qt.Unchecked:
-                #     hBasket.append(child.path)
-                # elif track_unhidden:
-                #     uhBasket.append(child.path)
-
         _(self.root_item)
         return hBasket, uhBasket
-
-    # if child.isdir:
-    #     _(child)
-    # elif child.checkState == Qt.Unchecked:
-    #     hBasket.append(child.path)
-    # elif track_unhidden:
-    #     uhBasket.append(child.path)
 
 
 if __name__ == '__main__':
