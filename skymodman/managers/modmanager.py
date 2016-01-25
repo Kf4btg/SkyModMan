@@ -121,6 +121,13 @@ class ModManager:
             # and [re]create the cache file
             self.saveModList()
 
+        self.LOGGER << "Loading list of all Mod Files on disk"
+        self.DB.loadAllModFiles(self.Config.paths.dir_mods)
+        # self.LOGGER << "Finished loading list of all Mod Files on disk"
+
+        self.LOGGER << "detecting file conflicts"
+        self.DB.detectFileConflicts()
+
 
     def validateModInstalls(self):
         """

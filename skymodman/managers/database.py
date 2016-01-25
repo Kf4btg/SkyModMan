@@ -4,6 +4,7 @@ import os
 import sqlite3
 from pathlib import Path
 import functools
+from collections import defaultdict
 
 from skymodman.constants import db_fields, SyncError
 from skymodman.utils import withlogger, counter
@@ -79,6 +80,10 @@ class DBManager:
         # desired by the user.
         self._con.executescript(self._SCHEMA)
         self._con.row_factory = sqlite3.Row
+
+        # These are created from the database, so it seems like it may be best just to store them in this class:
+        self.conflicts = defaultdict(list) # filepaths to list of mods containing that file
+        self.mods_with_conflicts = defaultdict(list) # mods to list of contained files that are in conflict with other mods
 
 
     ################
@@ -220,6 +225,9 @@ class DBManager:
 
     def saveHiddenFiles(self, json_target):
         """
+
+        Note: I notice ModOrganizer adds a '.mohidden' extension to every file it hides (or to the parent directory);
+        hmm...I'd like to avoid changing the files on disk as much as possible
 
         :param str|Path json_target: path to hiddenfiles.json file for current profile
         """
@@ -452,27 +460,141 @@ class DBManager:
 
         self.fillTable(mods_list)
 
-    def loadAllModFiles(self, directory, ordinal):
+    def loadAllModFiles(self, directory):
         """
         Here's an experiment to load ALL files from disk when the program starts up...let's see how long it takes
+
+        Update: about 12 seconds to load info for 223 mods from an ntfs-3g partition on a 7200rpm WD-Black...
+            not the horriblest, but still likely needs to be shunted to another thread.  Especially since that was
+            pretty much just reading file names; no operations such as checking for conflicts was done
+
+            Also, dumping the db to disk (in txt form) made a 2.7 MB file.
+
+        Update to update: 2nd time around, didn't even take 2 seconds. I did make some tweaks to the code, but still...I'm guessing the files were still in the system RAM?
+
         :return:
         :param Path directory:
-        :param int ordinal:
+        # :param int ordinal: ?? what was i going to use this for?
         """
-        dname = directory.name
-        dpath = str(directory)
-        modfiles=[]
+        # dname = directory.name
+        # dpath = str(directory)
+        # modfiles=[]
 
-        for root, dirs, files in os.walk(dpath):
-            for d in dirs:
-                if len(os.listdir(os.path.join(root,d)))==0:
-                    dirs.remove(d) # remove empty directories from the list ## todo: is this a good idea?
-            modfiles+= [os.path.relpath(os.path.join(root, f), dpath) for f in files]
+        relpath = os.path.relpath
+        join = os.path.join
+        listdir = os.listdir
+
+        # go through each folder indivually
+        for modfolder in directory.iterdir():
+            if not modfolder.is_dir(): continue
+            name=modfolder.name
+            modroot = str(modfolder)
+
+            mfiles = []
+            for root, dirs, files in os.walk(modroot):
+                for d in dirs:
+                    if len(listdir(join(root,d)))==0:
+                        # remove empty directories from the list
+                        dirs.remove(d) ## todo: is this actually a good idea?
+                mfiles.extend(relpath(join(root, f), modroot).lower() for f in files)
+            # put the mod's files in the db
+            if mfiles:
+                self._con.executemany(
+                    "INSERT into modfiles values (?, ?)",
+                    ((name, p) for p in mfiles))
+
+
+        #
+        # for root, dirs, files in os.walk(dpath):
+        #
+        #     for d in dirs:
+        #         if len(listdir(join(root,d)))==0:
+        #             dirs.remove(d) # remove empty directories from the list ## todo: is this a good idea?
+        #     modfiles+= [relpath(join(root, f), dpath) for f in files]
 
         # try: modfiles.remove('meta.ini') #don't care about these
         # except ValueError: pass
 
-        self._con.executemany("INSERT into modfiles values (?, ?)", ((dname, p) for p in modfiles))
+        # self._con.executemany("INSERT into modfiles values (?, ?)", ((dname, p) for p in modfiles))
+        # self.LOGGER << "dumping db contents to disk"
+        # with open('res/test2.dump.sql', 'w') as f:
+        #     for l in self._con.iterdump():
+        #         f.write(l+'\n')
+
+    def detectFileConflicts(self):
+        """
+        Using the data in the 'modfiles' table, detect any file conflicts amongs the installed mods
+        :return:
+        """
+
+        q="""CREATE VIEW filesbymodorder AS
+        SELECT ordinal, f.directory, filepath
+        FROM modfiles f, mods m
+        WHERE f.directory=m.directory
+        ORDER BY ordinal
+        """
+
+        detect_dupes_query = """
+                    SELECT f.filepath, f.ordinal, f.directory
+                        FROM filesbymodorder f
+                        INNER JOIN (
+                            SELECT filepath, COUNT(*) as C
+                            FROM filesbymodorder
+                            GROUP BY filepath
+                            HAVING C > 1
+                        ) dups ON f.filepath=dups.filepath
+                        ORDER BY f.filepath, f.ordinal
+                        """
+
+        with self._con:
+
+            self._con.execute(q)
+
+            # [print(*r) for r in self._con.execute(detect_dupes_query)]
+
+        # this gets us 1 entry for each duplicated file, containing a list of which
+        # mods contain a file by that name.
+
+        # but we probably need a "conflicts" entry for each mod, along with fields denoting whether
+        # it's currently winning the conflict, which other mods it conflicts with, and whether any disabled
+        # mods have the same file...
+        file=''
+
+        conflicts = defaultdict(list)
+        mods_with_conflicts = defaultdict(list)
+
+        for r in self._con.execute(detect_dupes_query):
+            if r['filepath'] != file:
+                file=r['filepath']
+            mod=r['directory']
+            # a dictionary of file conflicts to an ordered list of mods which contain them
+            conflicts[file].append(mod)
+            # also, a dictionary of mods to a list of conflicting files
+            mods_with_conflicts[mod].append(file)
+
+        self.conflicts = conflicts
+        self.mods_with_conflicts = mods_with_conflicts
+
+
+        # from pprint import pprint
+        # pprint(modswithconf)
+
+        # for c in modswithconf['Bethesda Hi-Res DLC Optimized']:
+        #     print("other mods containing file '%s'" % c)
+        #     for m in fconflicts[c]:
+        #         if m!='Bethesda Hi-Res DLC Optimized':
+        #             print('\t', m)
+
+
+
+                # print(file,":", sep="")
+            # print('\t',r['ordinal'],r['directory'], sep='\t')
+
+
+
+
+
+
 
 
     def makeModEntry(self, **kwargs):
