@@ -2,12 +2,12 @@ import json
 import json.decoder
 import os
 import sqlite3
-from pathlib import Path
+from pathlib import Path, PurePath
 import functools
 from collections import defaultdict
 
 from skymodman.constants import db_fields, SyncError
-from skymodman.utils import withlogger, counter
+from skymodman.utils import withlogger, counter, tree
 
 mcount = counter()
 
@@ -204,12 +204,7 @@ class DBManager:
                 success = False
         return success
 
-
-
-
-
-
-    ###################################33
+    ###################################
 
     def populateHiddenFilesTable(self, filelist):
         """
@@ -230,12 +225,31 @@ class DBManager:
         hmm...I'd like to avoid changing the files on disk if possible
 
         :param str|Path json_target: path to hiddenfiles.json file for current profile
+        # :param tree.Tree hiddentree:
         """
-
-        #fixme: use utils.Tree() and the dump method in/from the filetree model
 
         if not isinstance(json_target, Path):
             json_target = Path(json_target)
+
+        htree = tree.Tree()
+
+        for row in self._con.execute("SELECT * FROM hiddenfiles ORDER BY directory, filepath"):
+            # print(*row)
+            p = PurePath(row['directory'], row['filepath'])
+            pathparts = p.parts[:-1]
+
+            tree.treeInsert(htree, pathparts, p.name)
+
+
+        with json_target.open('w') as f:
+            f.write(tree.toString(htree))
+
+
+        # print(tree.toString(htree, 2))
+
+
+
+
         #
         # cur = self._con.execute("Select * from hiddenfiles group by directory")
         #

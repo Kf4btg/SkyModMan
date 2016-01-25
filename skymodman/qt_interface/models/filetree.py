@@ -561,6 +561,9 @@ class ModFileTreeModel(QAbstractItemModel):
 
         proxy.dataChanged.emit(proxy.mapFromSource(index1), proxy.mapFromSource(index2), *args)
 
+    def saveHidden(self):
+        self.manager.DB.saveHiddenFiles(self.manager.active_profile.hidden_files)
+
     def dumpsHidden(self):
         """Return a string containing the hidden files of this mod in a form suitable
         for serializing to json"""
@@ -629,6 +632,7 @@ class ModFileTreeModel(QAbstractItemModel):
             self.manager.DB.updatemany_("INSERT INTO hiddenfiles values (?, ?)", ((directory,a) for a in toadd))
 
 
+        self.saveHidden()
             # with self.manager.DB.conn:
         #     for r in self.manager.DB.conn.execute("select * from hiddenfiles"): #type: Row
         #         print(r["directory"]," | ", r["filepath"])
