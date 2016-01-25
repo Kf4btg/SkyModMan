@@ -194,16 +194,43 @@ class DBManager:
         """
         if not isinstance(json_source, Path):
             json_source = Path(json_source)
-        success = True
+        success = False
+
         with json_source.open('r') as f:
             try:
                 hiddenfiles = json.load(f)
-                self.populateHiddenFilesTable(hiddenfiles)
+                for mod, files in hiddenfiles.items():
+                    # gethiddenfiles returns a list of 1-tuples, each one with a filepath
+                    hfiles = self._gethiddenfiles(files, "", [])
+
+                    with self._con:
+                        self._con.executemany('INSERT INTO hiddenfiles VALUES ("'+mod+'", ?)', hfiles)
+                # [print(*r, sep="\t|\t") for r in
+                #  self._con.execute("select * from hiddenfiles")]
+                success=True
+
             except json.decoder.JSONDecodeError:
                 self.LOGGER.warning("No hidden files listed in {}, or file is malformed.".format(json_source))
-                success = False
         return success
 
+    def _gethiddenfiles(self, basedict, currpath, flist, join=os.path.join):
+        """
+        Recursive helper for loading the list of hiddenfiles from disk
+
+        :param basedict:
+        :param currpath:
+        :param flist:
+        :param join: speed up execution by locally binding os.path.join
+        :return:
+        """
+        for key, value in basedict.items():
+            if isinstance(value, list):
+                # have to add each filepath as 1-tuple to keep sqlite happy
+                flist.extend((join(currpath, fname), ) for fname in value)
+            else:
+                flist = self._gethiddenfiles(value, join(currpath, key), flist)
+
+        return flist
     ###################################
 
     def populateHiddenFilesTable(self, filelist):
@@ -247,22 +274,6 @@ class DBManager:
 
         # print(tree.toString(htree, 2))
 
-
-
-
-        #
-        # cur = self._con.execute("Select * from hiddenfiles group by directory")
-        #
-        # # todo: use defaultdict for this
-        # filelist = {}
-        # for row in cur:
-        #     mdir = row['directory']
-        #     if not mdir in filelist:
-        #         filelist[mdir] = []
-        #     # each file has a path and an indicator whether it is a directory
-        #     filelist[mdir].append({"file": row['file'], "isdir": row['isdir']})
-        #
-        # self.jsonWrite(json_target, filelist)
 
     # def fillTable(self, mod_list, doprint=False):
     def fillTable(self, mod_list):

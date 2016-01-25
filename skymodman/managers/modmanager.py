@@ -128,6 +128,8 @@ class ModManager:
         self.LOGGER << "detecting file conflicts"
         self.DB.detectFileConflicts()
 
+        self.DB.loadHiddenFiles(self.active_profile.hidden_files)
+
 
     def validateModInstalls(self):
         """
