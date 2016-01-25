@@ -6,8 +6,15 @@ import itertools
 import os
 from pathlib import Path
 
-from skymodman.utils import withlogger, tree
+from skymodman.utils import withlogger #, tree
 # from skymodman.utils import humanizer
+
+Qt_Checked = Qt.Checked
+Qt_Unchecked = Qt.Unchecked
+Qt_PartiallyChecked = Qt.PartiallyChecked
+Qt_ItemIsTristate = Qt.ItemIsTristate
+Qt_CheckStateRole = Qt.CheckStateRole
+
 
 # @withlogger
 # @humanizer.humanize
@@ -212,10 +219,10 @@ class QFSItem(FSItem):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self._checkstate=Qt.Checked# tracks explicit checks
+        self._checkstate=Qt_Checked# tracks explicit checks
         self.flags = Qt.ItemIsUserCheckable | Qt.ItemIsEnabled
         if self.isdir:
-            self.flags |= Qt.ItemIsTristate
+            self.flags |= Qt_ItemIsTristate
             self.icon = QIcon.fromTheme("folder")
         else: #file
             self.flags |= Qt.ItemNeverHasChildren
@@ -225,7 +232,7 @@ class QFSItem(FSItem):
     def itemflags(self):
         """Initial flags for all items are Qt.ItemIsUserCheckable and Qt.ItemIsEnabled
         Non-directories receive the Qt.ItemNeverHasChildren flag, and dirs get
-        Qt.ItemIsTristate to allow the 'partially-checked' state"""
+        Qt_ItemIsTristate to allow the 'partially-checked' state"""
         return self.flags
 
     @itemflags.setter
@@ -252,7 +259,7 @@ class QFSItem(FSItem):
 
         # state propagation for dirs:
         # (only dirs can have the tristate flag turned on)
-        if self.flags & Qt.ItemIsTristate:
+        if self.flags & Qt_ItemIsTristate:
             # propagate a check-or-uncheck down the line:
             for c in self.iterchildren():
 
@@ -260,7 +267,7 @@ class QFSItem(FSItem):
 
                 # this will trigger any child dirs to do the same
                 c.checkState = state
-                c.setEnabled(state == Qt.Checked)
+                c.setEnabled(state == Qt_Checked)
 
         self._checkstate = state
 
@@ -268,7 +275,7 @@ class QFSItem(FSItem):
         # the lists of hidden files to disk, so be sure to set it here;
         # note: only explicitly unchecked items will be marked as hidden here;
         # checked and partially-checked directories will not be hidden
-        self._hidden = state == Qt.Unchecked
+        self._hidden = state == Qt_Unchecked
 
         # add final check for if this was the last unhidden file in a directory:
 
@@ -289,17 +296,17 @@ class QFSItem(FSItem):
         for c in self.iterchildren():
             s = c.checkState
             # if any child is partially checked, so will this be
-            if s == Qt.PartiallyChecked: return Qt.PartiallyChecked
-            elif s == Qt.Unchecked:
+            if s == Qt_PartiallyChecked: return Qt_PartiallyChecked
+            elif s == Qt_Unchecked:
                 uncheckedkids = True
             else:
                 checkedkids = True
 
             # if we've found both kinds, return partial
             if checkedkids and uncheckedkids:
-                return Qt.PartiallyChecked
+                return Qt_PartiallyChecked
 
-        return Qt.Unchecked if uncheckedkids else Qt.Checked
+        return Qt_Unchecked if uncheckedkids else Qt_Checked
 
 
     def setEnabled(self, boolean):
@@ -373,6 +380,12 @@ class ModFileTreeModel(QAbstractItemModel):
             # name for this item is never actually seen
             self.rootitem = QFSItem(path="", name="data", parent=None)
             self.rootitem.loadChildren(self.rootpath, namefilter=lambda n: n.lower()=='meta.ini')
+
+            # now mark hidden files?
+            hfiles = list(self.manager.hiddenFiles(for_mod=self.modname))
+            for c in self.rootitem.iterchildren(True):
+                if c.lpath in hfiles:
+                    c.checkState = Qt_Unchecked
 
             self.endResetModel()  # tells the view it should get new data from model & reset itself
 
@@ -502,14 +515,14 @@ class ModFileTreeModel(QAbstractItemModel):
         else:
             if role == Qt.DisplayRole:
                 return item.name
-            elif role == Qt.CheckStateRole:
+            elif role == Qt_CheckStateRole:
                 # hides the complexity of the tristate workings
                 return item.checkState
             elif role == Qt.DecorationRole:
                 return item.icon
 
     # noinspection PyTypeChecker
-    def setData(self, index, value, role=Qt.CheckStateRole):
+    def setData(self, index, value, role=Qt_CheckStateRole):
         """Only the checkStateRole can be edited in this model.
         Most of the machinery for that is in the QFSItem class
 
@@ -520,7 +533,7 @@ class ModFileTreeModel(QAbstractItemModel):
         if not index.isValid(): return
 
         item = self.getItem(index)
-        if role==Qt.CheckStateRole:
+        if role==Qt_CheckStateRole:
 
             item.checkState = value #triggers cascade if this a dir
 
@@ -564,26 +577,26 @@ class ModFileTreeModel(QAbstractItemModel):
     def saveHidden(self):
         self.manager.DB.saveHiddenFiles(self.manager.active_profile.hidden_files)
 
-    def dumpsHidden(self):
-        """Return a string containing the hidden files of this mod in a form suitable
-        for serializing to json"""
-
-        hiddens = tree.Tree()
-        for child in self.root_item.iterchildren(True): #type: QFSItem
-            # skip any fully-checked items
-            if child.checkState == Qt.Checked:
-                continue
-
-            elif child.checkState == Qt.Unchecked:
-                pathparts = [os.path.basename(self.rootpath)]+list(child.ppath.parts[:-1])
-                # add unchecked dirs, but todo: do not descend
-                if child.isdir:
-                    tree.treeInsert(hiddens, pathparts) # todo: don't descend; just mark folder excluded, assume contents
-                else:
-                    tree.treeInsert(hiddens, pathparts, child.name)
-
-        # return json.dumps(hiddens, indent=1)
-        return tree.toString(hiddens)
+    # def dumpsHidden(self):
+    #     """Return a string containing the hidden files of this mod in a form suitable
+    #     for serializing to json"""
+    #
+    #     hiddens = tree.Tree()
+    #     for child in self.root_item.iterchildren(True): #type: QFSItem
+    #         # skip any fully-checked items
+    #         if child.checkState == Qt_Checked:
+    #             continue
+    #
+    #         elif child.checkState == Qt_Unchecked:
+    #             pathparts = [os.path.basename(self.rootpath)]+list(child.ppath.parts[:-1])
+    #             # add unchecked dirs, but todo: do not descend
+    #             if child.isdir:
+    #                 tree.treeInsert(hiddens, pathparts) # todo: don't descend; just mark folder excluded, assume contents
+    #             else:
+    #                 tree.treeInsert(hiddens, pathparts, child.name)
+    #
+    #     # return json.dumps(hiddens, indent=1)
+    #     return tree.toString(hiddens)
 
     def commit(self):
         """Commit changes to database"""
@@ -597,7 +610,7 @@ class ModFileTreeModel(QAbstractItemModel):
                                      (directory, ))]
 
         # let's forget all that silly complicated stuff and do this:
-        hiddens, unhiddens = self.markHiddenStates(len(nowhiddens)>0)
+        hiddens, unhiddens = self._getHiddenStates(len(nowhiddens)>0)
 
         if nowhiddens:
             # to remove will be empty if either of now/un-hiddens is empty
@@ -637,7 +650,7 @@ class ModFileTreeModel(QAbstractItemModel):
         #     for r in self.manager.DB.conn.execute("select * from hiddenfiles"): #type: Row
         #         print(r["directory"]," | ", r["filepath"])
 
-    def markHiddenStates(self, track_unhidden = True):
+    def _getHiddenStates(self, track_unhidden = True):
         """Maybe straightforward is better than stupidly complex. Who'd have thought.
 
         :param bool track_unhidden: whether we care about tracking unhidden files; For example, if the hiddenfiles database table has no entries for this mod, we wouldn't care because there's nothing to reset
@@ -648,11 +661,11 @@ class ModFileTreeModel(QAbstractItemModel):
         def _(base):
             for child in base.iterchildren():
                 cs = child.checkState
-                if cs==Qt.PartiallyChecked:
+                if cs==Qt_PartiallyChecked:
                     # this is a directory, we need to go deeper
                     _(child)
 
-                elif cs==Qt.Unchecked:
+                elif cs==Qt_Unchecked:
                     if child.isdir:
                         # if we found an unchecked folder, just add all its children
                         hBasket.extend(c.lpath for c in child.iterchildren(True) if not c.isdir)

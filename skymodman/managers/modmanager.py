@@ -115,19 +115,20 @@ class ModManager:
             self.validateModInstalls()
 
         else:
-            self.LOGGER << "Could not load mod info, reading from configured mods directory: " + str(self.Config.paths.dir_mods)
+            self.LOGGER << "Could not load mod info, reading from configured mods directory: " + self.Config['dir_mods']
             # if it fails, re-read mod data from disk
             self.DB.getModDataFromModDirectory(self.Config.paths.dir_mods)
             # and [re]create the cache file
             self.saveModList()
 
         self.LOGGER << "Loading list of all Mod Files on disk"
+        self.LOGGER.info("Detecting file conflicts")
         self.DB.loadAllModFiles(self.Config.paths.dir_mods)
         # self.LOGGER << "Finished loading list of all Mod Files on disk"
 
-        self.LOGGER << "detecting file conflicts"
         self.DB.detectFileConflicts()
 
+        self.logger.info("Analyzing hidden files")
         self.DB.loadHiddenFiles(self.active_profile.hidden_files)
 
 
@@ -240,6 +241,19 @@ class ModManager:
 
     def saveHiddenFiles(self):
         self.DB.saveHiddenFiles(self.active_profile.hidden_files)
+
+    def hiddenFiles(self, for_mod=None):
+        """
+
+        :param str for_mod:
+            If specified, must be the directory name of an installed mod; will yield only the files marked as hidden for that particular mod
+        :return: a generator over the Rows (basically a dict with keys 'directory' and 'filepath') of hiddenfiles; if 'for_mod' was given, will instead return a generator over just the hidden filepaths (generator of strings)
+        """
+        if for_mod is None:
+            yield from self.DB.execute_("Select * from hiddenfiles")
+        else:
+            yield from (t[0] for t in self.DB.execute_("Select filepath from hiddenfiles where directory=?", (for_mod, )))
+
 
 
     def getErrors(self, error_type):
