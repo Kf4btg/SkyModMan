@@ -147,15 +147,14 @@ class FSItem:
     def loadChildren(self, rel_root, namefilter = None):
         """
         Given a root, construct an absolute path from that root and
-        this item's (relative) path. Then scan that root for entries, creating an
-        FSItem for any files found and adding that item to the list of children.
+        this item's (relative) path. Then scan that path for entries, creating an
+        FSItem for each file found and adding it to this item's list of children.
         If the entry found is a directory, then call the loadChildren() method
         of the new FSItem with the same root given here.
 
         :param str rel_root:
         # :param conflicts: a collection of filepaths (all relative to a mod's 'data' directory) that have been determined to exist in multiple mods; if the name of a loaded file is in this collection, it will be marked as "has_conflict"
-        :param (str)->bool namefilter: When implemented, will allow name-filtering to exclude some
-        files from the results
+        :param (str)->bool namefilter: if given and not none, each filename found will be passed to the `namefilter` callable. If the namefiter returns True, that file will NOT be added to the list of children
         """
 
         rpath = Path(rel_root)
@@ -189,7 +188,6 @@ class FSItem:
         :param FSItem other:
         """
         return self.lpath == other.lpath
-
 
     def __str__(self):
         return "\n  {0.__class__.__name__}(name: '{0._name}', " \
@@ -267,7 +265,7 @@ class QFSItem(FSItem):
 
                 # this will trigger any child dirs to do the same
                 c.checkState = state
-                c.setEnabled(state == Qt_Checked)
+                # c.setEnabled(state == Qt_Checked)
 
         self._checkstate = state
 
@@ -370,7 +368,6 @@ class ModFileTreeModel(QAbstractItemModel):
         """
         if path == self.rootpath: return
 
-        # self.logger.debug("rootpath = "+path)
         if os.path.exists(path):
 
             self.beginResetModel() # tells the view to get ready to redisplay its contents
@@ -381,7 +378,7 @@ class ModFileTreeModel(QAbstractItemModel):
             self.rootitem = QFSItem(path="", name="data", parent=None)
             self.rootitem.loadChildren(self.rootpath, namefilter=lambda n: n.lower()=='meta.ini')
 
-            # now mark hidden files?
+            # now mark hidden files
             hfiles = list(self.manager.hiddenFiles(for_mod=self.modname))
             for c in self.rootitem.iterchildren(True):
                 if c.lpath in hfiles:
@@ -416,6 +413,7 @@ class ModFileTreeModel(QAbstractItemModel):
         return item
 
     def columnCount(self, *args, **kwargs) -> int:
+        """Dir/File Name(+checkbox), path to file, file conflicts """
         # return 2
         return 3
 
