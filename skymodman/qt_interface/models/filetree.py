@@ -18,7 +18,7 @@ class FSItem:
 
     #Since we may be creating LOTS of these things (some mods have gajiblions of files), we'll define
     # __slots__ to keep the memory footprint as low as possible
-    __slots__=("_path", "_lpath", "_name", "_parent", "_isdir", "_children", "_childnames", "_row", "_hidden", "_level")
+    __slots__=("_path", "_lpath", "_name", "_parent", "_isdir", "_children", "_childnames", "_row", "_hidden", "_level", "_hasconflict")
 
     def __init__(self, *, path, name, parent=None, isdir=True, **kwargs):
         """
@@ -146,6 +146,7 @@ class FSItem:
         of the new FSItem with the same root given here.
 
         :param str rel_root:
+        # :param conflicts: a collection of filepaths (all relative to a mod's 'data' directory) that have been determined to exist in multiple mods; if the name of a loaded file is in this collection, it will be marked as "has_conflict"
         :param (str)->bool namefilter: When implemented, will allow name-filtering to exclude some
         files from the results
         """
@@ -169,6 +170,8 @@ class FSItem:
             if e.is_dir():
                 child.loadChildren(rel_root, namefilter)
             child.row = r
+            # if child.path in conflicts:
+            #     child._hasconflict = True
             self._children.append(child)
             self._childnames.append(child.name)
 
@@ -334,6 +337,7 @@ class ModFileTreeModel(QAbstractItemModel):
         self._parent = parent
         self.manager = manager
         self.rootpath = None #type: str
+        self.modname = None #type: str
         self.rootitem = None #type: QFSItem
 
     @property
@@ -343,6 +347,10 @@ class ModFileTreeModel(QAbstractItemModel):
     @property
     def root_item(self):
         return self.rootitem
+
+    @property
+    def current_mod(self):
+        return self.modname
 
     def setRootPath(self, path):
         """
@@ -360,6 +368,7 @@ class ModFileTreeModel(QAbstractItemModel):
             self.beginResetModel() # tells the view to get ready to redisplay its contents
 
             self.rootpath = path
+            self.modname = os.path.basename(path)
             # name for this item is never actually seen
             self.rootitem = QFSItem(path="", name="data", parent=None)
             self.rootitem.loadChildren(self.rootpath, namefilter=lambda n: n.lower()=='meta.ini')
@@ -393,7 +402,8 @@ class ModFileTreeModel(QAbstractItemModel):
         return item
 
     def columnCount(self, *args, **kwargs) -> int:
-        return 2
+        # return 2
+        return 3
 
     def rowCount(self, index=QModelIndex(), *args, **kwargs) -> int:
         """Number of children contained by the item referenced by `index`
@@ -413,7 +423,7 @@ class ModFileTreeModel(QAbstractItemModel):
         :param role:
         """
         if orient == Qt.Horizontal and role==Qt.DisplayRole:
-            return ["Name", "Path"][section]
+            return ["Name", "Path", "Conflicts"][section]
             # return "Name"
         return super().headerData(section, orient, role)
 
@@ -480,6 +490,14 @@ class ModFileTreeModel(QAbstractItemModel):
         if index.column() == 1:
             if role == Qt.DisplayRole: #second column is path
                 return item.parent.path + "/"
+
+        elif index.column()==2: # third column is conflicts
+            if role == Qt.DisplayRole \
+                    and self.modname in self.manager.DB.mods_with_conflicts \
+                    and item.lpath in self.manager.DB.conflicts:
+                return "Yes"
+
+
         else:
             if role == Qt.DisplayRole:
                 return item.name
@@ -588,14 +606,32 @@ class ModFileTreeModel(QAbstractItemModel):
             toremove = []
             toadd = hiddens
 
-        if toremove: self.manager.DB.updatemany_(
-                "DELETE FROM hiddenfiles WHERE directory=? AND filepath=?",
-                map(lambda v: (directory, v), toremove))
-        if toadd: self.manager.DB.updatemany_("INSERT INTO hiddenfiles values (?, ?)",
-                                    map(lambda v: (directory, v), toadd))
+        # self.LOGGER << len(toremove)
+        # limit the size of the query strings we send to the DB
+        maxatonce=900 # max number of vars for sqlite query is 999
+        if toremove:
+            q = """DELETE FROM hiddenfiles WHERE directory = "{}" AND filepath IN ({})"""
+
+            sections, remainder = divmod(len(toremove),maxatonce)
+            for i in range(sections):
+                s=maxatonce*i
+
+                query = q.format(directory, ", ".join(['?']*maxatonce))
+
+                self.manager.DB.update_(query,toremove[s:s+maxatonce])
+            if remainder:
+                query = q.format(directory, ", ".join(['?']*remainder))
+
+                # self.manager.DB.update_(q.format(directory,fpaths))
+                self.manager.DB.update_(query, toremove[sections*maxatonce:])
+
+        if toadd:
+            self.manager.DB.updatemany_("INSERT INTO hiddenfiles values (?, ?)", ((directory,a) for a in toadd))
+
+            # self.manager.DB.updatemany_("INSERT INTO hiddenfiles values (?, ?)", map(lambda v: (directory, v), toadd))
 
 
-        # with self.manager.DB.conn:
+            # with self.manager.DB.conn:
         #     for r in self.manager.DB.conn.execute("select * from hiddenfiles"): #type: Row
         #         print(r["directory"]," | ", r["filepath"])
 
@@ -608,16 +644,42 @@ class ModFileTreeModel(QAbstractItemModel):
         uhBasket=[]  #holds non-hidden files
 
         def _(base):
-            for child in base.iterchildren(True):
-                if child.isdir: _(child)
-                elif child.checkState == Qt.Unchecked:
-                    hBasket.append(child.path)
+            for child in base.iterchildren():
+                cs = child.checkState
+                if cs==Qt.PartiallyChecked:
+                    # this is a directory, we need to go deeper
+                    _(child)
+
+                elif cs==Qt.Unchecked:
+                    if child.isdir:
+                        # if we found an unchecked folder, just add all its children
+                        hBasket.extend(c.lpath for c in child.iterchildren(True) if not c.isdir)
+                    else:
+                        hBasket.append(child.lpath)
+
                 elif track_unhidden:
-                    uhBasket.append(child.path)
+                    if child.isdir:
+                        uhBasket.extend(c.lpath for c in child.iterchildren(True) if not c.isdir)
+                    else:
+                        uhBasket.append(child.lpath)
+
+
+                #
+                # if child.isdir: _(child)
+                # elif child.checkState == Qt.Unchecked:
+                #     hBasket.append(child.path)
+                # elif track_unhidden:
+                #     uhBasket.append(child.path)
 
         _(self.root_item)
         return hBasket, uhBasket
 
+    # if child.isdir:
+    #     _(child)
+    # elif child.checkState == Qt.Unchecked:
+    #     hBasket.append(child.path)
+    # elif track_unhidden:
+    #     uhBasket.append(child.path)
 
 
 if __name__ == '__main__':
