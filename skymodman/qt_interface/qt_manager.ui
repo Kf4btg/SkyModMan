@@ -472,11 +472,11 @@
     <property name="title">
      <string>&amp;File</string>
     </property>
-    <addaction name="action_Install_Fomod"/>
-    <addaction name="actionChoose_Mod_Folder"/>
+    <addaction name="action_install_fomod"/>
+    <addaction name="action_choose_mod_folder"/>
     <addaction name="separator"/>
-    <addaction name="actionSave_Changes"/>
-    <addaction name="action_Quit"/>
+    <addaction name="action_save_changes"/>
+    <addaction name="action_quit"/>
    </widget>
    <widget class="QMenu" name="menuProfile">
     <property name="title">
@@ -486,12 +486,12 @@
      <property name="title">
       <string>&amp;Ini Files</string>
      </property>
-     <addaction name="actionSkyrim_ini"/>
-     <addaction name="actionSkyrimPrefs_ini"/>
+     <addaction name="action_edit_skyrim_ini"/>
+     <addaction name="action_edit_skyrimprefs_ini"/>
     </widget>
-    <addaction name="actionLoad"/>
-    <addaction name="actionNew"/>
-    <addaction name="actionDelete"/>
+    <addaction name="action_load_profile"/>
+    <addaction name="action_new_profile"/>
+    <addaction name="action_delete_profile"/>
     <addaction name="separator"/>
     <addaction name="menuIni_Files"/>
    </widget>
@@ -499,15 +499,15 @@
     <property name="title">
      <string>E&amp;dit</string>
     </property>
-    <addaction name="actionUndo"/>
-    <addaction name="actionRedo"/>
+    <addaction name="action_undo"/>
+    <addaction name="action_redo"/>
     <addaction name="separator"/>
-    <addaction name="action_togglemod"/>
+    <addaction name="action_toggle_mod"/>
     <addaction name="separator"/>
-    <addaction name="actionMove_Mod_Up"/>
-    <addaction name="actionMove_Mod_Down"/>
-    <addaction name="actionMove_Mod_To_Top"/>
-    <addaction name="actionMove_Mod_To_Bottom"/>
+    <addaction name="action_move_mod_up"/>
+    <addaction name="action_move_mod_down"/>
+    <addaction name="action_move_mod_to_top"/>
+    <addaction name="action_move_mod_to_bottom"/>
    </widget>
    <addaction name="menu_File"/>
    <addaction name="menuEdit"/>
@@ -523,8 +523,8 @@
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
-   <addaction name="actionChoose_Mod_Folder"/>
-   <addaction name="action_Install_Fomod"/>
+   <addaction name="action_choose_mod_folder"/>
+   <addaction name="action_install_fomod"/>
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
   <widget class="QToolBar" name="edit_toolBar">
@@ -537,12 +537,12 @@
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
-   <addaction name="actionMove_Mod_To_Top"/>
-   <addaction name="actionMove_Mod_Up"/>
-   <addaction name="actionMove_Mod_Down"/>
-   <addaction name="actionMove_Mod_To_Bottom"/>
+   <addaction name="action_move_mod_to_top"/>
+   <addaction name="action_move_mod_up"/>
+   <addaction name="action_move_mod_down"/>
+   <addaction name="action_move_mod_to_bottom"/>
   </widget>
-  <action name="action_Install_Fomod">
+  <action name="action_install_fomod">
    <property name="icon">
     <iconset theme="package-x-generic">
      <normaloff>../../../.designer/backup</normaloff>../../../.designer/backup</iconset>
@@ -554,7 +554,7 @@
     <string>Ctrl+I</string>
    </property>
   </action>
-  <action name="action_Quit">
+  <action name="action_quit">
    <property name="icon">
     <iconset theme="application-exit">
      <normaloff>../../../.designer/backup</normaloff>../../../.designer/backup</iconset>
@@ -566,7 +566,7 @@
     <string>Ctrl+Q</string>
    </property>
   </action>
-  <action name="actionChoose_Mod_Folder">
+  <action name="action_choose_mod_folder">
    <property name="icon">
     <iconset theme="folder">
      <normaloff>../../../.designer/backup</normaloff>../../../.designer/backup</iconset>
@@ -581,7 +581,7 @@
     <string>Ctrl+M</string>
    </property>
   </action>
-  <action name="actionLoad">
+  <action name="action_load_profile">
    <property name="text">
     <string>&amp;Load...</string>
    </property>
@@ -589,7 +589,7 @@
     <string>Ctrl+L</string>
    </property>
   </action>
-  <action name="actionNew">
+  <action name="action_new_profile">
    <property name="text">
     <string>&amp;New...</string>
    </property>
@@ -597,22 +597,22 @@
     <string>Ctrl+N</string>
    </property>
   </action>
-  <action name="actionDelete">
+  <action name="action_delete_profile">
    <property name="text">
     <string>D&amp;elete</string>
    </property>
   </action>
-  <action name="actionSkyrim_ini">
+  <action name="action_edit_skyrim_ini">
    <property name="text">
     <string>&amp;Skyrim.ini</string>
    </property>
   </action>
-  <action name="actionSkyrimPrefs_ini">
+  <action name="action_edit_skyrimprefs_ini">
    <property name="text">
     <string>SkyrimPrefs.&amp;ini</string>
    </property>
   </action>
-  <action name="actionUndo">
+  <action name="action_undo">
    <property name="icon">
     <iconset theme="edit-undo">
      <normaloff>.</normaloff>.</iconset>
@@ -624,7 +624,7 @@
     <string>Ctrl+Z</string>
    </property>
   </action>
-  <action name="actionRedo">
+  <action name="action_redo">
    <property name="icon">
     <iconset theme="edit-redo">
      <normaloff>.</normaloff>.</iconset>
@@ -636,7 +636,7 @@
     <string>Ctrl+Shift+Z</string>
    </property>
   </action>
-  <action name="action_togglemod">
+  <action name="action_toggle_mod">
    <property name="enabled">
     <bool>false</bool>
    </property>
@@ -650,26 +650,28 @@
     <string>Space</string>
    </property>
   </action>
-  <action name="actionSave_Changes">
+  <action name="action_save_changes">
    <property name="enabled">
     <bool>false</bool>
    </property>
    <property name="icon">
-    <iconset theme="edit-save"/>
+    <iconset theme="edit-save">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
     <string>&amp;Save Changes</string>
    </property>
   </action>
-  <action name="actionMove_Mod_Up">
+  <action name="action_move_mod_up">
    <property name="enabled">
     <bool>false</bool>
    </property>
    <property name="icon">
-    <iconset theme="arrow-up"/>
+    <iconset theme="arrow-up">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
-    <string>Move Mod Up</string>
+    <string>&amp;Move Mod Up</string>
    </property>
    <property name="toolTip">
     <string>Move mod earlier in the install sequence</string>
@@ -678,15 +680,16 @@
     <string>Ctrl+Up</string>
    </property>
   </action>
-  <action name="actionMove_Mod_Down">
+  <action name="action_move_mod_down">
    <property name="enabled">
     <bool>false</bool>
    </property>
    <property name="icon">
-    <iconset theme="arrow-down"/>
+    <iconset theme="arrow-down">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
-    <string>Move Mod Down</string>
+    <string>Move Mod &amp;Down</string>
    </property>
    <property name="toolTip">
     <string>Move mod later in the install sequence</string>
@@ -695,15 +698,16 @@
     <string>Ctrl+Down</string>
    </property>
   </action>
-  <action name="actionMove_Mod_To_Top">
+  <action name="action_move_mod_to_top">
    <property name="enabled">
     <bool>false</bool>
    </property>
    <property name="icon">
-    <iconset theme="go-top"/>
+    <iconset theme="go-top">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
-    <string>Move Mod To Top</string>
+    <string>M&amp;ove Mod To Top</string>
    </property>
    <property name="toolTip">
     <string>Move mod to the start of the install sequence</string>
@@ -712,15 +716,16 @@
     <string>Ctrl+Shift+Up</string>
    </property>
   </action>
-  <action name="actionMove_Mod_To_Bottom">
+  <action name="action_move_mod_to_bottom">
    <property name="enabled">
     <bool>false</bool>
    </property>
    <property name="icon">
-    <iconset theme="go-bottom"/>
+    <iconset theme="go-bottom">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
-    <string>Move Mod To Bottom</string>
+    <string>Move Mod To &amp;Bottom</string>
    </property>
    <property name="toolTip">
     <string>Move mod to the end of the install sequence</string>
