@@ -8,6 +8,7 @@ from os.path import (exists as _exists,
 
 from skymodman import skylog
 from .notifier import Notifier
+from .diqt import diqt
 
 def withlogger(cls):
     """Class decorator to add a logger to the class"""
