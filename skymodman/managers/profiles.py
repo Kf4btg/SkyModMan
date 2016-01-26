@@ -1,9 +1,16 @@
 from enum import Enum
 from pathlib import Path
+from collections import namedtuple
+from configparser import ConfigParser as confparser
 
 from skymodman import exceptions
 from skymodman.constants import SyncError as SE
-from skymodman.utils import withlogger
+from skymodman.utils import withlogger, diqt
+
+
+# well...that's all for now i guess!
+_psettings = namedtuple("_psettings", "modlist_onlyactive")
+
 
 # from skymodman.utils import humanizer
 # @humanizer.humanize
@@ -12,6 +19,11 @@ class Profile:
     """
     Represents a User profile with customized mod combinations, ini edits, loadorder, etc.
     """
+    __default_settings = {
+        "File Viewer": {
+            "activeonly":"True",
+        }
+    }
 
     class Files(str, Enum):
         MODINFO   = "modinfo.json"
@@ -19,6 +31,7 @@ class Profile:
         INIEDITS  = "iniedits.json"
         OVERWRITE = "overwrites.json"
         HIDDEN    = "hiddenfiles.json"
+        SETTINGS  = "settings.ini"
 
     def __init__(self, profiles_dir, name="default", copy_profile=None):
         """
@@ -28,15 +41,17 @@ class Profile:
         :param Profile copy_profile:
         """
 
-        self._name = name
+        # self._name = name
+        self.name = name
 
-        self._folder = profiles_dir / name
+        # self._folder = profiles_dir / name
+        self.folder = profiles_dir / name
 
         self.localfiles = {}  # type: Dict[str, Path]
 
-        if not self._folder.exists():
+        if not self.folder.exists():
             # create the directory if it doesn't exist
-            self._folder.mkdir()
+            self.folder.mkdir()
 
             # since we're creating a new profile, check to see we're cloning
             # an already existing one
@@ -44,9 +59,9 @@ class Profile:
                 import shutil
                 for fpath in copy_profile.localfiles.values():
                     #copy the other profile's files to our new profile dir
-                    shutil.copy(str(fpath), str(self._folder))
+                    shutil.copy(str(fpath), str(self.folder))
 
-        for f in [self._folder / Profile.Files(p).value for p in Profile.Files]:
+        for f in [self.folder / Profile.Files(p).value for p in Profile.Files]:
             # populate a dict with references to the files local to this profile,
             # keyed by the filenames sans extension (e.g. 'modinfo' for 'modinfo.json')
 
@@ -56,6 +71,17 @@ class Profile:
                 # if the file doesn't exist (perhaps because this is a new profile)
                 # create empty placeholder for it
                 f.touch()
+                if f.name == Profile.Files.SETTINGS:
+                    # put default vals in the ini file
+                    c = confparser()
+                    c.read_dict(Profile.__default_settings)
+                    with f.open('w') as ini:
+                        c.write(ini)
+
+        # we don't worry about the json files, but we need to load in the values from the
+        # ini file and store it.
+        self.settings = self.load_profile_settings()
+        # self.LOGGER << "Loaded profile-specific settings: {}".format(self.settings)
 
         # create a container to hold any issues found during
         # validation of this profile's mod list
@@ -63,13 +89,13 @@ class Profile:
                            SE.NOTLISTED: []}
 
 
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @property
-    def folder(self) -> Path:
-        return self._folder
+    # @property
+    # def name(self) -> str:
+    #     return self._name
+    #
+    # @property
+    # def folder(self) -> Path:
+    #     return self._folder
 
     @property
     def modinfo(self) -> Path:
@@ -103,6 +129,56 @@ class Profile:
         """
         self.syncErrors[error_type] = errors
 
+    def load_profile_settings(self):
+        setfile = self.localfiles['settings']
+
+        config = confparser()
+        config.read(str(setfile))
+
+        # for now, just turn the config parser into a dict and return it;
+        # the checks below should deal with most of the conversions we'd need
+        # to worry about
+        sett={}
+        for sec, sub in self.__default_settings.items():
+            sett[sec]={}
+            csub = config[sec]
+            for k,v in sub.items():
+                if v in ['True', 'False']:
+                    sett[sec][k] = csub.getboolean(k)
+                else:
+                    try:
+                        sett[sec][k] = csub.getint(k)
+                    except ValueError:
+                        sett[sec][k] = v
+
+        return  sett
+        # return {s:{k:v for k,v in config[s].items()} for s in self.__default_settings}
+        # for now, just get rid of the section names and save the key-value pairs
+        # for s in Profile.__default_settings: # key names should be all the extant sections
+        #     for key in config[s]:
+        #         sett[key]=config[s][key]
+
+    def save_setting(self, section, name, value):
+        """Change a setting value and write the updated values to disk"""
+        assert section in self.settings
+        assert name in self.settings[section]
+
+        self.settings[section][name] = value
+
+        self._save_profile_settings()
+
+    def _save_profile_settings(self):
+        setfile = self.localfiles['settings']
+
+
+        config = confparser()
+        config.read_dict(self.settings)
+
+        with setfile.open('w') as ini:
+            config.write(ini)
+
+
+
 
 # @humanizer.humanize
 @withlogger
@@ -115,7 +191,8 @@ class ProfileManager:
     # created, simply return that profile from the cache.
     # TODO: since all profiles are loaded by the profile selector at app start, we'll need to make sure
     # that this doesn't take too much memory (the Profile objects are pretty small) or take too long to start
-    __cache = {} # type: Dict[str, Profile]
+    # __cache = {} # type: Dict[str, Profile]
+    __cache = diqt(maxlen_=5)
 
 
     def __init__(self, manager, directory):
@@ -178,7 +255,7 @@ class ProfileManager:
         if profilename in self.__cache:
             self.LOGGER.info("Profile {} found in cache; returning cached object.".format(profilename))
         else:
-            self.__cache[profilename] = Profile( self._profiles_dir, profilename, copy_from)
+            self.__cache.append(profilename, Profile(self._profiles_dir, profilename, copy_from))
 
         return self.__cache[profilename]
 

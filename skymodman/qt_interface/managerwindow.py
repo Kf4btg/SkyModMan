@@ -1,4 +1,3 @@
-import sys
 from functools import partial
 
 from PyQt5.QtCore import (Qt,
@@ -63,8 +62,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self._manager = manager
 
         # setup trackers for all of our models and proxies
-        self.models  = {}
-        self.filters = {}
+        self.models  = {} #type: dict[M,QAbstractItemModel]
+        self.filters = {} #type: dict[F,QSortFilterProxyModel]
 
         # slots (methods) to be called after __init__ is finished
         setupSlots = [
@@ -121,6 +120,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     # <editor-fold desc="setup">
     def _setup_table(self, notify_done):
+        """
+        This is where we finally tell the manager to load all the actual data for the profile.
+
+        :param notify_done:
+        """
         self.Manager.loadActiveProfileData()
         self.mod_table.initUI(self.installed_mods_layout)
 
@@ -128,8 +132,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.mod_table.loadData()
 
-        # when the list of modified rows changes from empty to
-        # non-empty or v.v., enabled/disable the save/cancel btns
+        # when the user first makes changes to the table or reverts to a saved state from a modified state,  enable/disable the save/cancel btns
         self.models[M.mod_table
         ].tablehaschanges.connect(
                 self.on_table_unsaved_change)
@@ -139,7 +142,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.mod_table.canMoveItems.connect(
             self.enable_move_buttons)
 
-        # connect the move up/down by 1 signals
+        # connect the move up/down signals
         # to the appropriate slot on view
         self.moveMods.connect(self.mod_table.onMoveModsAction)
         # same for the move to top/button signals
@@ -197,23 +200,29 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         mod_filter = self.filters[
             F.mod_list] = ActiveModsListFilter(
                 self.filetree_modlist)
+
         mod_filter.setSourceModel(self.models[M.mod_table])
+
         mod_filter.setFilterCaseSensitivity(Qt.CaseInsensitive)
+
         # tell filter to read mod name
         mod_filter.setFilterKeyColumn(Column.NAME.value)
-        mod_filter.onlyShowActive = \
-            self.filetree_activeonlytoggle.checkState() == Qt.Checked
+
+        # load saved setting for 'activeonly' toggle
+
+        _activeonly=self.Manager.getProfileSetting('File Viewer','activeonly')
+        mod_filter.onlyShowActive = _activeonly
+
+        # apply setting to box
+        self.filetree_activeonlytoggle.setCheckState(Qt.Checked if _activeonly else Qt.Unchecked)
+
+        # and setup label text for first display
+        self.update_modlist_label(_activeonly)
 
         # connect the checkbox directly to the filter property
         self.filetree_activeonlytoggle.toggled[
             'bool'].connect(
-                mod_filter.setOnlyShowActive)
-        self.filetree_activeonlytoggle.toggled[
-            'bool'].connect(
-                self.update_modlist_label)
-
-        # and setup label text for first display
-        self.update_modlist_label(mod_filter.onlyShowActive)
+                self.on_modlist_activeonly_toggle)
 
         # connect proxy to textchanged of filter box
         self.filetree_modfilter.textChanged.connect(
@@ -260,6 +269,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.filetree_modlist.selectionModel().currentChanged.connect(
             # self.viewer_show_file_tree)
             proxy2source)
+
+
 
         # let setup know we're done here
         notify_done()
@@ -442,10 +453,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.remove_profile_button.setToolTip('Remove Profile')
 
 
-    def load_active_profile(self):
+    def reset_views_on_profile_change(self):
         """For now, this just repopulates the mod-table. There might be more to it later"""
+
+        # TODO: send out a signal to when the profile is changed that everything needing to update will be listening to
         self.LOGGER << "About to repopulate table"
         self.mod_table.loadData()
+
+        # self.filters[F.mod_list].
+
         # self.updateFileTreeModList()
 
         self.update_UI()
@@ -473,12 +489,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
             self.LOGGER.info(
                     "Activating profile '{}'".format(new_profile))
+
+            # fixme: change this setter to a method so it's clear how much happens at this point
             self.Manager.active_profile = new_profile
 
             # if this is the profile 'default', disable the remove button
             self.enable_profile_delete(new_profile)
 
-            self.load_active_profile()
+
+            self.reset_views_on_profile_change()
 
     def on_new_profile_click(self):
         """
@@ -540,6 +559,19 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         filt = self.filters[F.mod_list]
         filt.setFilterWildcard(text)
         self.update_modlist_label(filt.onlyShowActive)
+
+    def on_modlist_activeonly_toggle(self, checked):
+        # self.filetree_activeonlytoggle.toggled[
+        #     'bool'].connect(
+        #         mod_filter.setOnlyShowActive)
+        # self.filetree_activeonlytoggle.toggled[
+        #     'bool'].connect(
+        #         self.on_modlist_activeonly_toggle)
+        # self.update_modlist_label)
+        self.filters[F.mod_list].setOnlyShowActive(checked)
+        self.update_modlist_label(checked)
+        self.Manager.setProfileSetting('File Viewer', 'activeonly', checked)
+
 
     def on_undo_redo_event(self, undo_text, redo_text):
         """Update the undo/redo text to reflect the passed text.  If an argument is passed as ``None``, that button will instead be disabled."""
@@ -630,6 +662,8 @@ if __name__ == '__main__':
     from skymodman import managers
     # from skymodman.qt_interface.models.modtable_tree import \
     #     ModTable_TreeModel
+    from PyQt5.QtCore import QAbstractItemModel, QSortFilterProxyModel
+    import sys
 
     app = QApplication(sys.argv)
 

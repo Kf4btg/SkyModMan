@@ -121,6 +121,7 @@ class ModManager:
             # and [re]create the cache file
             self.saveModList()
 
+        # FIXME: avoid doing this on profile change
         self.LOGGER << "Loading list of all Mod Files on disk"
         self.LOGGER.info("Detecting file conflicts")
         self.DB.loadAllModFiles(self.Config.paths.dir_mods)
@@ -214,6 +215,13 @@ class ModManager:
     def saveModList(self):
         """Request that database manager save modinfo to disk"""
         self.DB.saveModDB(self.active_profile.modinfo)
+
+    def getProfileSetting(self, setting_section, setting_name):
+        return self.active_profile.settings[setting_section][setting_name]
+
+    def setProfileSetting(self, setting_section, setting_name, value):
+        self.active_profile.save_setting(setting_section, setting_name, value)
+
 
     def updateModName(self, ordinal: int, new_name:str):
         """

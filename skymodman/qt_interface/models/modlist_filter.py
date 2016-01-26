@@ -33,6 +33,12 @@ class ActiveModsListFilter(QSortFilterProxyModel):
         self._onlyactive = enabled
         self.invalidateFilter()
 
+    def resetInternalData(self):
+        self._onlyactive = True
+        # self.invalidateFilter()
+        super().resetInternalData()
+
+
     def filterAcceptsRow(self, row, parent):
         """
 
