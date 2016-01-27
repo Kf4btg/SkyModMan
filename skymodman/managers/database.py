@@ -82,8 +82,10 @@ class DBManager:
         self._con.row_factory = sqlite3.Row
 
         # These are created from the database, so it seems like it may be best just to store them in this class:
-        self.conflicts = defaultdict(list) # filepaths to list of mods containing that file
-        self.mods_with_conflicts = defaultdict(list) # mods to list of contained files that are in conflict with other mods
+        # actuall no that was confusing. there;d store on the manager now
+
+        # self.conflicts = defaultdict(list) # filepaths to list of mods containing that file
+        # self.mods_with_conflicts = defaultdict(list) # mods to list of contained files that are in conflict with other mods
 
 
     ################
@@ -585,8 +587,8 @@ class DBManager:
             # also, a dictionary of mods to a list of conflicting files
             mods_with_conflicts[mod].append(file)
 
-        self.conflicts = conflicts
-        self.mods_with_conflicts = mods_with_conflicts
+        self.manager.file_conflicts = conflicts
+        self.manager.mods_with_conflicting_files = mods_with_conflicts
 
         # for c in mods_with_conflicts['Bethesda Hi-Res DLC Optimized']:
         #     print("other mods containing file '%s'" % c)

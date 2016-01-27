@@ -36,6 +36,9 @@ class ModManager:
         # until it is requested.
         self._db_manager = database.DBManager(self)
 
+        self._conflicting_files = None # type: collections.defaultdict(list)
+        self._mods_with_conflicts = None #type: collections.defaultdict(list)
+
 
     @property
     def Config(self) -> config.ConfigManager:
@@ -48,6 +51,31 @@ class ModManager:
     @property
     def Profiler(self) -> profiles.ProfileManager:
         return self._profile_manager
+
+    @property
+    def file_conflicts(self):
+        return self._conflicting_files
+
+    @file_conflicts.setter
+    def file_conflicts(self, ddictlist):
+        self._conflicting_files = ddictlist
+
+    @property
+    def mods_with_conflicting_files(self):
+        return self._mods_with_conflicts
+
+    @mods_with_conflicting_files.setter
+    def mods_with_conflicting_files(self, ddictlist):
+        self._mods_with_conflicts = ddictlist
+
+
+
+    def get_cursor(self):
+        """
+        Using this, a component can request a cursor object for interacting with the database
+        :return: sqlite3.Cursor
+        """
+        return self.DB.conn.cursor()
 
     @property
     def active_profile(self) -> profiles.Profile:

@@ -7,7 +7,6 @@ from PyQt5.QtCore import (Qt,
                           QDir,
                           QPropertyAnimation,
                           # QStandardPaths,
-                          # QSortFilterProxyModel,
                           )
 from PyQt5.QtGui import QGuiApplication, QKeySequence
 from PyQt5.QtWidgets import (QApplication,
@@ -16,9 +15,8 @@ from PyQt5.QtWidgets import (QApplication,
                              QMessageBox,
                              QFileDialog,
                              # QAction,
-                             # QActionGroup,
                              # QHeaderView,
-                             QGroupBox, QHBoxLayout, QActionGroup)
+                             QActionGroup)
 
 from skymodman import skylog
 from skymodman.constants import (Tab as TAB,
@@ -32,7 +30,8 @@ from skymodman.qt_interface.widgets import message, NewProfileDialog
 from skymodman.qt_interface.models import (
     ProfileListModel,
     ModFileTreeModel,
-    ActiveModsListFilter, FileViewerTreeFilter)
+    ActiveModsListFilter,
+    FileViewerTreeFilter)
 from skymodman.qt_interface.views import ModTable_TreeView
 from skymodman.utils import withlogger, Notifier, checkPath
 
@@ -331,7 +330,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.action_save_changes.setShortcut(
                 QKeySequence.Save)
         self.action_save_changes.triggered.connect(
-                self.mod_table.saveChanges)
+                self.on_save_command)
 
         # action_move_mod_up
         # action_move_mod_down
@@ -376,9 +375,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.save_cancel_btnbox.button(
                 QDialogButtonBox.Apply).clicked.connect(
                 self.action_save_changes.trigger)
+
         self.save_cancel_btnbox.button(
                 QDialogButtonBox.Reset).clicked.connect(
-                self.mod_table.revertChanges)
+                self.on_revert_command)
 
         # using released since 'clicked' sends an extra
         # bool argument (which means nothing in this context)
@@ -498,6 +498,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # left the selectionModel() changed connection in the _setup function;
         # it's just easier to handle it there
 
+        self.models[M.file_viewer].hasUnsavedChanges.connect(self.on_table_unsaved_change)
+
 
 
         notify_done()
@@ -539,7 +541,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         hidden = {
             TAB.MODTABLE:  [b],
-            TAB.FILETREE:  [b,c,d],
+            TAB.FILETREE:  [b,
+                            c if not self.models[
+                                M.file_viewer].has_unsaved_changes else None,
+                            d],
             TAB.INSTALLER: [a,c,d]
         }
 
@@ -564,7 +569,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         disabled = {
             TAB.MODTABLE:  [],
             TAB.FILETREE:  [a, b, d, e],
-            TAB.INSTALLER: [a, b, c, d, e]
+            TAB.INSTALLER: [a, b,
+                            c if not self.models[M.file_viewer].has_unsaved_changes else None,
+                            d, e]
         }
 
         for comp in all_components:
@@ -692,6 +699,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         curtab = self.manager_tabs.currentIndex()
         self._visible_components_for_tab(curtab)
         self._enabled_actions_for_tab(curtab)
+
+
 
 
     @pyqtSlot('int')
@@ -824,6 +833,29 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             else:
                 action.setText(default_text)
                 action.setEnabled(False)
+
+    def on_save_command(self):
+        """
+        Save command does different things depending on which
+        tab is active.
+        :return:
+        """
+        tab = self.manager_tabs.currentIndex()
+
+        if tab == TAB.MODTABLE:
+            self.mod_table.saveChanges()
+        elif tab == TAB.FILETREE:
+            self.models[M.file_viewer].save()
+
+    def on_revert_command(self):
+        tab = self.manager_tabs.currentIndex()
+
+        if tab == TAB.MODTABLE:
+            self.mod_table.revertChanges()
+        elif tab == TAB.FILETREE:
+            self.models[M.file_viewer].revert()
+
+
 
 
     # </editor-fold>

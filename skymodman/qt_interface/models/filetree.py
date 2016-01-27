@@ -330,6 +330,7 @@ class ModFileTreeModel(QAbstractItemModel):
     # It will probably be necessary to do that asynchronously...somehow...
 
     rootPathChanged = pyqtSignal(str)
+    hasUnsavedChanges = pyqtSignal(bool)
 
     def __init__(self, *, manager, parent, **kwargs):
         """
@@ -345,6 +346,8 @@ class ModFileTreeModel(QAbstractItemModel):
         self.rootpath = None #type: str
         self.modname = None #type: str
         self.rootitem = None #type: QFSItem
+        self.dbconn = self.manager.DB.conn
+        self.cursor = self.dbconn.cursor()
 
     @property
     def root_path(self):
@@ -358,6 +361,10 @@ class ModFileTreeModel(QAbstractItemModel):
     def current_mod(self):
         return self.modname
 
+    @property
+    def has_unsaved_changes(self):
+        return self.dbconn.in_transaction
+
     def setRootPath(self, path=None):
         """
         Using this instead of a setter just for API-similarity with
@@ -366,7 +373,11 @@ class ModFileTreeModel(QAbstractItemModel):
 
         :param str path: the absolute filesystem path to the active mod's data folder. If passed as ``None``, the model is reset to empty
         """
+
         if path == self.rootpath: return
+
+        # commit any changes we've made so far
+        self.save()
 
         if path is None: # reset Model to show nothing
             self.beginResetModel()
@@ -378,24 +389,49 @@ class ModFileTreeModel(QAbstractItemModel):
 
         elif checkPath(path):
 
-            self.beginResetModel() # tells the view to get ready to redisplay its contents
+            self.beginResetModel()  # tells the view to get ready to redisplay its contents
 
             self.rootpath = path
             self.modname = os.path.basename(path)
-            # name for this item is never actually seen
-            self.rootitem = QFSItem(path="", name="data", parent=None)
-            self.rootitem.loadChildren(self.rootpath, namefilter=lambda n: n.lower()=='meta.ini')
 
-            # now mark hidden files
-            hfiles = list(self.manager.hiddenFiles(for_mod=self.modname))
-            for c in self.rootitem.iterchildren(True):
-                if c.lpath in hfiles:
-                    c.checkState = Qt_Unchecked
+            self._setup_or_reload_tree()
 
             self.endResetModel()  # tells the view it should get new data from model & reset itself
 
+            # reset cursor
+            self.cursor = self.dbconn.cursor()
+
             # emit notifier signal
             self.rootPathChanged.emit(path)
+
+    def _setup_or_reload_tree(self):
+        """
+        Loads thde data from the db and disk
+        """
+        self._load_tree()
+
+        # now mark hidden files
+        self._mark_hidden_files()
+
+        # this used to call resetModel() stuff, too, but I decided this wasn't the place for that. It's a little barren now...
+
+
+    def _load_tree(self):
+        """
+        Build the tree from the rootitem
+        :return:
+        """
+        # name for this item is never actually seen
+        self.rootitem = QFSItem(path="", name="data", parent=None)
+        self.rootitem.loadChildren(self.rootpath, namefilter=lambda
+            n: n.lower() == 'meta.ini')
+
+    def _mark_hidden_files(self):
+        hfiles = list(self.manager.hiddenFiles(for_mod=self.modname))
+        for c in self.rootitem.iterchildren(True):
+            if c.lpath in hfiles:
+                c.checkState = Qt_Unchecked
+
 
     def getItem(self, index) -> QFSItem:
         """Extracts actual item from given index
@@ -513,8 +549,8 @@ class ModFileTreeModel(QAbstractItemModel):
 
         elif index.column()==2: # third column is conflicts
             if role == Qt.DisplayRole \
-                    and self.modname in self.manager.DB.mods_with_conflicts \
-                    and item.lpath in self.manager.DB.conflicts:
+                    and self.modname in self.manager.mods_with_conflicting_files \
+                    and item.lpath in self.manager.file_conflicts:
                 return "Yes"
 
 
@@ -562,7 +598,7 @@ class ModFileTreeModel(QAbstractItemModel):
             # self.logger << "Last row touched: {}".format(QFSItem.last_row_touched)
 
             # self.dumpsHidden()
-            self.commit() # update the db with which files are now hidden
+            self.update_db() # update the db with which files are now hidden
 
             return True
         return super().setData(index, value, role)
@@ -580,39 +616,43 @@ class ModFileTreeModel(QAbstractItemModel):
 
         proxy.dataChanged.emit(proxy.mapFromSource(index1), proxy.mapFromSource(index2), *args)
 
-    def saveHidden(self):
-        self.manager.DB.saveHiddenFiles(self.manager.active_profile.hidden_files)
+    def save(self):
+        """
+        Commit any unsaved changes (currenlty just to hidden files) to the db and save the updated db state to disk
+        """
+        if self.dbconn.in_transaction:
+            self.dbconn.commit()
+            self.manager.DB.saveHiddenFiles(
+                self.manager.active_profile.hidden_files)
+            # afterwards, refresh cursor
+            self.cursor = self.dbconn.cursor()
+            self.hasUnsavedChanges.emit(False)
 
-    # def dumpsHidden(self):
-    #     """Return a string containing the hidden files of this mod in a form suitable
-    #     for serializing to json"""
-    #
-    #     hiddens = tree.Tree()
-    #     for child in self.root_item.iterchildren(True): #type: QFSItem
-    #         # skip any fully-checked items
-    #         if child.checkState == Qt_Checked:
-    #             continue
-    #
-    #         elif child.checkState == Qt_Unchecked:
-    #             pathparts = [os.path.basename(self.rootpath)]+list(child.ppath.parts[:-1])
-    #             # add unchecked dirs, but todo: do not descend
-    #             if child.isdir:
-    #                 tree.treeInsert(hiddens, pathparts) # todo: don't descend; just mark folder excluded, assume contents
-    #             else:
-    #                 tree.treeInsert(hiddens, pathparts, child.name)
-    #
-    #     # return json.dumps(hiddens, indent=1)
-    #     return tree.toString(hiddens)
 
-    def commit(self):
-        """Commit changes to database"""
+    def revert(self):
+        """
+        Undo all changes made to the tree since the last save.
+        """
+        self.beginResetModel()
+        self.dbconn.rollback()
+        self._setup_or_reload_tree()
+        # afterwards, refresh cursor
+        self.cursor = self.dbconn.cursor()
+
+        self.endResetModel()
+        self.hasUnsavedChanges.emit(False)
+
+
+
+    def update_db(self):
+        """Make  changes to database.
+        NOTE: this does not commit them! That must be done separately"""
         directory = os.path.basename(self.rootpath)
         ffalse = itertools.filterfalse
 
-        dbconn = self.manager.DB.conn
         # here's a list of the CURRENTLY hidden filepaths for this mod, as known to the database
         nowhiddens = [r["filepath"] for r in
-                      dbconn.execute("SELECT * FROM hiddenfiles WHERE directory=?",
+                      self.cursor.execute("SELECT * FROM hiddenfiles WHERE directory=?",
                                      (directory, ))]
 
         # let's forget all that silly complicated stuff and do this:
@@ -640,21 +680,17 @@ class ModFileTreeModel(QAbstractItemModel):
                 s=maxatonce*i
                 query = q.format(directory, ", ".join(['?']*maxatonce))
 
-                self.manager.DB.update_(query,toremove[s:s+maxatonce])
+                self.cursor.execute(query,toremove[s:s+maxatonce])
 
             if remainder:
                 query = q.format(directory, ", ".join(['?']*remainder))
 
-                self.manager.DB.update_(query, toremove[sections*maxatonce:])
+                self.cursor.execute(query, toremove[sections*maxatonce:])
 
         if toadd:
-            self.manager.DB.updatemany_("INSERT INTO hiddenfiles values (?, ?)", ((directory,a) for a in toadd))
+            self.cursor.executemany("INSERT INTO hiddenfiles values (?, ?)", ((directory,a) for a in toadd))
 
-
-        self.saveHidden()
-            # with self.manager.DB.conn:
-        #     for r in self.manager.DB.conn.execute("select * from hiddenfiles"): #type: Row
-        #         print(r["directory"]," | ", r["filepath"])
+        self.hasUnsavedChanges.emit(True)
 
     def _getHiddenStates(self, track_unhidden = True):
         """Maybe straightforward is better than stupidly complex. Who'd have thought.
@@ -697,3 +733,23 @@ if __name__ == '__main__':
 
 
 
+# def dumpsHidden(self):
+    #     """Return a string containing the hidden files of this mod in a form suitable
+    #     for serializing to json"""
+    #
+    #     hiddens = tree.Tree()
+    #     for child in self.root_item.iterchildren(True): #type: QFSItem
+    #         # skip any fully-checked items
+    #         if child.checkState == Qt_Checked:
+    #             continue
+    #
+    #         elif child.checkState == Qt_Unchecked:
+    #             pathparts = [os.path.basename(self.rootpath)]+list(child.ppath.parts[:-1])
+    #             # add unchecked dirs, but todo: do not descend
+    #             if child.isdir:
+    #                 tree.treeInsert(hiddens, pathparts) # todo: don't descend; just mark folder excluded, assume contents
+    #             else:
+    #                 tree.treeInsert(hiddens, pathparts, child.name)
+    #
+    #     # return json.dumps(hiddens, indent=1)
+    #     return tree.toString(hiddens)
