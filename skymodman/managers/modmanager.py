@@ -58,8 +58,9 @@ class ModManager:
         """
         return self.Profiler.active_profile
 
-    @active_profile.setter
-    def active_profile(self, profile):
+    # @active_profile.setter
+    # def active_profile(self, profile):
+    def set_active_profile(self, profile):
         """
         To be called by external interfaces.
         Set `profile` as currently loaded. Updates saved config file to mark this profile as the last-loaded profile, and loads the data for the newly-activated profile

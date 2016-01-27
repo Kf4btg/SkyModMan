@@ -178,6 +178,8 @@ class ProfileManager:
     # TODO: since all profiles are loaded by the profile selector at app start, we'll need to make sure
     # that this doesn't take too much memory (the Profile objects are pretty small) or take too long to start
     # __cache = {} # type: Dict[str, Profile]
+
+    # only hold the 5 most recently loaded profiles (this session)
     __cache = diqt(maxlen_=5)
 
 
