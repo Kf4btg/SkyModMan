@@ -528,7 +528,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 curtab in [TAB.MODLIST, TAB.FILETREE])
 
         self.next_button.setVisible(curtab == TAB.INSTALLER)
-        if curtab != TAB.MODLIST: self.modtable_search_group.hide()
+        self.modtable_search_button.setVisible(curtab == TAB.MODLIST)
+        self.modtable_search_box.setVisible(curtab == TAB.MODLIST)
 
     def enable_move_buttons(self, enable_moveup, enable_movedown):
         for action in [self.action_move_mod_to_bottom,
