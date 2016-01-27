@@ -6,7 +6,7 @@ import itertools
 import os
 from pathlib import Path
 
-from skymodman.utils import withlogger #, tree
+from skymodman.utils import withlogger, checkPath #, tree
 # from skymodman.utils import humanizer
 
 Qt_Checked = Qt.Checked
@@ -358,17 +358,25 @@ class ModFileTreeModel(QAbstractItemModel):
     def current_mod(self):
         return self.modname
 
-    def setRootPath(self, path):
+    def setRootPath(self, path=None):
         """
         Using this instead of a setter just for API-similarity with
         QFileSystemModel. That's the same reason rootPathChanged is emitted
         at the end of the method, as well.
 
-        :param str path: the absolute filesystem path to the active mod's data folder
+        :param str path: the absolute filesystem path to the active mod's data folder. If passed as ``None``, the model is reset to empty
         """
         if path == self.rootpath: return
 
-        if os.path.exists(path):
+        if path is None: # reset Model to show nothing
+            self.beginResetModel()
+            self.rootpath=None
+            self.rootitem=None
+            self.modname=None
+            self.rootPathChanged.emit(path)
+            self.endResetModel()
+
+        elif checkPath(path):
 
             self.beginResetModel() # tells the view to get ready to redisplay its contents
 

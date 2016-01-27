@@ -135,28 +135,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.mod_table.loadData()
 
-        # when the user first makes changes to the table or reverts to a saved state from a modified state,  enable/disable the save/cancel btns
-        # self.models[M.mod_table
-        # ].tablehaschanges.connect(
-        #         self.on_table_unsaved_change)
-
-        # self.mod_table.enableModActions.connect(
-        #     self.on_make_or_clear_mod_selection)
-        # self.mod_table.canMoveItems.connect(
-        #     self.enable_move_buttons)
-
-        # connect the move up/down signals
-        # to the appropriate slot on view
-        # self.moveMods.connect(self.mod_table.onMoveModsAction)
-        # # same for the move to top/button signals
-        # self.moveModsToBottom.connect(
-        #         self.mod_table.onMoveModsToBottomAction)
-        # self.moveModsToTop.connect(
-        #         self.mod_table.onMoveModsToTopAction)
-
-        # self.models[M.mod_table].undoevent.connect(
-        #     self.on_undo_redo_event)
-
         # setup the animation to show/hide the search bar
         self.animate_show_search = QPropertyAnimation(
                 self.modtable_search_box, b"maximumWidth")
@@ -167,6 +145,14 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.filters_dropdown.setVisible(False)
 
         notify_done()
+
+    def _reset_table(self):
+        """
+        Called when a new profile is loaded or some other major change occurs
+        """
+        self.mod_table.loadData()
+        self.modtable_search_box.clear() # might be good enough
+        # self._show_search_box(ensure_state=0)
 
     def _setup_profile_selector(self, notify_done):
         """
@@ -190,7 +176,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.profile_selector.setModel(model)
         self.profile_selector.setCurrentIndex(start_idx)
         # self.profile_selector.currentIndexChanged.connect(
-        #         self.on_profile_change)
+        #         self.on_profile_select)
 
 
         self.file_toolBar.addSeparator()
@@ -199,7 +185,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # let setup know we're done here
         notify_done()
-
 
     def _setup_file_tree(self, notify_done):
         """
@@ -222,15 +207,17 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         mod_filter.setFilterKeyColumn(Column.NAME.value)
 
         # load saved setting for 'activeonly' toggle
+        self.__setup_modlist_filter_state(mod_filter)
 
-        _activeonly=self.Manager.getProfileSetting('File Viewer','activeonly')
-        mod_filter.onlyShowActive = _activeonly
-
-        # apply setting to box
-        self.filetree_activeonlytoggle.setCheckState(Qt.Checked if _activeonly else Qt.Unchecked)
-
-        # and setup label text for first display
-        self.update_modlist_label(_activeonly)
+        #
+        # _activeonly=self.Manager.getProfileSetting('File Viewer','activeonly')
+        # mod_filter.onlyShowActive = _activeonly
+        #
+        # # apply setting to box
+        # self.filetree_activeonlytoggle.setCheckState(Qt.Checked if _activeonly else Qt.Unchecked)
+        #
+        # # and setup label text for first display
+        # self.update_modlist_label(_activeonly)
 
         # connect the checkbox directly to the filter property
         # self.filetree_activeonlytoggle.toggled[
@@ -292,6 +279,31 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # let setup know we're done here
         notify_done()
+
+    def __setup_modlist_filter_state(self, filter_):
+        activeonly = self.Manager.getProfileSetting('File Viewer',
+                                                     'activeonly')
+        filter_.onlyShowActive = activeonly
+
+        # apply setting to box
+        self.filetree_activeonlytoggle.setCheckState(
+            Qt.Checked if activeonly else Qt.Unchecked)
+
+        # and setup label text for first display
+        self.update_modlist_label(activeonly)
+
+    def _reset_file_tree(self):
+        # clear the filter boxes
+        self.filetree_modfilter.clear()
+        self.filetree_filefilter.clear()
+
+        self.models[M.file_viewer].setRootPath(None)
+
+        # update the label and checkbox on the modlist
+        self.__setup_modlist_filter_state(
+                self.filters[F.mod_list])
+
+
 
     def _setup_actions(self, notify_done):
         """Create additional actions, and make some tweaks to pre-existing ones
@@ -381,24 +393,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 QDialogButtonBox.Reset).clicked.connect(
                 self.mod_table.revertChanges)
 
-
-        self.modtable_search_button.clicked.connect(
-                self.show_search_box)
+        # using released since 'clicked' sends an extra
+        # bool argument (which means nothing in this context)
+        self.modtable_search_button.released.connect(
+                self._show_search_box)
 
         notify_done()
 
-    def show_search_box(self):
-
-        an = self.animate_show_search
-
-        if self.modtable_search_box.width() > 0:
-            an.setStartValue(300)
-            an.setEndValue(0)
-            an.start()
-        else:
-            an.setStartValue(0)
-            an.setEndValue(300)
-            an.start()
 
     def _connect_local_signals(self, notify_done):
         """
@@ -418,10 +419,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
 
         for slot in [self.enable_profile_delete,
-                     self.mod_table.loadData,
+                     self._reset_table,
+                    self._reset_file_tree,
                      ]:
             self.newProfileLoaded.connect(slot)
-
 
         # connect the move up/down signal to the appropriate slot on view
         self.moveMods.connect(
@@ -440,11 +441,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
 
 
-        self.enable_move_buttons
+        self._enable_move_buttons
 
         on_new_profile_action
         on_remove_profile_action
-        on_profile_change
+        on_profile_select
 
         on_modlist_activeonly_toggle
         on_modlist_filterbox_textchanged
@@ -460,7 +461,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # when new profile is selected
         self.profile_selector.currentIndexChanged.connect(
-                self.on_profile_change)
+                self.on_profile_select)
 
         # connect the undo event handler
         self.models[M.mod_table].undoevent.connect(
@@ -483,7 +484,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.mod_table.enableModActions.connect(
                 self.on_make_or_clear_mod_selection)
         self.mod_table.canMoveItems.connect(
-                self.enable_move_buttons)
+                self._enable_move_buttons)
 
         ##===================================
         ## File Tree Tab
@@ -531,7 +532,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.modtable_search_button.setVisible(curtab == TAB.MODLIST)
         self.modtable_search_box.setVisible(curtab == TAB.MODLIST)
 
-    def enable_move_buttons(self, enable_moveup, enable_movedown):
+    def _enable_move_buttons(self, enable_moveup, enable_movedown):
         for action in [self.action_move_mod_to_bottom,
                        self.action_move_mod_down]:
             action.setEnabled(enable_movedown)
@@ -539,6 +540,31 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         for action in [self.action_move_mod_to_top,
                        self.action_move_mod_up]:
             action.setEnabled(enable_moveup)
+
+    def _show_search_box(self, ensure_state=None):
+        """
+        If `ensure_state` is None, expand or collapse the search box
+        depending on its current state. Otherwise, only change the
+        state of the search box if it differs from `ensure_state.`
+
+        :param int ensure_state: states are 0 (Hidden) or 1 (Shown)
+        """
+
+        an = self.animate_show_search
+        # if ensure_state is not None and ensure_state in [0,1]:
+        #     if ensure_state==1:
+        #         if self.modtable_search_box.width() > 0: return
+        #     elif self.modtable_search_box.width() == 0 :return
+        #
+        #     state=ensure_state
+        # else:
+        #     state = 0 if self.modtable_search_box.width() > 0 else 1
+        state = 0 if self.modtable_search_box.width() > 0 else 1
+
+        an.setStartValue([300,0][state])
+        an.setEndValue([0,300][state])
+        an.start()
+
 
     def update_modlist_label(self, inactive_hidden):
         if inactive_hidden:
@@ -626,7 +652,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     # <editor-fold desc="EventHandlers">
     @pyqtSlot('int')
-    def on_profile_change(self, index):
+    def on_profile_select(self, index):
         """
         When a new profile is chosen from the dropdown list, load all the appropriate data for that profile and replace the current data with it. Also show a message about unsaved changes to the current profile.
         :param index:
@@ -650,12 +676,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             # fixme: change this setter to a method so it's clear how much happens at this point
             self.Manager.set_active_profile(new_profile)
 
+            self.logger << "Resetting views for new profile"
             self.newProfileLoaded.emit(new_profile)
 
             # if this is the profile 'default', disable the remove button
             # self.enable_profile_delete(new_profile)
 
-            self.reset_views_on_profile_change()
+            # self.reset_views_on_profile_change()
 
 
     def on_new_profile_action(self):
@@ -700,7 +727,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         Enable or disable buttons and actions that rely on having a selection in the mod table.
         """
-        self.enable_move_buttons(has_selection, has_selection)
+        self._enable_move_buttons(has_selection, has_selection)
 
         self.action_toggle_mod.setEnabled(has_selection)
 
