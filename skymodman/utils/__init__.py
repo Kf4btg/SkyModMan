@@ -6,9 +6,11 @@
 from os.path import (exists as _exists,
                      expanduser as _expand)
 
-from skymodman import skylog
+from skymodman import skylog as _skylog
+
 from .notifier import Notifier
 from .diqt import diqt
+from .safewrite import open_for_safe_write
 
 def withlogger(cls):
     """Class decorator to add a logger to the class"""
@@ -17,7 +19,7 @@ def withlogger(cls):
     def __init__(self, *args, **kwargs):
         name = '.'.join([cls.__module__, cls.__name__])
 
-        self._logger = skylog.newLogger(name)
+        self._logger = _skylog.newLogger(name)
         orig_init(self, *args, **kwargs)
 
     def logger(self):

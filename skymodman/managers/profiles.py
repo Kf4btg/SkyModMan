@@ -5,7 +5,7 @@ from configparser import ConfigParser as confparser
 
 from skymodman import exceptions
 from skymodman.constants import SyncError as SE
-from skymodman.utils import withlogger, diqt
+from skymodman.utils import withlogger, diqt, open_for_safe_write
 
 
 # well...that's all for now i guess!
@@ -21,7 +21,7 @@ class Profile:
     """
     __default_settings = {
         "File Viewer": {
-            "activeonly":"True",
+            "activeonly": True,
         }
     }
 
@@ -88,15 +88,6 @@ class Profile:
         self.syncErrors = {SE.NOTFOUND: [],
                            SE.NOTLISTED: []}
 
-
-    # @property
-    # def name(self) -> str:
-    #     return self._name
-    #
-    # @property
-    # def folder(self) -> Path:
-    #     return self._folder
-
     @property
     def modinfo(self) -> Path:
         return self.localfiles['modinfo']
@@ -141,22 +132,17 @@ class Profile:
         sett={}
         for sec, sub in self.__default_settings.items():
             sett[sec]={}
-            csub = config[sec]
             for k,v in sub.items():
-                if v in ['True', 'False']:
-                    sett[sec][k] = csub.getboolean(k)
+                if isinstance(v, bool):
+                    # fallback to default vals if key or section is missing
+                    sett[sec][k] = config.getboolean(sec, k, fallback=v)
+                elif isinstance(v, int):
+                    sett[sec][k] = config.getint(sec, k, fallback=v)
+                elif isinstance(v, float):
+                    sett[sec][k] = config.getfloat(sec, k, fallback=v)
                 else:
-                    try:
-                        sett[sec][k] = csub.getint(k)
-                    except ValueError:
-                        sett[sec][k] = v
-
+                    sett[sec][k] = v # strings for everyone else
         return  sett
-        # return {s:{k:v for k,v in config[s].items()} for s in self.__default_settings}
-        # for now, just get rid of the section names and save the key-value pairs
-        # for s in Profile.__default_settings: # key names should be all the extant sections
-        #     for key in config[s]:
-        #         sett[key]=config[s][key]
 
     def save_setting(self, section, name, value):
         """Change a setting value and write the updated values to disk"""
@@ -168,13 +154,13 @@ class Profile:
         self._save_profile_settings()
 
     def _save_profile_settings(self):
+        """Overwrite the settings file with the current values"""
         setfile = self.localfiles['settings']
-
 
         config = confparser()
         config.read_dict(self.settings)
 
-        with setfile.open('w') as ini:
+        with open_for_safe_write(setfile) as ini:
             config.write(ini)
 
 
