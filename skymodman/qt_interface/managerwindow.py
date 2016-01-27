@@ -157,6 +157,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # self.models[M.mod_table].undoevent.connect(
         #     self.on_undo_redo_event)
 
+        # setup the animation to show/hide the search bar
+        self.animate_show_search = QPropertyAnimation(
+                self.modtable_search_box, b"maximumWidth")
+        self.animate_show_search.setDuration(300)
+        self.modtable_search_box.setMaximumWidth(0)
+
         # we don't actually use this yet...
         self.filters_dropdown.setVisible(False)
 
@@ -352,13 +358,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.action_choose_mod_folder.triggered.connect(
                 self.choose_mod_folder)
 
+        # action_new_profile
         self.action_new_profile.triggered.connect(
                 self.on_new_profile_action)
 
+        # action_delete_profile
         self.action_delete_profile.triggered.connect(
             self.on_remove_profile_action)
-
-
 
         notify_done()
 
@@ -375,10 +381,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 QDialogButtonBox.Reset).clicked.connect(
                 self.mod_table.revertChanges)
 
-        self.animate_show_search = QPropertyAnimation(
-                self.modtable_search_box, b"maximumWidth")
-        self.animate_show_search.setDuration(300)
-        self.modtable_search_box.setMaximumWidth(0)
 
         self.modtable_search_button.clicked.connect(
                 self.show_search_box)
@@ -526,6 +528,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 curtab in [TAB.MODLIST, TAB.FILETREE])
 
         self.next_button.setVisible(curtab == TAB.INSTALLER)
+        if curtab != TAB.MODLIST: self.modtable_search_group.hide()
 
     def enable_move_buttons(self, enable_moveup, enable_movedown):
         for action in [self.action_move_mod_to_bottom,
