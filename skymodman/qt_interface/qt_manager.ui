@@ -15,20 +15,17 @@
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout">
-    <item row="3" column="0">
-     <spacer name="horizontalSpacer">
-      <property name="orientation">
-       <enum>Qt::Horizontal</enum>
+    <item row="3" column="4" alignment="Qt::AlignRight">
+     <widget class="QDialogButtonBox" name="save_cancel_btnbox">
+      <property name="enabled">
+       <bool>false</bool>
       </property>
-      <property name="sizeHint" stdset="0">
-       <size>
-        <width>40</width>
-        <height>20</height>
-       </size>
+      <property name="standardButtons">
+       <set>QDialogButtonBox::Apply|QDialogButtonBox::Reset</set>
       </property>
-     </spacer>
+     </widget>
     </item>
-    <item row="3" column="2">
+    <item row="3" column="5">
      <widget class="QPushButton" name="next_button">
       <property name="enabled">
        <bool>false</bool>
@@ -48,17 +45,7 @@
       </property>
      </widget>
     </item>
-    <item row="3" column="1" alignment="Qt::AlignRight">
-     <widget class="QDialogButtonBox" name="save_cancel_btnbox">
-      <property name="enabled">
-       <bool>false</bool>
-      </property>
-      <property name="standardButtons">
-       <set>QDialogButtonBox::Apply|QDialogButtonBox::Reset</set>
-      </property>
-     </widget>
-    </item>
-    <item row="0" column="0" colspan="4">
+    <item row="0" column="0" colspan="7">
      <widget class="QTabWidget" name="manager_tabs">
       <property name="currentIndex">
        <number>0</number>
@@ -400,6 +387,73 @@
       </widget>
      </widget>
     </item>
+    <item row="3" column="0">
+     <widget class="QGroupBox" name="modtable_search_group">
+      <property name="minimumSize">
+       <size>
+        <width>350</width>
+        <height>0</height>
+       </size>
+      </property>
+      <property name="flat">
+       <bool>true</bool>
+      </property>
+      <layout class="QGridLayout" name="gridLayout_2">
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item row="0" column="1">
+        <widget class="QLineEdit" name="modtable_search_box">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="toolTip">
+          <string>Type to search mod list</string>
+         </property>
+         <property name="placeholderText">
+          <string>Search</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="0">
+        <widget class="QToolButton" name="modtable_search_button">
+         <property name="toolTip">
+          <string>Find</string>
+         </property>
+         <property name="icon">
+          <iconset theme="search">
+           <normaloff>.</normaloff>.</iconset>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="2">
+        <spacer name="horizontalSpacer">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+    </item>
    </layout>
   </widget>
   <widget class="QMenuBar" name="menubar">
@@ -423,7 +477,7 @@
    </widget>
    <widget class="QMenu" name="menuProfile">
     <property name="title">
-     <string>P&amp;rofile</string>
+     <string>Prof&amp;ile</string>
     </property>
     <widget class="QMenu" name="menuIni_Files">
      <property name="title">
@@ -545,7 +599,8 @@
   </action>
   <action name="action_new_profile">
    <property name="icon">
-    <iconset theme="add"/>
+    <iconset theme="add">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
     <string>&amp;New...</string>
@@ -559,7 +614,8 @@
   </action>
   <action name="action_delete_profile">
    <property name="icon">
-    <iconset theme="remove"/>
+    <iconset theme="remove">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
     <string>D&amp;elete</string>

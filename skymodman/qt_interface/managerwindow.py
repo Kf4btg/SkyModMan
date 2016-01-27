@@ -5,8 +5,10 @@ from PyQt5.QtCore import (Qt,
                           pyqtSlot,
                           QModelIndex,
                           QDir,
+                          QPropertyAnimation,
                           # QStandardPaths,
-                          QSortFilterProxyModel)
+                          # QSortFilterProxyModel,
+                          QRect, QSize)
 from PyQt5.QtGui import QGuiApplication, QKeySequence
 from PyQt5.QtWidgets import (QApplication,
                              QMainWindow,
@@ -280,10 +282,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                         mod_filter.mapToSource(p)))
 
         # let's make it fancy
-        self.filetree_fileviewer.setAnimated(True)
-
-
-
+        # self.filetree_fileviewer.setAnimated(True)
 
         # let setup know we're done here
         notify_done()
@@ -376,7 +375,28 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 QDialogButtonBox.Reset).clicked.connect(
                 self.mod_table.revertChanges)
 
+        self.animate_show_search = QPropertyAnimation(
+                self.modtable_search_box, b"maximumWidth")
+        self.animate_show_search.setDuration(300)
+        self.modtable_search_box.setMaximumWidth(0)
+
+        self.modtable_search_button.clicked.connect(
+                self.show_search_box)
+
         notify_done()
+
+    def show_search_box(self):
+
+        an = self.animate_show_search
+
+        if self.modtable_search_box.width() > 0:
+            an.setStartValue(300)
+            an.setEndValue(0)
+            an.start()
+        else:
+            an.setStartValue(0)
+            an.setEndValue(300)
+            an.start()
 
     def _connect_local_signals(self, notify_done):
         """
