@@ -333,18 +333,18 @@ class ProfileManager:
         if profile.name.lower() == "default":
             raise exceptions.DeleteDefaultProfileError("default")
 
+        # remove from available_profiles list
+        self._available_profiles.remove(profile.name)
+        # and from cache
+        if profile.name in self.__cache:
+            self.__cache.remove(profile.name)
+
         # delete files in folder
         for f in profile.localfiles.values():
             if f.exists(): f.unlink()
 
         # remove folder
         profile.folder.rmdir()
-
-        # remove from available_profiles list
-        self._available_profiles.remove(profile.name)
-        # and from cache
-        if profile.name in self.__cache:
-            del self.__cache[profile.name]
 
 if __name__ == '__main__':
     from typing import List, Dict

@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QSortFilterProxyModel
+from PyQt5.QtCore import QSortFilterProxyModel, QModelIndex, Qt
 #(Qt,
 # pyqtSignal,
 # pyqtSlot,
@@ -53,5 +53,51 @@ class ActiveModsListFilter(QSortFilterProxyModel):
         return super().filterAcceptsRow(row, parent)
 
 
+
+class FileViewerTreeFilter(QSortFilterProxyModel):
+    """
+    This uses the results from a db query to basically ignore the filter on directories
+        and make sure any directory which contains a matching file is shown in the tree.
+        A directory with no matching files will be hidden.
+    """
+
+    def __init__(self,  parent, *args, **kwargs):
+        super().__init__(parent, *args, **kwargs)
+        self._parent = parent
+        self._filtertext = ''
+
+        self.matchingfiles = []
+
+    def setMatchingFiles(self, matches):
+        self.matchingfiles = matches
+
+    def setFilterWildcard(self, text):
+        self._filtertext = text
+        super().setFilterWildcard(text)
+
+    def filterAcceptsRow(self, row, parent):
+        """
+        This uses the results from a db query to basically ignore the filter on directories
+        and make sure any directory which contains a matching file is shown in the tree.
+        A directory with no matching files will be hidden.
+        :param int row:
+        :param QModelIndex parent: parent of row in the source
+        :return:
+        """
+        if not self._filtertext: # empty string
+            return True
+
+        # no matches
+        if not self.matchingfiles: return False
+
+        if not parent.isValid():
+            item=self.sourceModel().rootitem[row]
+        else:
+            item = parent.internalPointer()[row]
+        if item.isdir:
+            if any(f.startswith(item.lpath) for f in self.matchingfiles):
+                return True
+
+        return super().filterAcceptsRow(row, parent)
 
 

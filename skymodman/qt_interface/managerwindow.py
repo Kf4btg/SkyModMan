@@ -30,7 +30,7 @@ from skymodman.qt_interface.widgets import message, NewProfileDialog
 from skymodman.qt_interface.models import (
     ProfileListModel,
     ModFileTreeModel,
-    ActiveModsListFilter)
+    ActiveModsListFilter, FileViewerTreeFilter)
 from skymodman.qt_interface.views import ModTable_TreeView
 from skymodman.utils import withlogger, Notifier, checkPath
 
@@ -41,9 +41,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     modListSaved        = pyqtSignal()
 
     windowInitialized   = pyqtSignal()
-    modNameBeingEdited  = pyqtSignal(str)
 
-    deleteProfileAction = pyqtSignal(str)
+    newProfileLoaded    = pyqtSignal(str)
 
     moveMods            = pyqtSignal(int)
     moveModsToTop       = pyqtSignal()
@@ -72,6 +71,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self._setup_file_tree,
             self._setup_actions,
             self._connect_buttons,
+            self._connect_local_signals,
+            self._attach_slots,
         ]
 
         ## Notifier object for the above 'setup...' slots to
@@ -133,26 +134,29 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.mod_table.loadData()
 
         # when the user first makes changes to the table or reverts to a saved state from a modified state,  enable/disable the save/cancel btns
-        self.models[M.mod_table
-        ].tablehaschanges.connect(
-                self.on_table_unsaved_change)
+        # self.models[M.mod_table
+        # ].tablehaschanges.connect(
+        #         self.on_table_unsaved_change)
 
-        self.mod_table.enableModActions.connect(
-            self.on_make_or_clear_mod_selection)
-        self.mod_table.canMoveItems.connect(
-            self.enable_move_buttons)
+        # self.mod_table.enableModActions.connect(
+        #     self.on_make_or_clear_mod_selection)
+        # self.mod_table.canMoveItems.connect(
+        #     self.enable_move_buttons)
 
         # connect the move up/down signals
         # to the appropriate slot on view
-        self.moveMods.connect(self.mod_table.onMoveModsAction)
-        # same for the move to top/button signals
-        self.moveModsToBottom.connect(
-                self.mod_table.onMoveModsToBottomAction)
-        self.moveModsToTop.connect(
-                self.mod_table.onMoveModsToTopAction)
+        # self.moveMods.connect(self.mod_table.onMoveModsAction)
+        # # same for the move to top/button signals
+        # self.moveModsToBottom.connect(
+        #         self.mod_table.onMoveModsToBottomAction)
+        # self.moveModsToTop.connect(
+        #         self.mod_table.onMoveModsToTopAction)
 
-        self.models[M.mod_table].undoevent.connect(
-            self.on_undo_redo_event)
+        # self.models[M.mod_table].undoevent.connect(
+        #     self.on_undo_redo_event)
+
+        # we don't actually use this yet...
+        self.filters_dropdown.setVisible(False)
 
         notify_done()
 
@@ -177,12 +181,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.profile_selector.setModel(model)
         self.profile_selector.setCurrentIndex(start_idx)
-        self.profile_selector.currentIndexChanged.connect(
-                self.on_profile_change)
-        self.new_profile_button.clicked.connect(
-                self.on_new_profile_click)
-        self.remove_profile_button.clicked.connect(
-                self.on_remove_profile_click)
+        # self.profile_selector.currentIndexChanged.connect(
+        #         self.on_profile_change)
+
+
+        self.file_toolBar.addSeparator()
+        self.file_toolBar.addWidget(self.profile_group)
+        self.file_toolBar.addActions([self.action_new_profile, self.action_delete_profile])
 
         # let setup know we're done here
         notify_done()
@@ -220,13 +225,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.update_modlist_label(_activeonly)
 
         # connect the checkbox directly to the filter property
-        self.filetree_activeonlytoggle.toggled[
-            'bool'].connect(
-                self.on_modlist_activeonly_toggle)
+        # self.filetree_activeonlytoggle.toggled[
+        #     'bool'].connect(
+        #         self.on_modlist_activeonly_toggle)
 
         # connect proxy to textchanged of filter box
-        self.filetree_modfilter.textChanged.connect(
-            self.on_modlist_filterbox_textchanged)
+        # self.filetree_modfilter.textChanged.connect(
+        #     self.on_modlist_filterbox_textchanged)
 
         # finally, set the filter as the model for the modlist
         self.filetree_modlist.setModel(mod_filter)
@@ -244,16 +249,20 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             M.file_viewer] = ModFileTreeModel(manager=self._manager,
                                               parent=self.filetree_fileviewer)
 
+
         ## filter
         fileviewer_filter = self.filters[
-            F.file_viewer] = QSortFilterProxyModel(
+            F.file_viewer] = FileViewerTreeFilter(
                                 self.filetree_fileviewer)
+            # F.file_viewer] = QSortFilterProxyModel(
+                                # self.filetree_fileviewer)
         fileviewer_filter.setSourceModel(fileviewer_model)
         fileviewer_filter.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        # fileviewer_filter.setFilterKeyColumn(1) # filter on whole path
 
-        ## connect proxy to textchanged of filter box
-        self.filetree_filefilter.textChanged.connect(
-            fileviewer_filter.setFilterWildcard)
+        # connect proxy to textchanged of filter box
+        # self.filetree_filefilter.textChanged.connect(
+        #     fileviewer_filter.setFilterWildcard)
 
         ## set model
         self.filetree_fileviewer.setModel(fileviewer_filter)
@@ -264,11 +273,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # self.models[M.file_viewer].rootPathChanged.connect(self.on_filetree_fileviewer_rootpathchanged)
 
         ## show new files when mod selection in list
-        proxy2source = lambda c, p: self.viewer_show_file_tree(
-                mod_filter.mapToSource(c), mod_filter.mapToSource(p))
         self.filetree_modlist.selectionModel().currentChanged.connect(
             # self.viewer_show_file_tree)
-            proxy2source)
+                lambda c, p: self.viewer_show_file_tree(
+                        mod_filter.mapToSource(c),
+                        mod_filter.mapToSource(p)))
+
+        # let's make it fancy
+        self.filetree_fileviewer.setAnimated(True)
+
 
 
 
@@ -340,6 +353,14 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.action_choose_mod_folder.triggered.connect(
                 self.choose_mod_folder)
 
+        self.action_new_profile.triggered.connect(
+                self.on_new_profile_action)
+
+        self.action_delete_profile.triggered.connect(
+            self.on_remove_profile_action)
+
+
+
         notify_done()
 
     def _connect_buttons(self, notify_done):
@@ -347,6 +368,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         # use a dialog-button-box for save/cancel
         # have to specify by standard button type
+        # TODO: connect these buttons to actions
         self.save_cancel_btnbox.button(
                 QDialogButtonBox.Apply).clicked.connect(
                 self.mod_table.saveChanges)
@@ -355,6 +377,117 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 self.mod_table.revertChanges)
 
         notify_done()
+
+    def _connect_local_signals(self, notify_done):
+        """
+        SIGNALS:
+
+        modListModified
+        modListSaved
+
+        windowInitialized
+
+        newProfileLoaded
+
+        moveMods
+        moveModsToTop
+        moveModsToBottom
+
+        """
+
+        for slot in [self.enable_profile_delete,
+                     self.mod_table.loadData,
+                     ]:
+            self.newProfileLoaded.connect(slot)
+
+
+        # connect the move up/down signal to the appropriate slot on view
+        self.moveMods.connect(
+                self.mod_table.onMoveModsAction)
+        # same for the move to top/button signals
+        self.moveModsToBottom.connect(
+                self.mod_table.onMoveModsToBottomAction)
+        self.moveModsToTop.connect(
+                self.mod_table.onMoveModsToTopAction)
+
+        notify_done()
+
+    def _attach_slots(self, notify_done):
+        """
+        SLOTS:
+
+
+
+        self.enable_move_buttons
+
+        on_new_profile_action
+        on_remove_profile_action
+        on_profile_change
+
+        on_modlist_activeonly_toggle
+        on_modlist_filterbox_textchanged
+
+        self.on_table_unsaved_change
+        self.on_make_or_clear_mod_selection
+        self.on_undo_redo_event
+        """
+
+        ##===================================
+        ## General/Main Window
+        ##-----------------------------------
+
+        # when new profile is selected
+        self.profile_selector.currentIndexChanged.connect(
+                self.on_profile_change)
+
+        # connect the undo event handler
+        self.models[M.mod_table].undoevent.connect(
+                self.on_undo_redo_event)
+
+        ##===================================
+        ## Mod Table Tab
+        ##-----------------------------------
+
+        # when the user first makes changes to the table or reverts
+        # to a saved state from a modified state,  enable/disable
+        # the save/cancel btns
+        self.models[M.mod_table
+        ].tablehaschanges.connect(
+                self.on_table_unsaved_change)
+
+
+        # depending on selection in table, the movement actions will be enabled
+        # or disabled
+        self.mod_table.enableModActions.connect(
+                self.on_make_or_clear_mod_selection)
+        self.mod_table.canMoveItems.connect(
+                self.enable_move_buttons)
+
+        ##===================================
+        ## File Tree Tab
+        ##-----------------------------------
+
+        # connect the checkbox directly to the filter property
+        self.filetree_activeonlytoggle.toggled[
+            'bool'].connect(
+                self.on_modlist_activeonly_toggle)
+
+        # connect proxy to textchanged of filter box on listview
+        self.filetree_modfilter.textChanged.connect(
+                self.on_modlist_filterbox_textchanged)
+
+        ## same for file tree
+        self.filetree_filefilter.textChanged.connect(
+                self.on_fileviewer_filter_textchanged)
+                # self.filters[F.file_viewer].setFilterWildcard)
+
+        # left the selectionModel() changed connection in the _setup function;
+        # it's just easier to handle it there
+
+
+
+        notify_done()
+
 
     # </editor-fold>
 
@@ -445,12 +578,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         :param profile_name:
         """
         if profile_name.lower() == 'default':
-            self.remove_profile_button.setEnabled(False)
-            self.remove_profile_button.setToolTip(
+            self.action_delete_profile.setEnabled(False)
+            self.action_delete_profile.setToolTip(
                     'Cannot Remove Default Profile')
         else:
-            self.remove_profile_button.setEnabled(True)
-            self.remove_profile_button.setToolTip('Remove Profile')
+            self.action_delete_profile.setEnabled(True)
+            self.action_delete_profile.setToolTip('Remove Profile')
 
 
     def reset_views_on_profile_change(self):
@@ -491,15 +624,17 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                     "Activating profile '{}'".format(new_profile))
 
             # fixme: change this setter to a method so it's clear how much happens at this point
-            self.Manager.active_profile = new_profile
+            self.Manager.set_active_profile(new_profile)
+
+            self.newProfileLoaded.emit(new_profile)
 
             # if this is the profile 'default', disable the remove button
-            self.enable_profile_delete(new_profile)
-
+            # self.enable_profile_delete(new_profile)
 
             self.reset_views_on_profile_change()
 
-    def on_new_profile_click(self):
+
+    def on_new_profile_action(self):
         """
         When the 'add profile' button is clicked, create and show a small dialog for the user to choose a name for the new profile.
         """
@@ -519,7 +654,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                     self.profile_selector.findText(new_profile.name,
                                                    Qt.MatchFixedString))
 
-    def on_remove_profile_click(self):
+    def on_remove_profile_action(self):
         """
         Show a warning about irreversibly deleting the profile.
         """
@@ -537,8 +672,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.profile_selector.removeItem(
                     self.profile_selector.currentIndex())
 
-            # self.deleteProfileAction.emit(profile.name)
-
     def on_make_or_clear_mod_selection(self, has_selection):
         """
         Enable or disable buttons and actions that rely on having a selection in the mod table.
@@ -553,6 +686,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.action_save_changes.setEnabled(
             unsaved_changes_present)
 
+    def on_modlist_activeonly_toggle(self, checked):
+
+        self.filters[F.mod_list].setOnlyShowActive(checked)
+        self.update_modlist_label(checked)
+        self.Manager.setProfileSetting('File Viewer', 'activeonly', checked)
+
     def on_modlist_filterbox_textchanged(self, text):
         # Updates the proxy filtering, and notifies the label
         # to change its 'mods shown' count.
@@ -560,17 +699,31 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         filt.setFilterWildcard(text)
         self.update_modlist_label(filt.onlyShowActive)
 
-    def on_modlist_activeonly_toggle(self, checked):
-        # self.filetree_activeonlytoggle.toggled[
-        #     'bool'].connect(
-        #         mod_filter.setOnlyShowActive)
-        # self.filetree_activeonlytoggle.toggled[
-        #     'bool'].connect(
-        #         self.on_modlist_activeonly_toggle)
-        # self.update_modlist_label)
-        self.filters[F.mod_list].setOnlyShowActive(checked)
-        self.update_modlist_label(checked)
-        self.Manager.setProfileSetting('File Viewer', 'activeonly', checked)
+    def on_fileviewer_filter_textchanged(self, text):
+        """
+        Query the modfiles table in the db for files matching the filter
+        string given by `text`. The resulting matches are fed to the proxy
+        filter on the file viewer which uses them to make sure that matching
+        files are shown in the tree regardless of whether their parent
+        directories match the filter or not.
+        :param str text:
+        """
+
+        # don't bother querying db for empty string,
+        # the filter will ignore the matched files anyway
+        if not text:
+            self.filters[F.file_viewer].setFilterWildcard(text)
+        else:
+            db = self.Manager.DB._con
+
+            sqlexpr = r'%'+text.replace('?','_').replace('*',r'%')+r'%'
+
+            matches = [r[0] for r in db.execute("SELECT filepath FROM modfiles WHERE directory=? AND filepath LIKE ?", (self.models[M.file_viewer].modname, sqlexpr))]
+
+            self.filters[F.file_viewer].setMatchingFiles(matches)
+
+            self.filters[F.file_viewer].setFilterWildcard(text)
+            self.filetree_fileviewer.expandAll()
 
 
     def on_undo_redo_event(self, undo_text, redo_text):
@@ -638,8 +791,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             if not self.Manager.validateModInstalls():
                 self.mod_table.model().reloadErrorsOnly()
 
-                # def get_tab(self, index: int):
-                #     return self.manager_tabs.widget(index)
+    # def get_tab(self, index: int):
+    #     return self.manager_tabs.widget(index)
 
     def safe_quit(self):
         """

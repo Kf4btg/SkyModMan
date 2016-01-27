@@ -218,7 +218,7 @@ class QFSItem(FSItem):
         super().__init__(**kwargs)
 
         self._checkstate=Qt_Checked# tracks explicit checks
-        self.flags = Qt.ItemIsUserCheckable | Qt.ItemIsEnabled
+        self.flags = Qt.ItemIsUserCheckable | Qt.ItemIsEnabled | Qt.ItemIsSelectable
         if self.isdir:
             self.flags |= Qt_ItemIsTristate
             self.icon = QIcon.fromTheme("folder")
