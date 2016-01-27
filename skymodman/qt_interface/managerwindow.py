@@ -8,7 +8,7 @@ from PyQt5.QtCore import (Qt,
                           QPropertyAnimation,
                           # QStandardPaths,
                           # QSortFilterProxyModel,
-                          QRect, QSize)
+                          )
 from PyQt5.QtGui import QGuiApplication, QKeySequence
 from PyQt5.QtWidgets import (QApplication,
                              QMainWindow,
@@ -50,6 +50,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     moveModsToTop       = pyqtSignal()
     moveModsToBottom    = pyqtSignal()
 
+    # noinspection PyUnresolvedReferences
     def __init__(self, *, manager, **kwargs):
         """
 
@@ -94,9 +95,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # init mod table (since it is not included in the base ui file)
         self.mod_table = ModTable_TreeView(parent=self,
                                            manager=self.Manager)
-
-        # keep track of changes made to mod list
-        # self.file_tree_modified = False
 
         # set placeholder fields
         self.loaded_fomod = None
@@ -163,7 +161,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         start_idx = 0
         for name, profile in self.Manager.getProfiles(
                 names_only=False):
-            # self.LOGGER.debug("{}: {}".format(name, profile))
             model.insertRows(data=profile)
             if name == self.Manager.active_profile.name:
                 self.logger << "Setting {} as chosen profile".format(
@@ -175,9 +172,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.profile_selector.setModel(model)
         self.profile_selector.setCurrentIndex(start_idx)
-        # self.profile_selector.currentIndexChanged.connect(
-        #         self.on_profile_select)
-
 
         self.file_toolBar.addSeparator()
         self.file_toolBar.addWidget(self.profile_group)
@@ -200,33 +194,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 self.filetree_modlist)
 
         mod_filter.setSourceModel(self.models[M.mod_table])
-
         mod_filter.setFilterCaseSensitivity(Qt.CaseInsensitive)
 
         # tell filter to read mod name
         mod_filter.setFilterKeyColumn(Column.NAME.value)
 
-        # load saved setting for 'activeonly' toggle
+        # load and apply saved setting for 'activeonly' toggle
         self.__setup_modlist_filter_state(mod_filter)
-
-        #
-        # _activeonly=self.Manager.getProfileSetting('File Viewer','activeonly')
-        # mod_filter.onlyShowActive = _activeonly
-        #
-        # # apply setting to box
-        # self.filetree_activeonlytoggle.setCheckState(Qt.Checked if _activeonly else Qt.Unchecked)
-        #
-        # # and setup label text for first display
-        # self.update_modlist_label(_activeonly)
-
-        # connect the checkbox directly to the filter property
-        # self.filetree_activeonlytoggle.toggled[
-        #     'bool'].connect(
-        #         self.on_modlist_activeonly_toggle)
-
-        # connect proxy to textchanged of filter box
-        # self.filetree_modfilter.textChanged.connect(
-        #     self.on_modlist_filterbox_textchanged)
 
         # finally, set the filter as the model for the modlist
         self.filetree_modlist.setModel(mod_filter)
@@ -241,23 +215,17 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         ##################################
         ## model for tree view of files
         fileviewer_model = self.models[
-            M.file_viewer] = ModFileTreeModel(manager=self._manager,
-                                              parent=self.filetree_fileviewer)
-
+            M.file_viewer] = ModFileTreeModel(
+                manager=self._manager,
+                parent=self.filetree_fileviewer)
 
         ## filter
         fileviewer_filter = self.filters[
             F.file_viewer] = FileViewerTreeFilter(
                                 self.filetree_fileviewer)
-            # F.file_viewer] = QSortFilterProxyModel(
-                                # self.filetree_fileviewer)
+
         fileviewer_filter.setSourceModel(fileviewer_model)
         fileviewer_filter.setFilterCaseSensitivity(Qt.CaseInsensitive)
-        # fileviewer_filter.setFilterKeyColumn(1) # filter on whole path
-
-        # connect proxy to textchanged of filter box
-        # self.filetree_filefilter.textChanged.connect(
-        #     fileviewer_filter.setFilterWildcard)
 
         ## set model
         self.filetree_fileviewer.setModel(fileviewer_filter)
@@ -269,13 +237,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         ## show new files when mod selection in list
         self.filetree_modlist.selectionModel().currentChanged.connect(
-            # self.viewer_show_file_tree)
                 lambda c, p: self.viewer_show_file_tree(
                         mod_filter.mapToSource(c),
                         mod_filter.mapToSource(p)))
-
-        # let's make it fancy
-        # self.filetree_fileviewer.setAnimated(True)
 
         # let setup know we're done here
         notify_done()
@@ -297,16 +261,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.filetree_modfilter.clear()
         self.filetree_filefilter.clear()
 
+        # clear the file tree view
         self.models[M.file_viewer].setRootPath(None)
 
         # update the label and checkbox on the modlist
         self.__setup_modlist_filter_state(
                 self.filters[F.mod_list])
 
-
-
     def _setup_actions(self, notify_done):
-        """Create additional actions, and make some tweaks to pre-existing ones
+        """Connect all the actions to their appropriate slots/whatevers
 
         Actions:
             * action_install_fomod
@@ -388,7 +351,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # TODO: connect these buttons to actions
         self.save_cancel_btnbox.button(
                 QDialogButtonBox.Apply).clicked.connect(
-                self.mod_table.saveChanges)
+                self.action_save_changes.trigger)
         self.save_cancel_btnbox.button(
                 QDialogButtonBox.Reset).clicked.connect(
                 self.mod_table.revertChanges)
