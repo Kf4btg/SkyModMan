@@ -530,32 +530,6 @@
    <addaction name="action_install_fomod"/>
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
-  <widget class="QToolBar" name="edit_toolBar">
-   <property name="windowTitle">
-    <string>toolBar</string>
-   </property>
-   <attribute name="toolBarArea">
-    <enum>TopToolBarArea</enum>
-   </attribute>
-   <attribute name="toolBarBreak">
-    <bool>false</bool>
-   </attribute>
-   <addaction name="action_move_mod_to_top"/>
-   <addaction name="action_move_mod_up"/>
-   <addaction name="action_move_mod_down"/>
-   <addaction name="action_move_mod_to_bottom"/>
-  </widget>
-  <widget class="QToolBar" name="profile_toolbar">
-   <property name="windowTitle">
-    <string>toolBar</string>
-   </property>
-   <attribute name="toolBarArea">
-    <enum>TopToolBarArea</enum>
-   </attribute>
-   <attribute name="toolBarBreak">
-    <bool>false</bool>
-   </attribute>
-  </widget>
   <action name="action_install_fomod">
    <property name="icon">
     <iconset theme="package-x-generic">

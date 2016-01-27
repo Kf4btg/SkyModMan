@@ -5,7 +5,7 @@ from enum import Enum, IntEnum
 # which sends ints around quite a bit. Rather than having to look up the enum
 # value each time, I think it's better just to have them comparable to ints.
 class Tab(IntEnum):
-    MODLIST, FILETREE, INSTALLER = range(3)
+    MODTABLE, FILETREE, INSTALLER = range(3)
 
 class Column(IntEnum):
     ENABLED, ORDER, NAME, DIRECTORY, MODID, VERSION, ERRORS = range(7)

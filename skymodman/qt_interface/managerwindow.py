@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (QApplication,
                              # QAction,
                              # QActionGroup,
                              # QHeaderView,
-                             )
+                             QGroupBox, QHBoxLayout, QActionGroup)
 
 from skymodman import skylog
 from skymodman.constants import (Tab as TAB,
@@ -69,6 +69,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # slots (methods) to be called after __init__ is finished
         setupSlots = [
+            self._setup_toolbar,
             self._setup_profile_selector,
             self._setup_table,
             self._setup_file_tree,
@@ -103,9 +104,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.manager_tabs.setCurrentIndex(0)
         self.installerpages.setCurrentIndex(0)
 
-        # ensure the UI is properly updated when the tab changes
-        self.manager_tabs.currentChanged.connect(
-                self.update_UI)
 
         # Let sub-widgets know the main window is initialized
         self.windowInitialized.emit()
@@ -120,6 +118,34 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     ##===============================================
 
     # <editor-fold desc="setup">
+
+    def _setup_toolbar(self, notify_done):
+        """We've got a few things to add to the toolbar"""
+
+        # Profile selector and add/remove buttons
+        self.file_toolBar.addSeparator()
+        self.file_toolBar.addWidget(self.profile_group)
+        self.file_toolBar.addActions([self.action_new_profile, self.action_delete_profile])
+
+
+        # Action Group for the mod-movement buttons.
+        # this just makes it easier to enable/disable them all at once
+        self.file_toolBar.addSeparator()
+        mmag = self.mod_movement_group = QActionGroup(self)
+
+        macts = [self.action_move_mod_to_top,
+                 self.action_move_mod_up,
+                 self.action_move_mod_down,
+                 self.action_move_mod_to_bottom,
+                 ]
+
+        mmag.setExclusive(False)
+        [mmag.addAction(a) for a in macts]
+
+        self.file_toolBar.addActions(macts)
+
+        notify_done()
+
     def _setup_table(self, notify_done):
         """
         This is where we finally tell the manager to load all the actual data for the profile.
@@ -173,9 +199,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.profile_selector.setModel(model)
         self.profile_selector.setCurrentIndex(start_idx)
 
-        self.file_toolBar.addSeparator()
-        self.file_toolBar.addWidget(self.profile_group)
-        self.file_toolBar.addActions([self.action_new_profile, self.action_delete_profile])
+
 
         # let setup know we're done here
         notify_done()
@@ -404,7 +428,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
 
 
-        self._enable_move_buttons
+        self._enable_mod_move_actions
 
         on_new_profile_action
         on_remove_profile_action
@@ -421,6 +445,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         ##===================================
         ## General/Main Window
         ##-----------------------------------
+
+        # ensure the UI is properly updated when the tab changes
+        self.manager_tabs.currentChanged.connect(
+                self.on_tab_changed)
 
         # when new profile is selected
         self.profile_selector.currentIndexChanged.connect(
@@ -447,7 +475,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.mod_table.enableModActions.connect(
                 self.on_make_or_clear_mod_selection)
         self.mod_table.canMoveItems.connect(
-                self._enable_move_buttons)
+                self._enable_mod_move_actions)
 
         ##===================================
         ## File Tree Tab
@@ -483,19 +511,69 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     # def update_UI(self, *args):
     def update_UI(self):
-        if self.loaded_fomod is None:
-            self.fomod_tab.setEnabled(False)
+        self.fomod_tab.setEnabled(self.loaded_fomod is not None)
 
         curtab = self.manager_tabs.currentIndex()
+        self._visible_components_for_tab(curtab)
 
-        self.save_cancel_btnbox.setVisible(
-                curtab in [TAB.MODLIST, TAB.FILETREE])
+        # self.save_cancel_btnbox.setVisible(
+        #         curtab in [TAB.MODTABLE, TAB.FILETREE])
+        #
+        # self.next_button.setVisible(curtab == TAB.INSTALLER)
+        # self.modtable_search_button.setVisible(curtab == TAB.MODTABLE)
+        # self.modtable_search_box.setVisible(curtab == TAB.MODTABLE)
 
-        self.next_button.setVisible(curtab == TAB.INSTALLER)
-        self.modtable_search_button.setVisible(curtab == TAB.MODLIST)
-        self.modtable_search_box.setVisible(curtab == TAB.MODLIST)
+    def _visible_components_for_tab(self, tab):
+        """
+        Some manager components should be hidden on certain tabs
 
-    def _enable_move_buttons(self, enable_moveup, enable_movedown):
+        :param tab:
+        :return:
+        """
+        all_components = (a,b,c,d) = [
+            self.save_cancel_btnbox,
+            self.next_button,
+            self.modtable_search_button,
+            self.modtable_search_box,
+        ]
+
+        hidden = {
+            TAB.MODTABLE:  [b],
+            TAB.FILETREE:  [b,c,d],
+            TAB.INSTALLER: [a,c,d]
+        }
+
+        for comp in all_components:
+            comp.setVisible(comp not in hidden[tab])
+
+    def _enabled_actions_for_tab(self, tab):
+        """
+        Some manager actions should be disabled on certain tabs
+
+        :param tab:
+        :return:
+        """
+        all_components = (a, b, c, d, e) = [
+            self.mod_movement_group,
+            self.action_toggle_mod,
+            self.action_save_changes,
+            self.action_undo,
+            self.action_redo
+        ]
+
+        disabled = {
+            TAB.MODTABLE:  [],
+            TAB.FILETREE:  [a, b, d, e],
+            TAB.INSTALLER: [a, b, c, d, e]
+        }
+
+        for comp in all_components:
+            comp.setEnabled(comp not in disabled[tab])
+
+
+
+
+    def _enable_mod_move_actions(self, enable_moveup, enable_movedown):
         for action in [self.action_move_mod_to_bottom,
                        self.action_move_mod_down]:
             action.setEnabled(enable_movedown)
@@ -528,7 +606,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         an.setEndValue([0,300][state])
         an.start()
 
-
     def update_modlist_label(self, inactive_hidden):
         if inactive_hidden:
             text = "Active Mods ({shown}/{total})"
@@ -560,7 +637,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.models[M.file_viewer].setRootPath(str(p))
 
-
     def table_prompt_if_unsaved(self):
         """
         Check for unsaved changes to the mods list and show a prompt if any are found.
@@ -583,7 +659,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 # just disable the buttons
                 self.on_table_unsaved_change(False)
 
-
     def enable_profile_delete(self, profile_name):
         """
         If the profile name is anything other than the default profile
@@ -598,22 +673,27 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.action_delete_profile.setEnabled(True)
             self.action_delete_profile.setToolTip('Remove Profile')
 
-
-    def reset_views_on_profile_change(self):
-        """For now, this just repopulates the mod-table. There might be more to it later"""
-
-        # TODO: send out a signal to when the profile is changed that everything needing to update will be listening to
-        self.LOGGER << "About to repopulate table"
-        self.mod_table.loadData()
-
-        # self.filters[F.mod_list].
-
-        # self.updateFileTreeModList()
-
-        self.update_UI()
+    # def reset_views_on_profile_change(self):
+    #     """For now, this just repopulates the mod-table. There might be more to it later"""
+    #
+    #     self.LOGGER << "About to repopulate table"
+    #     self.mod_table.loadData()
+    #
+    #     # self.filters[F.mod_list].
+    #
+    #     # self.updateFileTreeModList()
+    #
+    #     self.update_UI()
 
 
     # <editor-fold desc="EventHandlers">
+
+    def on_tab_changed(self):
+        curtab = self.manager_tabs.currentIndex()
+        self._visible_components_for_tab(curtab)
+        self._enabled_actions_for_tab(curtab)
+
+
     @pyqtSlot('int')
     def on_profile_select(self, index):
         """
@@ -641,12 +721,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
             self.logger << "Resetting views for new profile"
             self.newProfileLoaded.emit(new_profile)
-
-            # if this is the profile 'default', disable the remove button
-            # self.enable_profile_delete(new_profile)
-
-            # self.reset_views_on_profile_change()
-
 
     def on_new_profile_action(self):
         """
@@ -690,7 +764,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         Enable or disable buttons and actions that rely on having a selection in the mod table.
         """
-        self._enable_move_buttons(has_selection, has_selection)
+        self._enable_mod_move_actions(has_selection, has_selection)
 
         self.action_toggle_mod.setEnabled(has_selection)
 
@@ -738,7 +812,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
             self.filters[F.file_viewer].setFilterWildcard(text)
             self.filetree_fileviewer.expandAll()
-
 
     def on_undo_redo_event(self, undo_text, redo_text):
         """Update the undo/redo text to reflect the passed text.  If an argument is passed as ``None``, that button will instead be disabled."""
