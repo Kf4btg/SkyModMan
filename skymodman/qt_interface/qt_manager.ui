@@ -536,7 +536,7 @@
    <addaction name="action_undo"/>
    <addaction name="action_redo"/>
   </widget>
-  <widget class="QStatusBar" name="statusBar"/>
+  <widget class="QStatusBar" name="status_bar"/>
   <action name="action_install_fomod">
    <property name="icon">
     <iconset theme="package-x-generic">

@@ -177,6 +177,14 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.animate_show_search.setDuration(300)
         self.modtable_search_box.setMaximumWidth(0)
 
+        # and now make the search bar do something
+        self.modtable_search_box.textChanged.connect(
+                self.on_table_search)
+        self.modtable_search_box.returnPressed.connect(
+            lambda: self.on_table_search(
+                    self.modtable_search_box.text()))
+
+
         # we don't actually use this yet...
         self.filters_dropdown.setVisible(False)
 
@@ -911,7 +919,24 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         elif tab == TAB.FILETREE:
             self.models[M.file_viewer].revert()
 
+    def on_table_search(self, text):
+        found = self.mod_table.search(text)
 
+        if text and not found:
+            if found is None:
+                # this means we DID find the text, but it was the same
+                # row that we started on
+                self.modtable_search_box.setStyleSheet('QLineEdit { color: gray }')
+                self.status_bar.showMessage("No more results found")
+            else:
+                # found was False
+                self.modtable_search_box.setStyleSheet(
+                            'QLineEdit { color: tomato }')
+                self.status_bar.showMessage("No results found")
+        # text was found or was ''
+        elif self.modtable_search_box.styleSheet():
+            self.modtable_search_box.setStyleSheet('')
+            self.status_bar.clearMessage()
 
 
     # </editor-fold>

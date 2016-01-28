@@ -1,5 +1,5 @@
 from PyQt5 import QtCore, QtGui
-from PyQt5.QtWidgets import QHeaderView, QTreeView, QAbstractItemView, QMenu, QAction
+# from PyQt5.QtWidgets import QHeaderView, QTreeView, QAbstractItemView, QMenu, QAction
 from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData
 
 from skymodman import ModEntry
@@ -13,6 +13,7 @@ from skymodman.utils.timedundo import stack
 
 from functools import total_ordering, partial
 from collections import deque
+import re
 
 
 # <editor-fold desc="ModuleConstants">
@@ -133,6 +134,11 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         stack().undocallback = partial(self._undo_event, 'undo')
         stack().docallback = partial(self._undo_event, 'redo')
+
+        # search stuff
+        self._last_search_text = ''
+        # self._last_returned_index
+
 
         self.LOGGER << "init ModTable_TreeModel"
 
@@ -315,6 +321,53 @@ class ModTable_TreeModel(QAbstractItemModel):
             return _flags | Qt_ItemIsEditable
 
         return _flags
+
+    def search(self, text, start_index) -> QModelIndex:
+        """
+        Search for the given text in the mod list (names, by default),
+        and return the model index of the first or next matching entry.
+        :param str text: search text
+        :param QModelIndex start_index: the currently selected index; search will begin here and search down the table
+        :return: QModelIndex
+        """
+        # an invalid index will have row==-1
+        # current_row = max(start_index.row(), 0)
+        current_row = start_index.row()
+
+        # step1 = text.replace('.','###DOT###').
+
+        # Wildcard matching:
+        #replace any '*' and '?' with '.*' and '.', respectively,
+        # but maintain any '.' (or other re metachars) in the text as
+        # literal chars
+        regex = re.sub(r'\\\?', '.',
+                       re.sub(r'\\\*', '.*',
+                            re.escape(text))
+                       )
+
+        regex = re.compile(regex, re.IGNORECASE)
+
+        def findstr(modentry):
+            return regex.search(modentry.name)
+
+        try:
+            next_result = next(filter(findstr,
+                                      self.mod_entries[current_row+1:]))
+        except StopIteration:
+            try:
+                next_result = next(filter(findstr,
+                                  self.mod_entries[:current_row+1]))
+            except StopIteration:
+                return QModelIndex()
+
+        if next_result:
+            return self.createIndex(next_result.ordinal-1, COL_NAME)
+
+        return QModelIndex()
+
+
+
+
 
     ##===============================================
     ## Setting Data

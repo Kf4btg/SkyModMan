@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import QHeaderView, QTreeView, QAbstractItemView, QMenu
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QItemSelectionModel
 
 from skymodman.constants import Column
 from skymodman.utils import withlogger
@@ -61,6 +61,29 @@ class ModTable_TreeView(QTreeView):
     def loadData(self):
         self._model.loadData()
         self.resizeColumnsToContents()
+
+    def search(self, text):
+        """
+        Query the model for the row containing the given text;
+        if it is found, scroll to and select the row.
+        :param text:
+        :return:
+        """
+        cindex = self.currentIndex()
+        result = self._model.search(text, cindex)
+
+        if result.isValid():
+            if result==cindex:
+                # this means that we're sitting on the only
+                # row that matches the search; return None
+                # to differentiate it.
+                return None
+
+            self.selectionModel().select(result, QItemSelectionModel.ClearAndSelect)
+            self.scrollTo(result, QAbstractItemView.PositionAtCenter)
+            self.setCurrentIndex(result)
+            return True
+        return False
 
     def resizeColumnsToContents(self):
         for i in range(self._model.columnCount()):
