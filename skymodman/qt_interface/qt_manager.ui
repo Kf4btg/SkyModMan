@@ -381,17 +381,6 @@
        <property name="bottomMargin">
         <number>0</number>
        </property>
-       <item row="0" column="0">
-        <widget class="QToolButton" name="modtable_search_button">
-         <property name="toolTip">
-          <string>Find</string>
-         </property>
-         <property name="icon">
-          <iconset theme="search">
-           <normaloff>.</normaloff>.</iconset>
-         </property>
-        </widget>
-       </item>
        <item row="0" column="2">
         <spacer name="horizontalSpacer">
          <property name="orientation">
@@ -405,35 +394,14 @@
          </property>
         </spacer>
        </item>
-       <item row="0" column="1">
-        <widget class="QLineEdit" name="modtable_search_box">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
+       <item row="0" column="0">
+        <widget class="QToolButton" name="modtable_search_button">
          <property name="toolTip">
-          <string>Type to search mod list</string>
+          <string>Find</string>
          </property>
-         <property name="placeholderText">
-          <string>Search</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="3">
-        <widget class="QDialogButtonBox" name="save_cancel_btnbox">
-         <property name="enabled">
-          <bool>false</bool>
-         </property>
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="standardButtons">
-          <set>QDialogButtonBox::Apply|QDialogButtonBox::Reset</set>
+         <property name="icon">
+          <iconset theme="search">
+           <normaloff>.</normaloff>.</iconset>
          </property>
         </widget>
        </item>
@@ -454,6 +422,32 @@
          </property>
          <property name="autoDefault">
           <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="3">
+        <widget class="QDialogButtonBox" name="save_cancel_btnbox">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="standardButtons">
+          <set>QDialogButtonBox::Apply|QDialogButtonBox::Reset</set>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="EscapeableLineEdit" name="modtable_search_box">
+         <property name="toolTip">
+          <string>Hit Enter to Search</string>
+         </property>
+         <property name="placeholderText">
+          <string>Search</string>
          </property>
         </widget>
        </item>
@@ -781,10 +775,11 @@
     <bool>false</bool>
    </property>
    <property name="icon">
-    <iconset theme="go-next"/>
+    <iconset theme="go-next">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
-    <string>Find Next</string>
+    <string>&amp;Find Next</string>
    </property>
    <property name="toolTip">
     <string>Find Next Occurrence</string>
@@ -795,10 +790,11 @@
     <bool>false</bool>
    </property>
    <property name="icon">
-    <iconset theme="go-previous"/>
+    <iconset theme="go-previous">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
-    <string>Find Previous</string>
+    <string>Find &amp;Previous</string>
    </property>
    <property name="toolTip">
     <string>Find Previous Occurrence</string>
@@ -806,13 +802,21 @@
   </action>
   <action name="action_show_search">
    <property name="icon">
-    <iconset theme="edit-find"/>
+    <iconset theme="edit-find">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
-    <string>Show Search Bar</string>
+    <string>S&amp;how Search Bar</string>
    </property>
   </action>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>EscapeableLineEdit</class>
+   <extends>QLineEdit</extends>
+   <header>skymodman.qt_interface.plugins.widgets.escapeablelineedit</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections>
   <connection>
@@ -828,6 +832,22 @@
     <hint type="destinationlabel">
      <x>23</x>
      <y>548</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>modtable_search_box</sender>
+   <signal>escapeLineEdit()</signal>
+   <receiver>modtable_search_button</receiver>
+   <slot>click()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>72</x>
+     <y>551</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>29</x>
+     <y>549</y>
     </hint>
    </hints>
   </connection>

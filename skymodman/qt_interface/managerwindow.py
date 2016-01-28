@@ -183,13 +183,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # self.modtable_search_box.textChanged.connect(
         #         self.on_table_search)
 
-        def clearstyle():
-            if self.modtable_search_box.styleSheet():
-                self.modtable_search_box.setStyleSheet('')
-                self.status_bar.clearMessage()
+
 
         self.modtable_search_box.textChanged.connect(
-            clearstyle)
+                self._clear_searchbox_style)
 
         def on_search_box_return():
             self._search_text = self.modtable_search_box.text()
@@ -714,8 +711,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         an.start()
 
         # also, focus the text field if we're showing it
-        if state: self.modtable_search_box.setFocus()
-        else: self.modtable_search_box.clearFocus()
+        if state:
+            self.modtable_search_box.setFocus()
+        else:
+            # or clear the focus and styling if we're hiding
+            self.modtable_search_box.clearFocus()
+            self.modtable_search_box.clear()
+
 
     def update_modlist_label(self, inactive_hidden):
         if inactive_hidden:
@@ -1000,6 +1002,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.action_find_previous.setEnabled(e)
 
         self.on_table_search()
+
+    def _clear_searchbox_style(self):
+        if self.modtable_search_box.styleSheet():
+            self.modtable_search_box.setStyleSheet('')
+            self.status_bar.clearMessage()
 
 
     # </editor-fold>
