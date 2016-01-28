@@ -107,6 +107,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.manager_tabs.setCurrentIndex(self._currtab.value)
         self.installerpages.setCurrentIndex(0)
 
+        self._search_text=''
+
         # self.states= {t:TabState() for t in TAB} #type: dict[TAB,TabState]
 
         # Let sub-widgets know the main window is initialized
@@ -178,11 +180,27 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.modtable_search_box.setMaximumWidth(0)
 
         # and now make the search bar do something
+        # self.modtable_search_box.textChanged.connect(
+        #         self.on_table_search)
+
+        def clearstyle():
+            if self.modtable_search_box.styleSheet():
+                self.modtable_search_box.setStyleSheet('')
+                self.status_bar.clearMessage()
+
         self.modtable_search_box.textChanged.connect(
-                self.on_table_search)
+            clearstyle)
+
+        def on_search_box_return():
+            self._search_text = self.modtable_search_box.text()
+            e = bool(self._search_text)
+            self.action_find_next.setEnabled(e)
+            self.action_find_previous.setEnabled(e)
+            self.on_table_search()
+
+        # i prefer searching only when i'm ready
         self.modtable_search_box.returnPressed.connect(
-            lambda: self.on_table_search(
-                    self.modtable_search_box.text()))
+            on_search_box_return)
 
 
         # we don't actually use this yet...
@@ -333,6 +351,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             * action_move_mod_to_top
             * action_move_mod_to_bottom
             * action_move_mod_up
+            * action_show_search
+            * action_find_next
+            * action_find_previous
         """
 
         # * action_undo
@@ -387,6 +408,18 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # action_delete_profile
         self.action_delete_profile.triggered.connect(
             self.on_remove_profile_action)
+
+        # show search bar
+        self.action_show_search.setShortcut(QKeySequence.Find)
+
+        # find next
+        self.action_find_next.setShortcut(QKeySequence.FindNext)
+        self.action_find_next.triggered.connect(
+            partial(self.on_table_search, 1))
+        # find prev
+        self.action_find_previous.setShortcut(QKeySequence.FindPrevious)
+        self.action_find_previous.triggered.connect(
+                partial(self.on_table_search, -1))
 
         notify_done()
 
@@ -611,7 +644,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.action_save_changes,    # 2
             self.action_revert_changes,  # 3
             self.action_undo,            # 4
-            self.action_redo             # 5
+            self.action_redo,            # 5
+            self.action_find_next,       # 6
+            self.action_find_previous,   # 7
         ]
 
         # this is a selector that, depending on how it is
@@ -624,6 +659,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             s[0] = s[1] = self.mod_table.selectionModel().hasSelection()
             s[2] = s[3] = tmodel.isDirty
             s[4],  s[5] = tmodel.canundo, tmodel.canredo
+            s[6] = s[7] = bool(self._search_text)
         elif tab == TAB.FILETREE:
             s[2] = s[3] = self.models[M.file_viewer].has_unsaved_changes
 
@@ -676,6 +712,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         an.setStartValue([300,0][state])
         an.setEndValue([0,300][state])
         an.start()
+
+        # also, focus the text field if we're showing it
+        if state: self.modtable_search_box.setFocus()
+        else: self.modtable_search_box.clearFocus()
 
     def update_modlist_label(self, inactive_hidden):
         if inactive_hidden:
@@ -869,7 +909,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         directories match the filter or not.
         :param str text:
         """
-
         # don't bother querying db for empty string,
         # the filter will ignore the matched files anyway
         if not text:
@@ -919,24 +958,48 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         elif tab == TAB.FILETREE:
             self.models[M.file_viewer].revert()
 
-    def on_table_search(self, text):
-        found = self.mod_table.search(text)
+    def on_table_search(self, direction=1):
+        """
+        Tell the view to search for 'text'; depending on success, we
+        will change the appearance of the search text and the status
+        bar message
 
-        if text and not found:
-            if found is None:
-                # this means we DID find the text, but it was the same
-                # row that we started on
-                self.modtable_search_box.setStyleSheet('QLineEdit { color: gray }')
-                self.status_bar.showMessage("No more results found")
-            else:
-                # found was False
-                self.modtable_search_box.setStyleSheet(
-                            'QLineEdit { color: tomato }')
-                self.status_bar.showMessage("No results found")
-        # text was found or was ''
-        elif self.modtable_search_box.styleSheet():
+        """
+
+        if self._search_text:
+            found = self.mod_table.search(self._search_text, direction)
+
+            if not found:
+                if found is None:
+                    # this means we DID find the text, but it was the same
+                    # row that we started on
+                    self.modtable_search_box.setStyleSheet(
+                            'QLineEdit { color: gray }')
+                    self.status_bar.showMessage("No more results found")
+                else:
+                    # found was False
+                    self.modtable_search_box.setStyleSheet(
+                                'QLineEdit { color: tomato }')
+                    self.status_bar.showMessage("No results found")
+                return
+
+        # text was found or was '': reset style sheet if one is present
+        if self.modtable_search_box.styleSheet():
             self.modtable_search_box.setStyleSheet('')
             self.status_bar.clearMessage()
+
+    def _on_search_box_return(self):
+        """
+        Hit return in the search box; update the saved search text and search
+        """
+        self._search_text = self.modtable_search_box.text()
+
+        e = bool(self._search_text)
+
+        self.action_find_next.setEnabled(e)
+        self.action_find_previous.setEnabled(e)
+
+        self.on_table_search()
 
 
     # </editor-fold>

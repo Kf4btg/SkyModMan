@@ -62,7 +62,7 @@ class ModTable_TreeView(QTreeView):
         self._model.loadData()
         self.resizeColumnsToContents()
 
-    def search(self, text):
+    def search(self, text, direction=1):
         """
         Query the model for the row containing the given text;
         if it is found, scroll to and select the row.
@@ -70,7 +70,7 @@ class ModTable_TreeView(QTreeView):
         :return:
         """
         cindex = self.currentIndex()
-        result = self._model.search(text, cindex)
+        result = self._model.search(text, cindex, direction)
 
         if result.isValid():
             if result==cindex:

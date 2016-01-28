@@ -135,11 +135,6 @@ class ModTable_TreeModel(QAbstractItemModel):
         stack().undocallback = partial(self._undo_event, 'undo')
         stack().docallback = partial(self._undo_event, 'redo')
 
-        # search stuff
-        self._last_search_text = ''
-        # self._last_returned_index
-
-
         self.LOGGER << "init ModTable_TreeModel"
 
     ##===============================================
@@ -322,7 +317,7 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         return _flags
 
-    def search(self, text, start_index) -> QModelIndex:
+    def search(self, text, start_index, direction=1) -> QModelIndex:
         """
         Search for the given text in the mod list (names, by default),
         and return the model index of the first or next matching entry.
@@ -331,10 +326,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         :return: QModelIndex
         """
         # an invalid index will have row==-1
-        # current_row = max(start_index.row(), 0)
         current_row = start_index.row()
-
-        # step1 = text.replace('.','###DOT###').
 
         # Wildcard matching:
         #replace any '*' and '?' with '.*' and '.', respectively,
@@ -350,24 +342,40 @@ class ModTable_TreeModel(QAbstractItemModel):
         def findstr(modentry):
             return regex.search(modentry.name)
 
+        searcher = partial(self._search_slice, findstr)
+
         try:
-            next_result = next(filter(findstr,
-                                      self.mod_entries[current_row+1:]))
+            # search backwards if dir<0
+            next_result = searcher(
+                    start=current_row-1, step=-1) \
+                        if direction<0 else searcher(
+                    start=current_row+1)
+
         except StopIteration:
             try:
-                next_result = next(filter(findstr,
-                                  self.mod_entries[:current_row+1]))
+                next_result = searcher(
+                        end=current_row-1, step=-1) \
+                    if direction < 0 else searcher(
+                        end=current_row + 1)
             except StopIteration:
                 return QModelIndex()
 
         if next_result:
             return self.createIndex(next_result.ordinal-1, COL_NAME)
 
+        # i don't think we'll ever reach here...
+        # but better safe than sorry, I guess
+        self.LOGGER << "--End of mod table search"
         return QModelIndex()
 
-
-
-
+    def _search_slice(self, match_func, start=None, end=None, step=1):
+        if start is None:
+            if end is None:
+                return next(filter(match_func, self.mod_entries[::step]))
+            return next(filter(match_func, self.mod_entries[:end:step]))
+        elif end is None:
+            return next(filter(match_func, self.mod_entries[start::step]))
+        return next(filter(match_func, self.mod_entries[start:end:step]))
 
     ##===============================================
     ## Setting Data

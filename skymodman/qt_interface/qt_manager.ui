@@ -507,6 +507,9 @@
     <addaction name="action_undo"/>
     <addaction name="action_redo"/>
     <addaction name="separator"/>
+    <addaction name="action_show_search"/>
+    <addaction name="action_find_next"/>
+    <addaction name="action_find_previous"/>
     <addaction name="action_toggle_mod"/>
     <addaction name="separator"/>
     <addaction name="action_move_mod_up"/>
@@ -773,7 +776,60 @@
     <string>Ctrl+Shift+R</string>
    </property>
   </action>
+  <action name="action_find_next">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="icon">
+    <iconset theme="go-next"/>
+   </property>
+   <property name="text">
+    <string>Find Next</string>
+   </property>
+   <property name="toolTip">
+    <string>Find Next Occurrence</string>
+   </property>
+  </action>
+  <action name="action_find_previous">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="icon">
+    <iconset theme="go-previous"/>
+   </property>
+   <property name="text">
+    <string>Find Previous</string>
+   </property>
+   <property name="toolTip">
+    <string>Find Previous Occurrence</string>
+   </property>
+  </action>
+  <action name="action_show_search">
+   <property name="icon">
+    <iconset theme="edit-find"/>
+   </property>
+   <property name="text">
+    <string>Show Search Bar</string>
+   </property>
+  </action>
  </widget>
  <resources/>
- <connections/>
+ <connections>
+  <connection>
+   <sender>action_show_search</sender>
+   <signal>triggered()</signal>
+   <receiver>modtable_search_button</receiver>
+   <slot>click()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>-1</x>
+     <y>-1</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>23</x>
+     <y>548</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
 </ui>

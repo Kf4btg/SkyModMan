@@ -94,3 +94,21 @@ def message(icon='question', title='', text='Are you sure?', info_text=None, but
         return False
     return response
 
+from PyQt5.QtWidgets import QLineEdit
+from PyQt5.QtCore import Qt, pyqtSignal
+
+class EscapableLineEdit(QLineEdit):
+
+    escapeLineEdit = pyqtSignal()
+
+    def keyPressEvent(self, event):
+        """
+
+        :param QKeyEvent event:
+        :return:
+        """
+
+        if event.key() == Qt.Key_Escape:
+            self.escapeLineEdit.emit()
+
+        super().keyPressEvent(event)
