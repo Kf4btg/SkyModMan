@@ -171,6 +171,18 @@ class ModTable_TreeModel(QAbstractItemModel):
     @property
     def stack(self):
         return stack()
+    @property
+    def undotext(self):
+        return stack().undotext()
+    @property
+    def redotext(self):
+        return stack().redotext()
+    @property
+    def canundo(self):
+        return stack().canundo()
+    @property
+    def canredo(self):
+        return stack().canredo()
 
     # FIXME: on the FIRST undoable action (when there are no undos available), the timed stack implementation doesn't react to the undo key sequence until the timer runs out; this is because the the Undo QAction is disabled until something is in the **real** undo stack. The non-responsive shortcut is rather jarring. Later, when there are already undos in the stack, the undo command interrupts the timer as it's supposed to.
     def undo(self):

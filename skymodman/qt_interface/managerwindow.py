@@ -1,4 +1,5 @@
 from functools import partial
+from itertools import compress
 
 from PyQt5.QtCore import (Qt,
                           pyqtSignal,
@@ -14,7 +15,7 @@ from PyQt5.QtWidgets import (QApplication,
                              QDialogButtonBox,
                              QMessageBox,
                              QFileDialog,
-                             # QAction,
+                             QAction, QAbstractButton, QPushButton,
                              # QHeaderView,
                              QActionGroup)
 
@@ -34,6 +35,7 @@ from skymodman.qt_interface.models import (
     FileViewerTreeFilter)
 from skymodman.qt_interface.views import ModTable_TreeView
 from skymodman.utils import withlogger, Notifier, checkPath
+
 
 
 @withlogger
@@ -58,6 +60,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         super().__init__(**kwargs)
         self.LOGGER.info("Initializing ModManager Window")
+        ModManagerWindow._this = self
 
         # reference to the Mod Manager
         self._manager = manager
@@ -99,10 +102,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # set placeholder fields
         self.loaded_fomod = None
 
+        self._currtab = TAB.MODTABLE
         # make sure the correct initial pages are showing
-        self.manager_tabs.setCurrentIndex(0)
+        self.manager_tabs.setCurrentIndex(self._currtab.value)
         self.installerpages.setCurrentIndex(0)
 
+        # self.states= {t:TabState() for t in TAB} #type: dict[TAB,TabState]
 
         # Let sub-widgets know the main window is initialized
         self.windowInitialized.emit()
@@ -110,6 +115,14 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     @property
     def Manager(self):
         return self._manager
+
+    @property
+    def current_tab(self):
+        return self._currtab
+
+    @current_tab.setter
+    def current_tab(self, tabnum):
+        self._currtab = TAB(tabnum)
 
 
     ##===============================================
@@ -332,6 +345,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.action_save_changes.triggered.connect(
                 self.on_save_command)
 
+        self.action_revert_changes.triggered.connect(
+                self.on_revert_command)
+
         # action_move_mod_up
         # action_move_mod_down
         self.action_move_mod_up.triggered.connect(
@@ -372,16 +388,34 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # use a dialog-button-box for save/cancel
         # have to specify by standard button type
         # TODO: connect these buttons to actions
-        self.save_cancel_btnbox.button(
-                QDialogButtonBox.Apply).clicked.connect(
+        btn_apply = self.save_cancel_btnbox.button(
+                QDialogButtonBox.Apply) #type: QPushButton
+        btn_reset = self.save_cancel_btnbox.button(
+                QDialogButtonBox.Reset)
+
+        btn_apply.clicked.connect(
                 self.action_save_changes.trigger)
 
-        self.save_cancel_btnbox.button(
-                QDialogButtonBox.Reset).clicked.connect(
-                self.on_revert_command)
+        self.action_save_changes.changed.connect(lambda: self.save_cancel_btnbox.setEnabled(self.action_save_changes.isEnabled()))
+
+        # set the save button up to follow the status of the save action
+        # self.action_save_changes.changed.connect(partial(self.update_button_from_action,
+        #         self.action_save_changes,
+        #         btn_apply))
+
+
+        # connect reset button to the revert action, and follow its status
+        btn_reset.clicked.connect(
+                self.action_revert_changes.trigger)
+
+        # self.action_revert_changes.changed.connect(partial(
+        #     self.update_button_from_action,
+        #             self.action_revert_changes,
+        #             btn_reset))
 
         # using released since 'clicked' sends an extra
-        # bool argument (which means nothing in this context)
+        # bool argument (which means nothing in this context
+        # but messes up the callback)
         self.modtable_search_button.released.connect(
                 self._show_search_box)
 
@@ -408,6 +442,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         for slot in [self.enable_profile_delete,
                      self._reset_table,
                     self._reset_file_tree,
+                    self._visible_components_for_tab,
+            self._enabled_actions_for_tab,
                      ]:
             self.newProfileLoaded.connect(slot)
 
@@ -525,60 +561,80 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # self.modtable_search_button.setVisible(curtab == TAB.MODTABLE)
         # self.modtable_search_box.setVisible(curtab == TAB.MODTABLE)
 
-    def _visible_components_for_tab(self, tab):
+    def _visible_components_for_tab(self, tab=None):
         """
         Some manager components should be hidden on certain tabs
 
         :param tab:
         :return:
         """
-        all_components = (a,b,c,d) = [
-            self.save_cancel_btnbox,
-            self.next_button,
-            self.modtable_search_button,
-            self.modtable_search_box,
+        if tab is None: tab=self.current_tab
+
+        all_components = [
+            self.save_cancel_btnbox,      # 0
+            self.next_button,             # 1
+            self.modtable_search_button,  # 2
+            self.modtable_search_box,     # 3
         ]
 
-        hidden = {
-            TAB.MODTABLE:  [b],
-            TAB.FILETREE:  [b,
-                            c if not self.models[
-                                M.file_viewer].has_unsaved_changes else None,
-                            d],
-            TAB.INSTALLER: [a,c,d]
+        s = [False]*len(all_components)
+
+        visible = {
+            TAB.MODTABLE:  [1, 0, 1, 1],
+            TAB.FILETREE:  [1, 0, 0, 0],
+            TAB.INSTALLER: [0, 1, 0, 0]
         }
 
-        for comp in all_components:
-            comp.setVisible(comp not in hidden[tab])
+        for comp, isvis in zip(all_components, visible[tab]):
+            comp.setVisible(isvis)
 
-    def _enabled_actions_for_tab(self, tab):
+    def _enabled_actions_for_tab(self, tab=None):
         """
         Some manager actions should be disabled on certain tabs
 
         :param tab:
         :return:
         """
-        all_components = (a, b, c, d, e) = [
-            self.mod_movement_group,
-            self.action_toggle_mod,
-            self.action_save_changes,
-            self.action_undo,
-            self.action_redo
+        if tab is None: tab=self.current_tab
+
+        all_components = [
+            self.mod_movement_group,     # 0
+            self.action_toggle_mod,      # 1
+            self.action_save_changes,    # 2
+            self.action_revert_changes,  # 3
+            self.action_undo,            # 4
+            self.action_redo             # 5
         ]
 
-        disabled = {
-            TAB.MODTABLE:  [],
-            TAB.FILETREE:  [a, b, d, e],
-            TAB.INSTALLER: [a, b,
-                            c if not self.models[M.file_viewer].has_unsaved_changes else None,
-                            d, e]
-        }
+        # this is a selector that, depending on how it is
+        # modified below, will allow us to set every
+        # component to its appropriate enabled state
+        s = [False]*len(all_components)
 
-        for comp in all_components:
-            comp.setEnabled(comp not in disabled[tab])
+        if tab == TAB.MODTABLE:
+            tmodel = self.models[M.mod_table]
+            s[0] = s[1] = self.mod_table.selectionModel().hasSelection()
+            s[2] = s[3] = tmodel.isDirty
+            s[4],  s[5] = tmodel.canundo, tmodel.canredo
+        elif tab == TAB.FILETREE:
+            s[2] = s[3] = self.models[M.file_viewer].has_unsaved_changes
+
+        # else: Installer has everything disabled
+
+        for comp, select in zip(all_components, s):
+            comp.setEnabled(select)
 
 
+    def update_button_from_action(self, action, button):
+        """
 
+        :param QAction action:
+        :param QAbstractButton button:
+        :return:
+        """
+        button.setEnabled(action.isEnabled())
+        button.setToolTip(action.toolTip())
+        button.setVisible(action.isVisible())
 
     def _enable_mod_move_actions(self, enable_moveup, enable_movedown):
         for action in [self.action_move_mod_to_bottom,
@@ -695,10 +751,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     # <editor-fold desc="EventHandlers">
 
-    def on_tab_changed(self):
-        curtab = self.manager_tabs.currentIndex()
-        self._visible_components_for_tab(curtab)
-        self._enabled_actions_for_tab(curtab)
+    def on_tab_changed(self, newindex):
+        self.current_tab = TAB(newindex)
+        self._visible_components_for_tab(newindex)
+        self._enabled_actions_for_tab(newindex)
 
 
 
@@ -774,14 +830,14 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         Enable or disable buttons and actions that rely on having a selection in the mod table.
         """
         self._enable_mod_move_actions(has_selection, has_selection)
-
         self.action_toggle_mod.setEnabled(has_selection)
 
     def on_table_unsaved_change(self, unsaved_changes_present):
-        self.save_cancel_btnbox.setEnabled(
-            unsaved_changes_present)
-        self.action_save_changes.setEnabled(
-            unsaved_changes_present)
+        for thing in [self.save_cancel_btnbox,
+                      self.action_save_changes,
+                      self.action_revert_changes]:
+            thing.setEnabled(
+                    unsaved_changes_present)
 
     def on_modlist_activeonly_toggle(self, checked):
 
@@ -923,6 +979,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         quit_app()
 
 
+
 # noinspection PyArgumentList
 def quit_app():
     skylog.stop_listener()
@@ -931,12 +988,12 @@ def quit_app():
 
 # <editor-fold desc="__main__">
 if __name__ == '__main__':
-    from skymodman import managers
     # from skymodman.qt_interface.models.modtable_tree import \
     #     ModTable_TreeModel
     from PyQt5.QtCore import QAbstractItemModel, QSortFilterProxyModel
     import sys
 
+    from skymodman import managers
     app = QApplication(sys.argv)
 
     MM = managers.ModManager()

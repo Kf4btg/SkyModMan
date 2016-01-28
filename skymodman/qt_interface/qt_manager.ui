@@ -479,6 +479,8 @@
     <addaction name="action_choose_mod_folder"/>
     <addaction name="separator"/>
     <addaction name="action_save_changes"/>
+    <addaction name="action_revert_changes"/>
+    <addaction name="separator"/>
     <addaction name="action_quit"/>
    </widget>
    <widget class="QMenu" name="menuProfile">
@@ -528,6 +530,11 @@
    </attribute>
    <addaction name="action_choose_mod_folder"/>
    <addaction name="action_install_fomod"/>
+   <addaction name="separator"/>
+   <addaction name="action_save_changes"/>
+   <addaction name="action_revert_changes"/>
+   <addaction name="action_undo"/>
+   <addaction name="action_redo"/>
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
   <action name="action_install_fomod">
@@ -615,6 +622,9 @@
    </property>
   </action>
   <action name="action_undo">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="icon">
     <iconset theme="edit-undo">
      <normaloff>.</normaloff>.</iconset>
@@ -627,6 +637,9 @@
    </property>
   </action>
   <action name="action_redo">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="icon">
     <iconset theme="edit-redo">
      <normaloff>.</normaloff>.</iconset>
@@ -662,6 +675,9 @@
    </property>
    <property name="text">
     <string>&amp;Save Changes</string>
+   </property>
+   <property name="statusTip">
+    <string>Save Changes</string>
    </property>
   </action>
   <action name="action_move_mod_up">
@@ -734,6 +750,27 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+Shift+Down</string>
+   </property>
+  </action>
+  <action name="action_revert_changes">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="icon">
+    <iconset theme="document-revert">
+     <normaloff>.</normaloff>.</iconset>
+   </property>
+   <property name="text">
+    <string>&amp;Revert Changes</string>
+   </property>
+   <property name="toolTip">
+    <string>Revert all unsaved changes</string>
+   </property>
+   <property name="statusTip">
+    <string>Reset to last saved state, undoing any unsaved changes</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+R</string>
    </property>
   </action>
  </widget>
