@@ -45,7 +45,8 @@ if __name__ == '__main__':
 
         w = ModManagerWindow(manager=MM)
         # noinspection PyArgumentList
-        w.resize(QGuiApplication.primaryScreen().availableSize()*3/5)
+        # w.resize(QGuiApplication.primaryScreen().availableSize()*3/5)
+        w.resize(QGuiApplication.primaryScreen().availableSize()*5/7)
         w.show()
 
         ret = None
