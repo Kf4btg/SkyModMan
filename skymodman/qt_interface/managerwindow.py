@@ -1,5 +1,4 @@
 from functools import partial
-from itertools import compress
 
 from PyQt5.QtCore import (Qt,
                           pyqtSignal,
@@ -29,6 +28,7 @@ from skymodman.constants import (Tab as TAB,
 from skymodman.qt_interface.qt_manager_ui import Ui_MainWindow
 from skymodman.qt_interface.widgets import message, NewProfileDialog
 from skymodman.qt_interface.models import (
+    ModTable_TreeModel,
     ProfileListModel,
     ModFileTreeModel,
     ActiveModsListFilter,
@@ -95,10 +95,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # setup the base ui
         self.setupUi(self)
 
-        # init mod table (since it is not included in the base ui file)
-        self.mod_table = ModTable_TreeView(parent=self,
-                                           manager=self.Manager)
-
         # set placeholder fields
         self.loaded_fomod = None
 
@@ -108,8 +104,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.installerpages.setCurrentIndex(0)
 
         self._search_text=''
-
-        # self.states= {t:TabState() for t in TAB} #type: dict[TAB,TabState]
 
         # Let sub-widgets know the main window is initialized
         self.windowInitialized.emit()
@@ -141,7 +135,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.file_toolBar.addWidget(self.profile_group)
         self.file_toolBar.addActions([self.action_new_profile, self.action_delete_profile])
 
-
         # Action Group for the mod-movement buttons.
         # this just makes it easier to enable/disable them all at once
         self.file_toolBar.addSeparator()
@@ -154,7 +147,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                  ]
 
         mmag.setExclusive(False)
-        [mmag.addAction(a) for a in macts]
+        for a in macts: mmag.addAction(a)
 
         self.file_toolBar.addActions(macts)
 
@@ -167,7 +160,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         :param notify_done:
         """
         self.Manager.loadActiveProfileData()
-        self.mod_table.initUI(self.installed_mods_layout)
+        self.mod_table.setModel(
+                ModTable_TreeModel(manager=self.Manager,
+                                   parent=self.mod_table))
 
         self.models[M.mod_table] = self.mod_table.model()
 
@@ -178,12 +173,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 self.modtable_search_box, b"maximumWidth")
         self.animate_show_search.setDuration(300)
         self.modtable_search_box.setMaximumWidth(0)
-
-        # and now make the search bar do something
-        # self.modtable_search_box.textChanged.connect(
-        #         self.on_table_search)
-
-
 
         self.modtable_search_box.textChanged.connect(
                 self._clear_searchbox_style)
@@ -198,7 +187,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # i prefer searching only when i'm ready
         self.modtable_search_box.returnPressed.connect(
             on_search_box_return)
-
 
         # we don't actually use this yet...
         self.filters_dropdown.setVisible(False)
@@ -233,8 +221,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.profile_selector.setModel(model)
         self.profile_selector.setCurrentIndex(start_idx)
-
-
 
         # let setup know we're done here
         notify_done()
@@ -299,6 +285,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 lambda c, p: self.viewer_show_file_tree(
                         mod_filter.mapToSource(c),
                         mod_filter.mapToSource(p)))
+
+
+        ## have escape key unfocus the filter boxes
+        for f in [self.filetree_modfilter, self.filetree_filefilter]:
+            f.escapeLineEdit.connect(f.clearFocus)
 
         # let setup know we're done here
         notify_done()
@@ -423,9 +414,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     def _connect_buttons(self, notify_done):
         """ Make the buttons do stuff
         """
-        # use a dialog-button-box for save/cancel
+        # use a dialog-button-box for save/cancel;
         # have to specify by standard button type
-        # TODO: connect these buttons to actions
         btn_apply = self.save_cancel_btnbox.button(
                 QDialogButtonBox.Apply) #type: QPushButton
         btn_reset = self.save_cancel_btnbox.button(
@@ -434,22 +424,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         btn_apply.clicked.connect(
                 self.action_save_changes.trigger)
 
+        # enabled/disable the save/cancel buttons based
+        # on the status of the save-changes action
         self.action_save_changes.changed.connect(lambda: self.save_cancel_btnbox.setEnabled(self.action_save_changes.isEnabled()))
 
-        # set the save button up to follow the status of the save action
-        # self.action_save_changes.changed.connect(partial(self.update_button_from_action,
-        #         self.action_save_changes,
-        #         btn_apply))
-
-
-        # connect reset button to the revert action, and follow its status
+        # connect reset button to the revert action
         btn_reset.clicked.connect(
                 self.action_revert_changes.trigger)
-
-        # self.action_revert_changes.changed.connect(partial(
-        #     self.update_button_from_action,
-        #             self.action_revert_changes,
-        #             btn_reset))
 
         # using released since 'clicked' sends an extra
         # bool argument (which means nothing in this context
