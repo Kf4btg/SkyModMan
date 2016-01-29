@@ -33,7 +33,6 @@ from skymodman.qt_interface.models import (
     ModFileTreeModel,
     ActiveModsListFilter,
     FileViewerTreeFilter)
-from skymodman.qt_interface.views import ModTable_TreeView
 from skymodman.utils import withlogger, Notifier, checkPath
 
 

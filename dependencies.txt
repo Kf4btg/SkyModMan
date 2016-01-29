@@ -1,0 +1,17 @@
+# https://github.com/wummel/patool
+patool
+
+# http://riverbankcomputing.co.uk/software/pyqt/intro
+pyqt5
+
+#
+xmltodict
+
+#
+addict
+
+#
+sh
+
+#
+lxml
