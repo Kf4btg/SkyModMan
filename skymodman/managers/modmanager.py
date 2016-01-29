@@ -36,20 +36,22 @@ class ModManager:
         # until it is requested.
         self._db_manager = database.DBManager(self)
 
-        self._conflicting_files = None # type: collections.defaultdict(list)
-        self._mods_with_conflicts = None #type: collections.defaultdict(list)
+        self._conflicting_files = None
+        """:type: collections.defaultdict[list]"""
+        self._mods_with_conflicts = None
+        """:type: collections.defaultdict[list]"""
 
 
     @property
-    def Config(self) -> config.ConfigManager:
+    def Config(self):
         return self._config_manager
 
     @property
-    def DB(self) -> database.DBManager:
+    def DB(self):
         return self._db_manager
 
     @property
-    def Profiler(self) -> profiles.ProfileManager:
+    def Profiler(self):
         return self._profile_manager
 
     @property
@@ -58,6 +60,10 @@ class ModManager:
 
     @file_conflicts.setter
     def file_conflicts(self, ddictlist):
+        """
+
+        :param collections.defaultdict[list] ddictlist:
+        """
         self._conflicting_files = ddictlist
 
     @property
@@ -66,9 +72,11 @@ class ModManager:
 
     @mods_with_conflicting_files.setter
     def mods_with_conflicting_files(self, ddictlist):
+        """
+
+        :param collections.defaultdict[list] ddictlist:
+        """
         self._mods_with_conflicts = ddictlist
-
-
 
     def get_cursor(self):
         """
@@ -86,8 +94,6 @@ class ModManager:
         """
         return self.Profiler.active_profile
 
-    # @active_profile.setter
-    # def active_profile(self, profile):
     def set_active_profile(self, profile):
         """
         To be called by external interfaces.
@@ -151,7 +157,7 @@ class ModManager:
             self.saveModList()
 
         # FIXME: avoid doing this on profile change
-        self.LOGGER << "Loading list of all Mod Files on disk"
+        # self.LOGGER << "Loading list of all Mod Files on disk"
         self.LOGGER.info("Detecting file conflicts")
         self.DB.loadAllModFiles(self.Config.paths.dir_mods)
         # self.LOGGER << "Finished loading list of all Mod Files on disk"
@@ -170,31 +176,7 @@ class ModManager:
 
         :return: True if no errors encountered, False otherwise
         """
-        # try:
         return self.DB.validateModsList(self.Config.listModFolders())
-            # return True
-        # except exceptions.FilesystemDesyncError as e:
-        #     self.LOGGER.error(e)
-        #
-        #     if e.count_not_listed:
-        #         # add them to the end of the list and notify the user
-        #
-        #         # record in moderrors table
-        #         self.DB.conn.executemany("INSERT INTO moderrors(mod, errortype) VALUES (?, ?)",
-        #                                  map(lambda v: (v, SyncError.NOTLISTED.value), e.not_listed))
-        #
-        #         # record on profile
-        #         # self.active_profile.recordErrors(constants.SE_NOTLISTED, e.not_listed)
-        #     if e.count_not_found:
-        #         # mark them somehow in the list display, and notify the user. Don't automatically remove from the list or anything silly like that.
-        #
-        #         # record in moderrors table
-        #         self.DB.conn.executemany("INSERT INTO moderrors(mod, errortype) VALUES (?, ?)",
-        #                                  map(lambda v: (v, SyncError.NOTFOUND.value), e.not_found))
-        #
-        #         # record on profile
-        #         # self.active_profile.recordErrors(constants.SE_NOTFOUND, e.not_found)
-        #     return False
 
     def basicModInfo(self):
         """
@@ -226,7 +208,8 @@ class ModManager:
         # modentry according the order defined in constants.db_fields
         dbrowgen = (tuple([getattr(m, f) for f in sorted(m._fields, key=lambda fld: db_fields.index(fld)) ] ) for m in changes)
 
-        # using the context manager may allow deferrable foreign to go unsatisfied for a moment
+        # using the context manager may allow deferrable foreign
+        # to go unsatisfied for a moment
         with self.DB.conn:
             # delete the row with the given ordinal
             self.DB.conn.executemany("DELETE FROM mods WHERE ordinal=?", rows_to_delete)
@@ -240,41 +223,26 @@ class ModManager:
         # And finally save changes to disk
         self.saveModList()
 
-
     def saveModList(self):
         """Request that database manager save modinfo to disk"""
         self.DB.saveModDB(self.active_profile.modinfo)
 
-    def getProfileSetting(self, setting_section, setting_name):
-        return self.active_profile.settings[setting_section][setting_name]
-
-    def setProfileSetting(self, setting_section, setting_name, value):
-        self.active_profile.save_setting(setting_section, setting_name, value)
-
-
-    def updateModName(self, ordinal: int, new_name:str):
-        """
-        Have the DBMan update a mod's 'name' (e.g. the string that appears in the mod-table and which is customizable by the user)
-        :return:
-        """
-        self.LOGGER.debug("New name for mod #{}: {}".format(ordinal, new_name))
-        self.DB.update_("UPDATE mods SET name=? WHERE ordinal = ?", (new_name, ordinal))
-        # print([t for t in self.DB.execute_("Select * from mods where ordinal = ?", (ordinal, ))])
-
-    def updateModState(self, ordinal: int, enabled_status: bool):
-        self.LOGGER.debug("New status for mod #{}: {}".format(ordinal, "Enabled" if enabled_status else "Disabled"))
-        self.DB.update_("UPDATE mods SET enabled=? WHERE ordinal = ?", (int(enabled_status), ordinal))
-        # print([t for t in self.DB.execute_("Select * from mods where ordinal = ?", (ordinal,))])
-
-    def getModDir(self, modName):
-        """
-        queries the db for the directory associated with the given name
-        :param modName:
-        :return:
+    def getProfileSetting(self, section, name):
         """
 
-        return self.DB.getOne('SELECT directory from mods where name= ? ', (modName, ))[0]
+        :param str section: Config file section the setting belongs to
+        :param str name: Name of the setting
+        :return: current value of the setting
+        """
+        return self.active_profile.settings[section][name]
 
+    def setProfileSetting(self, section, name, value):
+        """
+        :param str section: Config file section the setting belongs to
+        :param str name: Name of the setting
+        :param value: the new value of the setting
+        """
+        self.active_profile.save_setting(section, name, value)
 
     def saveHiddenFiles(self):
         self.DB.saveHiddenFiles(self.active_profile.hidden_files)
@@ -290,8 +258,6 @@ class ModManager:
             yield from self.DB.execute_("Select * from hiddenfiles")
         else:
             yield from (t[0] for t in self.DB.execute_("Select filepath from hiddenfiles where directory=?", (for_mod, )))
-
-
 
     def getErrors(self, error_type):
         """

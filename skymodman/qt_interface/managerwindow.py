@@ -724,10 +724,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         if not indexCur.isValid(): return
 
-        modname = self.models[M.mod_list].data(indexCur)
+        moddir = indexCur.internalPointer().directory
 
-        p = self.Manager.Config.paths.dir_mods / \
-            self.Manager.getModDir(modname)
+        # modname = self.models[M.mod_list].data(indexCur)
+
+        p = self.Manager.Config.paths.dir_mods / moddir
+        #     self.Manager.getModDir(modname)
 
         self.models[M.file_viewer].setRootPath(str(p))
 
