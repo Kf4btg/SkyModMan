@@ -55,6 +55,31 @@ def checkPath(path, exp_user=False):
         return path and _exists(_expand(path))
     return path and _exists(path)
 
+
+def printattrs(obj, name=None):
+    """
+    For debugging. Prints the name and value of any entry in the object's dir(). Works for classes with or without a __dict__
+    :param obj:
+    :param name: Just used to label the object in output
+    :return:
+    """
+    from pprint import pprint
+    from collections import Mapping, Sequence
+    if name:
+        print(name+":")
+    else:
+        print("attributes:")
+
+    for a in dir(obj):
+        print("    ",end="")
+        attr=getattr(obj,a)
+        if isinstance(attr,(Mapping,Sequence)) and not isinstance(attr,(str,bytes)):
+            print(a,end=": ")
+            pprint(attr, indent=4)
+        else:
+            print(a, attr, sep=": ")
+
+
 #
 # def allcombos(iterable):
 #     """Returns iterator that yields tuples of all possible non-empty combinations of the elements of the iterable, disregarding order
