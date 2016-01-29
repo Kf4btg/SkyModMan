@@ -92,6 +92,34 @@
           </property>
          </widget>
         </item>
+        <item row="1" column="0" colspan="3">
+         <widget class="ModTable_TreeView" name="mod_table">
+          <property name="horizontalScrollBarPolicy">
+           <enum>Qt::ScrollBarAlwaysOff</enum>
+          </property>
+          <property name="dragDropMode">
+           <enum>QAbstractItemView::InternalMove</enum>
+          </property>
+          <property name="selectionMode">
+           <enum>QAbstractItemView::ContiguousSelection</enum>
+          </property>
+          <property name="rootIsDecorated">
+           <bool>false</bool>
+          </property>
+          <property name="uniformRowHeights">
+           <bool>true</bool>
+          </property>
+          <property name="itemsExpandable">
+           <bool>false</bool>
+          </property>
+          <property name="expandsOnDoubleClick">
+           <bool>false</bool>
+          </property>
+          <attribute name="headerStretchLastSection">
+           <bool>false</bool>
+          </attribute>
+         </widget>
+        </item>
        </layout>
       </widget>
       <widget class="QWidget" name="filetree_tab">
@@ -161,7 +189,10 @@
              </widget>
             </item>
             <item row="4" column="1" colspan="2">
-             <widget class="QLineEdit" name="filetree_modfilter">
+             <widget class="EscapeableLineEdit" name="filetree_modfilter">
+              <property name="toolTip">
+               <string>Filter by mod name</string>
+              </property>
               <property name="placeholderText">
                <string>Filter</string>
               </property>
@@ -200,7 +231,10 @@
              </widget>
             </item>
             <item>
-             <widget class="QLineEdit" name="filetree_filefilter">
+             <widget class="EscapeableLineEdit" name="filetree_filefilter">
+              <property name="toolTip">
+               <string>Filter by file name</string>
+              </property>
               <property name="placeholderText">
                <string>Filter</string>
               </property>
@@ -816,6 +850,11 @@
    <extends>QLineEdit</extends>
    <header>skymodman.qt_interface.plugins.widgets.escapeablelineedit</header>
   </customwidget>
+  <customwidget>
+   <class>ModTable_TreeView</class>
+   <extends>QTreeView</extends>
+   <header>skymodman.qt_interface.views.modtable</header>
+  </customwidget>
  </customwidgets>
  <resources/>
  <connections>
@@ -848,6 +887,38 @@
     <hint type="destinationlabel">
      <x>29</x>
      <y>549</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>filetree_modfilter</sender>
+   <signal>escapeLineEdit()</signal>
+   <receiver>filetree_modfilter</receiver>
+   <slot>clear()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>318</x>
+     <y>477</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>283</x>
+     <y>499</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>filetree_filefilter</sender>
+   <signal>escapeLineEdit()</signal>
+   <receiver>filetree_filefilter</receiver>
+   <slot>clear()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>497</x>
+     <y>491</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>532</x>
+     <y>499</y>
     </hint>
    </hints>
   </connection>

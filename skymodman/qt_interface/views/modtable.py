@@ -4,7 +4,6 @@ from PyQt5.QtCore import Qt, pyqtSignal, QItemSelectionModel
 from skymodman.constants import Column
 from skymodman.utils import withlogger
 from skymodman.thirdparty.undo import group
-# from skymodman.utils.timedundo import group
 
 from skymodman.qt_interface.models.modtable_tree import ModTable_TreeModel
 
@@ -22,32 +21,12 @@ class ModTable_TreeView(QTreeView):
 
     canMoveItems = pyqtSignal(bool, bool)
 
-    def __init__(self, *, parent, manager, **kwargs):
+    def __init__(self, parent, *args, **kwargs):
         # noinspection PyArgumentList
-        super().__init__(parent, **kwargs)
-        self.manager = manager #type: ModManager
-        self._parent = parent # type: ModManagerWindow
+        super().__init__(parent, *args, **kwargs)
         self._model  = None  # type: ModTable_TreeModel
         self._selection_model = None # type: QtCore.QItemSelectionModel
-        self.LOGGER << "Init ModTable_TreeView"
-
-    def initUI(self, grid):
-        self.setRootIsDecorated(False) # no collapsing
-        self.setObjectName("mod_table")
-        grid.addWidget(self, 1, 0, 1, 5)
-
-        self.setSelectionMode(QAbstractItemView.ContiguousSelection)
-        self.setDragDropMode(QAbstractItemView.InternalMove)
-
-        self.setModel(ModTable_TreeModel(parent=self, manager=self.manager))
-        self.setColumnHidden(Column.DIRECTORY, True) # hide directory column by default
-        # h=self.header() #type:QHeaderView
-        self.header().setStretchLastSection(False) # don't stretch the last section...
-        self.header().setSectionResizeMode(Column.NAME, QHeaderView.Stretch)  # ...stretch the Name section!
-
-        self._selection_model = self.selectionModel()  # keep a local reference to the selection model
-        self._model.notifyViewRowsMoved.connect(self._selection_moved) # called from model's shiftrows() method
-        self._model.hideErrorColumn.connect(self._hideErrorColumn) # only show error col if there are errors
+        # self.LOGGER << "Init ModTable_TreeView"
 
     def _hideErrorColumn(self, hide):
         self.setColumnHidden(Column.ERRORS, hide)
@@ -57,6 +36,19 @@ class ModTable_TreeView(QTreeView):
     def setModel(self, model):
         super().setModel(model)
         self._model = model
+        # keep a local reference to the selection model
+        self._selection_model = self.selectionModel()
+        # called from model's shiftrows() method
+        self._model.notifyViewRowsMoved.connect(self._selection_moved)
+        # only show error col if there are errors
+        self._model.hideErrorColumn.connect(self._hideErrorColumn)
+
+        # some final UI adjustments
+        self.setColumnHidden(Column.DIRECTORY,
+                             True)  # hide directory column by default
+        # stretch the Name section
+        self.header().setSectionResizeMode(Column.NAME,QHeaderView.Stretch)
+
 
     def loadData(self):
         self._model.loadData()
@@ -79,7 +71,7 @@ class ModTable_TreeView(QTreeView):
                 # to differentiate it.
                 return None
 
-            self.selectionModel().select(result, QItemSelectionModel.ClearAndSelect)
+            self._selection_model.select(result, QItemSelectionModel.ClearAndSelect)
             self.scrollTo(result, QAbstractItemView.PositionAtCenter)
             self.setCurrentIndex(result)
             return True
@@ -175,9 +167,10 @@ class ModTable_TreeView(QTreeView):
 
         :param QContextMenuEvent event:
         """
-        mw = self._parent # mainwindow
+
+        mw = self.window() # mainwindow
         menu = QMenu(self)
-        menu.addActions([mw.action_togglemod
+        menu.addActions([mw.action_toggle_mod
                          ])
         menu.exec_(event.globalPos())
 
@@ -204,8 +197,7 @@ class ModTable_TreeView(QTreeView):
                                 Qt_CheckStateRole)
 
 if __name__ == '__main__':
-    from skymodman.managers import ModManager
-    from skymodman.qt_interface.managerwindow import ModManagerWindow
+    # from skymodman.managers import ModManager
     from PyQt5 import QtCore #, QtGui
 
     # QModelIndex

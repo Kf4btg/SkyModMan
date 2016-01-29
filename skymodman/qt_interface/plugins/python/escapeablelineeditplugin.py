@@ -3,7 +3,7 @@ from PyQt5.QtDesigner import QPyDesignerCustomWidgetPlugin
 
 from skymodman.qt_interface.plugins.widgets.escapeablelineedit import EscapeableLineEdit
 
-class PyDemoPlugin(QPyDesignerCustomWidgetPlugin):
+class EscapeableLineEditPlugin(QPyDesignerCustomWidgetPlugin):
 
     # Initialise the instance.
     def __init__(self, parent=None):
@@ -34,7 +34,7 @@ class PyDemoPlugin(QPyDesignerCustomWidgetPlugin):
     # Return the name of the group to which the custom widget belongs.  A new
     # group will be created if it doesn't already exist.
     def group(self):
-        return "Custom"
+        return "SMM_Custom"
 
     # Return the icon used to represent the custom widget in Designer's widget
     # box.
