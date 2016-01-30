@@ -5,7 +5,7 @@ from skymodman.constants import Column
 from skymodman.utils import withlogger
 from skymodman.thirdparty.undo import group
 
-from skymodman.qt_interface.models.modtable_tree import ModTable_TreeModel
+from skymodman.interface.models.modtable_tree import ModTable_TreeModel
 
 Qt_Checked   = Qt.Checked
 Qt_Unchecked = Qt.Unchecked

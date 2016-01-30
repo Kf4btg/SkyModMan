@@ -25,9 +25,9 @@ from skymodman.constants import (Tab as TAB,
                                  qModels as M,
                                  qFilters as F,
                                  Column)
-from skymodman.qt_interface.qt_manager_ui import Ui_MainWindow
-from skymodman.qt_interface.widgets import message, NewProfileDialog
-from skymodman.qt_interface.models import (
+from skymodman.interface.qt_manager_ui import Ui_MainWindow
+from skymodman.interface.widgets import message, NewProfileDialog
+from skymodman.interface.models import (
     ModTable_TreeModel,
     ProfileListModel,
     ModFileTreeModel,
@@ -1070,7 +1070,7 @@ def quit_app():
 
 # <editor-fold desc="__main__">
 if __name__ == '__main__':
-    # from skymodman.qt_interface.models.modtable_tree import \
+    # from skymodman.interface.models.modtable_tree import \
     #     ModTable_TreeModel
     from PyQt5.QtCore import QAbstractItemModel, QSortFilterProxyModel
     import sys

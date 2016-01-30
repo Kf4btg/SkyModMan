@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'skymodman/qt_interface/qt_manager.ui'
+# Form implementation generated from reading ui file 'skymodman/interface/qt_manager.ui'
 #
 # Created by: PyQt5 UI code generator 5.5.1
 #
@@ -463,5 +463,5 @@ class Ui_MainWindow(object):
         self.action_find_previous.setToolTip(_translate("MainWindow", "Find Previous Occurrence"))
         self.action_show_search.setText(_translate("MainWindow", "S&how Search Bar"))
 
-from skymodman.qt_interface.plugins.widgets.escapeablelineedit import EscapeableLineEdit
-from skymodman.qt_interface.views.modtable import ModTable_TreeView
+from skymodman.interface.plugins.widgets.escapeablelineedit import EscapeableLineEdit
+from skymodman.interface.views.modtable import ModTable_TreeView

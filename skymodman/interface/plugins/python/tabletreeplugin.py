@@ -1,9 +1,9 @@
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtDesigner import QPyDesignerCustomWidgetPlugin
 
-from skymodman.qt_interface.plugins.widgets.escapeablelineedit import EscapeableLineEdit
+from skymodman.interface.views.modtable import ModTable_TreeView
 
-class EscapeableLineEditPlugin(QPyDesignerCustomWidgetPlugin):
+class ModTable_TreeViewPlugin(QPyDesignerCustomWidgetPlugin):
 
     # Initialise the instance.
     def __init__(self, parent=None):
@@ -25,11 +25,11 @@ class EscapeableLineEditPlugin(QPyDesignerCustomWidgetPlugin):
 
     # Return a new instance of the custom widget with the given parent.
     def createWidget(self, parent):
-        return EscapeableLineEdit(parent)
+        return ModTable_TreeView(parent=parent)
 
     # Return the name of the class that implements the custom widget.
     def name(self):
-        return "EscapeableLineEdit"
+        return "ModTable_TreeView"
 
     # Return the name of the group to which the custom widget belongs.  A new
     # group will be created if it doesn't already exist.
@@ -44,12 +44,12 @@ class EscapeableLineEditPlugin(QPyDesignerCustomWidgetPlugin):
     # Return a short description of the custom widget used by Designer in a
     # tool tip.
     def toolTip(self):
-        return "QLineEdit that emits a signal on Escape"
+        return "Custom QTreeView for displaying tabular data."
 
     # Return a full description of the custom widget used by Designer in
     # "What's This?" help for the widget.
     def whatsThis(self):
-        return "A simple extension to the standard QLineEdit that catches a press of the Escape key and emits a signal."
+        return "A customized QTreeView that is intended to be used in place of a QTableView for cases where the entire row--rather than an individual cell--is conceptually a single data 'item'. It shows a flat (non-hierarchical) view of the data, and all operations such as movement and dragging are done per-row."
 
     # Return True if the custom widget acts as a container for other widgets.
     def isContainer(self):
@@ -58,19 +58,13 @@ class EscapeableLineEditPlugin(QPyDesignerCustomWidgetPlugin):
     # Return an XML fragment that allows the default values of the custom
     # widget's properties to be overridden.
     def domXml(self):
-        return '<widget class="EscapeableLineEdit" name="escapeablelineedit">\n' \
-               ' <property name="toolTip" >\n' \
-               '  <string></string>\n' \
-               ' </property>\n' \
-               ' <property name="whatsThis" >\n' \
-               '  <string></string>\n' \
-               ' </property>\n' \
+        return '<widget class="ModTable_TreeView" name="mod_table">\n' \
                '</widget>\n'
 
     # Return the name of the module containing the class that implements the
     # custom widget.  It may include a module path.
     def includeFile(self):
-        return "skymodman.qt_interface.plugins.widgets.escapeablelineedit"
+        return "skymodman.interface.views.modtable"
 
 
 # Define the image used for the icon.

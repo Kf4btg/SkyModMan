@@ -36,7 +36,7 @@ if __name__ == '__main__':
     if USE_QT_GUI:
         from PyQt5.QtWidgets import QApplication
         from PyQt5.QtGui import QGuiApplication
-        from skymodman.qt_interface.managerwindow import ModManagerWindow
+        from skymodman.interface.managerwindow import ModManagerWindow
 
         app = QApplication(sys.argv)
 
