@@ -463,5 +463,5 @@ class Ui_MainWindow(object):
         self.action_find_previous.setToolTip(_translate("MainWindow", "Find Previous Occurrence"))
         self.action_show_search.setText(_translate("MainWindow", "S&how Search Bar"))
 
-from skymodman.interface.plugins.widgets.escapeablelineedit import EscapeableLineEdit
+from skymodman.interface.designer.plugins.widgets.escapeablelineedit import EscapeableLineEdit
 from skymodman.interface.views.modtable import ModTable_TreeView

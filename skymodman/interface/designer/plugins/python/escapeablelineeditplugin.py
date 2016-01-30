@@ -1,7 +1,8 @@
-from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtDesigner import QPyDesignerCustomWidgetPlugin
+from PyQt5.QtGui import QIcon, QPixmap
 
-from skymodman.interface.plugins.widgets.escapeablelineedit import EscapeableLineEdit
+from skymodman.interface.designer.plugins.widgets.escapeablelineedit import EscapeableLineEdit
+
 
 class EscapeableLineEditPlugin(QPyDesignerCustomWidgetPlugin):
 
