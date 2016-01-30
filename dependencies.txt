@@ -1,5 +1,5 @@
-# https://github.com/wummel/patool
-patool
+# https://github.com/Changaco/python-libarchive-c
+python-libarchive-c
 
 # http://riverbankcomputing.co.uk/software/pyqt/intro
 pyqt5
