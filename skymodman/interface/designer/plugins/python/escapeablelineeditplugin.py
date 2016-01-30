@@ -71,7 +71,7 @@ class EscapeableLineEditPlugin(QPyDesignerCustomWidgetPlugin):
     # Return the name of the module containing the class that implements the
     # custom widget.  It may include a module path.
     def includeFile(self):
-        return "skymodman.interface.plugins.widgets.escapeablelineedit"
+        return "skymodman.interface.designer.plugins.widgets.escapeablelineedit"
 
 
 # Define the image used for the icon.

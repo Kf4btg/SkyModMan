@@ -1,11 +1,11 @@
 from PyQt5.QtCore import QRegularExpression
 from PyQt5.QtGui import QRegularExpressionValidator
 from PyQt5.QtWidgets import (QDialog,
-                             QDialogButtonBox,
-                             QPushButton)
+                             QDialogButtonBox)
 
-from .new_profile_dialog_ui import Ui_NewProfileDialog
+from skymodman.interface.designer.uic.new_profile_dialog_ui import Ui_NewProfileDialog
 from skymodman.utils import withlogger
+
 
 @withlogger
 class NewProfileDialog(QDialog,  Ui_NewProfileDialog):

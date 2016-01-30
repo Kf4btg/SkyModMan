@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'widgets/new_profile_dialog.ui'
+# Form implementation generated from reading ui file 'skymodman/interface/designer/ui/new_profile_dialog.ui'
 #
 # Created by: PyQt5 UI code generator 5.5.1
 #

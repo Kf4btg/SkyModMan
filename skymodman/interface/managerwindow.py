@@ -14,8 +14,7 @@ from PyQt5.QtWidgets import (QApplication,
                              QDialogButtonBox,
                              QMessageBox,
                              QFileDialog,
-                             QAction, QAbstractButton, QPushButton,
-                             # QHeaderView,
+                             QAction, QAbstractButton,  # QHeaderView,
                              QActionGroup)
 
 from skymodman import skylog
@@ -25,14 +24,14 @@ from skymodman.constants import (Tab as TAB,
                                  qModels as M,
                                  qFilters as F,
                                  Column)
-from skymodman.interface.qt_manager_ui import Ui_MainWindow
-from skymodman.interface.widgets import message, NewProfileDialog
+from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow
 from skymodman.interface.models import (
     ModTable_TreeModel,
     ProfileListModel,
     ModFileTreeModel,
     ActiveModsListFilter,
     FileViewerTreeFilter)
+from skymodman.interface.widgets import message, NewProfileDialog
 from skymodman.utils import withlogger, Notifier, checkPath
 
 
@@ -1072,7 +1071,6 @@ def quit_app():
 if __name__ == '__main__':
     # from skymodman.interface.models.modtable_tree import \
     #     ModTable_TreeModel
-    from PyQt5.QtCore import QAbstractItemModel, QSortFilterProxyModel
     import sys
 
     from skymodman import managers
