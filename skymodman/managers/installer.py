@@ -1,95 +1,21 @@
-from functools import partialmethod
 from collections import OrderedDict
-from contextlib import ContextDecorator
-# import traceback
 import shutil
 import os
 import subprocess
 from pathlib import Path
-from ctypes import byref, c_longlong, c_size_t, c_void_p
-# from os.path import basename
 import sys
 
 import libarchive
 from libarchive import file_reader, ArchiveError, ffi
-from libarchive.extract import new_archive_write_disk #, extract_entries
-# from libarchive.read import ArchiveRead
+from libarchive.extract import new_archive_write_disk
+from ctypes import byref, c_longlong, c_size_t, c_void_p
 
 
-
-# import patoolib
 from skymodman.exceptions import ArchiverError
-from skymodman.utils import withlogger, change_dir , printattrs #, checkPath
+from skymodman.utils import withlogger, change_dir #, printattrs #, checkPath
+
 
 @withlogger
-class _catchArchiveError(ContextDecorator):
-
-    def __init__(self, func=None, *args, **kwargs):
-        self.func = func
-        super().__init__(*args, **kwargs)
-
-    def __enter__(self):
-        if self.func: return self.func
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if exc_type is ArchiveError:
-            if self.func:
-                self.logger.error("Error during operation '{0.__name__}': {1}".format(self.func, exc_val))
-            else:
-                self.logger.error("Error reading archive: {}".format(exc_val))
-
-            # print(traceback.format_tb(exc_tb))
-            # traceback.print_tb(exc_tb)
-            # printattrs(exc_tb, "traceback")
-            # printattrs(exc_tb.tb_frame)
-            # return True
-
-        return False
-
-
-
-
-class ArchiveHandler_old:
-
-    def __init__(self, archive_type):
-        self._type = archive_type
-        self._commands = {
-            "list":    lambda:None,
-            "extract": lambda:None,
-            "create":  lambda:None
-        }
-        self._options = {
-            "list":    None,
-            "extract": None,
-            "create":  None
-        }
-
-    @property
-    def type(self):
-        return self._type
-
-    @property
-    def list(self):
-        return self._commands["list"]
-
-    @property
-    def extract(self):
-        return self._commands["extract"]
-
-    @property
-    def create(self):
-        return self._commands["create"]
-
-    def set_command(self, cmd_name, command=None, options=None):
-        self._commands[cmd_name] = command
-        self._options[cmd_name] = options
-
-    set_list_command    = partialmethod(set_command, "list")
-    set_extract_command = partialmethod(set_command, "extract")
-    set_create_command  = partialmethod(set_command, "create")
-
-
 class ArchiveHandler:
     FORMATS = ["zip", "rar", "7z"]
     PROGRAMS = ["unrar", "unar", "7z"]
@@ -109,6 +35,7 @@ class ArchiveHandler:
     """A mapping containing from the command name to a callable crafted to return the unique include-file syntax for each of the different commands"""
 
     def __init__(self, *args, **kwargs):
+        # noinspection PyArgumentList
         super().__init__(*args, **kwargs)
         self.archiver = ArchiveHandler()
 
@@ -117,7 +44,6 @@ class ArchiveHandler:
 
         if '7z' in self._programs:
             self._7zrar = self._7z_supports_rar()
-
 
     def detect_programs(self):
         """
@@ -234,10 +160,10 @@ class ArchiveHandler:
         :return: Tuple of (bool, list[ArchiveError]); the first item  is whether any command was able to sucessfully unpack the archive, while the second is the list of errors encountered, if any, during the various attempts.
         """
 
-        # first, try our other programs
         errors = []
-
         success=True
+
+        # first, try our other programs
         for cmdname, cmd in self._programs.items():
             if cmdname == '7z' and not self._7zrar: continue
             try:
@@ -274,7 +200,6 @@ class ArchiveHandler:
                 if entries:
                     with file_reader(archive) as arc:
                         self._extract_matching_entries(arc, entries)
-                        # print(entries)
                 else:
                     libarchive.extract_file(archive)
             except libarchive.ArchiveError as lae:
@@ -361,6 +286,7 @@ class InstallManager:
     Handles unpacking of mod archives and moving mod files and directories into the appropriate locations.
     """
 
+    # noinspection PyArgumentList
     def __init__(self, manager, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.manager = manager
@@ -373,6 +299,21 @@ class InstallManager:
 
         return None
 
+    def extract(self, archive, destination, entries=None):
+        """
+
+        :param archive: the archive to unpack
+        :param destination: extraction destination
+        :param entries: list of archive entries (i.e. directories or files) to extract; if None, all entries will be extracted
+        :return:
+        """
+
+        self.archiver.extract_archive(archive, destination, entries)
+
+    def iter_archive(self, archive, *, dirs=True, files=True):
+        yield from self.archiver.list_archive(archive, dirs=dirs, files=files)
+
+
 
 
 def __test_extract():
@@ -383,7 +324,6 @@ def __test_extract():
         'res/rartest.rar',
         'res/test-extract')
 
-    # print(os.listdir('res/test-extract'))
     for r, d, f in os.walk('res/test-extract'):
         print(r, d, f)
 
@@ -393,7 +333,6 @@ def __test_list():
 def __test_fomod():
     assert not im.is_fomod('res/7ztest.7z')
     print(im.is_fomod('res/rartest.rar'))
-    # print(im.is_fomod('res/rartest.rar'))
 
 def __test_exentries():
     rar = Path('res/rartest.rar').absolute()
