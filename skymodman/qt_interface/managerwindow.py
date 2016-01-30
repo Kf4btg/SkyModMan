@@ -382,8 +382,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.action_quit.triggered.connect(self.safe_quit)
 
         # action_install_fomod
-        self.action_install_fomod.triggered.connect(
-                self.load_fomod)
+        self.action_install_mod.triggered.connect(
+                self.install_mod_archive)
         # action_choose_mod_folder
         self.action_choose_mod_folder.triggered.connect(
                 self.choose_mod_folder)
@@ -1017,7 +1017,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.loaded_fomod = files[0]
             # todo: maybe run this method in a separate thread? at least the dialog
             # todo: setup 2nd tab with data from xml file and begin installation process
-            # todo: support loading actual fomod archives. (7z, rar, zip, etc.)
+
+    def install_mod_archive(self):
+        # todo: default to home folder or something instead of current dir
+        filename=QFileDialog.getOpenFileName(self, "Select Mod Archive",
+                                             QDir.currentPath(),
+                                             "Archives [zip, 7z, rar] (*.zip *.7z *.rar);;All Files(*)")[0]
+        if filename:
+            message('information','The Thing', filename)
+
 
     def choose_mod_folder(self):
         """
