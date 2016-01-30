@@ -4,7 +4,6 @@ from pathlib import Path
 from copy import deepcopy
 
 from skymodman import utils, exceptions
-# from skymodman.utils.humanizer import humanize
 
 from skymodman.constants import (EnvVars, INIKey, INISection)
 

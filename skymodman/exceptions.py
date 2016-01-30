@@ -51,3 +51,6 @@ class FilesystemDesyncError(Error):
             s+="{} mods found on disk were not recognized".format(self.count_not_listed)
         return s+"."
 
+#------------------------------
+class ArchiverError(Error):
+    pass

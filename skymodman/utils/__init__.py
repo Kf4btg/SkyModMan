@@ -55,6 +55,24 @@ def checkPath(path, exp_user=False):
         return path and _exists(_expand(path))
     return path and _exists(path)
 
+from contextlib import contextmanager
+
+import os
+@contextmanager
+def change_dir(dir):
+    """
+    A context manager that changes to the working directory to the path given by `dir` for the operations given in the with block, then changes back to the original wd on exit.  The full path of the original working directory is returned as the value of the contextmanager and can be bound with ``as``; this can be useful for referencing paths that are relative to the original wd.
+
+    :param dir:
+    """
+
+    pwd = os.getcwd()
+    os.chdir(dir)
+    yield pwd
+
+    os.chdir(pwd)
+
+
 
 def printattrs(obj, name=None):
     """

@@ -554,8 +554,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.models[M.file_viewer].hasUnsavedChanges.connect(self.on_table_unsaved_change)
 
-
-
         notify_done()
 
 
@@ -594,8 +592,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.modtable_search_button,  # 2
             self.modtable_search_box,     # 3
         ]
-
-        s = [False]*len(all_components)
 
         visible = {
             TAB.MODTABLE:  [1, 0, 1, 1],
