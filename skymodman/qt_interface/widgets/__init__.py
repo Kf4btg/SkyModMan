@@ -70,7 +70,6 @@ def message(icon='question', title='', text='Are you sure?', info_text=None, but
 
     if not mbuttons: mbuttons = QMessageBox.OK
 
-
     mbox = QMessageBox(micon, title, text, mbuttons, parent)
     mbox.setDefaultButton(dbutton)
 

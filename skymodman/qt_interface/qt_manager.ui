@@ -503,7 +503,7 @@
     <property name="title">
      <string>&amp;File</string>
     </property>
-    <addaction name="action_install_fomod"/>
+    <addaction name="action_install_mod"/>
     <addaction name="action_choose_mod_folder"/>
     <addaction name="separator"/>
     <addaction name="action_save_changes"/>
@@ -559,8 +559,7 @@
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
-   <addaction name="action_choose_mod_folder"/>
-   <addaction name="action_install_fomod"/>
+   <addaction name="action_install_mod"/>
    <addaction name="separator"/>
    <addaction name="action_save_changes"/>
    <addaction name="action_revert_changes"/>
@@ -568,13 +567,16 @@
    <addaction name="action_redo"/>
   </widget>
   <widget class="QStatusBar" name="status_bar"/>
-  <action name="action_install_fomod">
+  <action name="action_install_mod">
    <property name="icon">
-    <iconset theme="package-x-generic">
+    <iconset theme="folder-downloads">
      <normaloff>../../../.designer/backup</normaloff>../../../.designer/backup</iconset>
    </property>
    <property name="text">
-    <string>&amp;Install Fomod...</string>
+    <string>&amp;Install Mod...</string>
+   </property>
+   <property name="toolTip">
+    <string>Install Mod</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+I</string>

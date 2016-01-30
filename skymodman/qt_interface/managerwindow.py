@@ -1025,6 +1025,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                                              "Archives [zip, 7z, rar] (*.zip *.7z *.rar);;All Files(*)")[0]
         if filename:
             message('information','The Thing', filename)
+            
 
 
     def choose_mod_folder(self):

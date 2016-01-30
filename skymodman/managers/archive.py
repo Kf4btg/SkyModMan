@@ -1,15 +1,14 @@
-from collections import OrderedDict
-import shutil
 import os
+import shutil
 import subprocess
-from pathlib import Path
 import sys
+from collections import OrderedDict
+from pathlib import Path
 
 import libarchive
 from libarchive import file_reader, ArchiveError, ffi
 from libarchive.extract import new_archive_write_disk
 from ctypes import byref, c_longlong, c_size_t, c_void_p
-
 
 from skymodman.exceptions import ArchiverError
 from skymodman.utils import withlogger, change_dir #, printattrs #, checkPath
@@ -32,7 +31,7 @@ class ArchiveHandler:
             else p
             for p in paths),
     }
-    """A mapping containing from the command name to a callable crafted to return the unique include-file syntax for each of the different commands"""
+    """A mapping  from the command name to a callable crafted to return the unique include-file syntax for each of the different commands"""
 
     def __init__(self, *args, **kwargs):
         # noinspection PyArgumentList
