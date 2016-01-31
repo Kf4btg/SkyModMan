@@ -1,5 +1,7 @@
 from skymodman import ModEntry, skylog
-from skymodman.managers import config as _config, database as _database
+from skymodman.managers import (config as _config,
+                                database as _database,
+                                installer as _install)
 from skymodman.managers.profiles import Profile, ProfileManager
 from skymodman.constants import db_fields as _db_fields
 
@@ -7,7 +9,7 @@ from skymodman.constants import db_fields as _db_fields
 _configman  = None
 _dataman    = None
 _profileman = None
-_installman = None
+# _installman = None
 
 #shortcuts
 conf     = _configman
@@ -20,7 +22,7 @@ mods_with_conflicting_files = None
 _logger = None
 
 def init():
-    global _logger, _dataman, _profileman, _installman, _configman
+    global _logger, _dataman, _profileman, _configman #_installman,
     global conf, profiles, db
 
     _logger = skylog.newLogger(__name__)
@@ -234,3 +236,30 @@ def get_errors(error_type):
     """
 
     yield from (r['mod'] for r in _dataman.execute_(q, (error_type.value, )))
+
+
+##===============================================
+## Mod [Un]Installation
+##===============================================
+
+def install_mod(archive):
+    """
+    Examine an archive file for mod contents. If it contains a fomod-installer script, run the fomod wizard. If it just contains the mod files, check for proper directory structure and extract to the configured mod directory. Return status that lets the caller know whether the install succeeded and whether it should update its display.
+
+    :param archive: path to the archive file.
+    :return:
+    """
+
+    # Create an instance of the install manager
+    installman = _install.InstallManager()
+
+    # check for fomod
+    fomod_dir = installman.is_fomod(archive)
+    if fomod_dir:
+        print(fomod_dir)
+
+
+
+
+def install_mod_from_dir(directory):
+    pass

@@ -3,6 +3,8 @@ import os
 from pathlib import Path
 from copy import deepcopy
 
+import appdirs
+
 from skymodman import utils, exceptions
 # from skymodman.managers import modmanager as Manager
 from skymodman.constants import (EnvVars, INIKey, INISection)
@@ -48,8 +50,8 @@ class ConfigManager:
 
     __DEFAULT_CONFIG={
         _S_GENERAL: {
-            _K_MODDIR: "##DATADIR##/mods",
-            _K_VFSMNT: "##DATADIR##/skyrimfs",
+            _K_MODDIR: appdirs.user_data_dir(__APPNAME) +"/mods",
+            _K_VFSMNT: appdirs.user_data_dir(__APPNAME) +"/skyrimfs",
             _K_LASTPRO: __DEFAULT_PROFILE
         }
     }
@@ -159,34 +161,36 @@ class ConfigManager:
 
         ## set up paths ##
         # use XDG_CONFIG_HOME if set, else default to ~/.config
-        user_config_dir = os.getenv("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
+        # user_config_dir = os.getenv("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
 
-        self.paths.dir_config = Path(user_config_dir) / self.__APPNAME
+        paths = self.paths
 
-        self.paths.file_main = self.paths.dir_config / "{}.ini".format(self.__APPNAME)
+        paths.dir_config = Path(appdirs.user_config_dir(self.__APPNAME))
+
+        paths.file_main = paths.dir_config / "{}.ini".format(self.__APPNAME)
 
         ## check for config dir ##
-        if not self.paths.dir_config.exists():
+        if not paths.dir_config.exists():
             self.LOGGER.warning("Configuration directory not found.")
-            self.LOGGER.info("Creating configuration directory at: {}".format(self.paths.dir_config))
-            self.paths.dir_config.mkdir(parents=True)
+            self.LOGGER.info("Creating configuration directory at: {}".format(paths.dir_config))
+            paths.dir_config.mkdir(parents=True)
 
         ## check for profiles dir ##
 
-        self.paths.dir_profiles = self.paths.dir_config / ConfigManager.__PROFILES_DIRNAME
+        paths.dir_profiles = paths.dir_config / ConfigManager.__PROFILES_DIRNAME
 
-        if not self.paths.dir_profiles.exists():
-            self.LOGGER.info("Creating profiles directory at: {}".format(self.paths.dir_profiles))
-            self.paths.dir_profiles.mkdir(parents=True)
+        if not paths.dir_profiles.exists():
+            self.LOGGER.info("Creating profiles directory at: {}".format(paths.dir_profiles))
+            paths.dir_profiles.mkdir(parents=True)
 
-            def_pro = self.paths.dir_profiles / ConfigManager.__DEFAULT_PROFILE
+            def_pro = paths.dir_profiles / ConfigManager.__DEFAULT_PROFILE
 
             self.LOGGER.info("Creating directory for default profile.")
             def_pro.mkdir()
 
 
         ## check that main config file exists ##
-        if not self.paths.file_main.exists():
+        if not paths.file_main.exists():
             self.LOGGER.info("Creating default configuration file.")
             # create it w/ default values if it doesn't
             self.create_default_config()
@@ -197,20 +201,21 @@ class ConfigManager:
 
         #check for data dir, mods dir
         ## TODO: maybe we shouldn't create the mod directory by default?
-        if not self.paths.dir_mods.exists():
+        if not paths.dir_mods.exists():
             # for now, only create if the location in the config is same as the default
-            if str(self.paths.dir_mods) == \
-                    os.path.join(os.getenv("XDG_DATA_HOME",
-                                           os.path.expanduser("~/.local/share")),
-                                 ConfigManager.__APPNAME,
-                                 "mods"):
-                self.LOGGER.info("Creating new mods directory at: {}".format(self.paths.dir_mods))
-                self.paths.dir_mods.mkdir(parents=True)
+            if str(paths.dir_mods) == \
+                appdirs.user_data_dir(self.__APPNAME) + "/mods":
+                    # os.path.join(os.getenv("XDG_DATA_HOME",
+                    #                        os.path.expanduser("~/.local/share")),
+                    #              ConfigManager.__APPNAME,
+                    #              "mods"):
+                self.LOGGER.info("Creating new mods directory at: {}".format(paths.dir_mods))
+                paths.dir_mods.mkdir(parents=True)
             else:
                 self.LOGGER.error("Configured mods directory not found")
 
         # ensure that 'lastprofile' exists in profiles dir, or fallback to default
-        lpdir = self.paths.dir_profiles / self._lastprofile
+        lpdir = paths.dir_profiles / self._lastprofile
         if not lpdir.exists():
             self.LOGGER.error("Directory for last-loaded profile '{}' could not be found! Falling back to default.".format(self._lastprofile))
             self._lastprofile = self.__DEFAULT_PROFILE
@@ -225,16 +230,17 @@ class ConfigManager:
 
         # default data directory
         # TODO: will need to figure something else out if there's ever a need to get this working on a non-linux OS (e.g. OS X)
-        default_data_dir = Path(os.getenv("XDG_DATA_HOME",
-                                          os.path.expanduser("~/.local/share"))) / ConfigManager.__APPNAME
+        # default_data_dir = Path(os.getenv("XDG_DATA_HOME",
+        #                                   os.path.expanduser("~/.local/share"))) / ConfigManager.__APPNAME
+        # default_data_dir = Path(appdirs.user_data_dir(self.__APPNAME))
 
         config = configparser.ConfigParser()
 
-        # construct the default config, replacing the placeholder with the actual data directory
+        # construct the default config
         for section,vallist in ConfigManager.__DEFAULT_CONFIG.items():
             config[section] = {}
             for prop, value in vallist.items():
-                config[section][prop] = value.replace('##DATADIR##', str(default_data_dir))
+                config[section][prop] = value
 
         with self.paths.file_main.open('w') as configfile:
             config.write(configfile)

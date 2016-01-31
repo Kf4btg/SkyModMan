@@ -103,10 +103,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # Let sub-widgets know the main window is initialized
         self.windowInitialized.emit()
 
-    # @property
-    # def Manager(self):
-    #     return self._manager
-
     @property
     def current_tab(self):
         return self._currtab
@@ -114,7 +110,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     @current_tab.setter
     def current_tab(self, tabnum):
         self._currtab = TAB(tabnum)
-
 
     ##===============================================
     ## Setup UI Functionality (called once on first load)
@@ -467,7 +462,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         notify_done()
 
-
     def _connect_local_signals(self, notify_done):
         """
         SIGNALS:
@@ -584,7 +578,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         notify_done()
 
-
     # </editor-fold>
 
     ##===============================================
@@ -645,6 +638,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.action_redo,            # 5
             self.action_find_next,       # 6
             self.action_find_previous,   # 7
+            self.action_uninstall_mod,   # 8
         ]
 
         # this is a selector that, depending on how it is
@@ -654,7 +648,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         if tab == TAB.MODTABLE:
             tmodel = self.models[M.mod_table]
-            s[0] = s[1] = self.mod_table.selectionModel().hasSelection()
+            s[0] = s[1] = s[8] = self.mod_table.selectionModel().hasSelection()
             s[2] = s[3] = tmodel.isDirty
             s[4],  s[5] = tmodel.canundo, tmodel.canredo
             s[6] = s[7] = bool(self._search_text)
@@ -665,7 +659,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         for comp, select in zip(all_components, s):
             comp.setEnabled(select)
-
 
     def update_button_from_action(self, action, button):
         """
@@ -719,7 +712,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.modtable_search_box.clearFocus()
             self.modtable_search_box.clear()
 
-
     def update_modlist_label(self, inactive_hidden):
         if inactive_hidden:
             text = "Active Mods ({shown}/{total})"
@@ -746,10 +738,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         moddir = indexCur.internalPointer().directory
 
-        # modname = self.models[M.mod_list].data(indexCur)
-
         p = Manager.conf.paths.dir_mods / moddir
-        #     Manager.getModDir(modname)
 
         self.models[M.file_viewer].setRootPath(str(p))
 
@@ -789,28 +778,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.action_delete_profile.setEnabled(True)
             self.action_delete_profile.setToolTip('Remove Profile')
 
-    # def reset_views_on_profile_change(self):
-    #     """For now, this just repopulates the mod-table. There might be more to it later"""
-    #
-    #     self.LOGGER << "About to repopulate table"
-    #     self.mod_table.loadData()
-    #
-    #     # self.filters[F.mod_list].
-    #
-    #     # self.updateFileTreeModList()
-    #
-    #     self.update_UI()
-
-
     # <editor-fold desc="EventHandlers">
 
     def on_tab_changed(self, newindex):
         self.current_tab = TAB(newindex)
         self._visible_components_for_tab()
         self._enabled_actions_for_tab()
-
-
-
 
     @pyqtSlot('int')
     def on_profile_select(self, index):
@@ -882,17 +855,23 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         Enable or disable buttons and actions that rely on having a selection in the mod table.
         """
-        self._enable_mod_move_actions(has_selection, has_selection)
+        # self.LOGGER << "modtable selection->{}".format(has_selection)
+
+        self.mod_movement_group.setEnabled(has_selection)
         self.action_toggle_mod.setEnabled(has_selection)
+        self.action_uninstall_mod.setEnabled(has_selection)
 
     def on_table_unsaved_change(self, unsaved_changes_present):
-        for thing in [self.save_cancel_btnbox,
+        # self.LOGGER << "table status: {}".format("dirty" if unsaved_changes_present else "clean")
+
+        for widgy in [self.save_cancel_btnbox,
                       self.action_save_changes,
                       self.action_revert_changes]:
-            thing.setEnabled(
+            widgy.setEnabled(
                     unsaved_changes_present)
 
     def on_modlist_activeonly_toggle(self, checked):
+        # self.LOGGER << "ActiveOnly toggled->{}".format(checked)
 
         self.filters[F.mod_list].setOnlyShowActive(checked)
         self.update_modlist_label(checked)
@@ -932,6 +911,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def on_undo_redo_event(self, undo_text, redo_text):
         """Update the undo/redo text to reflect the passed text.  If an argument is passed as ``None``, that button will instead be disabled."""
+        # self.LOGGER << "Undoevent({}, {})".format(undo_text, redo_text)
+
         for action, text, default_text in [
             (self.action_undo, undo_text, "Undo"),
             (self.action_redo, redo_text, "Redo")]:
@@ -1019,6 +1000,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     ##===============================================
 
     def edit_preferences(self):
+        # todo
         message(text="Preferences?")
 
     # noinspection PyArgumentList
@@ -1054,10 +1036,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             QDir.currentPath(),
             "Archives [zip, 7z, rar] (*.zip *.7z *.rar);;All Files(*)")[0]
         if filename:
+            Manager.install_mod(filename)
             message('information','The Thing', filename)
             
-
-
     def choose_mod_folder(self):
         """
         Show dialog allowing user to choose a mod folder.

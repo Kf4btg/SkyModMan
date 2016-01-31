@@ -1,15 +1,12 @@
 from PyQt5 import QtGui
-# from PyQt5.QtWidgets import QHeaderView, QTreeView, QAbstractItemView, QMenu, QAction
 from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData
 
 from skymodman import ModEntry
 from skymodman.managers import modmanager as Manager
 from skymodman.constants import (Column as COL, SyncError)
 # , DBLCLICK_COLS, VISIBLE_COLS)
-# from skymodman.constants import SyncError
 from skymodman.utils import withlogger
 from skymodman.thirdparty.undo import undoable #, group #,stack
-# from skymodman.utils.timedundo import groupundoable, stack, _undoable
 from skymodman.utils.timedundo import stack
 
 from functools import total_ordering, partial
@@ -19,8 +16,6 @@ import re
 
 # <editor-fold desc="ModuleConstants">
 
-# HEADERS =   ["Order", "", "Name", "Folder", "Mod ID", "Version", "Errors"]
-# COLUMNS = {COL.ORDER, COL.ENABLED, COL.NAME, COL.DIRECTORY, COL.MODID, COL.VERSION, COL.ERRORS}
 VISIBLE_COLS  = [COL.ORDER, COL.ENABLED, COL.NAME, COL.MODID, COL.VERSION, COL.ERRORS]
 DBLCLICK_COLS = {COL.MODID, COL.VERSION}
 
@@ -120,19 +115,18 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         self._datahaschanged = None # placeholder for first start
 
-        # track the row numbers of every mod in the table that is changed in any way.
-        # Every time a change is made, the row number is appended to the end of the deque,
-        # even if it is already present. Allowing duplicates in this way lets an undo()
-        # remove the most recent changes without losing track of any previous changes
-        # made to that row.
+        # track the row numbers of every mod in the table that is
+        # changed in any way. Every time a change is made, the row
+        # number is appended to the end of the deque, even if it
+        # is already present. Allowing duplicates in this way lets
+        # an undo() remove the most recent changes without losing
+        # track of any previous changes made to that row.
         self._modifications = deque()
 
-        # used to store removed rows during DnD operations
-        # edit: no it's not
-        # self.removed = []
 
         stack().undocallback = partial(self._undo_event, 'undo')
         stack().docallback = partial(self._undo_event, 'redo')
+
 
         self.LOGGER << "init ModTable_TreeModel"
 
@@ -186,9 +180,15 @@ class ModTable_TreeModel(QAbstractItemModel):
 
     # FIXME: on the FIRST undoable action (when there are no undos available), the timed stack implementation doesn't react to the undo key sequence until the timer runs out; this is because the the Undo QAction is disabled until something is in the **real** undo stack. The non-responsive shortcut is rather jarring. Later, when there are already undos in the stack, the undo command interrupts the timer as it's supposed to.
     def undo(self):
+        """
+        Undo the most recent action
+        """
         stack().undo()
 
     def redo(self):
+        """
+        Redo the most recently undone action
+        """
         stack().redo()
 
     def _undo_event(self, action=None):
@@ -201,8 +201,8 @@ class ModTable_TreeModel(QAbstractItemModel):
             self.undoevent.emit(None, None)
         else:
             self._check_dirty_status()
-            self.undoevent.emit(stack().undotext(),
-                                stack().redotext())
+            self.undoevent.emit(self.undotext,
+                                self.redotext)
 
     ##===============================================
     ## Required Qt Abstract Method Overrides
@@ -364,7 +364,7 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         # i don't think we'll ever reach here...
         # but better safe than sorry, I guess
-        self.LOGGER << "--End of mod table search"
+        self.LOGGER << "<--End of mod table search"
         return QModelIndex()
 
     def _search_slice(self, match_func, start=None, end=None, step=1):
@@ -384,7 +384,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
         Currently, the only editable fields are the enabled column (checkbox) and the name field (lineedit)
 
-        :param index:
+        :param QModelIndex index:
         :param value:
         :param role:
         :return:
@@ -420,7 +420,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         old_value = getattr(mod, field)
         setattr(mod, field, value)
 
-        # record this row numnber in the modified rows stack
+        # record this row number in the modified rows stack
         self._modifications.append(row)
 
         self.dataChanged.emit(index, index)
@@ -451,17 +451,25 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
         # self.LOGGER << "Moving rows {}-{} to row {}.".format(start_row, end_row, move_to_row)
 
-        count       = 1 + end_row - start_row
-        d_shift     = move_to_row - start_row      # shift distance; could be +-
-        rvector     = -(d_shift//abs(d_shift))      # get inverse normal vector; this will be +1 for up, -1 for down (see below)
+        count = 1 + end_row - start_row
+
+        # shift distance; could be pos/neg
+        d_shift = move_to_row - start_row
+
+        # get inverse step (normal vector);
+        # this will be +1 for up, -1 for down
+        rstep = -(d_shift//abs(d_shift))
 
         _end_offset = 0 # need this later
         if move_to_row < start_row: # If we're moving UP:
-            slice_start = dest_child = move_to_row  # get a slice from smallest index
-            slice_end   = 1 + end_row    # ... to the end of the rows to displace
-        else: # if we're moving DOWN:
+
+            # get a slice from smallest index...
+            slice_start = dest_child = move_to_row
+            # ...to the end of the rows to displace
+            slice_end   = 1 + end_row
+
+        else: # moving DOWN:
             slice_start = start_row
-            # slice_end   = dest_child = min(move_to_row + count, self.rowCount()) # don't go past last row
 
             slice_end   = move_to_row + count
             # we want to make sure we don't try to move past the end;
@@ -473,68 +481,34 @@ class ModTable_TreeModel(QAbstractItemModel):
             dest_child = slice_end
 
 
-        # notes:
-        # if we're moving DOWN:
-        #   * the ordinal is increasing,
-        #   * slice_start==start_row,
-        #   * slice_end==move_to_row + count
-        #
-        # If we're moving UP:
-        #   * ordinal is decreasing
-        #   * slice_start == move_to_row
-        #   * slice_end == end_row + 1
-
-        # Qt expects the final argument of beginMoveRows to be the index in the model
-        # before which THE ENTIRE BLOCK of moved rows will be placed.
-        # For example, if our block contains three items, rows 3-5, and we want to
-        # move the block such that row 3 will be at index 7--followed by row 4 at 8, and
-        # row 5 at 9--our destination index (i.e. the final arg to beginMoveRows) will
-        # actually be **10**, since 10 is the index immediately after the final item
-        # of our moved block.
-        # An easy way to calculate this is that, WHEN MOVING DOWN, the destination index is
-        # equal to the target row (the target of the first moved row, that is) + the number
-        # of items being moved. So, for our example above:
-        #       >>> 7+3=10.
-        # Moving up is simpler: the destination row and the target row are the same.
-
         self.beginMoveRows(parent, start_row, end_row, parent, dest_child)
-
-        self._doshift(slice_start, slice_end, count, rvector)
-
+        self._doshift(slice_start, slice_end, count, rstep)
         self.endMoveRows()
 
         # track all modified rows
         self._modifications.extend(range(slice_start, slice_end))
+
         self.notifyViewRowsMoved.emit()
 
         yield undotext
 
-        # for the reverse beginMoveRows call, we know that what was `start_row` is now in `move_to_row`;
-        # and the end_row is 'count'-1 rows beyond that; but an easier way to end_row is probably:
-        #     start = move_to_row    (same as 'start_row+d_shift')
-        #     end = end_row + d_shift
-        # since 'd_shift' is either + or - based on the original movement
-        # the dest index we can get by selecting the other possibility from the one we made above:
-        #     dchild2 = slice_end if move_to_row < start_row else slice_start
-
-        # here's where we use that offset we saved; have to subtract it from both start and
-        # end to make sure we're referencing the right block of rows when calling beginMoveRows
+        # here's where we use that offset we saved;
+        # have to subtract it from both start and end to make sure
+        # we're referencing the right block of rows when
+        # calling beginMoveRows
         self.beginMoveRows(parent,
                       move_to_row - _end_offset,
                       end_row + d_shift - _end_offset, parent,
                       slice_end if move_to_row < start_row else slice_start)
-        # print("undo: %d-%d -> %d" % (start_row + d_shift - _end_offset,
-        #                              end_row + d_shift - _end_offset,
-        #                              slice_end if move_to_row < start_row else slice_start))
 
         # the internal undo just involves rotating in the opposite direction
-        self._doshift(slice_start, slice_end, count, -rvector)
-
+        self._doshift(slice_start, slice_end, count, -rstep)
         self.endMoveRows()
 
         # remove all de-modified row numbers
         for _ in range(slice_end-slice_start):
             self._modifications.pop()
+
         self.notifyViewRowsMoved.emit()
 
     def _doshift(self, slice_start, slice_end, count, uvector):
@@ -548,9 +522,12 @@ class ModTable_TreeModel(QAbstractItemModel):
         # now copy the slice into a deque;
         deck = deque(me[slice_start:slice_end]) #type: deque[QModEntry]
 
-        # rotate the deck in the opposite direction and voila its like we shifted everything.
+        # rotate the deck in the opposite direction and voila!
+        # its like we shifted everything.
         deck.rotate(count * uvector)
-        # pop em back in, replacing the ordinal to reflect the mod's new position
+
+        # pop em back in, replacing the ordinal to reflect
+        # the mod's new position
         for i in range(slice_start, slice_end):
             me[i]=deck.popleft()
             me[i].ordinal = i+1
@@ -559,9 +536,18 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
         Checks whether the table has just gone from a saved to an unsaved state, or vice-versa, and sends a notification signal iff there is a state change.
         """
-        if self._datahaschanged is None or stack().haschanged() != self._datahaschanged:
-            # if _datahaschanged is None, then this is the first time we've changed data this session.
-            # Otherwise, we only want to activate when there is a difference between the current and cached state
+
+        # if signals are blocked, there's no reason to continue (this
+        # probably means we're in a 'revert'/undo-all command, and this
+        # method will be called again at the end of that
+        if self.signalsBlocked(): return
+
+        if self._datahaschanged is None \
+                or stack().haschanged() != self._datahaschanged:
+            # if _datahaschanged is None, then this is the first
+            # time we've changed data this session.
+            # Otherwise, we only want to activate when there is
+            # a difference between the current and cached state
             self._datahaschanged = stack().haschanged()
             self.tablehaschanges.emit(self._datahaschanged)
 
@@ -608,49 +594,58 @@ class ModTable_TreeModel(QAbstractItemModel):
         self.endResetModel()
 
     ##===============================================
-    ## Save and Revert
+    ## Save & Revert
     ##===============================================
 
     def save(self):
-        to_save = [self.mod_entries[row] for row in set(self._modifications)]
+        to_save = [self.mod_entries[row]
+                   for row in set(self._modifications)]
 
         Manager.save_user_edits(to_save)
 
-        # for now, let's just reset the undo stack and consider this the new "start" point
+        # for now, let's just reset the undo stack and consider
+        # this the new "start" point
         stack().clear()
         self._datahaschanged = None
         stack().savepoint()
 
         self._undo_event()
 
-    def revert(self):
+    def revert_all(self):
+        """
+        Does a 'mass undo' of all changes made to the table so far.
+        :return:
+        """
         self.beginResetModel()
-        # self.LOGGER << self.signalsBlocked()
         self.blockSignals(True)
+
         while stack().canundo():
-            # todo: this doesn't block signals...should it?
             stack().undo()
 
         self.blockSignals(False)
         self.endResetModel()
 
+        # now call all the signals that were missed
+        # self.notifyViewRowsMoved.emit()
+        self._check_dirty_status()
+        self.undoevent.emit(self.undotext, self.redotext)
+
     ##===============================================
-    ## Adding and Removing Rows/Columns
+    ## Drag & Drop
     ##===============================================
 
     def supportedDropActions(self):
         return Qt.MoveAction
 
     def mimeTypes(self):
-        """We just drag text around"""
+        """We just draggin text around"""
         return ['text/plain']
 
     def mimeData(self, indexes):
         """
 
         :param list[QModelIndex] indexes:
-        :return: A string that is 2 ints separated by spaces, e.g.:  '4 8'
-            This string corresponds to the first and last row in the block of rows being dragged.
+        :return: A string that is 2 ints separated by whitespace, e.g.:  '4 8' This string corresponds to the first and last row in the block of rows being dragged.
         """
         rows = sorted(set(i.row() for i in indexes))
         mimedata = QMimeData()
@@ -676,8 +671,11 @@ class ModTable_TreeModel(QAbstractItemModel):
         start, end = [int(r) for r in data.text().split()]
 
         self.shiftRows(start, end, dest)
-        # self.logger << "dropMimeData '{}' a{} r{} c{} p{}".format(data.text(), action, row, column, p )
         return True
+
+    ##===============================================
+    ## Adding and Removing Rows/Columns (may need later)
+    ##===============================================
 
     # def removeRows(self, row, count, parent=QModelIndex()):
     #     """

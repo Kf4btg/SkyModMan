@@ -1,4 +1,5 @@
 import os
+from tempfile import TemporaryDirectory
 
 from skymodman.utils import withlogger
 from skymodman.managers.archive import ArchiveHandler
@@ -16,11 +17,25 @@ class InstallManager:
         self.archiver = ArchiveHandler()
 
     def is_fomod(self, archive):
-        for e in self.list_archive(archive, files=False):
+        for e in self.iter_archive(archive, files=False):
             if os.path.basename(e).lower() == "fomod":
                 return e
 
         return None
+
+    def extract_fomod(self, archive, fomod_path):
+        """
+        Extracts fomod install script to a temporary directory
+
+        :param archive:
+        :param fomod_path: The internal path to the 'fomod' directory within the archive (as returned by is_fomod)
+        :return: Path to the extracted install script
+        """
+        with TemporaryDirectory() as tmpdir:
+            self.extract(archive, tmpdir, entries=[fomod_path])
+
+
+
 
     def extract(self, archive, destination, entries=None):
         """

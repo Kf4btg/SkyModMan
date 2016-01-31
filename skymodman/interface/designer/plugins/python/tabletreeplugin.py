@@ -1,7 +1,7 @@
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtDesigner import QPyDesignerCustomWidgetPlugin
 
-from skymodman.interface.views.modtable import ModTable_TreeView
+from skymodman.interface.views.modtable_treeview import ModTable_TreeView
 
 class ModTable_TreeViewPlugin(QPyDesignerCustomWidgetPlugin):
 
@@ -64,7 +64,7 @@ class ModTable_TreeViewPlugin(QPyDesignerCustomWidgetPlugin):
     # Return the name of the module containing the class that implements the
     # custom widget.  It may include a module path.
     def includeFile(self):
-        return "skymodman.interface.views.modtable"
+        return "skymodman.interface.views.modtable_treeview"
 
 
 # Define the image used for the icon.

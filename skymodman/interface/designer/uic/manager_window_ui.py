@@ -328,6 +328,7 @@ class Ui_MainWindow(object):
         self.action_show_search.setIcon(icon)
         self.action_show_search.setObjectName("action_show_search")
         self.action_uninstall_mod = QtWidgets.QAction(MainWindow)
+        self.action_uninstall_mod.setEnabled(False)
         icon = QtGui.QIcon.fromTheme("edit-delete")
         self.action_uninstall_mod.setIcon(icon)
         self.action_uninstall_mod.setObjectName("action_uninstall_mod")
@@ -481,4 +482,4 @@ class Ui_MainWindow(object):
         self.action_preferences.setShortcut(_translate("MainWindow", "Ctrl+P"))
 
 from skymodman.interface.designer.plugins.widgets.escapeablelineedit import EscapeableLineEdit
-from skymodman.interface.views.modtable import ModTable_TreeView
+from skymodman.interface.views.modtable_treeview import ModTable_TreeView

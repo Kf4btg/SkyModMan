@@ -1,5 +1,5 @@
-from fomod import Fomod
-from fomod.elements import ModName, DependencyList, DependencyType, FileList, InstallSteps, ModImage, Pattern, DTPattern, Group, Plugin
+from skymodman.fomod import Fomod
+from skymodman.fomod.elements import ModName, DependencyList, DependencyType, FileList, InstallSteps, ModImage, Pattern, DTPattern, Group, Plugin
 from lxml import objectify
 
 from skymodman.fomod.enums import *

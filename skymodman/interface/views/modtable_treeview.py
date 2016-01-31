@@ -5,7 +5,7 @@ from skymodman.constants import Column
 from skymodman.utils import withlogger
 from skymodman.thirdparty.undo import group
 
-from skymodman.interface.models.modtable_tree import ModTable_TreeModel
+from skymodman.interface.models.modtable_treemodel import ModTable_TreeModel
 
 Qt_Checked   = Qt.Checked
 Qt_Unchecked = Qt.Unchecked
@@ -26,6 +26,7 @@ class ModTable_TreeView(QTreeView):
         super().__init__(parent, *args, **kwargs)
         self._model  = None  # type: ModTable_TreeModel
         self._selection_model = None # type: QtCore.QItemSelectionModel
+        self.handle_move_signals = True
         # self.LOGGER << "Init ModTable_TreeView"
 
     def _hideErrorColumn(self, hide):
@@ -39,7 +40,7 @@ class ModTable_TreeView(QTreeView):
         # keep a local reference to the selection model
         self._selection_model = self.selectionModel()
         # called from model's shiftrows() method
-        self._model.notifyViewRowsMoved.connect(self._selection_moved)
+        self._model.notifyViewRowsMoved.connect(self.selectionChanged)
         # only show error col if there are errors
         self._model.hideErrorColumn.connect(self._hideErrorColumn)
 
@@ -48,7 +49,6 @@ class ModTable_TreeView(QTreeView):
                              True)  # hide directory column by default
         # stretch the Name section
         self.header().setSectionResizeMode(Column.NAME,QHeaderView.Stretch)
-
 
     def loadData(self):
         self._model.loadData()
@@ -82,30 +82,50 @@ class ModTable_TreeView(QTreeView):
             self.resizeColumnToContents(i)
 
     def revertChanges(self):
-        self._model.revert()
-        self.clearSelection()
+        self.LOGGER << "Reverting all user edits"
+        self._model.revert_all()
+        self.enableModActions.emit(False)
+
+        # self.clearSelection()
 
     def saveChanges(self):
+        self.LOGGER << "Saving user changes"
         self._model.save()
 
-    def selectionChanged(self, selected, deselected):
-        if self._selection_model.hasSelection():
-            self.enableModActions.emit(True) # enable the button box
-            self._selection_moved()   # check for disable up/down buttons
-        else:
-            self.enableModActions.emit(False)
+    def selectionChanged(self, selected=None, deselected=None):
 
-        super().selectionChanged(selected, deselected)
+        # None means the selection was _moved_, rather than changed
+        if selected is None:
+            # self.handle_move_signals will be false if there
+            # is no selection and we're in an undo/redo cmd
+            if self.handle_move_signals:
+                self._selection_moved()
+        else:
+            # self.LOGGER << "selection changed"
+
+            # enable/disable the button box
+            if self._selection_model.hasSelection():
+
+                self.enableModActions.emit(True)
+                self._selection_moved()   # check for disable up/down buttons
+            else:
+                self.enableModActions.emit(False)
+
+            super().selectionChanged(selected, deselected)
 
     def _selection_moved(self):
-        # check for selection to prevent movement buttons from reactivating on a redo()
-        if self._selection_model.hasSelection():
-            issel = self._selection_model.isSelected
-            model = self._model
-            self.canMoveItems.emit(
-                not issel(model.index(0,0)),
-                not issel(model.index(model.rowCount()-1, 0))
-            )
+        """
+        Determines whether or not to enable the mod move-up/down buttons
+        :return:
+        """
+        # self.LOGGER << "selection moved"
+
+        is_selected = self._selection_model.isSelected
+        model = self._model
+        self.canMoveItems.emit(
+            not is_selected(model.index(0,0)),
+            not is_selected(model.index(model.rowCount()-1, 0))
+        )
 
     def _selectedrownumbers(self):
         # we use set() first because Qt sends the row number once for each column in the row.
@@ -144,9 +164,21 @@ class ModTable_TreeView(QTreeView):
             self._tellmodelshiftrows(rows[0]+distance, rows=rows)
 
     def undo(self):
+        # we check the hasSelection() result to see whether
+        # whether we want to ignore notifications about row
+        # movement sent by the model (which we would only be
+        # interested in if the selection were being moved around)
+        self.handle_move_signals = self._selection_model.hasSelection()
         self._model.undo()
+
+        # and reset it afterwards
+        self.handle_move_signals = True
+
     def redo(self):
+        # see note above
+        self.handle_move_signals = self._selection_model.hasSelection()
         self._model.redo()
+        self.handle_move_signals = True
 
     def dragEnterEvent(self, event):
         """ Qt-override.
@@ -170,7 +202,8 @@ class ModTable_TreeView(QTreeView):
 
         mw = self.window() # mainwindow
         menu = QMenu(self)
-        menu.addActions([mw.action_toggle_mod
+        menu.addActions([mw.action_toggle_mod,
+                         mw.action_uninstall_mod,
                          ])
         menu.exec_(event.globalPos())
 
@@ -197,8 +230,5 @@ class ModTable_TreeView(QTreeView):
                                 Qt_CheckStateRole)
 
 if __name__ == '__main__':
-    # from skymodman.managers import ModManager
     from PyQt5 import QtCore #, QtGui
 
-    # QModelIndex
-    # from PyQt5.QtGui import QDragEnterEvent, QContextMenuEvent

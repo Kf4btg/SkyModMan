@@ -854,6 +854,9 @@
    </property>
   </action>
   <action name="action_uninstall_mod">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="icon">
     <iconset theme="edit-delete"/>
    </property>

@@ -1,1 +1,1 @@
-from .modtable import ModTable_TreeView
+from .modtable_treeview import ModTable_TreeView
