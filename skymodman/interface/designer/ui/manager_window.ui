@@ -61,8 +61,20 @@
            </item>
            <item>
             <widget class="QComboBox" name="profile_selector">
+             <property name="minimumSize">
+              <size>
+               <width>120</width>
+               <height>0</height>
+              </size>
+             </property>
              <property name="statusTip">
               <string>Select a profile.</string>
+             </property>
+             <property name="editable">
+              <bool>false</bool>
+             </property>
+             <property name="sizeAdjustPolicy">
+              <enum>QComboBox::AdjustToContents</enum>
              </property>
              <item>
               <property name="text">
@@ -496,23 +508,25 @@
      <x>0</x>
      <y>0</y>
      <width>800</width>
-     <height>34</height>
+     <height>26</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_file">
     <property name="title">
      <string>&amp;File</string>
     </property>
-    <widget class="QMenu" name="menu_load_profile">
+    <widget class="QMenu" name="menu_profiles">
      <property name="title">
-      <string>Load Profile</string>
+      <string>Profiles</string>
      </property>
-     <addaction name="separator"/>
+     <property name="icon">
+      <iconset theme="system-users"/>
+     </property>
+     <addaction name="action_new_profile"/>
+     <addaction name="action_delete_profile"/>
+     <addaction name="action_rename_profile"/>
     </widget>
-    <addaction name="menu_load_profile"/>
-    <addaction name="action_new_profile"/>
-    <addaction name="action_delete_profile"/>
-    <addaction name="separator"/>
+    <addaction name="menu_profiles"/>
     <addaction name="action_choose_mod_folder"/>
     <addaction name="action_preferences"/>
     <addaction name="separator"/>
@@ -524,7 +538,7 @@
     </property>
     <widget class="QMenu" name="menu_ini_files">
      <property name="title">
-      <string>Ini Files</string>
+      <string>&amp;Ini Files</string>
      </property>
      <addaction name="action_edit_skyrim_ini"/>
      <addaction name="action_edit_skyrimprefs_ini"/>
@@ -589,6 +603,9 @@
    <property name="shortcut">
     <string>Ctrl+I</string>
    </property>
+   <property name="autoRepeat">
+    <bool>false</bool>
+   </property>
   </action>
   <action name="action_quit">
    <property name="icon">
@@ -616,6 +633,9 @@
    <property name="shortcut">
     <string>Ctrl+M</string>
    </property>
+   <property name="autoRepeat">
+    <bool>false</bool>
+   </property>
   </action>
   <action name="action_load_profile">
    <property name="text">
@@ -627,11 +647,11 @@
   </action>
   <action name="action_new_profile">
    <property name="icon">
-    <iconset theme="add">
+    <iconset theme="list-add">
      <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
-    <string>&amp;New Profile...</string>
+    <string>&amp;New...</string>
    </property>
    <property name="toolTip">
     <string>Create New Profile</string>
@@ -639,14 +659,17 @@
    <property name="shortcut">
     <string>Ctrl+N</string>
    </property>
+   <property name="autoRepeat">
+    <bool>false</bool>
+   </property>
   </action>
   <action name="action_delete_profile">
    <property name="icon">
-    <iconset theme="remove">
+    <iconset theme="list-remove">
      <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
-    <string>D&amp;elete Profile</string>
+    <string>D&amp;elete</string>
    </property>
    <property name="toolTip">
     <string>Remove Profile</string>
@@ -711,7 +734,7 @@
     <bool>false</bool>
    </property>
    <property name="icon">
-    <iconset theme="edit-save">
+    <iconset theme="document-save">
      <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
@@ -719,6 +742,9 @@
    </property>
    <property name="statusTip">
     <string>Save Changes</string>
+   </property>
+   <property name="autoRepeat">
+    <bool>false</bool>
    </property>
   </action>
   <action name="action_move_mod_up">
@@ -802,7 +828,7 @@
      <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
-    <string>&amp;Revert Changes</string>
+    <string>Revert &amp;Changes</string>
    </property>
    <property name="toolTip">
     <string>Revert all unsaved changes</string>
@@ -812,6 +838,9 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+Shift+R</string>
+   </property>
+   <property name="autoRepeat">
+    <bool>false</bool>
    </property>
   </action>
   <action name="action_find_next">
@@ -858,21 +887,34 @@
     <bool>false</bool>
    </property>
    <property name="icon">
-    <iconset theme="edit-delete"/>
+    <iconset theme="edit-delete">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
-    <string>Uninstall</string>
+    <string>&amp;Uninstall</string>
    </property>
   </action>
   <action name="action_preferences">
    <property name="icon">
-    <iconset theme="settings"/>
+    <iconset theme="preferences-system">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
-    <string>Preferences</string>
+    <string>&amp;Preferences</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+P</string>
+   </property>
+   <property name="autoRepeat">
+    <bool>false</bool>
+   </property>
+  </action>
+  <action name="action_rename_profile">
+   <property name="text">
+    <string>&amp;Rename...</string>
+   </property>
+   <property name="toolTip">
+    <string>Rename Profile</string>
    </property>
   </action>
  </widget>
@@ -885,7 +927,7 @@
   <customwidget>
    <class>ModTable_TreeView</class>
    <extends>QTreeView</extends>
-   <header>skymodman.interface.views.modtable</header>
+   <header>skymodman.interface.views.modtable_treeview</header>
   </customwidget>
  </customwidgets>
  <resources/>
