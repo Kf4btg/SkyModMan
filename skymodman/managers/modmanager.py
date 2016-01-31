@@ -1,58 +1,18 @@
-from skymodman import ModEntry, skylog #exceptions,
-# from skymodman.utils import classprop
+from skymodman import ModEntry, skylog
 from skymodman.managers import config as _config, database as _database
 from skymodman.managers.profiles import Profile, ProfileManager
-from skymodman.constants import db_fields #SyncError,
+from skymodman.constants import db_fields as _db_fields
 
 
-# from skymodman.utils import humanizer
-# @humanizer.humanize
-# noinspection PyMethodParameters
-# @with_logger
-# class ModManager:
-#     """
-#     Manages all the backend interaction; this includes access to the Configuration,
-#     profile manager, database manager, etc. This is a singleton class: only one
-#     instance will be created during any run of the application.
-#     """
-    #
-    # _instance = None
-    # def __new__(*args, **kwargs):
-    #     """Override __new__ to allow only one instance of this class to exist, even
-    #     if it is called multiple times.  Makes this class a singleton"""
-    #     if _instance is not None:
-    #         return _instance
-    #     self = object.__new__(*args)
-    #     _instance = self
-    #     return self
-
-
-    # def __init__(self):
-    #     self._config_manager = config.ConfigManager(self)
-    #
-    #     # must be created after config manager
-    #     self._profile_manager = profiles.ProfileManager(self, self._config_manager.paths.dir_profiles)
-    #     # set the most-recently loaded profile as active.
-    #     self._profile_manager.setActiveProfile(self._config_manager.lastprofile)
-    #
-    #     # Prepare the database, but do not load any information
-    #     # until it is requested.
-    #     self._db_manager = database.DBManager(self)
-    #
-    #     self._conflicting_files = None
-    #     """:type: collections.defaultdict[list]"""
-    #     self._mods_with_conflicts = None
-    #     """:type: collections.defaultdict[list]"""
-
-_configman = None
-_dataman = None
+_configman  = None
+_dataman    = None
 _profileman = None
 _installman = None
 
 #shortcuts
-conf = _configman
-db = _dataman
-profiles=_profileman
+conf     = _configman
+db       = _dataman
+profiles = _profileman
 
 file_conflicts = None
 mods_with_conflicting_files = None
@@ -62,7 +22,9 @@ _logger = None
 def init():
     global _logger, _dataman, _profileman, _installman, _configman
     global conf, profiles, db
+
     _logger = skylog.newLogger(__name__)
+
     _configman = conf = _config.ConfigManager()
 
     # must be created after config manager
@@ -75,31 +37,6 @@ def init():
     _dataman = db = _database.DBManager()
 
 
-
-# @property
-# def file_conflicts(self):
-#     return self._conflicting_files
-#
-# @file_conflicts.setter
-# def file_conflicts(self, ddictlist):
-#     """
-#
-#     :param collections.defaultdict[list] ddictlist:
-#     """
-#     self._conflicting_files = ddictlist
-
-# @property
-# def mods_with_conflicting_files(self):
-#     return self._mods_with_conflicts
-#
-# @mods_with_conflicting_files.setter
-# def mods_with_conflicting_files(self, ddictlist):
-#     """
-#
-#     :param collections.defaultdict[list] ddictlist:
-#     """
-#     self._mods_with_conflicts = ddictlist
-
 def get_cursor():
     """
     Using this, a component can request a cursor object for interacting with the database
@@ -109,8 +46,7 @@ def get_cursor():
 
 def active_profile() -> Profile:
     """
-    Retrieves the presently loaded Profile from the
-    Profile Manager.
+    Retrieves the presently loaded Profile from the Profile Manager.
     :return: The active Profile object
     """
     return _profileman.active_profile
@@ -149,7 +85,7 @@ def new_profile(name, copy_from = None):
     copying config files from the `copy_from` Profile
     :param str name:
     :param profiles.Profile copy_from:
-    :return:
+    :return: new Profile object
     """
     return _profileman.newProfile(name, copy_from)
 
@@ -224,8 +160,8 @@ def save_user_edits(changes):
     rows_to_delete = [(m.ordinal, ) for m in changes]
 
     # a generator that creates tuples of values by sorting the values of the
-    # modentry according the order defined in constants.db_fields
-    dbrowgen = (tuple([getattr(m, f) for f in sorted(m._fields, key=lambda fld: db_fields.index(fld)) ] ) for m in changes)
+    # modentry according the order defined in constants._db_fields
+    dbrowgen = (tuple([getattr(m, f) for f in sorted(m._fields, key=lambda fld: _db_fields.index(fld)) ] ) for m in changes)
 
     # using the context manager may allow deferrable foreign
     # to go unsatisfied for a moment
@@ -235,8 +171,8 @@ def save_user_edits(changes):
         db.conn.executemany("DELETE FROM mods WHERE ordinal=?", rows_to_delete)
 
         # and reinsert
-        query = "INSERT INTO mods(" + ", ".join(db_fields) + ") VALUES ("
-        query += ", ".join("?" * len(db_fields)) + ")"
+        query = "INSERT INTO mods(" + ", ".join(_db_fields) + ") VALUES ("
+        query += ", ".join("?" * len(_db_fields)) + ")"
 
         db.conn.executemany(query, dbrowgen)
 

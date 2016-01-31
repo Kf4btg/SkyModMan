@@ -61,11 +61,8 @@ class DBManager:
     def __init__(self):
         """
 
-        # :param ModManager manager:
         """
         super().__init__()
-
-        # Manager = manager
 
         # create db in memory
         self._con = sqlite3.connect(":memory:")

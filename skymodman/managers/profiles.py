@@ -42,10 +42,8 @@ class Profile:
         :param Profile copy_profile:
         """
 
-        # self._name = name
         self.name = name
 
-        # self._folder = profiles_dir / name
         self.folder = profiles_dir / name
 
         self.localfiles = {}  # type: Dict[str, Path]

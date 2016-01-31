@@ -1,4 +1,4 @@
-from PyQt5 import QtCore, QtGui
+from PyQt5 import QtGui
 # from PyQt5.QtWidgets import QHeaderView, QTreeView, QAbstractItemView, QMenu, QAction
 from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData
 
@@ -109,7 +109,6 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
         super().__init__(**kwargs)
         self._parent = parent
-        # self.manager = manager
 
         # noinspection PyUnresolvedReferences
         self.mod_entries = [] #type: list[QModEntry]

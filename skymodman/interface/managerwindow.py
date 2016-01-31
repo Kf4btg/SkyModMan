@@ -54,15 +54,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     def __init__(self, **kwargs):
         """
 
-        # :param managers.ModManager manager:
         :param kwargs: anything to pass on the the base class constructors
         """
         super().__init__(**kwargs)
         self.LOGGER.info("Initializing ModManager Window")
         ModManagerWindow._this = self
-
-        # reference to the Mod Manager
-        # self._manager = manager
 
         # setup trackers for all of our models and proxies
         self.models  = {} #type: dict[M,QAbstractItemModel]
@@ -1013,6 +1009,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             # todo: maybe run this method in a separate thread? at least the dialog
             # todo: setup 2nd tab with data from xml file and begin installation process
 
+    # noinspection PyTypeChecker,PyArgumentList
     def install_mod_archive(self):
         # todo: default to home folder or something instead of current dir
         filename=QFileDialog.getOpenFileName(self, "Select Mod Archive",
@@ -1044,7 +1041,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 self.mod_table.model().reloadErrorsOnly()
 
     # def get_tab(self, index: int):
-    #     return Manager_tabs.widget(index)
+    #     return self.manager_tabs.widget(index)
 
     def safe_quit(self):
         """
@@ -1065,14 +1062,10 @@ def quit_app():
 
 # <editor-fold desc="__main__">
 if __name__ == '__main__':
-    # from skymodman.interface.models.modtable_tree import \
-    #     ModTable_TreeModel
     import sys
 
-    # from skymodman import managers
     app = QApplication(sys.argv)
-
-    # MM = managers.ModManager()
+    Manager.init()
 
     w = ModManagerWindow()
     # noinspection PyArgumentList

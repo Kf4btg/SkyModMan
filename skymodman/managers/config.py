@@ -55,10 +55,7 @@ class ConfigManager:
     }
 
     def __init__(self):
-        """
-        """
         super().__init__()
-
 
         self.__paths = ConfigPaths()
         self._lastprofile = None # type: str

@@ -343,7 +343,6 @@ class ModFileTreeModel(QAbstractItemModel):
         # noinspection PyArgumentList
         super().__init__(parent=parent,**kwargs)
         self._parent = parent
-        # self.manager = manager
         self.rootpath = None #type: str
         self.modname = None #type: str
         self.rootitem = None #type: QFSItem

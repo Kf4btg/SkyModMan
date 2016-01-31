@@ -40,8 +40,7 @@ if __name__ == '__main__':
 
         app = QApplication(sys.argv)
 
-        #init our ModManager instance
-        # MM = ModManager()
+        #init the ModManager
         modmanager.init()
 
 
