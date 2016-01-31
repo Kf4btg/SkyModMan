@@ -2,7 +2,7 @@
 import os
 import sys
 
-from skymodman.managers import ModManager
+from skymodman.managers import modmanager
 from skymodman import constants, skylog
 
 
@@ -41,9 +41,11 @@ if __name__ == '__main__':
         app = QApplication(sys.argv)
 
         #init our ModManager instance
-        MM = ModManager()
+        # MM = ModManager()
+        modmanager.init()
 
-        w = ModManagerWindow(manager=MM)
+
+        w = ModManagerWindow()
         # noinspection PyArgumentList
         # w.resize(QGuiApplication.primaryScreen().availableSize()*3/5)
         w.resize(QGuiApplication.primaryScreen().availableSize()*5/7)
@@ -54,7 +56,7 @@ if __name__ == '__main__':
             ret = app.exec_()
         except:
             skylog.stop_listener()
-            MM.DB.shutdown()
+            modmanager.db.shutdown()
             raise
         finally:
             if ret is not None:

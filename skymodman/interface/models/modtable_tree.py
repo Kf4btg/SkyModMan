@@ -3,6 +3,7 @@ from PyQt5 import QtCore, QtGui
 from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData
 
 from skymodman import ModEntry
+from skymodman.managers import modmanager as Manager
 from skymodman.constants import (Column as COL, SyncError)
 # , DBLCLICK_COLS, VISIBLE_COLS)
 # from skymodman.constants import SyncError
@@ -103,13 +104,12 @@ class ModTable_TreeModel(QAbstractItemModel):
     notifyViewRowsMoved = pyqtSignal() # let view know selection may have moved
     hideErrorColumn = pyqtSignal(bool)
 
-    def __init__(self, *, manager, parent, **kwargs):
+    def __init__(self, parent, **kwargs):
         """
-        :param ModManager manager:
         """
         super().__init__(**kwargs)
         self._parent = parent
-        self.manager = manager
+        # self.manager = manager
 
         # noinspection PyUnresolvedReferences
         self.mod_entries = [] #type: list[QModEntry]
@@ -580,7 +580,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         stack().clear()
         stack().savepoint()
 
-        self.mod_entries = [QModEntry(**d) for d in self.manager.basicModInfo()]
+        self.mod_entries = [QModEntry(**d) for d in Manager.basic_mod_info()]
 
         self.getErrors()
 
@@ -589,10 +589,10 @@ class ModTable_TreeModel(QAbstractItemModel):
 
     def getErrors(self):
         self.errors = {}  # reset
-        for err in self.manager.getErrors(SyncError.NOTFOUND):
+        for err in Manager.get_errors(SyncError.NOTFOUND):
             self.errors[err] = SyncError.NOTFOUND
 
-        for err in self.manager.getErrors(SyncError.NOTLISTED):
+        for err in Manager.get_errors(SyncError.NOTLISTED):
             self.errors[err] = SyncError.NOTLISTED
 
         # only show error column when they are errors to report
@@ -615,7 +615,7 @@ class ModTable_TreeModel(QAbstractItemModel):
     def save(self):
         to_save = [self.mod_entries[row] for row in set(self._modifications)]
 
-        self.manager.saveUserEdits(to_save)
+        Manager.save_user_edits(to_save)
 
         # for now, let's just reset the undo stack and consider this the new "start" point
         stack().clear()

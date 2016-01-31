@@ -97,6 +97,18 @@ def printattrs(obj, name=None):
         else:
             print(a, attr, sep=": ")
 
+class classprop:
+    """
+    Decorator that allows the creation of readonly calculated properties for classes, accessible via ''Class.propname'', just like an instance property. However, only getters are supported, not setters or deleters.
+    """
+
+    def __init__(self, getter=None):
+        self.fget = getter
+
+    # instance will (usually) always be None
+    def __get__(self, instance, cls):
+        return self.fget(cls)
+
 
 #
 # def allcombos(iterable):

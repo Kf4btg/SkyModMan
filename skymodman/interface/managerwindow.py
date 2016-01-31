@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import (QApplication,
                              QActionGroup)
 
 from skymodman import skylog
+from skymodman.managers import modmanager as Manager
 from skymodman.constants import (Tab as TAB,
                                  INIKey,
                                  INISection,
@@ -50,10 +51,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     moveModsToBottom    = pyqtSignal()
 
     # noinspection PyUnresolvedReferences
-    def __init__(self, *, manager, **kwargs):
+    def __init__(self, **kwargs):
         """
 
-        :param managers.ModManager manager:
+        # :param managers.ModManager manager:
         :param kwargs: anything to pass on the the base class constructors
         """
         super().__init__(**kwargs)
@@ -61,7 +62,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         ModManagerWindow._this = self
 
         # reference to the Mod Manager
-        self._manager = manager
+        # self._manager = manager
 
         # setup trackers for all of our models and proxies
         self.models  = {} #type: dict[M,QAbstractItemModel]
@@ -106,9 +107,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # Let sub-widgets know the main window is initialized
         self.windowInitialized.emit()
 
-    @property
-    def Manager(self):
-        return self._manager
+    # @property
+    # def Manager(self):
+    #     return self._manager
 
     @property
     def current_tab(self):
@@ -157,10 +158,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         :param notify_done:
         """
-        self.Manager.loadActiveProfileData()
+        Manager.load_active_profile_data()
         self.mod_table.setModel(
-                ModTable_TreeModel(manager=self.Manager,
-                                   parent=self.mod_table))
+                ModTable_TreeModel(parent=self.mod_table))
 
         self.models[M.mod_table] = self.mod_table.model()
 
@@ -206,10 +206,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         model = ProfileListModel()
 
         start_idx = 0
-        for name, profile in self.Manager.getProfiles(
+        for name, profile in Manager.get_profiles(
                 names_only=False):
             model.insertRows(data=profile)
-            if name == self.Manager.active_profile.name:
+            if name == Manager.active_profile().name:
                 self.logger << "Setting {} as chosen profile".format(
                     name)
                 start_idx = model.rowCount() - 1
@@ -259,7 +259,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         ## model for tree view of files
         fileviewer_model = self.models[
             M.file_viewer] = ModFileTreeModel(
-                manager=self._manager,
                 parent=self.filetree_fileviewer)
 
         ## filter
@@ -293,7 +292,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         notify_done()
 
     def __setup_modlist_filter_state(self, filter_):
-        activeonly = self.Manager.getProfileSetting('File Viewer',
+        activeonly = Manager.get_profile_setting('File Viewer',
                                                      'activeonly')
         filter_.onlyShowActive = activeonly
 
@@ -415,7 +414,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # use a dialog-button-box for save/cancel;
         # have to specify by standard button type
         btn_apply = self.save_cancel_btnbox.button(
-                QDialogButtonBox.Apply) #type: QPushButton
+                QDialogButtonBox.Apply)
         btn_reset = self.save_cancel_btnbox.button(
                 QDialogButtonBox.Reset)
 
@@ -566,8 +565,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     def update_UI(self):
         self.fomod_tab.setEnabled(self.loaded_fomod is not None)
 
-        curtab = self.manager_tabs.currentIndex()
-        self._visible_components_for_tab(curtab)
+        self._visible_components_for_tab()
 
         # self.save_cancel_btnbox.setVisible(
         #         curtab in [TAB.MODTABLE, TAB.FILETREE])
@@ -576,14 +574,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # self.modtable_search_button.setVisible(curtab == TAB.MODTABLE)
         # self.modtable_search_box.setVisible(curtab == TAB.MODTABLE)
 
-    def _visible_components_for_tab(self, tab=None):
+    def _visible_components_for_tab(self):
         """
         Some manager components should be hidden on certain tabs
 
-        :param tab:
         :return:
         """
-        if tab is None: tab=self.current_tab
+        tab=self.current_tab
 
         all_components = [
             self.save_cancel_btnbox,      # 0
@@ -601,14 +598,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         for comp, isvis in zip(all_components, visible[tab]):
             comp.setVisible(isvis)
 
-    def _enabled_actions_for_tab(self, tab=None):
+    def _enabled_actions_for_tab(self):
         """
         Some manager actions should be disabled on certain tabs
 
-        :param tab:
         :return:
         """
-        if tab is None: tab=self.current_tab
+        tab=self.current_tab
 
         all_components = [
             self.mod_movement_group,     # 0
@@ -722,8 +718,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # modname = self.models[M.mod_list].data(indexCur)
 
-        p = self.Manager.Config.paths.dir_mods / moddir
-        #     self.Manager.getModDir(modname)
+        p = Manager.conf.paths.dir_mods / moddir
+        #     Manager.getModDir(modname)
 
         self.models[M.file_viewer].setRootPath(str(p))
 
@@ -780,8 +776,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def on_tab_changed(self, newindex):
         self.current_tab = TAB(newindex)
-        self._visible_components_for_tab(newindex)
-        self._enabled_actions_for_tab(newindex)
+        self._visible_components_for_tab()
+        self._enabled_actions_for_tab()
 
 
 
@@ -798,7 +794,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         else:
             new_profile = self.profile_selector.currentData(
                     Qt.UserRole).name
-            if new_profile == self.Manager.active_profile.name:
+            if new_profile == Manager.active_profile().name:
                 # somehow selected the same profile; do nothing
                 return
 
@@ -809,7 +805,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                     "Activating profile '{}'".format(new_profile))
 
             # fixme: change this setter to a method so it's clear how much happens at this point
-            self.Manager.set_active_profile(new_profile)
+            Manager.set_active_profile(new_profile)
 
             self.logger << "Resetting views for new profile"
             self.newProfileLoaded.emit(new_profile)
@@ -824,7 +820,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # display popup, wait for close and check signal
         if popup.exec_() == popup.Accepted:
             # add new profile if they clicked ok
-            new_profile = self.Manager.newProfile(popup.final_name,
+            new_profile = Manager.new_profile(popup.final_name,
                                                   popup.copy_from)
 
             self.profile_selector.model().addProfile(new_profile)
@@ -838,7 +834,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         Show a warning about irreversibly deleting the profile.
         """
-        profile = self.Manager.active_profile
+        profile = Manager.active_profile()
 
         if message('warning', 'Confirm Delete Profile',
                    'Delete "' + profile.name + '"?',
@@ -847,7 +843,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                    'customized load-orders, ini-edits, etc. Note '
                    'that installed mods will not be affected. This '
                    'cannot be undone. Do you wish to continue?'):
-            self.Manager.deleteProfile(
+            Manager.delete_profile(
                     self.profile_selector.currentData())
             self.profile_selector.removeItem(
                     self.profile_selector.currentIndex())
@@ -870,7 +866,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.filters[F.mod_list].setOnlyShowActive(checked)
         self.update_modlist_label(checked)
-        self.Manager.setProfileSetting('File Viewer', 'activeonly', checked)
+        Manager.set_profile_setting('File Viewer', 'activeonly', checked)
 
     def on_modlist_filterbox_textchanged(self, text):
         # Updates the proxy filtering, and notifies the label
@@ -893,7 +889,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         if not text:
             self.filters[F.file_viewer].setFilterWildcard(text)
         else:
-            db = self.Manager.DB._con
+            db = Manager.db._con
 
             sqlexpr = r'%'+text.replace('?','_').replace('*',r'%')+r'%'
 
@@ -1035,27 +1031,27 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         moddir = QFileDialog.getExistingDirectory(
                 self,
                 "Choose Directory Containing Installed Mods",
-                self.Manager.Config['dir_mods'])
+                Manager.conf['dir_mods'])
 
         # update config with new path
         if checkPath(moddir):
-            self.Manager.Config.updateConfig(moddir,
+            Manager.conf.updateConfig(moddir,
                                              INIKey.MODDIR,
                                              INISection.GENERAL)
 
             # reverify and reload the mods.
-            if not self.Manager.validateModInstalls():
+            if not Manager.validate_mod_installs():
                 self.mod_table.model().reloadErrorsOnly()
 
     # def get_tab(self, index: int):
-    #     return self.manager_tabs.widget(index)
+    #     return Manager_tabs.widget(index)
 
     def safe_quit(self):
         """
         Show a prompt if there are any unsaved changes, then close the program.
         """
         self.table_prompt_if_unsaved()
-        self.Manager.DB.shutdown()
+        Manager.db.shutdown()
 
         quit_app()
 
@@ -1073,12 +1069,12 @@ if __name__ == '__main__':
     #     ModTable_TreeModel
     import sys
 
-    from skymodman import managers
+    # from skymodman import managers
     app = QApplication(sys.argv)
 
-    MM = managers.ModManager()
+    # MM = managers.ModManager()
 
-    w = ModManagerWindow(manager=MM)
+    w = ModManagerWindow()
     # noinspection PyArgumentList
     w.resize(QGuiApplication.primaryScreen().availableSize() * 3 / 5)
     w.show()

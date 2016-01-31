@@ -16,7 +16,7 @@ class NewProfileDialog(QDialog,  Ui_NewProfileDialog):
 
         self.setupUi(self)
 
-        self.okbutton = self.buttonBox.button(QDialogButtonBox.Ok) #type: QPushButton
+        self.okbutton = self.buttonBox.button(QDialogButtonBox.Ok)
         self.okbutton.setDisabled(True)
 
         self.final_name = None

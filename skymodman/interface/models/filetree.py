@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 
 from skymodman.utils import withlogger, checkPath #, tree
+from skymodman.managers import modmanager as Manager
 # from skymodman.utils import humanizer
 
 Qt_Checked = Qt.Checked
@@ -332,7 +333,7 @@ class ModFileTreeModel(QAbstractItemModel):
     rootPathChanged = pyqtSignal(str)
     hasUnsavedChanges = pyqtSignal(bool)
 
-    def __init__(self, *, manager, parent, **kwargs):
+    def __init__(self, parent, **kwargs):
         """
 
         :param ModManager manager:
@@ -342,11 +343,11 @@ class ModFileTreeModel(QAbstractItemModel):
         # noinspection PyArgumentList
         super().__init__(parent=parent,**kwargs)
         self._parent = parent
-        self.manager = manager
+        # self.manager = manager
         self.rootpath = None #type: str
         self.modname = None #type: str
         self.rootitem = None #type: QFSItem
-        self.dbconn = self.manager.DB.conn
+        self.dbconn = Manager.db.conn
         self.cursor = self.dbconn.cursor()
 
     @property
@@ -427,7 +428,7 @@ class ModFileTreeModel(QAbstractItemModel):
             n: n.lower() == 'meta.ini')
 
     def _mark_hidden_files(self):
-        hfiles = list(self.manager.hiddenFiles(for_mod=self.modname))
+        hfiles = list(Manager.hidden_files(for_mod=self.modname))
         for c in self.rootitem.iterchildren(True):
             if c.lpath in hfiles:
                 c.checkState = Qt_Unchecked
@@ -549,8 +550,8 @@ class ModFileTreeModel(QAbstractItemModel):
 
         elif index.column()==2: # third column is conflicts
             if role == Qt.DisplayRole \
-                    and self.modname in self.manager.mods_with_conflicting_files \
-                    and item.lpath in self.manager.file_conflicts:
+                    and self.modname in Manager.mods_with_conflicting_files \
+                    and item.lpath in Manager.file_conflicts:
                 return "Yes"
 
 
@@ -622,8 +623,7 @@ class ModFileTreeModel(QAbstractItemModel):
         """
         if self.dbconn.in_transaction:
             self.dbconn.commit()
-            self.manager.DB.saveHiddenFiles(
-                self.manager.active_profile.hidden_files)
+            Manager.save_hidden_files()
             # afterwards, refresh cursor
             self.cursor = self.dbconn.cursor()
             self.hasUnsavedChanges.emit(False)
@@ -726,7 +726,7 @@ class ModFileTreeModel(QAbstractItemModel):
 
 
 if __name__ == '__main__':
-    from skymodman.managers import ModManager
+    # from skymodman.managers import ModManager
     # noinspection PyUnresolvedReferences
     from sqlite3 import Row
 

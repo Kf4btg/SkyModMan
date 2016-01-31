@@ -8,6 +8,7 @@ from collections import defaultdict
 
 from skymodman.constants import db_fields, SyncError
 from skymodman.utils import withlogger, counter, tree
+from skymodman.managers import modmanager as Manager
 
 mcount = counter()
 
@@ -57,14 +58,14 @@ class DBManager:
         "enabled": lambda v: 1,
     }
 
-    def __init__(self, manager):
+    def __init__(self):
         """
 
-        :param ModManager manager:
+        # :param ModManager manager:
         """
         super().__init__()
 
-        self.manager = manager
+        # Manager = manager
 
         # create db in memory
         self._con = sqlite3.connect(":memory:")
@@ -587,8 +588,8 @@ class DBManager:
             # also, a dictionary of mods to a list of conflicting files
             mods_with_conflicts[mod].append(file)
 
-        self.manager.file_conflicts = conflicts
-        self.manager.mods_with_conflicting_files = mods_with_conflicts
+        Manager.file_conflicts = conflicts
+        Manager.mods_with_conflicting_files = mods_with_conflicts
 
         # for c in mods_with_conflicts['Bethesda Hi-Res DLC Optimized']:
         #     print("other mods containing file '%s'" % c)
@@ -694,9 +695,9 @@ class DBManager:
 
 
 if __name__ == '__main__':
-    from skymodman.managers import ModManager
+    # from skymodman.managers import ModManager
 
-    DB = DBManager(ModManager())
+    DB = DBManager()
     DB._con.row_factory = sqlite3.Row
 
     DB.loadModDB(Path(os.path.expanduser("~/.config/skymodman/profiles/default/modinfo.json")))

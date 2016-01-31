@@ -4,6 +4,7 @@ from collections import namedtuple
 from configparser import ConfigParser as confparser
 
 from skymodman import exceptions
+# from skymodman.managers import modmanager as Manager
 from skymodman.constants import SyncError as SE
 from skymodman.utils import withlogger, diqt, open_for_safe_write
 
@@ -183,13 +184,11 @@ class ProfileManager:
     __cache = diqt(maxlen_=5)
 
 
-    def __init__(self, manager, directory):
+    def __init__(self, directory):
         """
-        :param skymodman.managers.ModManager manager: reference to ModManager
         :param Path directory: the application's 'profiles' storage directory
         """
         super().__init__()
-        self.manager = manager
 
         self._profiles_dir = directory
         self._current_profile = None

@@ -4,7 +4,7 @@ from pathlib import Path
 from copy import deepcopy
 
 from skymodman import utils, exceptions
-
+# from skymodman.managers import modmanager as Manager
 from skymodman.constants import (EnvVars, INIKey, INISection)
 
 __myname = "skymodman"
@@ -54,12 +54,10 @@ class ConfigManager:
         }
     }
 
-    def __init__(self, manager):
+    def __init__(self):
         """
-        :param ModManager manager:
         """
         super().__init__()
-        self.manager = manager
 
 
         self.__paths = ConfigPaths()

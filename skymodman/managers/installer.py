@@ -11,9 +11,8 @@ class InstallManager:
     """
 
     # noinspection PyArgumentList
-    def __init__(self, manager, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.manager = manager
         self.archiver = ArchiveHandler()
 
     def is_fomod(self, archive):
