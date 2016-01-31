@@ -1,6 +1,7 @@
 from . import custom_widgets
 from .new_profile_dialog import NewProfileDialog
 from PyQt5.QtWidgets import QMessageBox, QSpacerItem, QSizePolicy
+from contextlib import suppress
 
 _icons = {
     'question': QMessageBox.Question,
@@ -51,22 +52,27 @@ def message(icon='question', title='', text='Are you sure?', info_text=None, but
     :param default_button:
     :return:
     """
-    try:
-        micon = _icons[icon]
-    except KeyError:
-        micon = QMessageBox.NoIcon
-
+    # defaults
+    micon = QMessageBox.NoIcon
+    dbutton = QMessageBox.NoButton
     mbuttons = QMessageBox.NoButton
-    for b in buttons:
-        try:
-            mbuttons = mbuttons | _buttons[b]
-        except KeyError:
-            pass
 
-    try:
+
+    with suppress(KeyError):
+        micon = _icons[icon]
+
+    if isinstance(buttons, str):
+        # handle just one value passed for 'buttons'
+        with suppress(KeyError):
+            mbuttons = _buttons[buttons]
+    elif buttons is not None:
+        for b in buttons:
+            with suppress(KeyError):
+                mbuttons |= _buttons[b]
+
+    with suppress(KeyError):
         dbutton = _buttons[default_button]
-    except KeyError:
-        dbutton = QMessageBox.NoButton
+
 
     if not mbuttons: mbuttons = QMessageBox.OK
 

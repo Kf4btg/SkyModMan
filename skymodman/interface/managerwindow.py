@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (QApplication,
                              QAction, QAbstractButton,  # QHeaderView,
                              QActionGroup)
 
-from skymodman import skylog
+from skymodman import skylog, exceptions
 from skymodman.managers import modmanager as Manager
 from skymodman.constants import (Tab as TAB,
                                  INIKey,
@@ -861,7 +861,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         newname = QInputDialog.getText(self, "Rename Profile", "New name")[0]
 
         if newname:
-            Manager.rename_profile(newname)
+            try:
+                Manager.rename_profile(newname)
+            except exceptions.ProfileError as pe:
+                message('critical', "Error during rename", text=str(pe), buttons='ok')
 
 
 

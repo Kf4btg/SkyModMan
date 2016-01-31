@@ -117,11 +117,16 @@ class Profile:
 
 
     def rename(self, new_name):
+        """
+
+        :param str new_name:
+        :return:
+        """
         if self.name.lower() == "default":
             raise exceptions.DeleteDefaultProfileError()
 
-        new_dir = self.folder.with_name(new_name)
-        if new_dir.exists():
+        new_dir = self.folder.with_name(new_name) #type: Path
+        if new_dir.with_name(new_name.lower()).exists():
             raise exceptions.ProfileExistsError(new_name)
 
         # rename the directory (doesn't affect path obj)
