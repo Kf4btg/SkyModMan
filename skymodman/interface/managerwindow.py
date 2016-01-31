@@ -1012,9 +1012,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     # noinspection PyTypeChecker,PyArgumentList
     def install_mod_archive(self):
         # todo: default to home folder or something instead of current dir
-        filename=QFileDialog.getOpenFileName(self, "Select Mod Archive",
-                                             QDir.currentPath(),
-                                             "Archives [zip, 7z, rar] (*.zip *.7z *.rar);;All Files(*)")[0]
+        filename=QFileDialog.getOpenFileName(
+            self, "Select Mod Archive",
+            QDir.currentPath(),
+            "Archives [zip, 7z, rar] (*.zip *.7z *.rar);;All Files(*)")[0]
         if filename:
             message('information','The Thing', filename)
             
@@ -1033,8 +1034,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # update config with new path
         if checkPath(moddir):
             Manager.conf.updateConfig(moddir,
-                                             INIKey.MODDIR,
-                                             INISection.GENERAL)
+                                      INIKey.MODDIR,
+                                      INISection.GENERAL)
 
             # reverify and reload the mods.
             if not Manager.validate_mod_installs():

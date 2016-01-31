@@ -49,11 +49,11 @@ Qt_ItemIsDragEnabled   = Qt.ItemIsDragEnabled
 Qt_ItemIsDropEnabled   = Qt.ItemIsDropEnabled
 
 col2field = {
-    COL_ORDER: "ordinal",
-    COL_ENABLED: "enabled",
-    COL_NAME: "name",
+    COL_ORDER:     "ordinal",
+    COL_ENABLED:   "enabled",
+    COL_NAME:      "name",
     COL.DIRECTORY: "directory",
-    COL_MODID: "modid",
+    COL_MODID:     "modid",
     COL_VERSION:   "version",
 }
 
