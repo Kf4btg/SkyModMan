@@ -13,7 +13,7 @@ from PyQt5.QtWidgets import (QApplication,
                              QMainWindow,
                              QDialogButtonBox,
                              QMessageBox,
-                             QFileDialog,
+                             QFileDialog, QInputDialog,
                              QAction, QAbstractButton,  # QHeaderView,
                              QActionGroup)
 
@@ -313,6 +313,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             * action_load_profile
             * action_new_profile
             * action_delete_profile
+            * action_rename_profile
 
             * action_preferences
             * action_quit
@@ -349,6 +350,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # action_delete_profile
         self.action_delete_profile.triggered.connect(
             self.on_remove_profile_action)
+
+        # action_rename_profile
+        self.action_rename_profile.triggered.connect(
+            self.on_rename_profile_action)
 
         #--------------------------------------------------
 
@@ -850,6 +855,16 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                     self.profile_selector.currentData())
             self.profile_selector.removeItem(
                     self.profile_selector.currentIndex())
+
+    def on_rename_profile_action(self):
+
+        newname = QInputDialog.getText(self, "Rename Profile", "New name")[0]
+
+        if newname:
+            Manager.rename_profile(newname)
+
+
+
 
     def on_make_or_clear_mod_selection(self, has_selection):
         """

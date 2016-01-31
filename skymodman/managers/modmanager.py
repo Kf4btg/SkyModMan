@@ -6,18 +6,18 @@ from skymodman.managers.profiles import Profile, ProfileManager
 from skymodman.constants import db_fields as _db_fields
 
 
-_configman  = None
-_dataman    = None
-_profileman = None
+_configman  = None # type: _config.ConfigManager
+_dataman    = None # type: _database.DatabaseManager
+_profileman = None # type: ProfileManager
 # _installman = None
 
 #shortcuts
-conf     = _configman
-db       = _dataman
-profiles = _profileman
+conf     = _configman   # type: _config.ConfigManager
+db       = _dataman     # type: _database.DatabaseManager
+profiles = _profileman  # type: ProfileManager
 
-file_conflicts = None
-mods_with_conflicting_files = None
+file_conflicts = None               # type: collections.defaultdict[list]
+mods_with_conflicting_files = None  # type: collections.defaultdict[list]
 
 _logger = None
 
@@ -90,6 +90,25 @@ def new_profile(name, copy_from = None):
     :return: new Profile object
     """
     return _profileman.newProfile(name, copy_from)
+
+def rename_profile(new_name, current=None):
+    """
+    Change the name of profile `current` to `new_name`. If `current` is passed as None, rename the active profile. This renames the profile's directory on disk.
+    :param new_name:
+    :param current:
+    """
+    # get the current Profile object
+    if current is None:
+        current = active_profile()
+    elif isinstance(current, str):
+        current = _profileman[current]
+
+    _logger << "Renaming profile: {}->{}".format(current.name, new_name)
+    _profileman.rename_profile(current, new_name)
+
+    if current is active_profile():
+        _configman.updateConfig(current.name, "lastprofile")
+
 
 def delete_profile(profile):
     _profileman.deleteProfile(profile, True)
@@ -192,7 +211,7 @@ def get_profile_setting(section, name):
     :param str name: Name of the setting
     :return: current value of the setting
     """
-    return active_profile().settings[section][name]
+    return active_profile().Config[section][name]
 
 def set_profile_setting(section, name, value):
     """

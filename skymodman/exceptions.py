@@ -14,16 +14,28 @@ class InvalidConfigKeyError(Error):
 #---------------------------
 
 class ProfileError(Error):
-    def __init__(self, profilename):
+    def __init__(self, profilename, msg='{name}'):
         self.profilename = profilename
+        self.msg = msg
+
+    def __str__(self):
+        return self.msg.format(name=self.profilename)
+
+class ProfileDoesNotExistError(ProfileError):
+    def __init__(self, profilename):
+        super().__init__(profilename,
+                         "No profile with the name '{name}' could be found.")
 
 class ProfileExistsError(ProfileError):
-    def __str__(self):
-        return "A profile with the name '{}' already exists.".format(self.profilename)
+    def __init__(self, profilename):
+        super().__init__(profilename,
+                         "A profile with the name '{name}' already exists.".format(
+                             self.profilename))
 
 class DeleteDefaultProfileError(ProfileError):
-    def __str__(self):
-        return "The default profile cannot be deleted."
+    def __init__(self):
+        super().__init__('default',
+                         "The default profile cannot be deleted or renamed")
 
 #---------------------------
 class FilesystemDesyncError(Error):

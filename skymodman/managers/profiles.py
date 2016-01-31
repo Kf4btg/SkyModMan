@@ -1,6 +1,6 @@
-from enum import Enum
+# from enum import Enum
 from pathlib import Path
-from collections import namedtuple
+# from collections import namedtuple
 from configparser import ConfigParser as confparser
 
 from skymodman import exceptions
@@ -10,7 +10,13 @@ from skymodman.utils import withlogger, diqt, open_for_safe_write
 
 
 # well...that's all for now i guess!
-_psettings = namedtuple("_psettings", "modlist_onlyactive")
+# _psettings = namedtuple("_psettings", "modlist_onlyactive")
+
+
+ProfileFiles = (MODINFO, LOADORDER, INIEDITS, OVERWRITE, HIDDEN, SETTINGS) = (
+    "modinfo.json", "loadorder.json", "iniedits.json",
+    "overwrites.json", "hiddenfiles.json", "settings.ini")
+
 
 
 # from skymodman.utils import humanizer
@@ -26,60 +32,52 @@ class Profile:
         }
     }
 
-    class Files(str, Enum):
-        MODINFO   = "modinfo.json"
-        LOADORDER = "loadorder.json"
-        INIEDITS  = "iniedits.json"
-        OVERWRITE = "overwrites.json"
-        HIDDEN    = "hiddenfiles.json"
-        SETTINGS  = "settings.ini"
 
-    def __init__(self, profiles_dir, name="default", copy_profile=None):
+    def __init__(self, profiles_dir, name="default", copy_profile=None, create_on_enoent=True):
         """
 
         :param Path profiles_dir:
         :param str name:
         :param Profile copy_profile:
+        :param bool create_on_enoent: Whether to create the profile folder if it does not already exist
         """
 
         self.name = name
 
-        self.folder = profiles_dir / name
-
-        self.localfiles = {}  # type: Dict[str, Path]
+        self.folder = profiles_dir / name # type: Path
 
         if not self.folder.exists():
-            # create the directory if it doesn't exist
-            self.folder.mkdir()
+            if create_on_enoent:
+                # create the directory if it doesn't exist
+                self.folder.mkdir()
 
-            # since we're creating a new profile, check to see we're cloning
-            # an already existing one
-            if copy_profile is not None:
-                import shutil
-                for fpath in copy_profile.localfiles.values():
-                    #copy the other profile's files to our new profile dir
-                    shutil.copy(str(fpath), str(self.folder))
+                # since we're creating a new profile, check to see we're cloning
+                # an already existing one
+                if copy_profile is not None:
+                    import shutil
+                    for fpath in (copy_profile.folder / fname for fname in ProfileFiles):
+                        #copy the other profile's files to our new profile dir
+                        shutil.copy(str(fpath), str(self.folder))
+                    del shutil
+            else:
+                raise exceptions.ProfileDoesNotExistError(name)
 
-        for f in [self.folder / Profile.Files(p).value for p in Profile.Files]:
-            # populate a dict with references to the files local to this profile,
-            # keyed by the filenames sans extension (e.g. 'modinfo' for 'modinfo.json')
-
-            self.localfiles[f.stem] = f
+        for f in [self.folder / p for p in ProfileFiles]:
 
             if not f.exists():
                 # if the file doesn't exist (perhaps because this is a new profile)
                 # create empty placeholder for it
                 f.touch()
-                if f.name == Profile.Files.SETTINGS:
+                if f.name == SETTINGS:
                     # put default vals in the ini file
                     c = confparser()
-                    c.read_dict(Profile.__default_settings)
+                    c.read_dict(self.__default_settings)
                     with f.open('w') as ini:
                         c.write(ini)
 
         # we don't worry about the json files, but we need to load in the values from the
         # ini file and store it.
-        self.settings = self.load_profile_settings()
+        self._config = self.load_profile_settings()
         # self.LOGGER << "Loaded profile-specific settings: {}".format(self.settings)
 
         # create a container to hold any issues found during
@@ -88,24 +86,59 @@ class Profile:
                            SE.NOTLISTED: []}
 
     @property
+    def Config(self):
+        # has a capital C to differentiate from path properties
+        return self._config
+
+    @property
     def modinfo(self) -> Path:
-        return self.localfiles['modinfo']
+        return self.folder / MODINFO
 
     @property
     def loadorder(self) -> Path:
-        return self.localfiles['loadorder']
+        return self.folder / LOADORDER
 
     @property
     def iniedits(self) -> Path:
-        return self.localfiles['iniedits']
+        return self.folder / INIEDITS
 
     @property
     def overwrites(self) -> Path:
-        return self.localfiles['overwrites']
+        return self.folder / OVERWRITE
 
     @property
     def hidden_files(self):
-        return self.localfiles['hiddenfiles']
+        return self.folder / HIDDEN
+
+    @property
+    def settings(self):
+        return self.folder / SETTINGS
+
+
+
+    def rename(self, new_name):
+        if self.name.lower() == "default":
+            raise exceptions.DeleteDefaultProfileError()
+
+        new_dir = self.folder.with_name(new_name)
+        if new_dir.exists():
+            raise exceptions.ProfileExistsError(new_name)
+
+        # rename the directory (doesn't affect path obj)
+        self.folder.rename(new_dir)
+
+        try:
+            assert new_dir.exists()
+            assert not self.folder.exists()
+        except AssertionError:
+            raise exceptions.ProfileError(self.name,
+                                          "Error while renaming profile '{name}' to '{new_name}'".format(new_name=new_name))
+
+        # update reference
+        self.folder = new_dir
+        self.name = new_name
+
+
 
     def recordErrors(self, error_type, errors):
         """
@@ -120,10 +153,8 @@ class Profile:
         self.syncErrors[error_type] = errors
 
     def load_profile_settings(self):
-        setfile = self.localfiles['settings']
-
         config = confparser()
-        config.read(str(setfile))
+        config.read(str(self.settings))
 
         # for now, just turn the config parser into a dict and return it;
         # the checks below should deal with most of the conversions we'd need
@@ -145,21 +176,20 @@ class Profile:
 
     def save_setting(self, section, name, value):
         """Change a setting value and write the updated values to disk"""
-        assert section in self.settings
-        assert name in self.settings[section]
+        assert section in self._config
+        assert name in self._config[section]
 
-        self.settings[section][name] = value
+        self._config[section][name] = value
 
         self._save_profile_settings()
 
     def _save_profile_settings(self):
         """Overwrite the settings file with the current values"""
-        setfile = self.localfiles['settings']
 
         config = confparser()
-        config.read_dict(self.settings)
+        config.read_dict(self._config)
 
-        with open_for_safe_write(setfile) as ini:
+        with open_for_safe_write(self.settings) as ini:
             config.write(ini)
 
 
@@ -197,16 +227,16 @@ class ProfileManager:
 
         ## load profile names from folders in profiles-dir
         self.LOGGER.info("loading profiles from {}".format(self._profiles_dir))
-        self._available_profiles = [] # type: List[str]
+        self._profile_names = [] # type: List[str]
 
         for p in self._profiles_dir.iterdir():
             if p.is_dir():
                 # self.LOGGER.debug("Found profile {}: appending to profiles list.".format(p.name))
-                self._available_profiles.append(p.name)
+                self._profile_names.append(p.name)
 
-        if len(self._available_profiles) == 0:
+        if len(self._profile_names) == 0:
             self.LOGGER.warning("No profiles found. Creating default profile.")
-            self._available_profiles.append("default")
+            self._profile_names.append("default")
             self._current_profile = self.loadProfile("default")
 
     ################
@@ -221,26 +251,47 @@ class ProfileManager:
 
     @property
     def profile_names(self):
-        return self._available_profiles
+        return self._profile_names
 
     #######################
     ## Choosing Profiles ##
     #######################
 
-    def loadProfile(self, profilename, copy_from = None):
+    def __getitem__(self, profilename):
+        """
+        Provides mapping-like access to profiles: use ``profmanager['my_profile']``
+        to retrieve the Profile object for the profile named 'my_profile'
+        (loading it from disk if not cached).
+
+        Unlike the default behavior of 'loadProfile', this will NOT create a new profile if one by the given
+        name can't be found. A ProfileDoesNotExistError will be raised instead.
+
+        :param profilename: name of the profile to load
+        :return: Profile object
+        """
+
+        return self.loadProfile(profilename, create=False)
+
+
+
+    def loadProfile(self, profilename, copy_from = None, create=True):
         """
 
         :param str profilename:
+            name of profile to load.
         :param Profile copy_from:
-            if the named Profile does not exist, a new one will be created with that name. If `copy_from` is specified and is the name of a currently existing profile, settings will be copied from that profile to the new one rather than creating the typical default configuration files.
-        :return:
+            If `copy_from` is specified and is the name of a currently existing profile, settings will be copied from that profile to the new one rather than creating the typical default configuration files.
+        :param create:
+            If True, and no profile by the given name exists, a new one with that name will be created and returned, copying configuration from `copy_from` if specified. If False and the profile does not exist, a ProfileError will be raised.
+        :return: loaded or created Profile object
         """
         # self.LOGGER.info("Loading profile '{}'.".format(profilename))
 
         if profilename in self.__cache:
             self.LOGGER.info("Profile {} found in cache; returning cached object.".format(profilename))
         else:
-            self.__cache.append(profilename, Profile(self._profiles_dir, profilename, copy_from))
+            self.__cache.append(profilename, Profile(self._profiles_dir, profilename, copy_profile=copy_from, create_on_enoent=create))
+
 
         return self.__cache[profilename]
 
@@ -264,15 +315,15 @@ class ProfileManager:
 
     def iterProfiles(self):
         """Iterate over the list of known profiles"""
-        yield from self._available_profiles
+        yield from self._profile_names
 
     def profilesByName(self):
         """
         iterator of (name, Profile) pairs, sorted by name
         """
-        self._available_profiles = sorted(self._available_profiles)
-        yield from zip(self._available_profiles,
-                  (self.loadProfile(p) for p in self._available_profiles))
+        self._profile_names = sorted(self._profile_names)
+        yield from zip(self._profile_names,
+                       (self.loadProfile(p) for p in self._profile_names))
 
 
     #####################
@@ -302,7 +353,7 @@ class ProfileManager:
         except exceptions.ProfileError:
             raise
 
-        self._available_profiles.append(profile_name)
+        self._profile_names.append(profile_name)
         return new_prof
 
 
@@ -328,10 +379,10 @@ class ProfileManager:
         assert isinstance(profile, Profile)
 
         if profile.name.lower() == "default":
-            raise exceptions.DeleteDefaultProfileError("default")
+            raise exceptions.DeleteDefaultProfileError()
 
         # remove from available_profiles list
-        self._available_profiles.remove(profile.name)
+        self._profile_names.remove(profile.name)
         # and from cache
         if profile.name in self.__cache:
             self.__cache.remove(profile.name)
@@ -343,5 +394,30 @@ class ProfileManager:
         # remove folder
         profile.folder.rmdir()
 
+    def rename_profile(self, profile, new_name):
+        """
+        Moves the directory containing the configuration files for Profile `profile` to a new directory with the name `new_name`, and updates all occurrences of the old name to the new.
+
+        :param profile:
+        :param new_name:
+        :raises: ProfileExistsError: if a directory named `new_name` already exists
+        """
+
+        assert isinstance(profile, Profile)
+
+        old_name = profile.name
+        profile.rename(new_name)
+
+        self.__cache.remove(old_name)
+        self._profile_names.remove(old_name)
+        self._profile_names.append(profile.name)
+
+        self.__cache.append(profile.name, profile)
+
+
+
+
+
+
 if __name__ == '__main__':
-    from typing import List, Dict
+    from typing import List

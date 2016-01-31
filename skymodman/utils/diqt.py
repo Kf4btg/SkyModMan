@@ -109,7 +109,10 @@ class diqt(deque):
         self._values.appendleft(value)
 
     def remove(self, key):
-        return NotImplemented
+        i=self.index(key)
+        del self._values[i]
+        super().__delitem__(i)
+
 
 
 
