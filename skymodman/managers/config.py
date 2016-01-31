@@ -67,8 +67,6 @@ class ConfigManager:
 
         self.ensureDefaultSetup()
 
-
-
     @property
     def paths(self) -> ConfigPaths:
         """
@@ -160,8 +158,6 @@ class ConfigManager:
         """
 
         ## set up paths ##
-        # use XDG_CONFIG_HOME if set, else default to ~/.config
-        # user_config_dir = os.getenv("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
 
         paths = self.paths
 
@@ -205,10 +201,6 @@ class ConfigManager:
             # for now, only create if the location in the config is same as the default
             if str(paths.dir_mods) == \
                 appdirs.user_data_dir(self.__APPNAME) + "/mods":
-                    # os.path.join(os.getenv("XDG_DATA_HOME",
-                    #                        os.path.expanduser("~/.local/share")),
-                    #              ConfigManager.__APPNAME,
-                    #              "mods"):
                 self.LOGGER.info("Creating new mods directory at: {}".format(paths.dir_mods))
                 paths.dir_mods.mkdir(parents=True)
             else:
@@ -227,12 +219,6 @@ class ConfigManager:
         Creates 'skymodman.ini' with default values
         """
         #TODO: perhaps just include a default config file and copy it in place.
-
-        # default data directory
-        # TODO: will need to figure something else out if there's ever a need to get this working on a non-linux OS (e.g. OS X)
-        # default_data_dir = Path(os.getenv("XDG_DATA_HOME",
-        #                                   os.path.expanduser("~/.local/share"))) / ConfigManager.__APPNAME
-        # default_data_dir = Path(appdirs.user_data_dir(self.__APPNAME))
 
         config = configparser.ConfigParser()
 
