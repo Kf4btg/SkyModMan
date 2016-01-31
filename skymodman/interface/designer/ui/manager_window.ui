@@ -13,7 +13,7 @@
   <property name="windowTitle">
    <string>MainWindow</string>
   </property>
-  <widget class="QWidget" name="centralwidget">
+  <widget class="QWidget" name="_centralwidget">
    <layout class="QGridLayout" name="gridLayout">
     <item row="0" column="0" colspan="5">
      <widget class="QTabWidget" name="manager_tabs">
@@ -128,7 +128,7 @@
        </attribute>
        <layout class="QGridLayout" name="gridLayout_6">
         <item row="0" column="0">
-         <widget class="QSplitter" name="splitter">
+         <widget class="QSplitter" name="_filetreesplitter">
           <property name="orientation">
            <enum>Qt::Horizontal</enum>
           </property>
@@ -416,7 +416,7 @@
         <number>0</number>
        </property>
        <item row="0" column="2">
-        <spacer name="horizontalSpacer">
+        <spacer name="_lower_spacer">
          <property name="orientation">
           <enum>Qt::Horizontal</enum>
          </property>
@@ -490,7 +490,7 @@
     </item>
    </layout>
   </widget>
-  <widget class="QMenuBar" name="menubar">
+  <widget class="QMenuBar" name="_menubar">
    <property name="geometry">
     <rect>
      <x>0</x>
@@ -499,41 +499,49 @@
      <height>34</height>
     </rect>
    </property>
-   <widget class="QMenu" name="menu_File">
+   <widget class="QMenu" name="menu_file">
     <property name="title">
      <string>&amp;File</string>
     </property>
-    <addaction name="action_install_mod"/>
-    <addaction name="action_choose_mod_folder"/>
+    <widget class="QMenu" name="menu_load_profile">
+     <property name="title">
+      <string>Load Profile</string>
+     </property>
+     <addaction name="separator"/>
+    </widget>
+    <addaction name="menu_load_profile"/>
+    <addaction name="action_new_profile"/>
+    <addaction name="action_delete_profile"/>
     <addaction name="separator"/>
-    <addaction name="action_save_changes"/>
-    <addaction name="action_revert_changes"/>
+    <addaction name="action_choose_mod_folder"/>
+    <addaction name="action_preferences"/>
     <addaction name="separator"/>
     <addaction name="action_quit"/>
    </widget>
-   <widget class="QMenu" name="menuProfile">
+   <widget class="QMenu" name="menu_edit">
     <property name="title">
-     <string>Prof&amp;ile</string>
+     <string>&amp;Edit</string>
     </property>
-    <widget class="QMenu" name="menuIni_Files">
+    <widget class="QMenu" name="menu_ini_files">
      <property name="title">
-      <string>&amp;Ini Files</string>
+      <string>Ini Files</string>
      </property>
      <addaction name="action_edit_skyrim_ini"/>
      <addaction name="action_edit_skyrimprefs_ini"/>
     </widget>
-    <addaction name="action_load_profile"/>
-    <addaction name="action_new_profile"/>
-    <addaction name="action_delete_profile"/>
-    <addaction name="separator"/>
-    <addaction name="menuIni_Files"/>
-   </widget>
-   <widget class="QMenu" name="menuEdit">
-    <property name="title">
-     <string>E&amp;dit</string>
-    </property>
     <addaction name="action_undo"/>
     <addaction name="action_redo"/>
+    <addaction name="action_save_changes"/>
+    <addaction name="action_revert_changes"/>
+    <addaction name="separator"/>
+    <addaction name="menu_ini_files"/>
+   </widget>
+   <widget class="QMenu" name="menu_mod">
+    <property name="title">
+     <string>&amp;Mod</string>
+    </property>
+    <addaction name="action_install_mod"/>
+    <addaction name="action_uninstall_mod"/>
     <addaction name="separator"/>
     <addaction name="action_show_search"/>
     <addaction name="action_find_next"/>
@@ -545,9 +553,9 @@
     <addaction name="action_move_mod_to_top"/>
     <addaction name="action_move_mod_to_bottom"/>
    </widget>
-   <addaction name="menu_File"/>
-   <addaction name="menuEdit"/>
-   <addaction name="menuProfile"/>
+   <addaction name="menu_file"/>
+   <addaction name="menu_edit"/>
+   <addaction name="menu_mod"/>
   </widget>
   <widget class="QToolBar" name="file_toolBar">
    <property name="windowTitle">
@@ -573,7 +581,7 @@
      <normaloff>../../../.designer/backup</normaloff>../../../.designer/backup</iconset>
    </property>
    <property name="text">
-    <string>&amp;Install Mod...</string>
+    <string>&amp;Install...</string>
    </property>
    <property name="toolTip">
     <string>Install Mod</string>
@@ -623,7 +631,7 @@
      <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
-    <string>&amp;New...</string>
+    <string>&amp;New Profile...</string>
    </property>
    <property name="toolTip">
     <string>Create New Profile</string>
@@ -638,7 +646,7 @@
      <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
-    <string>D&amp;elete</string>
+    <string>D&amp;elete Profile</string>
    </property>
    <property name="toolTip">
     <string>Remove Profile</string>
@@ -843,6 +851,25 @@
    </property>
    <property name="text">
     <string>S&amp;how Search Bar</string>
+   </property>
+  </action>
+  <action name="action_uninstall_mod">
+   <property name="icon">
+    <iconset theme="edit-delete"/>
+   </property>
+   <property name="text">
+    <string>Uninstall</string>
+   </property>
+  </action>
+  <action name="action_preferences">
+   <property name="icon">
+    <iconset theme="settings"/>
+   </property>
+   <property name="text">
+    <string>Preferences</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+P</string>
    </property>
   </action>
  </widget>

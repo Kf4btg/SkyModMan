@@ -246,7 +246,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # make sure we're just showing the mod name
         self.filetree_modlist.setModelColumn(Column.NAME.value)
 
-        self.splitter.setSizes(
+        self._filetreesplitter.setSizes(
                 [1, 500])  # just make the left one smaller ok?
 
         ##################################
@@ -315,27 +315,77 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """Connect all the actions to their appropriate slots/whatevers
 
         Actions:
-            * action_install_fomod
-            * action_choose_mod_folder
-            * action_quit
             * action_load_profile
             * action_new_profile
             * action_delete_profile
+
+            * action_preferences
+            * action_quit
+
+            * action_install_mod
+            * action_uninstall_mod
+            * action_choose_mod_folder
+
             * action_edit_skyrim_ini
             * action_edit_skyrimprefs_ini
+
+            * action_toggle_mod
+
             * action_undo
             * action_redo
-            * action_toggle_mod
             * action_save_changes
+            * action_revert_changes
+
             * action_move_mod_up
             * action_move_mod_down
             * action_move_mod_to_top
             * action_move_mod_to_bottom
             * action_move_mod_up
+
             * action_show_search
             * action_find_next
             * action_find_previous
         """
+
+        # action_new_profile
+        self.action_new_profile.triggered.connect(
+            self.on_new_profile_action)
+
+        # action_delete_profile
+        self.action_delete_profile.triggered.connect(
+            self.on_remove_profile_action)
+
+        #--------------------------------------------------
+
+        # action_preferences
+        self.action_preferences.triggered.connect(
+            self.edit_preferences)
+
+
+        # action_quit
+        self.action_quit.setShortcut(QKeySequence.Quit)
+        self.action_quit.triggered.connect(self.safe_quit)
+
+        # --------------------------------------------------
+
+        # action_install_mod
+        self.action_install_mod.triggered.connect(
+            self.install_mod_archive)
+        # action_choose_mod_folder
+        self.action_choose_mod_folder.triggered.connect(
+            self.choose_mod_folder)
+
+        # --------------------------------------------------
+
+        # action edit ... ini
+
+        # --------------------------------------------------
+
+        # action_toggle_mod
+        self.action_toggle_mod.triggered.connect(
+            self.mod_table.toggleSelectionCheckstate)
+
+        # --------------------------------------------------
 
         # * action_undo
         # * action_redo
@@ -345,9 +395,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.action_undo.triggered.connect(self.mod_table.undo)
         self.action_redo.triggered.connect(self.mod_table.redo)
 
-        # action_toggle_mod
-        self.action_toggle_mod.triggered.connect(
-                self.mod_table.toggleSelectionCheckstate)
+        # --------------------------------------------------
 
         # action_save_changes
         self.action_save_changes.setShortcut(
@@ -357,6 +405,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.action_revert_changes.triggered.connect(
                 self.on_revert_command)
+
+        #--------------------------------------------------
 
         # action_move_mod_up
         # action_move_mod_down
@@ -372,23 +422,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.action_move_mod_to_bottom.triggered.connect(
                 self.moveModsToBottom.emit)
 
-        # action_quit
-        self.action_quit.triggered.connect(self.safe_quit)
-
-        # action_install_fomod
-        self.action_install_mod.triggered.connect(
-                self.install_mod_archive)
-        # action_choose_mod_folder
-        self.action_choose_mod_folder.triggered.connect(
-                self.choose_mod_folder)
-
-        # action_new_profile
-        self.action_new_profile.triggered.connect(
-                self.on_new_profile_action)
-
-        # action_delete_profile
-        self.action_delete_profile.triggered.connect(
-            self.on_remove_profile_action)
+        # --------------------------------------------------
 
         # show search bar
         self.action_show_search.setShortcut(QKeySequence.Find)
@@ -983,6 +1017,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     ##===============================================
     ## Action Handlers
     ##===============================================
+
+    def edit_preferences(self):
+        message(text="Preferences?")
 
     # noinspection PyArgumentList
     def load_fomod(self):
