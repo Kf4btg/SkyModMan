@@ -4,6 +4,9 @@ python-libarchive-c
 # http://riverbankcomputing.co.uk/software/pyqt/intro
 pyqt5
 
+# https://github.com/ActiveState/appdirs
+appdirs
+
 #
 xmltodict
 
