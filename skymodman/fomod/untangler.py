@@ -48,53 +48,75 @@ class Element(untangle.Element):
         """
         yield from ((k,v) for k,v in self._attributes.items())
 
+class Stepper:
+    def __init__(self, generator):
+        self.gen=generator
+        self._count=0
+
+    @property
+    def step(self):
+        self._count+=1
+        return next(self.gen)
+
+    @property
+    def count(self):
+        return self._count
+
+    def send(self, value):
+        self.gen.send(value)
+
+    
 
 class Fomodder:
     def __init__(self, config_xml):
         self.fomod_config = untangle.parse(config_xml)
-        print(type(self.fomod_config.config))
+        # print(type(self.fomod_config.config))
 
     @property
     def root(self):
         return self.fomod_config.config
+
+    def get_stepper(self):
+        return Stepper(self.steps())
 
     def steps(self):
         """
         This is the workhorse of the class. It is a generator that yields the values from the fomod config xml in order, allowing the handler to deal with the value as needed before moving on to the next step.
         :return:
         """
+        root=self.fomod_config.config
 
         ## Step1: ModName
-        yield from _next(self.root.moduleName, cdata=True, **DEFAULTS["moduleName"])
+        yield from _next(root.moduleName, cdata=True, **DEFAULTS["moduleName"])
 
         ## step 2: modimage
-        for el in self.root.get_elements("moduleImage"):
+        for el in root.get_elements("moduleImage"):
             yield from _next(el, **DEFAULTS["moduleImage"])
             break
         else:
             # fake it up
             yield "moduleImage"
-            yield from (DEFAULTS["moduleImage"][a]
-                        for a in ["path", "showImage",
-                                  "showFade", "height"])
+            for a in ["path", "showImage", "showFade", "height"]:
+                yield a
+                yield DEFAULTS["moduleImage"][a]
 
         ## step3: module Dependencies
-        for el in self.root.get_elements("moduleDependencies"):
+        for el in root.get_elements("moduleDependencies"):
             yield from _moduledependencies(el)
             break
 
         ## step4: requiredInstallFiles
-        for el in self.root.get_elements("requiredInstallFiles"):
+        for el in root.get_elements("requiredInstallFiles"):
             if len(el): yield from _files(el)
             break
 
         ## step5: installSteps
-        for el in self.root.get_elements("installSteps"):
+        for el in root.get_elements("installSteps"):
             if len(el): _installsteps(el)
             break
 
         ## step6: conditionalFileInstalls
-        for el in self.root.get_elements("conditionalFileInstalls"):
+        for el in root.get_elements("conditionalFileInstalls"):
             if len(el):
                 yield from _patterns(el.patterns)
 
@@ -112,16 +134,18 @@ def _next(element, *attrs, cdata=False, **attr_default_pairs):
     :param attr_default_pairs: any kwargs other than `attrs` and `cdata` will be taken as an attribute to look up in the element, and if not found the value given in the kwarg will be used as the default return value.
     :return:
     """
-    yield element.name
+    yield element._name
 
     if cdata: yield element.cdata
-
-    yield from (element.get_attribute(a) for a in attrs)
-
-    yield from (element.get_attribute(a,d) for a,d in attr_default_pairs.items())
-
-
-
+    
+    for a in attrs:
+        yield a
+        yield element.get_attribute(a)
+        
+    for a,d in attr_default_pairs.items():
+        yield a
+        yield element.get_attribute(a,d)
+        
 def _moduledependencies(moddeps):
     # Need to check whether:
     #  A) modDeps ele has a 'dependencies' subelement, or
