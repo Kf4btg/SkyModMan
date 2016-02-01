@@ -275,10 +275,18 @@ def install_mod(archive):
     # check for fomod
     fomod_dir = installman.is_fomod(archive)
     if fomod_dir:
-        print(fomod_dir)
-
-
+        pass
 
 
 def install_mod_from_dir(directory):
     pass
+
+
+##===============================================
+## Installation Helpers
+##-----------------------------------------------
+## These are used to query dependencies for the
+## fomod installer
+##===============================================
+
+

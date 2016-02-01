@@ -123,7 +123,7 @@ def processFileItem(file_item):
 
 if __name__ == '__main__':
     from pprint import pprint
-    with open("../res/ModuleConfig.xml", "rb") as f:
+    with open("res/SMIM/ModuleConfig.xml", "rb") as f:
         c=dictParse(f).config
 
     pprint(c)
