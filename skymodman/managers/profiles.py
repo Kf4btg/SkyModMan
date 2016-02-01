@@ -126,7 +126,11 @@ class Profile:
             raise exceptions.DeleteDefaultProfileError()
 
         new_dir = self.folder.with_name(new_name) #type: Path
-        if new_dir.with_name(new_name.lower()).exists():
+
+        # if the folder exists or if it matches (case-insensitively) one of the other profile
+        # dirs, raise exception
+        if new_dir.exists() or \
+            new_name.lower() in [f.name.lower() for f in self.folder.parent.iterdir()]:
             raise exceptions.ProfileExistsError(new_name)
 
         # rename the directory (doesn't affect path obj)

@@ -772,16 +772,18 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     def enable_profile_delete(self, profile_name):
         """
         If the profile name is anything other than the default profile
-        (likely 'default') enable the remove_profile button
+        (likely 'default') enable the remove and rename actions
         :param profile_name:
         """
         if profile_name.lower() == 'default':
             self.action_delete_profile.setEnabled(False)
             self.action_delete_profile.setToolTip(
                     'Cannot Remove Default Profile')
+            self.action_rename_profile.setEnabled(False)
         else:
             self.action_delete_profile.setEnabled(True)
             self.action_delete_profile.setToolTip('Remove Profile')
+            self.action_rename_profile.setEnabled(True)
 
     # <editor-fold desc="EventHandlers">
 
@@ -864,9 +866,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             try:
                 Manager.rename_profile(newname)
             except exceptions.ProfileError as pe:
-                message('critical', "Error during rename", text=str(pe), buttons='ok')
-
-
+                message('critical', "Error During Rename Operation", text=str(pe), buttons='ok')
 
 
     def on_make_or_clear_mod_selection(self, has_selection):

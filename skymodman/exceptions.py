@@ -29,7 +29,7 @@ class ProfileDoesNotExistError(ProfileError):
 class ProfileExistsError(ProfileError):
     def __init__(self, profilename):
         super().__init__(profilename,
-                         "A profile with the name '{name}' already exists.")
+                         "A profile matching the name '{name}' already exists.")
 
 class DeleteDefaultProfileError(ProfileError):
     def __init__(self):
