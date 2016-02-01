@@ -1,5 +1,5 @@
 from skymodman.thirdparty.untangle import untangle
-from skymodman.managers import modmanager as Manager
+# from skymodman.managers import modmanager as Manager
 
 class Element(untangle.Element):
     def __init__(self, *args, **kwargs):
@@ -64,18 +64,13 @@ class Fomodder:
         :return:
         """
 
-        # Step1: ModName
+        ## Step1: ModName
+        yield from _next(self.root.moduleName, cdata=True, **DEFAULTS["moduleName"])
 
-        # yield from self._modname(self.root.moduleName)
-        yield from _next(self.root.moduleName, "position", "colour",
-                         cdata=True)
-
-        # step 2: modimage
-        els=self.root.get_elements("moduleImage")
-        if els:
-            yield from _next(els[0],
-                             "path", "showImage",
-                             "showFade", "height")
+        ## step 2: modimage
+        for el in self.root.get_elements("moduleImage"):
+            yield from _next(el, **DEFAULTS["moduleImage"])
+            break
         else:
             # fake it up
             yield "moduleImage"
@@ -83,38 +78,31 @@ class Fomodder:
                         for a in ["path", "showImage",
                                   "showFade", "height"])
 
-        # step3: module Dependencies
-        yield from _moduledependencies(self.root)
+        ## step3: module Dependencies
+        for el in self.root.get_elements("moduleDependencies"):
+            yield from _moduledependencies(el)
+            break
 
-        # step4: requiredInstallFiles
-        els = self.root.get_elements("requiredInstallFiles")
-        if els and len(els[0]):
-            rif = els[0] #only 1
+        ## step4: requiredInstallFiles
+        for el in self.root.get_elements("requiredInstallFiles"):
+            if len(el): yield from _files(el)
+            break
 
-            yield rif._name
+        ## step5: installSteps
+        for el in self.root.get_elements("installSteps"):
+            if len(el): _installsteps(el)
+            break
 
-            for fstype in ["file", "folder"]:
-                yield from (
-                    _next(f,
-                          "source",
-                          "priority",
-                          "destination",
-                          "alwaysInstall",
-                          "installIfUsable")
-                    for f in rif.get_elements(fstype))
-
-        # step5: installSteps
-        els = self.root.get_elements("installSteps")
-        if els and len(els[0]):
-            _installsteps(els[0])
+        ## step6: conditionalFileInstalls
+        for el in self.root.get_elements("conditionalFileInstalls"):
+            if len(el):
+                yield from _patterns(el.patterns)
 
 
 
-        # step6: conditionalFileInstalls
 
 
-
-def _next(element, *attrs_using_DEFAULTS, attrs=None, cdata=False, **attr_default_pairs):
+def _next(element, *attrs, cdata=False, **attr_default_pairs):
     """
 
     :param element: the element
@@ -128,44 +116,30 @@ def _next(element, *attrs_using_DEFAULTS, attrs=None, cdata=False, **attr_defaul
 
     if cdata: yield element.cdata
 
-    yield from (default_attr(element, a) for a in attrs_using_DEFAULTS)
+    yield from (element.get_attribute(a) for a in attrs)
 
     yield from (element.get_attribute(a,d) for a,d in attr_default_pairs.items())
 
 
-def _modulename(element:Element):
-    # first, yield element name
-    yield element.name
 
-    #then, yield the text (mod name)
-    yield element.cdata
+def _moduledependencies(moddeps):
+    # Need to check whether:
+    #  A) modDeps ele has a 'dependencies' subelement, or
+    #  B) the dependencies are placed directly below it
+    #      (this seems to happen sometimes, though usually it's if there's only 1 dependency)
 
-    # yield the attributes, if any, as (name, value) tuples
-    for a in ["position", "colour"]:
-        yield default_attr(element, a)
+    for el in moddeps.get_elements("dependencies"):
+        yield moddeps._name
+        yield from _dependencies(el)
+        break
+    else:
+        # yield directly from this element
+        yield from _dependencies(moddeps)
 
-def _moduledependencies(config):
-    # Need to check that:
-    #  1) moduleDependencies element exists
-    #  2) it has a dependencies subelement
-    #  3) dependencies subelement is not empty
-    if hasattr(config, "moduleDependencies") \
-        and hasattr(config.moduleDependencies, "dependencies") \
-        and len(config.moduleDependencies.dependencies):
-
-        yield config.moduleDependencies._name
-
-        yield from _dependencies(config.moduleDependencies.dependencies)
-
-attrs_for_deps={"fileDependency":["file", "state"],
-           "flagDependency":["flag", "value"],
-           "gameDependency":["version"],
-           "fommDependency":["version"]}
-dep_types = attrs_for_deps.keys()
 def _dependencies(element):
-    # yields the element name "dependencies" (our 'announcement')
+    # yields the element name (e.g."dependencies", our 'announcement')
     # and the value/default-value for the operator
-    yield from _next(element, "operator")
+    yield from _next(element, **DEFAULTS["dependencies"])
 
     # dict {type:[deps-of-type...], ...}
     # if there are no deps of that type, its list will be empty
@@ -175,26 +149,96 @@ def _dependencies(element):
         yield from (_next(dep, attrs=attrs_for_deps[dt])
                     for dep in dependencies[dt])
 
+def _files(element):
+    yield element._name # the container
+
+    for fstype in ["file", "folder"]:
+        yield from (
+            _next(f, "source", **DEFAULTS[fstype])
+            for f in element.get_elements(fstype))
+
 def _installsteps(steps_element):
-    yield from _next(steps_element, "order")
+    yield from _next(steps_element, **DEFAULTS["installSteps"])
 
     for step in steps_element.get_elements("installStep"):
-        yield "whoaaaaa"
+        yield from _next(step, "name")
+
+        ## check visible dep group
+        for vis in step.get_elements("visible"):
+            for deps in vis.get_elements("dependencies"):
+                yield vis._name
+                yield from _dependencies(deps)
+                break
+            else:
+                yield from _dependencies(vis)
+
+            # signals that we need a decision from controller;
+            # controller needs to have analyzed the dependencies and
+            # determined whether they were satisfied; if so, we will
+            # continue to process this step. If not, we move to the next.
+            # Controller must send() the result to the generator
+            do_step = yield None
+            break
+        else:
+            # always run step if there is no visible check
+            do_step = True
+
+        if do_step:
+            for group in step.optionalFileGroups.group:
+                _group(group)
+
+def _group(group):
+    yield from _next(group, "name", "type")
+
+    yield from _next(group.plugins, **DEFAULTS["plugins"])
+
+    for plugin in group.plugins.plugin:
+        yield from _next(plugin, "name")
+
+        yield from _next(plugin.description, cdata=True)
+
+        for el in plugin.get_elements("image"):
+            yield from _next(el, "path")
+
+        for el in plugin.get_elements("conditionFlags"):
+            yield el._name
+            yield from (_next(flag, "name", cdata=True)
+                        for flag in el.get_elements("flag"))
+
+        for el in plugin.get_elements("files"):
+            yield from _files(el)
+
+        yield from _typedescriptor(plugin.typeDescriptor)
 
 
+def _typedescriptor(descriptor):
+    yield descriptor._name
+
+    for simpletype in descriptor.get_elements("type"):
+        yield from _next(simpletype, "name")
+        break
+    else:
+        for dtype in descriptor.get_elements("dependencyType"):
+            yield dtype._name
+
+            yield from _next(dtype.defaultType, "name")
+
+            yield from _patterns(dtype.patterns)
 
 
+def _patterns(patterns):
+    yield patterns._name
 
+    for pattern in patterns.get_elements("pattern"):
+        yield pattern._name
+        yield from _next(pattern.type, "name")
 
+        # there should never be any "loose" dependencies in here
+        yield from _dependencies(pattern.dependencies)
 
-def default_attr(element, attrname):
-    return element.get_attribute(
-        attrname,
-        DEFAULTS[element._name][attrname])
-
-
-
-
+        for f in pattern.get_elements("files"):
+            yield from _files(f)
+            break
 
 
 # default values for various attributes
@@ -227,7 +271,11 @@ DEFAULTS={
 DEFAULTS["plugins"] = DEFAULTS["installSteps"]
 DEFAULTS["folder"] = DEFAULTS["file"]
 
-
+attrs_for_deps = {"fileDependency": ["file", "state"],
+                  "flagDependency": ["flag", "value"],
+                  "gameDependency": ["version"],
+                  "fommDependency": ["version"]}
+dep_types = attrs_for_deps.keys()
 
 
 
