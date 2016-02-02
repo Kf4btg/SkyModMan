@@ -65,3 +65,7 @@ class FilesystemDesyncError(Error):
 #------------------------------
 class ArchiverError(Error):
     pass
+
+#------------------------------
+class FomodError(Error):
+    pass

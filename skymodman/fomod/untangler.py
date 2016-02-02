@@ -1,6 +1,7 @@
 from skymodman.thirdparty.untangle import untangle
 from skymodman.utils.color import Color
 # from skymodman.managers import modmanager as Manager
+from skymodman import exceptions
 
 class Element(untangle.Element):
     def __init__(self, *args, **kwargs):
@@ -51,6 +52,11 @@ class Element(untangle.Element):
 
 class Stepper:
     def __init__(self, generator):
+        """
+
+        :param __generator generator:
+        :return:
+        """
         self.gen=generator
         self._count=0
 
@@ -65,6 +71,22 @@ class Stepper:
 
     def send(self, value):
         self.gen.send(value)
+
+    def step_until(self, element_name):
+        next_val = ...
+        while next_val != element_name:
+            next_val = self.step
+
+        if next_val is ...:
+            raise exceptions.FomodError("Element '{}' not found".format(element_name))
+
+        return next_val
+
+    def step_for(self, count):
+        for i in range(count-1):
+            self.step
+        return self.step
+
 
     
 
