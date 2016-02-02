@@ -96,9 +96,54 @@ def test_required_install_files(stepper):
 
     assert expects == {"file":[], "folder":[]}
 
+def test_installsteps(stepper):
+    assert stepper.step == "installSteps"
+
+    assert stepper.step == "order"
+    assert stepper.step == "Explicit"
+
+    assert stepper.step == "installStep"
+    assert stepper.step == "name"
+    assert stepper.step == "Select Option(s)"
+
+    # no visible on the first step
+
+def test_step1_optfilegroups(stepper):
+    assert stepper.step == "optionalFileGroups"
+
+    assert stepper.step == "group"
+    assert stepper.step == "name"
+    assert stepper.step == "STEP Installer"
+    assert stepper.step == "type"
+    assert stepper.step == "SelectAny"
+
+    assert stepper.step == "plugins"
+    assert stepper.step == "order"
+    assert stepper.step == "Explicit"
+
+    assert stepper.step == "plugin"
+    assert stepper.step == "name"
+    assert stepper.step == "Continue to installer..."
+
+    assert stepper.step == "description"
+    assert stepper.step.startswith("This is the installer for the STEP Mod Compilation and STEP Patches. On the next page you")
+
+    assert stepper.step == "image"
+    assert stepper.step == "path"
+    assert stepper.step == r"Fomod\STEP.png"
+
+    assert stepper.step == "typeDescriptor"
+    assert stepper.step == "type"
+    assert stepper.step == "name"
+    assert stepper.step == "Required"
+
+# def test_step2(stepper):
+    
 
 
 
+def no():
+    pass
 
 ## test helpers
 def check_file_item(_stepper, file_type, possibles):

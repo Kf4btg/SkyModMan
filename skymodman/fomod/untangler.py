@@ -118,9 +118,10 @@ class Fomodder:
             if len(el): yield from _files(el)
             break
 
+
         ## step5: installSteps
         for el in root.get_elements("installSteps"):
-            if len(el): _installsteps(el)
+            if len(el): yield from _installsteps(el)
             break
 
         ## step6: conditionalFileInstalls
@@ -146,6 +147,8 @@ def _next(element, *attrs, cdata=False, attr_convs=None, **attr_default_pairs):
     yield element._name
 
     if cdata: yield element.cdata
+
+    attr_convs = attr_convs or []
     
     for a in attrs:
         yield a
@@ -224,8 +227,9 @@ def _installsteps(steps_element):
             do_step = True
 
         if do_step:
+            yield step.optionalFileGroups._name
             for group in step.optionalFileGroups.group:
-                _group(group)
+                yield from _group(group)
 
 def _group(group):
     yield from _next(group, "name", "type")
