@@ -1,4 +1,5 @@
 from skymodman.thirdparty.untangle import untangle
+from skymodman.utils.color import Color
 # from skymodman.managers import modmanager as Manager
 
 class Element(untangle.Element):
@@ -87,18 +88,25 @@ class Fomodder:
         root=self.fomod_config.config
 
         ## Step1: ModName
-        yield from _next(root.moduleName, cdata=True, **DEFAULTS["moduleName"])
+        yield from _next(root.moduleName, attr_convs=DEFAULTTYPES["moduleName"], cdata=True, **DEFAULTS["moduleName"])
 
         ## step 2: modimage
         for el in root.get_elements("moduleImage"):
-            yield from _next(el, **DEFAULTS["moduleImage"])
+            yield from _next(el, attr_convs=DEFAULTTYPES["moduleImage"], **DEFAULTS["moduleImage"])
             break
         else:
             # fake it up
             yield "moduleImage"
-            for a in ["path", "showImage", "showFade", "height"]:
+
+            # first, the path (no type conversion)
+            yield "path"
+            yield DEFAULTS["moduleImage"]["path"]
+
+            # then other ones w/ type conv
+            for a in ["showImage", "showFade", "height"]:
                 yield a
-                yield DEFAULTS["moduleImage"][a]
+                yield DEFAULTTYPES["moduleImage"][a](
+                    DEFAULTS["moduleImage"][a])
 
         ## step3: module Dependencies
         for el in root.get_elements("moduleDependencies"):
@@ -124,13 +132,14 @@ class Fomodder:
 
 
 
-def _next(element, *attrs, cdata=False, **attr_default_pairs):
+def _next(element, *attrs, cdata=False, attr_convs=None, **attr_default_pairs):
     """
 
     :param element: the element
     :param attrs_using_DEFAULTS: anything listed here will first be queried in the element, then in the DEFAULTS dict if not found
     :param attrs: should just be a plain iterable of attribute names to be looked up in the element. Will return ``None`` if not found.
     :param cdata: Whether to return the cdata for this element
+    :param attr_convs: if not None, should be a dict of attribute names to a callable that converts that attribute's value (by default a string) to the proper type. For example, you could pass: ``attr_convs={"priority": int, "install": bool, "path": lambda p: Path(p)}``
     :param attr_default_pairs: any kwargs other than `attrs` and `cdata` will be taken as an attribute to look up in the element, and if not found the value given in the kwarg will be used as the default return value.
     :return:
     """
@@ -140,11 +149,17 @@ def _next(element, *attrs, cdata=False, **attr_default_pairs):
     
     for a in attrs:
         yield a
-        yield element.get_attribute(a)
+        if a in attr_convs:
+            yield attr_convs[a](element.get_attribute(a))
+        else:
+            yield element.get_attribute(a)
         
     for a,d in attr_default_pairs.items():
         yield a
-        yield element.get_attribute(a,d)
+        if a in attr_convs:
+            yield attr_convs[a](element.get_attribute(a,d))
+        else:
+            yield element.get_attribute(a,d)
         
 def _moduledependencies(moddeps):
     # Need to check whether:
@@ -170,16 +185,17 @@ def _dependencies(element):
     dependencies = {dt:element.get_elements(dt) for dt in dep_types}
 
     for dt in dep_types:
-        yield from (_next(dep, attrs=attrs_for_deps[dt])
-                    for dep in dependencies[dt])
+        for dep in dependencies[dt]:
+            yield from _next(dep, *attrs_for_deps[dt])
 
 def _files(element):
     yield element._name # the container
 
     for fstype in ["file", "folder"]:
-        yield from (
-            _next(f, "source", **DEFAULTS[fstype])
-            for f in element.get_elements(fstype))
+        for f in element.get_elements(fstype):
+            yield from _next(f, "source",
+                             attr_convs=DEFAULTTYPES[fstype],
+                             **DEFAULTS[fstype])
 
 def _installsteps(steps_element):
     yield from _next(steps_element, **DEFAULTS["installSteps"])
@@ -226,8 +242,8 @@ def _group(group):
 
         for el in plugin.get_elements("conditionFlags"):
             yield el._name
-            yield from (_next(flag, "name", cdata=True)
-                        for flag in el.get_elements("flag"))
+            for flag in el.get_elements("flag"):
+                yield from _next(flag, "name", cdata=True)
 
         for el in plugin.get_elements("files"):
             yield from _files(el)
@@ -294,6 +310,26 @@ DEFAULTS={
 # some extra things that are duplicates
 DEFAULTS["plugins"] = DEFAULTS["installSteps"]
 DEFAULTS["folder"] = DEFAULTS["file"]
+
+# todo: add enums?
+DEFAULTTYPES= {
+    "moduleName":   {
+        "colour":   Color.from_hexstr
+    },
+    "moduleImage":  {
+        "showImage": bool,
+        "showFade":  bool,
+        "height":    int,
+    },
+    "file":         {
+        "alwaysInstall":   bool,
+        "installIfUsable": bool,
+        "priority":        int
+    },
+}
+
+DEFAULTTYPES["folder"] = DEFAULTTYPES["file"]
+
 
 attrs_for_deps = {"fileDependency": ["file", "state"],
                   "flagDependency": ["flag", "value"],

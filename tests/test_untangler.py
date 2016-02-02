@@ -32,10 +32,10 @@ def test_modname(stepper):
     if nstep == "position":
         assert stepper.step == "RightOfImage"
         assert stepper.step == "colour"
-        assert stepper.step == "000000"
+        assert str(stepper.step) == "000000"
 
     elif nstep == "colour":
-        assert stepper.step == "000000"
+        assert str(stepper.step) == "000000"
         assert stepper.step == "position"
         assert stepper.step == "RightOfImage"
 
@@ -57,5 +57,64 @@ def test_modimage(stepper):
                 break
 
     assert len(attrs) == 0
+
+    # and next is when we'd test the module dependencies,
+    # but the STEP installed doesn't have them, so...
+
+def test_required_install_files(stepper):
+    assert stepper.step == "requiredInstallFiles"
+    nstep = stepper.step
+
+    assert nstep in ["file", "folder"]
+
+    expects={
+        "file": [{
+            "source": "00 Core Files",
+            "destination": "",
+            "priority": 2,
+            "alwaysInstall":   False,
+            "installIfUsable": False,
+            },{
+            "source":      "01 Core Files",
+            "destination": "",
+            "priority":    1,
+            "alwaysInstall":   False,
+            "installIfUsable": False,
+        }],
+        "folder": [{
+            "source":      "00 Core Files",
+            "destination": "",
+            "priority":    1,
+            "alwaysInstall":   False,
+            "installIfUsable": False,
+        }]
+    }
+
+    check_file_item(stepper, nstep, expects)
+    check_file_item(stepper, stepper.step, expects)
+    check_file_item(stepper, stepper.step, expects)
+
+    assert expects == {"file":[], "folder":[]}
+
+
+
+
+
+## test helpers
+def check_file_item(_stepper, file_type, possibles):
+    # attributes are source, destination, priority,alwaysInstall,installIfUsable
+    # in a random order
+
+    attr={_stepper.step: _stepper.step,
+          _stepper.step: _stepper.step,
+          _stepper.step: _stepper.step,
+          _stepper.step: _stepper.step,
+          _stepper.step: _stepper.step}
+
+    assert attr in possibles[file_type]
+    possibles[file_type].remove(attr)
+
+
+
 
 
