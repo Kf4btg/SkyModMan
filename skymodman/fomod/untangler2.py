@@ -57,12 +57,129 @@ class Element(untangle.Element):
         yield from ((k,v) for k,v in self._attributes.items())
 
 
+
+class fomodcommon:
+
+    commands = r"/.#@|!&~"
+    suffixes = r"?*|$"
+
+    # <editor-fold desc="command documentation">
+    # each command is a command-char followed by an element or attribute name
+    cmd_doc = {
+        "Selectors": {
+            # these will throw exceptions of the target does not exist
+            '/': "select (move to) child element w/ given name under root."
+                 " note that here, 'root' refers to element that was current"
+                 " at the time the script was entered; if the client is running"
+                 " a sub-script (through the ! command), the root is likely to"
+                 " be different from the main root, which makes it easier to focus"
+                 " on a 'sub-tree' of elements.",
+            '.': "select child w/ given name under current element",
+            '~': "move to sibling (child of current element's parent); this"
+                 " is also the 'default' command, and so can usually be omitted:"
+                 " '~sibling' == 'sibling'",
+            '|': "mutually-exclusive sibling selector. See '|' under Suffixes.",
+
+            ## Data Request Commands
+            '#': "this is a combination command that could have a different"
+                 " meaning depending on how it is used. If given bare (with"
+                 " no name), it means 'request the cdata/text from the"
+                 " current element. If a name is provided that is the name"
+                 " of one of the children of the current element, then it"
+                 " indicates 'move to the [first] child with the given name"
+                 " AND request the value of its cdata/text attribute.'",
+            '@': "request value of named attribute from current element",
+
+            ## Control Commands (these commands not sent to server)
+            '!': "run script (series of commands) w/ given name",
+            '&': "query the controller for a reponse about the most recent"
+                 " command of this name that was marked w/ the '$' suffix;"
+                 " if the controller returns a True response, then continue"
+                 " with the script; otherwise, move up a script level (even"
+                 " out of the script altogether if this occurs in the 'main'"
+                 " script.",},
+
+        "Suffixes": {  # (add after name, eg '.elname?')
+
+            # for navigation (will not throw exceptions)
+            '?': "move to `target` if exists(`target`); if the target does"
+                 " not exist, script execution will continue at the next"
+                 " movement command (i.e. any data/script commands that"
+                 " come after this command and the next movement cmd will be"
+                 " skipped.",
+            '*': "foreach `target` w/ given name: ...",
+            '|': "the mutually-exclusive sibling marker can be used as both a"
+                 " suffix and command (prefix). As a prefix, it can be thought"
+                 " of as being similar to '?': select the target if it exists."
+                 " If the target did in fact exist, its sub-commands will be"
+                 " executed, and then any consecutive commands using '|' as "
+                 " a selector will be skipped, without selection being attempted."
+                 " However, if the target does not exist and the next selector"
+                 " command is '|', attempt to select that element instead. If"
+                 " a chain of '|' selectors are used, then the first target that"
+                 " exists will be selected and the rest skipped. This is very"
+                 " similar to a 'if: elif: ...' construct. The target elements"
+                 " in the chain must be siblings. Of special note is that if a"
+                 " command starts with '|' but was preceded by a command that"
+                 " neither had a '|' suffix nor was a skipped member of a chain,"
+                 " the '|' will be ignored and sibling selection will proceed"
+                 " as if the command actually started with '~'.",
+
+            # Example:
+            #   .chain1|
+            #       ...
+            #   |chain2|
+            #       ...
+            #   |chain3
+            #       ...
+            #   not_in_chain
+
+            # other
+            '$': "marks a command as a fork point requiring special handling:"
+                 " the client's controller should be queried after such a marked"
+                 " command to decide what to do next (see the '&' command above)",
+        }
+    }
+    # </editor-fold>
+
+    class FomodError(exceptions.Error):
+        pass
+
+    class NoSuchElement(FomodError):
+        """
+        Indicates to the consumer that the element they requested does not exist.
+        """
+        pass
+
+    class BadCommand(FomodError):
+        """
+        Indicates an unrecognized command was received
+        """
+        pass
+
+
+
 class FomodServer:
     def __init__(self, config_xml):
         self.fomod_config = untangle.parse(config_xml)
+        self.connected_client = None
+
+    def connect(self, consumer):
+        if self.connected_client is None:
+            self.connected_client=consumer
+            try:
+                self.serve(consumer)
+            finally:
+                consumer.close()
+                self.connected_client = None
+        else:
+            consumer.send(None) # says "I'm busy"
+
+
+
 
     # noinspection PyNoneFunctionAssignment
-    def feeder(self, consumer):
+    def serve(self, consumer):
         """
 
         :param __generator consumer: Should be a generator equipped to receive send() commands from the feed. The values yielded by the generator will control the actions of the feeder.
@@ -101,7 +218,7 @@ class FomodServer:
                     command = next(consumer)
                     break
                 else:
-                    command = consumer.throw(NoSuchElement)
+                    command = consumer.throw(fomodcommon.NoSuchElement)
 
 
 
@@ -115,10 +232,7 @@ class FomodServer:
 
 
 
-class NoSuchElement(exceptions.Error):
-    """
-    Indicates to the consumer that the element they requested does not exist.
-    """
+
 
 
 

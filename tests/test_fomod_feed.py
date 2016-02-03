@@ -1,4 +1,4 @@
-from skymodman.fomod.untangler2 import FomodServer
+from skymodman.fomod.untangler2 import FomodServer, fomodcommon
 from contextlib import wraps
 from skymodman.utils.color import Color
 
@@ -13,6 +13,19 @@ def consumer(func):
 
 
 @consumer
+def dummy_display():
+    while 1:
+        try:
+            value = yield
+            print(value)
+        except GeneratorExit:
+            return
+
+
+commands = fomodcommon.commands
+suffixes = fomodcommon.suffixes
+
+@consumer
 def fomod_client(display):
     """
 
@@ -24,98 +37,167 @@ def fomod_client(display):
             modname = yield
             display.send(("moduleName", modname))
 
-            for a in ["position", "colour"]:
-                val = yield from _send_cmd("@", a) # send attr request
-
-                if val is None:
-                    val = DEFAULTS["moduleName"][a]
-
-                display.send("moduleName", a,
-                             _convert_attr("moduleName", a, val))
+            # for a in ["position", "colour"]:
+            #     val = yield from _send_cmd("@", a) # send attr request
+            #
+            #     if val is None:
+            #         val = DEFAULTS["moduleName"][a]
+            #
+            #     display.send("moduleName", a,
+            #                  _convert_attr("moduleName", a, val))
 
 
         except GeneratorExit:
             display.close()
             return
 
-# each command is a command-char followed by an element or attribute name
-cmd_doc = {
-    "Selectors":{
-    # these will throw exceptions of the target does not exist
-    '/': "select (move to) child element w/ given name under root."
-         " note that here, 'root' refers to element that was current"
-         " at the time the script was entered; if the client is running"
-         " a sub-script (through the ! command), the root is likely to"
-         " be different from the main root, which makes it easier to focus"
-         " on a 'sub-tree' of elements.",
-    '.': "select child w/ given name under current element",
-    '~': "move to sibling (child of current element's parent); this"
-         " is also the 'default' command, and so can usually be omitted:"
-         " '~sibling' == 'sibling'",
-    '|': "mutually-exclusive sibling selector. See '|' under Suffixes.",
+class FomodClient:
 
-    ## Data Request Commands
-    '#': "this is a combination command that could have a different"
-         " meaning depending on how it is used. If given bare (with"
-         " no name), it means 'request the cdata/text from the"
-         " current element. If a name is provided that is the name"
-         " of one of the children of the current element, then it"
-         " indicates 'move to the [first] child with the given name"
-         " AND request the value of its cdata/text attribute.'",
-    '@': "request value of named attribute from current element",
+    def __init__(self, display, scripts_map, server):
+        self.display = display
+        self.scripts = scripts_map
+        self.server = server
+        self.controller_responses = {}
 
-    ## Control Commands (these commands not sent to server)
-    '!': "run script (series of commands) w/ given name",
-    '&': "query the controller for a reponse about the most recent"
-         " command of this name that was marked w/ the '$' suffix;"
-         " if the controller returns a True response, then continue"
-         " with the script; otherwise, move up a script level (even"
-         " out of the script altogether if this occurs in the 'main'"
-         " script.",},
+    def start(self):
+        self.server.connect(self.run(self.scripts['main']))
 
-    "Suffixes": { # (add after name, eg '.elname?')
 
-    # for navigation (will not throw exceptions)
-    '?': "move to `target` if exists(`target`); if the target does"
-         " not exist, script execution will continue at the next"
-         " movement command (i.e. any data/script commands that"
-         " come after this command and the next movement cmd will be"
-         " skipped.",
-    '*': "foreach `target` w/ given name: ...",
-    '|': "the mutually-exclusive sibling marker can be used as both a"
-         " suffix and command (prefix). As a prefix, it can be thought"
-         " of as being similar to '?': select the target if it exists."
-         " If the target did in fact exist, its sub-commands will be"
-         " executed, and then any consecutive commands using '|' as "
-         " a selector will be skipped, without selection being attempted."
-         " However, if the target does not exist and the next selector"
-         " command is '|', attempt to select that element instead. If"
-         " a chain of '|' selectors are used, then the first target that"
-         " exists will be selected and the rest skipped. This is very"
-         " similar to a 'if: elif: ...' construct. The target elements"
-         " in the chain must be siblings. Of special note is that if a"
-         " command starts with '|' but was preceded by a command that"
-         " neither had a '|' suffix nor was a skipped member of a chain,"
-         " the '|' will be ignored and sibling selection will proceed"
-         " as if the command actually started with '~'.",
+    @consumer
+    def run(self, script):
+        state={
+            "xorchain": None,
+            "to_controller": None,
+            "from_controller": None,
+        }
+        for cmd in script:
+            action = self.check_cmd(cmd, state)
+            if action is None or action is True: continue
+            if action is False: break
 
-        # Example:
-        #   .chain1|
-        #       ...
-        #   |chain2|
-        #       ...
-        #   |chain3
-        #       ...
-        #   not_in_chain
+            response = yield from action
 
-    # other
-    '$': "marks a command as a fork point requiring special handling:"
-         " the client's controller should be queried after such a marked"
-         " command to decide what to do next (see the '&' command above)",
-}
-}
 
-script = {
+
+
+
+    get_cmd_parts = (#name      cmd     suf
+        lambda com: (com,       '~',    ' '),
+        lambda com: (com[1:],   com[0], ' '),
+        lambda com: (com[:-1],  '~',   com[:-1]),
+        lambda com: (com[1:-1], com[0], com[:-1]),
+    )
+
+    def check_cmd(self, command:str, state):
+        """Checks for client control-codes in `command`"""
+
+        if not command: return None
+
+        if len(command)==1:
+            if command in "#/":
+                return self.send_cmd("", command)
+
+            return None #fixme: raise exception
+
+
+        # 'bitmask' corresponding to an index in get_cmd_parts
+        _ = (1 if command[0] in commands else 0) \
+            + (2 if command[-1] in suffixes else 0)
+
+
+        if not _: return self.send_cmd(command)
+
+        name, c, s = self.get_cmd_parts[_](command)
+
+        # if have both and cmd is runscript()
+        if _ & 1|2 and c == "!":
+
+            # run subscript
+            # but command could possibly have $ suffix,
+            # so check that first
+            if s == "$":
+                state["to_controller"] = name
+            return self.run(self.scripts[name])
+
+        # if we have explicit cmd char
+        if _ & 1:
+
+            if c == "!":  # run subscript
+                return self.run(self.scripts[name])
+            if c == '&': # return response from controller
+                return state["from_controller"]
+
+            # uf we've satisfied the check,
+            if state['xorchain'] is True:
+
+                # skip further | commands
+                if c == "|":
+                    return None
+
+                # else: the chain has ended
+                state["xorchain"] = None
+
+        # if we have suffix
+        if _ & 2 and s in "|$":
+
+            # starting new xor chain
+            if s == "|": state['xorchain'] = False
+
+            # send this name to controller before next command
+            if s == "$": state["to_controller"] = name
+
+            # unset suffix b/c server doesn't care about these 2
+            s = " "
+
+        return self.send_cmd(name, c, s)
+
+
+    def check_response(self, response, state):
+
+        # todo: actually handle the response
+        self.display.send(response)
+
+
+    @staticmethod
+    def send_cmd(name, command="~", suffix=" "):
+        """
+        yields a command to the server in two parts:
+        the first part is is a two-character command string,
+        consisting of the concatenation of the `command` and `suffix`
+        (or their defaults).  Using this, the server will be prepare
+        the appropriate operation and then request the `name`, which
+        is the second and final value to be yielded by this generator.
+
+        Name is yielded even if it is an empty string.
+
+        :param name:
+        :param command:
+        :param suffix:
+        :return:
+        """
+        yield command+suffix
+        yield name
+
+    @staticmethod
+    def _convert_attr(element_name, attrname, value):
+        """
+        If the attribute is listed in the conversions dict, return the converted value; otherwise just return the value unchanged.
+        :param element_name:
+        :param attrname:
+        :param value:
+        :return:
+        """
+        try:
+            return DEFAULTTYPES[element_name][attrname](value)
+        except AttributeError:
+            return value
+
+
+
+
+
+# <editor-fold desc="install-script command outline">
+installscript = {
     "main": ("#moduleName",
                  '@position',
                  '@colour',
@@ -136,7 +218,7 @@ script = {
                 '@order',
                 ".installStep*",
                     '!installsteps',
-             
+
              '/conditionalFileInstalls?',
                  '.patterns',
                     '.pattern*',
@@ -219,49 +301,9 @@ script = {
     )
 
 }
+# </editor-fold>
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-def _send_cmd(cmd, request=None):
-    yield cmd
-    if request is not None:
-        response = yield request
-        return response
-
-def _convert_attr(element_name, attrname, value):
-    """
-    If the attribute is listed in the conversions dict, return the converted value; otherwise just return the value unchanged.
-    :param element_name:
-    :param attrname:
-    :param value:
-    :return:
-    """
-    try:
-        return DEFAULTTYPES[element_name][attrname](value)
-    except AttributeError:
-        return value
-
-@consumer
-def dummy_display():
-    while 1:
-        try:
-            value = yield
-            print(value)
-        except GeneratorExit:
-            return
 
 
 
