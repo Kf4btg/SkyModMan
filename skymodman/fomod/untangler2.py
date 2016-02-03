@@ -57,7 +57,7 @@ class Element(untangle.Element):
         yield from ((k,v) for k,v in self._attributes.items())
 
 
-class FomodFeed:
+class FomodServer:
     def __init__(self, config_xml):
         self.fomod_config = untangle.parse(config_xml)
 
