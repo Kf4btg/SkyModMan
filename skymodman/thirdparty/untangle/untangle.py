@@ -104,7 +104,7 @@ class Element(object):
             (self._name, self._attributes, self.cdata)
         )
 
-    def __nonzero__(self):
+    def __bool__(self):
         return self.is_root or self._name is not None
 
     def __eq__(self, val):
