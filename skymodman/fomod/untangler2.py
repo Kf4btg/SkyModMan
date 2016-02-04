@@ -95,7 +95,7 @@ class Fomod:
         defs = DEFAULTS["moduleImage"]
         mimg = root.moduleImage or Element("moduleImage", defs)
 
-        self.modimage = ModImage(mimg["path"] or defs["path"],
+        self.modimage = ModImage(_pathfix(mimg["path"]) or defs["path"],
 
                                  _tobool(mimg["showImage"]
                                          or defs["showImage"]),
@@ -133,7 +133,7 @@ class Fomod:
 
         if not len(dparent): return None
 
-        deps.fileDependency = [FileDep(d["file"],
+        deps.fileDependency = [FileDep(_pathfix(d["file"]),
                                        FileState(d["state"]))
                                for d in dparent.fileDependency]
 
@@ -158,8 +158,8 @@ class Fomod:
             ftype = File if f._name == "file" else Folder
 
             files.append(
-                ftype(f["source"],
-                      f["destination"] or f["source"],
+                ftype(_pathfix(f["source"]),
+                      _pathfix(f["destination"] or f["source"]),
 
                       int(f["priority"]
                           or defs["priority"]),
@@ -233,7 +233,7 @@ class Fomod:
             p.description = plugin.description.cdata
 
             if plugin.image:
-                p.image = plugin.image["path"]
+                p.image = _pathfix(plugin.image["path"])
 
             if plugin.conditionFlags:
                 p.conditionFlags = [Flag(f["name"], f.cdata)
@@ -251,7 +251,9 @@ class Fomod:
 
         return plugs
 
+def _pathfix(path:str):
 
+    return path.replace('\\', '/')
 
 def _tobool(val):
     v = val.lower()

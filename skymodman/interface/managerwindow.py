@@ -1054,8 +1054,16 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             QDir.currentPath(),
             "Archives [zip, 7z, rar] (*.zip *.7z *.rar);;All Files(*)")[0]
         if filename:
-            Manager.install_mod(filename)
-            message('information','The Thing', filename)
+            # Manager.install_mod(filename)
+            from skymodman.interface.widgets.fomod_installer_wizard import FomodInstaller
+
+            fomodinstaller = FomodInstaller()
+
+            # fomodinstaller.show()
+            fomodinstaller.exec_()
+
+
+            # message('information','The Thing', filename)
             
     def choose_mod_folder(self):
         """

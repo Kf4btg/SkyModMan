@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Wizard</class>
+ <widget class="QWizard" name="Wizard">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>600</width>
+    <height>500</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Wizard</string>
+  </property>
+  <property name="wizardStyle">
+   <enum>QWizard::ClassicStyle</enum>
+  </property>
+  <property name="options">
+   <set>QWizard::NoBackButtonOnStartPage</set>
+  </property>
+  <widget class="QWizardPage" name="page_start">
+   <property name="title">
+    <string>Mod Name</string>
+   </property>
+   <property name="subTitle">
+    <string/>
+   </property>
+  </widget>
+  <widget class="QWizardPage" name="wizardPage2">
+   <property name="title">
+    <string>Mod Name</string>
+   </property>
+   <property name="subTitle">
+    <string>Step Name</string>
+   </property>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
