@@ -1,4 +1,7 @@
-from collections import deque
+from collections import deque, namedtuple
+from enum import Enum
+from itertools import chain, repeat
+
 from functools import partial
 
 from skymodman.thirdparty.untangle import untangle
@@ -23,6 +26,12 @@ class Element(untangle.Element):
         value = super().get_attribute(key)
 
         return default if value is None else value
+
+    def __getattr__(self, key):
+        try:
+            return super().__getattr__(key)
+        except AttributeError:
+            return []
 
     def iter_all(self):
         """
@@ -158,12 +167,290 @@ class fomodcommon:
         """
         pass
 
+modname = namedtuple("modname", "name position colour")
+modimage = namedtuple("modimage", "path showImage showFade height")
+file = namedtuple("file", "source destination priority alwaysInstall installIfUsable")
+folder = namedtuple("folder", *file._fields)
+flag = namedtuple("flag", "name value")
+
+filedep = namedtuple("filedep", "file state")
+flagdep = namedtuple("flagdep", "flag value")
+
+class Dependencies:
+    __slots__ = "operator", "fileDependency", "flagDependency", "gameDependency", "fommDependency"
+
+    def __init__(self, operator=Operator.AND, fileDependency=None, flagDependency=None, gameDependency=None, fommDependency=None):
+        self.operator = operator
+        self.fileDependency = [] if fileDependency is None else fileDependency
+        self.flagDependency = [] if flagDependency is None else flagDependency
+        self.gameDependency = gameDependency
+        self.fommDependency = fommDependency
+
+    def __iter__(self):
+        yield from chain(zip(repeat("fileDependency"), self.fileDependency),
+                         zip(repeat("flagDependency"), self.flagDependency))
+        if self.gameDependency: yield ("gameDependency", self.gameDependency)
+        if self.fommDependency: yield ("fommDependency", self.fommDependency)
+
+    def __len__(self):
+        return len(self.fileDependency) + len(self.flagDependency) + bool(self.gameDependency) + bool(self.fommDependency)
+
+class Pattern:
+    __slots__ = "type", "dependencies", "files"
+
+    def __init__(self, type_ = None, depends = None, files = None):
+        self.type = type_
+        self.dependencies = depends
+        self.files = [] if not files else files
+
+class InstallStep:
+    __slots__ = "name", "visible", "optionalFileGroups"
+
+    def __init__(self, name):
+        self.name = name
+        self.visible = None
+        self.optionalFileGroups = []
+
+class Group:
+    __slots__ = "name", "type", "plugins", "plugin_order"
+
+    def __init__(self, name, group_type):
+        self.name = name
+        self.type = group_type
+        self.plugin_order = Order.ASC
+        self.plugins = []
+
+class Plugin:
+    __slots__ = "name", "description", "image", "conditionFlags", "files", "type", "patterns"
+
+    def __init__(self, name, description=None, image=None):
+        self.name = name
+        self.description = "" if not description else description
+        self.image = image
+        self.conditionFlags = []
+        self.files = []
+        self.type = None
+        self.patterns = []
+
+class GroupType(Enum):
+    ALO = "SelectAtLeastOne"
+    AMO = "SelectAtMostOne"
+    EXO = "SelectExactlyOne"
+    ALL = "SelectAll"
+    ANY = "SelectAny"
+
+class PluginType(Enum):
+    REQ = "Required"
+    OPT = "Optional"
+    REC = "Recommended"
+    NOT = "NotUsable"
+    COU = "CouldBeUsable"
+
+class FileState(Enum):
+    M = "Missing"
+    I = "Inactive"
+    A = "Active"
+
+class Order(Enum):
+    EXP = "Explicit"
+    DES = "Descending"
+    ASC = "Ascending"
+
+class Position(Enum):
+    L = "Left"
+    R = "Right"
+    ROI = "RightOfImage"
+
+class Operator(Enum):
+    AND = "And"
+    OR = "Or"
+
+
+
 
 
 class FomodServer:
     def __init__(self, config_xml):
         self.fomod_config = untangle.parse(config_xml)
         self.connected_client = None
+        self.modname = None
+        self.modimage = None
+        self.moddeps = None # []
+        self.reqfiles = []
+        self.installsteps = []
+        self.condinstalls = []
+
+
+    def analyze(self):
+        root = self.fomod_config.config # type: Element
+
+        ## mod name
+        self.modname = modname(root.moduleName.cdata,
+                               Position(root.moduleName['position']
+                                        or DEFAULTS["moduleName"]
+                                        ["position"]),
+                               Color.from_hexstr(
+                                   root.moduleName.colour or
+                                   DEFAULTS["moduleName"]["colour"]
+                               ))
+        ## mod image
+        defs = DEFAULTS["moduleImage"]
+        mimg = root.moduleImage or Element("moduleImage", defs)
+
+        self.modimage = modimage(mimg["path"] or defs["path"],
+
+                                 _tobool(mimg["showImage"]
+                                         or defs["showImage"]),
+
+                                 _tobool(mimg["showFade"]
+                                         or defs["showFade"]),
+
+                                 int(mimg["height"]
+                                     or defs["height"])
+                                 )
+
+        ## mod dependencies
+        self.moddeps = self._getdeps(root.moduleDependencies)
+
+        ## required install files
+        self.reqfiles = self._getfiles(root.requiredInstallFiles)
+
+        ## conditional file installs
+        self.condinstalls = self._getpatterns(root.conditionalFileInstalls)
+
+        ## install steps
+        self.installsteps = self._getinstallsteps(root.installSteps)
+
+    @staticmethod
+    def _getdeps(element):
+        if not element: return None
+
+        dparent = element.dependencies
+        deps = Dependencies()
+
+        if dparent:
+            deps.operator = Operator(dparent["operator"] or "And")
+        else:
+            dparent = element
+
+        if not len(dparent): return None
+
+        deps.fileDependency = [filedep(d["file"],
+                                       FileState(d["state"]))
+                               for d in dparent.fileDependency]
+
+        deps.flagDependency = [flagdep(d["flag"], d["value"]) for d in dparent.flagDependency]
+
+
+        deps.gameDependency = dparent.gameDependency["version"] if dparent.gameDependency else None
+
+        deps.fommDependency = dparent.fommDependency["version"] if dparent.fommDependency else None
+
+        return  deps
+
+
+    @staticmethod
+    def _getfiles(element, defs = DEFAULTS["file"]):
+        if not element: return None
+
+        fparent = element.files or element
+
+        files = []
+        for f in chain(fparent.file, fparent.folder):
+            ftype = file if f._name == "file" else folder
+
+            files.append(
+                ftype(f["source"],
+                      f["destination"] or f["source"],
+
+                      int(f["priority"]
+                          or defs["priority"]),
+
+                      _tobool(f["alwaysInstall"]
+                              or defs["alwaysInstall"]),
+
+                      _tobool(f["installIfUsable"]
+                              or defs["installIfUsable"])
+                      ))
+        return files
+
+    @classmethod
+    def _getpatterns(cls, element):
+        if not element: return None
+
+        pats=[]
+        parent = element.patterns
+        if not parent:
+            parent = element
+
+        for pat in parent.pattern:
+            p = Pattern(pat.type["name"])
+            p.dependencies = cls._getdeps(pat)
+            p.files = cls._getfiles(pat)
+            pats.append(p)
+
+        return pats
+
+    @classmethod
+    def _getinstallsteps(cls, element):
+        if not element: return None
+
+        steps = []
+
+        for step in element.installStep:
+            s = InstallStep(step["name"])
+            s.visible = cls._getdeps(step.visible)
+            s.optionalFileGroups = cls._getgroups(step.optionalFileGroups)
+
+            steps.append(s)
+
+
+        return steps
+
+    @classmethod
+    def _getgroups(cls, element):
+        if not element: return None
+
+        groups = []
+
+        for group in element.group:
+            g = Group(group["name"], GroupType(group["type"]))
+            g.plugin_order = group.plugins["order"]
+            g.plugins = cls._getplugins(group.plugins)
+
+            groups.append(g)
+
+        return groups
+
+    @classmethod
+    def _getplugins(cls, element):
+        if not element: return None
+        plugs = []
+
+        for plugin in element.plugin:
+            p = Plugin(plugin["name"])
+            p.description = plugin.description.cdata
+
+            if plugin.image:
+                p.image = plugin.image["path"]
+
+            if plugin.conditionFlags:
+                p.conditionFlags = [flag(f["name"], f.cdata)
+                                    for f in plugin.conditionFlags.flag]
+
+            tipe = plugin.typeDescriptor
+            if tipe.type: #simple type
+                p.type = PluginType(tipe.type["name"])
+            else: # dependency type
+                dt = tipe.dependencyType
+                p.type = PluginType(dt.defaultType["name"])
+                p.patterns = cls._getpatterns(dt.patterns)
+
+            plugs.append(p)
+
+        return plugs
+
+
 
     def connect(self, consumer):
         if self.connected_client is None:
@@ -175,6 +462,7 @@ class FomodServer:
                 self.connected_client = None
         else:
             consumer.send(None) # says "I'm busy"
+
 
 
 
@@ -244,46 +532,15 @@ class FomodServer:
                     cmd, suf, name = consumer.throw(fomodcommon.NoSuchElement)
 
 
+def _tobool(val):
+    v = val.lower()
+    if v in ("true", "t", "yes", "y", "1"):
+        return True
+    if v in ("false", "f", "no", "n", "0"):
+        return False
 
-
-def run_loop(consumer, current, ancestors, cmd, suf, name):
-
-    if cmd is None:  # end
-        return None, None, None
-
-    elif cmd == "@":  # attributes
-       return consumer.send(current[name])
-
-    elif cmd == "#":  # cdata/text
-        if name:
-            for el in current.get_elements(name):
-                ancestors.append(current)
-                current = el
-                return consumer.send(current.cdata)
-            return consumer.throw(fomodcommon.NoSuchElement)
-        else:
-            return consumer.send(current.cdata)
-
-    elif cmd == ".":
-        if suf == "?":
-            for el in current.get_elements(name):
-                ancestors.append(current)
-                current = el
-                return next(consumer)
-            return consumer.send(False)
-        elif suf == "*":
-            for el in current.get_elements(name):
-                cmd, suf, name = next(consumer)
-
-
-
-        for el in current.get_elements(name):
-            ancestors.append(current)
-            current = el
-            cmd, suf, name = next(consumer)
-            break
-        else:
-            cmd, suf, name = consumer.throw(fomodcommon.NoSuchElement)
+    # fallback
+    return bool(val)
 
 
 # <editor-fold desc="defaults">
@@ -295,18 +552,18 @@ DEFAULTS={
     },
     "moduleImage": {
         "path": "screenshot",
-        "showImage": True,
-        "showFade": True,
-        "height": -1,
+        "showImage": "True",
+        "showFade": "True",
+        "height": "-1",
     },
     "installSteps": {
         "order": "Ascending"
     },
     "file": {
         "destination": "", # same as source
-        "alwaysInstall": False,
-        "installIfUsable": False,
-        "priority": 0
+        "alwaysInstall": "False",
+        "installIfUsable": "False",
+        "priority": "0"
     },
     "dependencies": {
         "operator": "And"
