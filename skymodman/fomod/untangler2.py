@@ -182,7 +182,10 @@ class Fomod:
             parent = element
 
         for pat in parent.pattern:
-            p = Pattern(pat.type["name"])
+            p = Pattern()
+
+            if pat.type:
+                p.type = pat.type["name"]
             p.dependencies = cls._getdeps(pat)
             p.files = cls._getfiles(pat)
             pats.append(p)
@@ -250,9 +253,6 @@ class Fomod:
 
 
 
-
-
-
 def _tobool(val):
     v = val.lower()
     if v in ("true", "t", "yes", "y", "1"):
@@ -271,3 +271,19 @@ def _tobool(val):
 
 setattr(untangle, "_Element", untangle.Element)
 setattr(untangle, "Element", Element)
+
+
+if __name__ == '__main__':
+    import sys
+    f = Fomod(sys.argv[1])
+
+    print("\n----Mod Name----")
+    print(f.modname)
+    print("\n----Mod Image----")
+    print(f.modimage)
+    print("\n----Required Installs----")
+    print(f.reqfiles)
+    print("\n----Conditional Installs----")
+    print(f.condinstalls)
+    print("\n----Install Steps----")
+    print(f.installsteps)
