@@ -1,4 +1,5 @@
 from collections import deque
+from functools import partial
 
 from skymodman.thirdparty.untangle import untangle
 from skymodman.utils.color import Color
@@ -197,46 +198,92 @@ class FomodServer:
         current = root.moduleName # type: Element
 
         # value = current.cdata
-        command = consumer.send(current.cdata)
+        # cmd, suf, name = consumer.send(current.cdata)
+        # cmd, suf, name = consumer.send(current.cdata)
+        _do = lambda: consumer.send(current.cdata)
         while True:
+            cmd, suf, name = _do()
 
-            if command is None: # end
+            if cmd is None: # end
                 break
 
-            elif command == "@": # attributes
-                requested = next(consumer)
-                command = consumer.send(current[requested])
+            elif cmd == "@": # attributes
+                _do = lambda: consumer.send(current[name])
 
-            elif command == "#": # cdata/text
-                command = consumer.send(current.cdata)
+            elif cmd == "#": # cdata/text
+                if name:
+                    for el in current.get_elements(name):
+                        ancestors.append(current)
+                        current = el
+                        _do = lambda: consumer.send(current.cdata)
+                        break
+                    else:
+                        _do = consumer.throw(fomodcommon.NoSuchElement)
+                else:
+                    _do = lambda: consumer.send(current.cdata)
 
-            elif command == ".": # move to child element (single)
-                requested = next(consumer)
-                for el in current.get_elements(requested):
+            elif cmd == ".":
+                if suf == "?":
+                    for el in current.get_elements(name):
+                        ancestors.append(current)
+                        current = el
+                        _do = lambda : next(consumer)
+                        break
+                    else:
+                        _do = lambda : consumer.send(False)
+                # elif suf == "*":
+                #     for el in current.get_elements(name):
+
+
+                for el in current.get_elements(name):
                     ancestors.append(current)
                     current = el
-                    command = next(consumer)
+                    cmd, suf, name = next(consumer)
                     break
                 else:
-                    command = consumer.throw(fomodcommon.NoSuchElement)
+                    cmd, suf, name = consumer.throw(fomodcommon.NoSuchElement)
 
 
 
 
+def run_loop(consumer, current, ancestors, cmd, suf, name):
+
+    if cmd is None:  # end
+        return None, None, None
+
+    elif cmd == "@":  # attributes
+       return consumer.send(current[name])
+
+    elif cmd == "#":  # cdata/text
+        if name:
+            for el in current.get_elements(name):
+                ancestors.append(current)
+                current = el
+                return consumer.send(current.cdata)
+            return consumer.throw(fomodcommon.NoSuchElement)
+        else:
+            return consumer.send(current.cdata)
+
+    elif cmd == ".":
+        if suf == "?":
+            for el in current.get_elements(name):
+                ancestors.append(current)
+                current = el
+                return next(consumer)
+            return consumer.send(False)
+        elif suf == "*":
+            for el in current.get_elements(name):
+                cmd, suf, name = next(consumer)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
+        for el in current.get_elements(name):
+            ancestors.append(current)
+            current = el
+            cmd, suf, name = next(consumer)
+            break
+        else:
+            cmd, suf, name = consumer.throw(fomodcommon.NoSuchElement)
 
 
 # <editor-fold desc="defaults">

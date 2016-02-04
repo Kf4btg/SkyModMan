@@ -175,8 +175,7 @@ class FomodClient:
         :param suffix:
         :return:
         """
-        yield command+suffix
-        yield name
+        yield (command, suffix, name)
 
     @staticmethod
     def _convert_attr(element_name, attrname, value):
@@ -297,7 +296,7 @@ installscript = {
            "@name",
         "!dependencies",
         "/files?",
-            "!file"
+            "!files"
     )
 
 }
