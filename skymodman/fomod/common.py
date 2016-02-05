@@ -145,7 +145,7 @@ DEFAULTS={
         "colour": "000000"
     },
     "moduleImage": {
-        "path": "screenshot",
+        "path": "screenshot.png",
         "showImage": "True",
         "showFade": "True",
         "height": "-1",

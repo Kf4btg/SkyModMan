@@ -2,10 +2,9 @@ from pathlib import Path
 from os.path import exists
 from functools import lru_cache
 
-from PyQt5.QtCore import Qt, QModelIndex
-from PyQt5.QtWidgets import QWizard, QWizardPage, QListWidgetItem, QLabel, QTreeWidgetItem, QStyledItemDelegate, QStyle, \
-    QStyleOptionViewItem, QStyleOption, QProxyStyle, QTreeWidget
-from PyQt5.QtGui import QPixmap, QPainter
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QWizard, QWizardPage, QLabel, QTreeWidgetItem, QStyle, QProxyStyle
+from PyQt5.QtGui import QPixmap
 
 from skymodman.interface.designer.uic.plugin_wizpage_ui import Ui_WizardPage
 from skymodman.fomod.untangler2 import Fomod
@@ -68,7 +67,6 @@ class ScaledLabel(QLabel):
         show an image of the incorrect dimensions
         :param event:
         """
-        # self.scale_pixmap()
         self._scaled_cache_valid = False
         self.setPixmap(scale_pixmap(self._pixmap,
                                     self.width(),
@@ -133,19 +131,28 @@ class StartPage(QWizardPage):
         super().__init__(*args)
         self.setTitle(modname.name)
         self.modroot = path
+        modimgpath = Path(self.modroot, modimage.path).as_posix()
 
-        if Path(self.modroot, modimage.path).exists():
+        if exists(modimgpath):
             self.setPixmap(QWizard.WatermarkPixmap,
-                              QPixmap(modimage.path))
+                              QPixmap(modimgpath))
 
 
 class PluginPage(QWizardPage, Ui_WizardPage):
+
+    group_label_suffixes = {
+        GroupType.EXO: " (Select One)",
+        GroupType.ALL: " (All Required)",
+        GroupType.AMO: " (Optional, Select One)",
+        GroupType.ALO: " (Select At Least One)",
+        GroupType.ANY: " (Optional)"
+    }
+
     def __init__(self, path, modname, step, *args):
         """
 
         :param Fomod.InstallStep step:
         :param args:
-        :return:
         """
         super().__init__(*args)
 
@@ -158,22 +165,24 @@ class PluginPage(QWizardPage, Ui_WizardPage):
 
         self.v_splitter.setSizes([300, 500])
         self.h_splitter.setSizes([200, 600])
-        self.plugin_list.setStyleSheet("")
 
 
-        # self.plugin_list.setItemDelegateForColumn(0, RadioDelegate(self.plugin_list))
-        self.plugin_list.setStyle(customStyle(self.plugin_list.style()))
+        self.plugin_list.setStyle(
+            RadioButtonStyle(self.plugin_list.style()))
 
-        for g in step.optionalFileGroups:
+        for group in step.optionalFileGroups:
 
-            gtype = g.type
-
-            group_label = PluginGroup(gtype, g.plugin_order,
-                                      self.plugin_list, [g.name])
+            group_label = PluginGroup(
+                group.type,
+                group.plugin_order,
+                self.plugin_list,
+                [
+                    group.name + self.group_label_suffixes[group.type]
+                ])
             group_label.setFlags(Qt.ItemIsEnabled)
 
-            for p in g.plugins:
-                if gtype == GroupType.EXO:
+            for p in group.plugins:
+                if group.type in [GroupType.EXO, GroupType.AMO]:
                     i = RadioItem(group_label)
                 else:
                     i = QTreeWidgetItem(group_label)
@@ -182,8 +191,14 @@ class PluginPage(QWizardPage, Ui_WizardPage):
                 # using a qlabel seems to be the only way to get
                 # the text to wrap
                 lab = QLabel(p.name)
-                i.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
-                QTreeWidgetItem.setCheckState(i, 0, Qt.Unchecked)
+
+                if group.type == GroupType.ALL:
+                    i.setFlags(Qt.ItemIsUserCheckable)
+                    i.setCheckState(0, Qt.Checked)
+                else:
+                    i.setFlags(
+                        Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+                    QTreeWidgetItem.setCheckState(i, 0, Qt.Unchecked)
 
                 lab.setWordWrap(True)
 
@@ -201,7 +216,6 @@ class PluginPage(QWizardPage, Ui_WizardPage):
 
         :param QTreeWidgetItem item:
         :param column:
-        :return:
         """
         if item.flags() & Qt.ItemIsUserCheckable:
             item.setCheckState(0, item.checkState(0) ^ Qt.Checked)
@@ -211,7 +225,6 @@ class PluginPage(QWizardPage, Ui_WizardPage):
         """
 
         :param QTreeWidgetItem item:
-        :return:
         """
 
         if item.flags() & Qt.ItemIsUserCheckable:
@@ -230,8 +243,6 @@ class PluginGroup(QTreeWidgetItem):
         super().__init__(*args, **kwargs)
 
         self.group_type = group_type
-
-        self.exclusive = self.group_type == GroupType.EXO
 
         self.order = plugin_order
 
@@ -261,15 +272,22 @@ class RadioItem(QTreeWidgetItem):
         self.group_type = self.group.group_type
 
     def setCheckState(self, column, state):
-        if not (self.checkState(column) & Qt.Checked):
-            super().setCheckState(column, Qt.Checked)
+        if state & Qt.Checked:
+            super().setCheckState(column, state)
             self.group.uncheck_others(self)
 
+        # only the "AtMostOne" groups should be uncheckable
+        elif self.group_type == GroupType.AMO:
+            super().setCheckState(column, state)
 
-class customStyle(QProxyStyle):
+
+
+class RadioButtonStyle(QProxyStyle):
 
     def drawPrimitive(self, element, option, painter, widget=None):
         """
+        Draws radio buttons for RadioItems rather than the normal
+         check boxes
 
         :param element:
         :param option:
@@ -278,17 +296,6 @@ class customStyle(QProxyStyle):
         :return:
         """
         if element == QStyle.PE_IndicatorCheckBox and isinstance(option.widget.itemFromIndex(option.index), RadioItem):
-            # if option.index.parent()
-            # if option.widget().itemFromIndex(option.index).group_type == GroupType.EXO:
-            # index=option.index #type: # QModelIndex
-            # print(index.flags())
-            # print(widget)
-            # print(dir(option.state))
-            # print(dir(option))
-            # print(option.checkState)
-            # print(option.widget)
-            # option.state |= QStyle.State_On
-            # print(option.index.model().data(option.index, Qt.UserRole))
                 super().drawPrimitive(QStyle.PE_IndicatorRadioButton,
                                   option, painter, widget)
         else:
@@ -296,54 +303,16 @@ class customStyle(QProxyStyle):
                                   option, painter, widget)
 
 
-class RadioDelegate(QStyledItemDelegate):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        QProxyStyle
-
-    def paint(self, painter, option, index):
-        """
-
-        :param QPainter painter:
-        :param option:
-        :param QModelIndex index:
-        :return:
-        """
-        print(option)
-        option.state |= QStyle.State_On
-        # option.state |= {
-        #     Qt.Unchecked: QStyle.State_Off,
-        #     Qt.Checked: QStyle.State_On,
-        # }[index.internalPointer().checkState()]
-        style=QApplication.style()
-
-
-        style.drawPrimitive(QStyle.PE_IndicatorRadioButton,
-                                option, painter)
-
-
-    # def drawCheck(self, painter, option, rect, checkstate):
-    #     if rect.isValid():
-    #         option.rect = rect
-    #         option.state &= ~QStyle.State_HasFocus
-    #         option.state |= {
-    #             Qt.Unchecked: QStyle.State_Off,
-    #             Qt.Checked: QStyle.State_On,
-    #         }[checkstate]
-    #
-    #     style = QApplication.style() # type: QStyle
-    #
-    #     style.drawPrimitive(QStyle.PE_IndicatorRadioButton,
-    #                         option, painter)
-
-
 
 if __name__ == '__main__':
-    from PyQt5.QtWidgets import QApplication
+    from PyQt5.QtWidgets import QApplication, QTreeWidget
     import sys
 
     app = QApplication(sys.argv)
-    fwiz = FomodInstaller(Fomod('res/SMIM/fomod/ModuleConfig.xml'), 'res/SMIM')
+    # ffile, fpath = 'res/STEP/ModuleConfig.xml','res/STEP'
+    # ffile, fpath = 'res/SMIM/fomod/ModuleConfig.xml','res/SMIM'
+    ffile, fpath = 'res/SkyFallsMills/FOMod/ModuleConfig.xml','res/SkyFallsMills'
+    fwiz = FomodInstaller(Fomod(ffile), fpath)
 
     # img='res/PerMa.jpg'
     # img='res/STEP/STEP.png'
