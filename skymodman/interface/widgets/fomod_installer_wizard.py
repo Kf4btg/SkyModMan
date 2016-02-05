@@ -2,12 +2,14 @@ from pathlib import Path
 from os.path import exists
 from functools import lru_cache
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QWizard, QWizardPage, QListWidgetItem, QLabel
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtCore import Qt, QModelIndex
+from PyQt5.QtWidgets import QWizard, QWizardPage, QListWidgetItem, QLabel, QTreeWidgetItem, QStyledItemDelegate, QStyle, \
+    QStyleOptionViewItem, QStyleOption, QProxyStyle, QTreeWidget
+from PyQt5.QtGui import QPixmap, QPainter
 
 from skymodman.interface.designer.uic.plugin_wizpage_ui import Ui_WizardPage
 from skymodman.fomod.untangler2 import Fomod
+from skymodman.fomod.common import GroupType, PluginType
 
 
 class ScaledLabel(QLabel):
@@ -156,31 +158,64 @@ class PluginPage(QWizardPage, Ui_WizardPage):
 
         self.v_splitter.setSizes([300, 500])
         self.h_splitter.setSizes([200, 600])
+        self.plugin_list.setStyleSheet("")
+
+
+        # self.plugin_list.setItemDelegateForColumn(0, RadioDelegate(self.plugin_list))
+        self.plugin_list.setStyle(customStyle(self.plugin_list.style()))
 
         for g in step.optionalFileGroups:
-            group_label =QListWidgetItem(g.name)
+
+            gtype = g.type
+
+            group_label = PluginGroup(gtype, g.plugin_order,
+                                      self.plugin_list, [g.name])
             group_label.setFlags(Qt.ItemIsEnabled)
-            self.plugin_list.addItem(group_label)
+
             for p in g.plugins:
-                i = QListWidgetItem(p.name)
-                i.setData(Qt.UserRole, p)
+                if gtype == GroupType.EXO:
+                    i = RadioItem(group_label)
+                else:
+                    i = QTreeWidgetItem(group_label)
+                i.setData(0, Qt.UserRole, p)
+
+                # using a qlabel seems to be the only way to get
+                # the text to wrap
+                lab = QLabel(p.name)
                 i.setFlags(Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
-                i.setCheckState(Qt.Unchecked)
-                self.plugin_list.addItem(i)
+                QTreeWidgetItem.setCheckState(i, 0, Qt.Unchecked)
+
+                lab.setWordWrap(True)
+
+                lab.setMouseTracking(True)
+
+
+                self.plugin_list.setItemWidget(i, 0, lab)
+
+            group_label.setExpanded(True)
 
         self.plugin_list.itemEntered.connect(self.show_item_info)
 
+    def on_plugin_list_itemClicked(self, item, column):
+        """
+
+        :param QTreeWidgetItem item:
+        :param column:
+        :return:
+        """
+        if item.flags() & Qt.ItemIsUserCheckable:
+            item.setCheckState(0, item.checkState(0) ^ Qt.Checked)
 
 
     def show_item_info(self, item):
         """
 
-        :param QListWidgetItem item:
+        :param QTreeWidgetItem item:
         :return:
         """
 
         if item.flags() & Qt.ItemIsUserCheckable:
-            plugin = item.data(Qt.UserRole)
+            plugin = item.data(0, Qt.UserRole)
             self.plugin_description_view.setText(plugin.description)
 
             if plugin.image:
@@ -188,6 +223,120 @@ class PluginPage(QWizardPage, Ui_WizardPage):
 
                 if exists(imgpath):
                     self.label.setScaledPixmap(imgpath)
+
+
+class PluginGroup(QTreeWidgetItem):
+    def __init__(self, group_type, plugin_order, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.group_type = group_type
+
+        self.exclusive = self.group_type == GroupType.EXO
+
+        self.order = plugin_order
+
+    def flags(self):
+        return Qt.ItemIsEnabled
+
+    def children(self):
+        for i in range(self.childCount()):
+            yield self.child(i)
+
+    def uncheck_others(self, checked_item):
+        for item in self.children():
+            if item.checkState(0) & Qt.Checked and \
+                item is not checked_item:
+                # have to bypass the subclass override or nothing
+                # will ever get unchecked...
+                QTreeWidgetItem.setCheckState(item, 0, Qt.Unchecked)
+
+class RadioItem(QTreeWidgetItem):
+    def __init__(self, *args, **kwargs):
+        """
+        :param group: The Plugin Group this item belongs to
+        """
+        super().__init__(*args, **kwargs)
+        self.group = self.parent()
+
+        self.group_type = self.group.group_type
+
+    def setCheckState(self, column, state):
+        if not (self.checkState(column) & Qt.Checked):
+            super().setCheckState(column, Qt.Checked)
+            self.group.uncheck_others(self)
+
+
+class customStyle(QProxyStyle):
+
+    def drawPrimitive(self, element, option, painter, widget=None):
+        """
+
+        :param element:
+        :param option:
+        :param painter:
+        :param QTreeWidget widget:
+        :return:
+        """
+        if element == QStyle.PE_IndicatorCheckBox and isinstance(option.widget.itemFromIndex(option.index), RadioItem):
+            # if option.index.parent()
+            # if option.widget().itemFromIndex(option.index).group_type == GroupType.EXO:
+            # index=option.index #type: # QModelIndex
+            # print(index.flags())
+            # print(widget)
+            # print(dir(option.state))
+            # print(dir(option))
+            # print(option.checkState)
+            # print(option.widget)
+            # option.state |= QStyle.State_On
+            # print(option.index.model().data(option.index, Qt.UserRole))
+                super().drawPrimitive(QStyle.PE_IndicatorRadioButton,
+                                  option, painter, widget)
+        else:
+            super().drawPrimitive(element,
+                                  option, painter, widget)
+
+
+class RadioDelegate(QStyledItemDelegate):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        QProxyStyle
+
+    def paint(self, painter, option, index):
+        """
+
+        :param QPainter painter:
+        :param option:
+        :param QModelIndex index:
+        :return:
+        """
+        print(option)
+        option.state |= QStyle.State_On
+        # option.state |= {
+        #     Qt.Unchecked: QStyle.State_Off,
+        #     Qt.Checked: QStyle.State_On,
+        # }[index.internalPointer().checkState()]
+        style=QApplication.style()
+
+
+        style.drawPrimitive(QStyle.PE_IndicatorRadioButton,
+                                option, painter)
+
+
+    # def drawCheck(self, painter, option, rect, checkstate):
+    #     if rect.isValid():
+    #         option.rect = rect
+    #         option.state &= ~QStyle.State_HasFocus
+    #         option.state |= {
+    #             Qt.Unchecked: QStyle.State_Off,
+    #             Qt.Checked: QStyle.State_On,
+    #         }[checkstate]
+    #
+    #     style = QApplication.style() # type: QStyle
+    #
+    #     style.drawPrimitive(QStyle.PE_IndicatorRadioButton,
+    #                         option, painter)
+
+
 
 if __name__ == '__main__':
     from PyQt5.QtWidgets import QApplication

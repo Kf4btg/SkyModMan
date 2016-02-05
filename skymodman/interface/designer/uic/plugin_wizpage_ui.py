@@ -23,7 +23,7 @@ class Ui_WizardPage(object):
         self.v_splitter.setOrientation(QtCore.Qt.Horizontal)
         self.v_splitter.setChildrenCollapsible(False)
         self.v_splitter.setObjectName("v_splitter")
-        self.plugin_list = QtWidgets.QListWidget(self.v_splitter)
+        self.plugin_list = QtWidgets.QTreeWidget(self.v_splitter)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Expanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
@@ -31,24 +31,32 @@ class Ui_WizardPage(object):
         self.plugin_list.setSizePolicy(sizePolicy)
         self.plugin_list.setMinimumSize(QtCore.QSize(200, 0))
         self.plugin_list.setMouseTracking(True)
-        self.plugin_list.setStyleSheet("QListWidget::item {\n"
-"    color:  rgb(85, 170, 255)\n"
+        self.plugin_list.setStyleSheet("QTreeWidget::item:has-children {\n"
+"    color: rgb(85, 170, 255)\n"
 "}\n"
 "\n"
-"QListWidget::item:checked, QListWidget::item:unchecked {\n"
-"    color: initial;\n"
+"QTreeWidget::branch {\n"
+"    background: transparent\n"
+"}\n"
+"\n"
+"QTreeWidget QLabel {\n"
+"    padding: 2px;\n"
+"    font-size:10pt;\n"
 "}")
         self.plugin_list.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.plugin_list.setIndentation(10)
+        self.plugin_list.setRootIsDecorated(False)
+        self.plugin_list.setItemsExpandable(False)
+        self.plugin_list.setAnimated(False)
         self.plugin_list.setWordWrap(True)
+        self.plugin_list.setHeaderHidden(True)
+        self.plugin_list.setExpandsOnDoubleClick(False)
         self.plugin_list.setObjectName("plugin_list")
-        item = QtWidgets.QListWidgetItem()
-        item.setFlags(QtCore.Qt.ItemIsSelectable|QtCore.Qt.ItemIsUserCheckable|QtCore.Qt.ItemIsEnabled)
-        item.setCheckState(QtCore.Qt.Unchecked)
-        self.plugin_list.addItem(item)
-        item = QtWidgets.QListWidgetItem()
-        item.setFlags(QtCore.Qt.ItemIsSelectable|QtCore.Qt.ItemIsUserCheckable|QtCore.Qt.ItemIsEnabled)
-        item.setCheckState(QtCore.Qt.Unchecked)
-        self.plugin_list.addItem(item)
+        item_0 = QtWidgets.QTreeWidgetItem(self.plugin_list)
+        item_1 = QtWidgets.QTreeWidgetItem(item_0)
+        item_1.setCheckState(0, QtCore.Qt.Checked)
+        item_1 = QtWidgets.QTreeWidgetItem(item_0)
+        item_1.setCheckState(0, QtCore.Qt.Checked)
         self.plugin_view = QtWidgets.QGroupBox(self.v_splitter)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Expanding)
         sizePolicy.setHorizontalStretch(0)
@@ -89,12 +97,12 @@ class Ui_WizardPage(object):
     def retranslateUi(self, WizardPage):
         _translate = QtCore.QCoreApplication.translate
         WizardPage.setWindowTitle(_translate("WizardPage", "WizardPage"))
+        self.plugin_list.headerItem().setText(0, _translate("WizardPage", "1"))
         __sortingEnabled = self.plugin_list.isSortingEnabled()
         self.plugin_list.setSortingEnabled(False)
-        item = self.plugin_list.item(0)
-        item.setText(_translate("WizardPage", "Select One Plugin Test"))
-        item = self.plugin_list.item(1)
-        item.setText(_translate("WizardPage", "ITemtest2"))
+        self.plugin_list.topLevelItem(0).setText(0, _translate("WizardPage", "Group 1"))
+        self.plugin_list.topLevelItem(0).child(0).setText(0, _translate("WizardPage", "Choice1"))
+        self.plugin_list.topLevelItem(0).child(1).setText(0, _translate("WizardPage", "Choice2"))
         self.plugin_list.setSortingEnabled(__sortingEnabled)
         self.plugin_view.setTitle(_translate("WizardPage", "Description"))
         self.plugin_description_view.setPlaceholderText(_translate("WizardPage", "Testing Testing We\'ll put some stuff here it\'ll be great you just know it haha."))
