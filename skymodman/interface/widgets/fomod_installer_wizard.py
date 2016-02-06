@@ -10,7 +10,8 @@ from PyQt5.QtWidgets import (QWizard, QWizardPage,
                              QDialog)
 
 import asyncio
-from quamash import QThreadExecutor, QEventLoop
+import quamash
+# from quamash import QThreadExecutor, QEventLoop
 
 # from skymodman.installer.fomod import Fomod
 from skymodman.managers import installer
@@ -128,7 +129,6 @@ class FinalPage(QWizardPage, Ui_FinalPage):
 
 
     def initializePage(self):
-
         self.man.check_conditional_installs()
         self._html.append(self._opening_html)
         for f in self.man.install_files:
@@ -139,6 +139,23 @@ class FinalPage(QWizardPage, Ui_FinalPage):
         self.install_summary.setHtml("".join(self._html))
 
         self.install_progress.reset()
+        self.install_progress.setMaximum(self.man.num_files_to_install)
+        self.max=self.install_progress.maximum()
+
+        asyncio.get_event_loop().create_task(self.do_install())
+
+    def setprogress(self, val):
+        self.install_progress.setValue(val)
+        if self.install_progress.value() >= self.max:
+            self.completeChanged.emit()
+
+
+    async def do_install(self):
+        await self.man.copyfiles(self.setprogress)
+
+    def isComplete(self):
+        return self.install_progress.value() >= self.install_progress.maximum()
+
 
     def cleanupPage(self):
         self._html = []
@@ -543,12 +560,12 @@ if __name__ == '__main__':
     import sys
 
     app = QApplication(sys.argv)
-    loop = QEventLoop(app)
+    loop = quamash.QEventLoop(app)
     asyncio.set_event_loop(loop)
 
     # ffile, fpath = 'res/STEP/ModuleConfig.xml','res/STEP'
-    # ffile, fpath = 'res/SMIM/fomod/ModuleConfig.xml','res/SMIM'
-    ffile, fpath = 'res/SkyFallsMills/FOMod/ModuleConfig.xml','res/SkyFallsMills'
+    ffile, fpath = 'res/SMIM/fomod/ModuleConfig.xml','res/SMIM'
+    # ffile, fpath = 'res/SkyFallsMills/FOMod/ModuleConfig.xml','res/SkyFallsMills'
 
     im = installer.InstallManager()
     im.prepare_fomod(ffile)

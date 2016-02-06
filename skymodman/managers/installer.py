@@ -198,16 +198,18 @@ class InstallManager:
     def install_files(self):
         return self.install_state.files_to_install
 
+    @property
+    def num_files_to_install(self):
+        return len(self.install_state.files_to_install)
+
     async def copyfiles(self, callback=print):
         flist = self.install_state.files_to_install
-        total = len(flist)
 
         amt_copied=0
         for file in flist:
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0.02)
             amt_copied+=1
-            asyncio.get_event_loop().call_soon_threadsafe(
-                "{.2}".format(amt_copied/total))
+            asyncio.get_event_loop().call_soon_threadsafe(callback, amt_copied)
 
 
 
