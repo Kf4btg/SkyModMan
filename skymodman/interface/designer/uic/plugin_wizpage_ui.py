@@ -8,18 +8,18 @@
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-class Ui_WizardPage(object):
-    def setupUi(self, WizardPage):
-        WizardPage.setObjectName("WizardPage")
-        WizardPage.resize(632, 459)
+class Ui_InstallStepPage(object):
+    def setupUi(self, InstallStepPage):
+        InstallStepPage.setObjectName("InstallStepPage")
+        InstallStepPage.resize(632, 459)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Expanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(WizardPage.sizePolicy().hasHeightForWidth())
-        WizardPage.setSizePolicy(sizePolicy)
-        self.gridLayout = QtWidgets.QGridLayout(WizardPage)
+        sizePolicy.setHeightForWidth(InstallStepPage.sizePolicy().hasHeightForWidth())
+        InstallStepPage.setSizePolicy(sizePolicy)
+        self.gridLayout = QtWidgets.QGridLayout(InstallStepPage)
         self.gridLayout.setObjectName("gridLayout")
-        self.v_splitter = QtWidgets.QSplitter(WizardPage)
+        self.v_splitter = QtWidgets.QSplitter(InstallStepPage)
         self.v_splitter.setOrientation(QtCore.Qt.Horizontal)
         self.v_splitter.setChildrenCollapsible(False)
         self.v_splitter.setObjectName("v_splitter")
@@ -91,20 +91,20 @@ class Ui_WizardPage(object):
         self.verticalLayout.addWidget(self.h_splitter)
         self.gridLayout.addWidget(self.v_splitter, 0, 0, 1, 1)
 
-        self.retranslateUi(WizardPage)
-        QtCore.QMetaObject.connectSlotsByName(WizardPage)
+        self.retranslateUi(InstallStepPage)
+        QtCore.QMetaObject.connectSlotsByName(InstallStepPage)
 
-    def retranslateUi(self, WizardPage):
+    def retranslateUi(self, InstallStepPage):
         _translate = QtCore.QCoreApplication.translate
-        WizardPage.setWindowTitle(_translate("WizardPage", "WizardPage"))
-        self.plugin_list.headerItem().setText(0, _translate("WizardPage", "1"))
+        InstallStepPage.setWindowTitle(_translate("InstallStepPage", "WizardPage"))
+        self.plugin_list.headerItem().setText(0, _translate("InstallStepPage", "1"))
         __sortingEnabled = self.plugin_list.isSortingEnabled()
         self.plugin_list.setSortingEnabled(False)
-        self.plugin_list.topLevelItem(0).setText(0, _translate("WizardPage", "Group 1"))
-        self.plugin_list.topLevelItem(0).child(0).setText(0, _translate("WizardPage", "Choice1"))
-        self.plugin_list.topLevelItem(0).child(1).setText(0, _translate("WizardPage", "Choice2"))
+        self.plugin_list.topLevelItem(0).setText(0, _translate("InstallStepPage", "Group 1"))
+        self.plugin_list.topLevelItem(0).child(0).setText(0, _translate("InstallStepPage", "Choice1"))
+        self.plugin_list.topLevelItem(0).child(1).setText(0, _translate("InstallStepPage", "Choice2"))
         self.plugin_list.setSortingEnabled(__sortingEnabled)
-        self.plugin_view.setTitle(_translate("WizardPage", "Description"))
-        self.plugin_description_view.setPlaceholderText(_translate("WizardPage", "Testing Testing We\'ll put some stuff here it\'ll be great you just know it haha."))
+        self.plugin_view.setTitle(_translate("InstallStepPage", "Description"))
+        self.plugin_description_view.setPlaceholderText(_translate("InstallStepPage", "Testing Testing We\'ll put some stuff here it\'ll be great you just know it haha."))
 
-from skymodman.interface.widgets.fomod_installer_wizard import ScaledLabel
+from skymodman.interface.widgets.scaledlabel import ScaledLabel

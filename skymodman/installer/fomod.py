@@ -3,7 +3,7 @@ from itertools import chain
 from skymodman.thirdparty.untangle import untangle
 
 from skymodman.utils.color import Color
-from skymodman.fomod.common import *
+from skymodman.installer.common import *
 
 
 class Element(untangle.Element):

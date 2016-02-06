@@ -1,4 +1,3 @@
-from . import custom_widgets
 from .new_profile_dialog import NewProfileDialog
 from PyQt5.QtWidgets import QMessageBox, QSpacerItem, QSizePolicy
 from contextlib import suppress

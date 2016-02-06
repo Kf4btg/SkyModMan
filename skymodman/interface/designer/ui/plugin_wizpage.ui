@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>WizardPage</class>
- <widget class="QWizardPage" name="WizardPage">
+ <class>InstallStepPage</class>
+ <widget class="QWizardPage" name="InstallStepPage">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -177,7 +177,7 @@ QTreeWidget QLabel {
   <customwidget>
    <class>ScaledLabel</class>
    <extends>QLabel</extends>
-   <header>skymodman.interface.widgets.fomod_installer_wizard</header>
+   <header>skymodman.interface.widgets.scaledlabel</header>
   </customwidget>
  </customwidgets>
  <resources/>

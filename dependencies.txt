@@ -6,15 +6,3 @@ pyqt5
 
 # https://github.com/ActiveState/appdirs
 appdirs
-
-#
-xmltodict
-
-#
-addict
-
-#
-sh
-
-#
-lxml

@@ -55,11 +55,11 @@ class InstallManager:
         return list(self.archiver.list_archive(archive, dirs=dirs, files=files))
 
 
-from skymodman.fomod.untangler import Fomodder
+from skymodman.installer.fomod import Fomod
 def reference_fomod_handler(xml_file):
-    f=Fomodder(xml_file)
+    f=Fomod(xml_file)
 
-    stepper = f.steps()
+    # stepper = f.steps()
 
     mod={}
 
@@ -67,13 +67,6 @@ def reference_fomod_handler(xml_file):
     # First to be yield is the modname;
     # each new section is preceded by the element name:
 
-    for step in next(stepper):
-
-        if step=="moduleName":
-            # next 3 steps are name, position, colour
-            mod['name']=[next(stepper), next(stepper), next(stepper)]
-        # elif step=="moduleImage":
-        #     mod['image']=
 
 
 
