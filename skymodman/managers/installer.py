@@ -88,6 +88,9 @@ class InstallManager:
 
         self.install_state.install_dest = Manager.conf.paths.dir_mods
 
+        if self.current_fomod.reqfiles:
+            self.install_state.files_to_install=self.current_fomod.reqfiles
+
 
 
     dep_checks = {
@@ -99,10 +102,21 @@ class InstallManager:
 
     def set_flag(self, flag, value):
         self.install_state.flags[flag]=value
+        # print(self.install_state.flags)
 
     def unset_flag(self, flag):
         try: del self.install_state.flags[flag]
         except KeyError: pass
+        # print(self.install_state.flags)
+
+
+    def mark_file_for_install(self, file):
+        """
+
+        :param common.File file:
+        :return:
+        """
+        self.install_state.files_to_install.append(file)
 
     def check_dependencies_pattern(self, dependencies):
         """
@@ -124,20 +138,20 @@ class InstallManager:
         return True
 
     def check_file(self, file, state):
-        print("check file", file, state)
-        ret = Manager.checkFileState(file, state)
+        # print("check file", file, state)
+        # ret = Manager.checkFileState(file, state)
 
-        print(ret)
-        return ret
+        # print(ret)
+        return Manager.checkFileState(file, state)
 
     def check_flag(self, flag, value):
-        print(flag, value)
-        print( self.install_state.flags[flag] if flag in self.install_state.flags else "flag {} missing".format(flag))
+        # print(flag, value)
+        # print( self.install_state.flags[flag] if flag in self.install_state.flags else "flag {} missing".format(flag))
 
         ret= flag in self.install_state.flags \
                and self.install_state.flags[flag] == value
 
-        print(ret)
+        # print(ret)
         return ret
 
     def check_game_version(self, version):

@@ -185,7 +185,7 @@ class Fomod:
             p = Pattern()
 
             if pat.type:
-                p.type = pat.type["name"]
+                p.type = PluginType(pat.type["name"])
             p.dependencies = cls._getdeps(pat)
             p.files = cls._getfiles(pat)
             pats.append(p)

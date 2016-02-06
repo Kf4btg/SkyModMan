@@ -2,7 +2,7 @@ from pathlib import Path
 from os.path import exists
 from itertools import count
 
-from PyQt5.QtCore import Qt, pyqtProperty, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtProperty
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (QWizard, QWizardPage,
                              QLabel, QTreeWidgetItem,
@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (QWizard, QWizardPage,
 
 # from skymodman.installer.fomod import Fomod
 from skymodman.managers import installer
-from skymodman.installer.common import GroupType#, PluginType, Dependencies, Operator
+from skymodman.installer.common import GroupType, PluginType#, Dependencies, Operator
 from skymodman.interface.designer.uic.plugin_wizpage_ui import Ui_InstallStepPage
 
 class FomodInstaller(QWizard):
@@ -32,11 +32,12 @@ class FomodInstaller(QWizard):
         self.rootpath = files_path
         self.step_pages = []
 
+        FomodInstaller.Pages = []
+
+        # tracking page ids
         self.page_count = count()
 
         self.initUI()
-
-        self.flags = {}
 
         self.resize(800,800)
 
@@ -46,9 +47,6 @@ class FomodInstaller(QWizard):
         self.setWizardStyle(QWizard.ClassicStyle)
         self.setOptions(QWizard.NoBackButtonOnStartPage)
         self.setWindowTitle("Mod Installation: " + self.fomod.modname.name)
-
-        # set the isValid property as default for PluginGroups
-        # self.setDefaultProperty("PluginGroup", "isValid", "selectionChanged")
 
         self.page_start = StartPage(self.rootpath, self.fomod.modname, self.fomod.modimage, next(self.page_count))
 
@@ -68,26 +66,6 @@ class FomodInstaller(QWizard):
             self.addPage(self.step_pages[-1])
 
         self.Pages.extend(self.step_pages)
-
-    # def nextId(self):
-    #     # _next = self.currentPage().nextId()
-    #     print(self.currentId())
-    #
-    #     v=self.page(self.currentPage().nextId()).checkVisible()
-    #     print(v)
-    #
-    #     return super().nextId()
-
-
-        # while True:
-        #     print(_next)
-        #     npage = self.page(_next)
-        #     print(npage)
-        #     if npage.checkVisible():
-        #         return _next
-        #     _next = npage.nextId()
-
-
 
 
 class StartPage(QWizardPage):
@@ -135,12 +113,12 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
         self.plugin_list.clear()
 
         self.pageid = pageid
-        print(pageid, step.name)
+        # print(pageid, step.name)
 
 
         #try to make page sections a reasonable default size
         self.v_splitter.setSizes([300, 500])
-        self.h_splitter.setSizes([200, 600])
+        self.h_splitter.setSizes([400, 400])
 
         # set custom style that enables showing RadioButtons
         # (instead of checkboxes) for mutually-exclusive groups
@@ -167,10 +145,10 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
 
                 # the mutually-exclusive groups get radiobuttons
                 if group.type in [GroupType.EXO, GroupType.AMO]:
-                    i = RadioItem(group_label)
+                    i = RadioItem(p, group_label)
                 # the rest, plain treewidgetitems w/ checkboxes
                 else:
-                    i = QTreeWidgetItem(group_label)
+                    i = PluginItem(p, group_label)
 
                 # store the Plugin object in the TreeWidgetItem
                 i.setData(0, Qt.UserRole, p)
@@ -178,11 +156,12 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
                 # set 'all-required' groups to checked and disable
                 # them to prevent unchecking
                 if group.type == GroupType.ALL:
-                    i.setFlags(Qt.ItemIsUserCheckable)
+                    i.setFlags(Qt.ItemNeverHasChildren)
                     i.setCheckState(0, Qt.Checked)
                 else:
                     i.setFlags(
-                        Qt.ItemIsEnabled | Qt.ItemIsUserCheckable)
+                        Qt.ItemIsEnabled | Qt.ItemIsUserCheckable |
+                        Qt.ItemNeverHasChildren)
                     QTreeWidgetItem.setCheckState(i, 0, Qt.Unchecked)
 
 
@@ -194,28 +173,30 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
                 lab.setMouseTracking(True)
                 # now set the label as the item widget for this row
                 self.plugin_list.setItemWidget(i, 0, lab)
+                i.label = lab
 
             # they can't be collapsed, but they need to be expanded
             group_label.setExpanded(True)
             # track group
             self.groups.append(group_label)
 
-        # connect mouse-enter event to chaning item image/description
+        # connect mouse-enter event to changing item image/description
         self.plugin_list.itemEntered.connect(self.show_item_info)
 
+    def initializePage(self):
+        for g in self.groups:
+            for c in g.children():
+                g.check_child_type(c)
 
-    dep_checks = {
-        "fileDependency": lambda s, d: s.checkFile(d.file, d.state),
-        "flagDependency": lambda s, d: s.checkFlag(d.flag, d.value),
-        "gameDependency": lambda s, d: bool(d),
-        "fommDependency": lambda s, d: bool(d),
-    }
+    def cleanupPage(self):
+        for g in self.groups:
+            g.reset()
 
     def checkVisible(self):
         # print(self.step.visible)
 
         if self.step.visible:
-            return self.wizard().installer.check_dependencies_pattern(self.step.visible)
+            return self.installman.check_dependencies_pattern(self.step.visible)
 
         # if no visible element, always True
         return True
@@ -240,10 +221,11 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
         :param QTreeWidgetItem item:
         """
 
-        if item.flags() & Qt.ItemIsUserCheckable:
+        if item.flags() & Qt.ItemNeverHasChildren:
             plugin = item.data(0, Qt.UserRole)
             self.plugin_description_view.setText(plugin.description)
 
+            # show image if there is one
             if plugin.image:
                 imgpath = Path(self.modroot, plugin.image).as_posix()
 
@@ -251,15 +233,21 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
                     self.label.setScaledPixmap(imgpath)
 
     def isComplete(self):
+        """If all groups on this page have a valid selection,
+        enable the next/finish buttons"""
         return all(g.isValid for g in self.groups)
     
     def nextId(self):
+        """
+        Return the id of the next installation step whose visible parameter
+        evaluates to True; if No further steps evaluate such, return -1
+        :return:
+        """
 
         next_id = super().nextId()
 
         if next_id != -1:
-            can_show = FomodInstaller.Pages[next_id].checkVisible()
-            if not can_show:
+            if not FomodInstaller.Pages[next_id].checkVisible():
                 next_id = FomodInstaller.Pages[next_id].nextId()
 
         return next_id
@@ -268,9 +256,6 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
 
 
 class PluginGroup(QTreeWidgetItem):
-
-    ## notifier signal for Wizard Fields
-    selectionChanged = pyqtSignal()
 
     def __init__(self, group_type, plugin_order, install_manager, *args, **kwargs):
         # noinspection PyArgumentList
@@ -352,6 +337,58 @@ class PluginGroup(QTreeWidgetItem):
                 for flag in self.get_plugin(item).conditionFlags:
                     self.installman.unset_flag(flag.name)
 
+    def check_child_type(self, child):
+        """
+        Notes:
+        default-type: The default type of the plugin used if none of the specified dependency states are satisfied.
+        dependencyPatterns: The list of dependency patterns against which to match the user's installation. The first pattern that matches the user's installation determines the type of the plugin.
+
+        :param PluginItem child:
+        :return:
+        """
+
+        ctype = child.plugin.type # default type
+
+        if child.plugin.patterns:
+            for pat in child.plugin.patterns:
+                if self.installman.check_dependencies_pattern(pat.dependencies):
+                    ctype = pat.type
+                    break
+
+        print(child.plugin.name, ctype)
+
+        if ctype == PluginType.REQ:
+            child.setCheckState(0, Qt.Checked)
+            # child.setDisabled(True)
+            child.setFlags(Qt.ItemNeverHasChildren)
+
+        elif ctype == PluginType.NOT:
+            child.setCheckState(0, Qt.Unchecked)
+            child.setFlags(Qt.ItemNeverHasChildren)
+            child.label.setEnabled(False)
+
+        elif ctype == PluginType.REC:
+            child.setCheckState(0, Qt.Checked)
+
+
+    def reset(self):
+        for c in self.children():
+            if c.checkState(0) & Qt.Checked:
+                c.setCheckState(0, Qt.Unchecked)
+
+    def enable_plugin_flags(self, plugin, enable):
+        """
+
+        :param plugin:
+        :param bool enable:
+        :return:
+        """
+        if enable:
+            for flag in plugin.conditionFlags:
+                self.installman.set_flag(flag.name, flag.value)
+        else:
+            for flag in plugin.conditionFlags:
+                self.installman.unset_flag(flag.name)
 
     def uncheck_others(self, checked_item):
         """
@@ -371,24 +408,41 @@ class PluginGroup(QTreeWidgetItem):
                     self.installman.unset_flag(f.name)
 
 
-class RadioItem(QTreeWidgetItem):
+class PluginItem(QTreeWidgetItem):
+    def __init__(self, plugin, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.group = self.parent()
+        self.group_type = self.group.group_type
+        self.plugin = plugin
+        self.label = None
+
+
+    def setCheckState(self, column, state):
+        super().setCheckState(column, state)
+
+        self.group.enable_plugin_flags(self.plugin, state & Qt.Checked)
+
+
+
+
+
+class RadioItem(PluginItem):
     def __init__(self, *args, **kwargs):
         """
         :param group: The Plugin Group this item belongs to
         """
         # noinspection PyArgumentList
         super().__init__(*args, **kwargs)
-        self.group = self.parent()
-
-        self.group_type = self.group.group_type
 
     def setCheckState(self, column, state):
-        if state & Qt.Checked:
-            super().setCheckState(column, state)
+        if self.checkState(0) != state:
+            if state & Qt.Checked:
+                super().setCheckState(column, state)
 
         # only the "AtMostOne" radio groups should be uncheckable
-        elif self.group_type == GroupType.AMO:
-            super().setCheckState(column, state)
+            elif self.group_type == GroupType.AMO:
+                super().setCheckState(column, state)
 
 
 
