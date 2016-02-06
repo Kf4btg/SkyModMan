@@ -3,7 +3,33 @@ from tempfile import TemporaryDirectory
 
 from skymodman.utils import withlogger
 from skymodman.managers.archive import ArchiveHandler
+from skymodman.installer.fomod import Fomod
+from skymodman.installer import common
+# from skymodman.managers import modmanager as Manager
 
+class installState:
+    def __init__(self):
+        self.file_path = None
+        self.install_dest = None
+        self.files_to_install = []
+
+        self.flags = {}
+
+
+    # fake manager for testing
+class FakeManager:
+    class conf:
+        class paths:
+            dir_mods="res"
+
+    @staticmethod
+    def checkFileState(file, state):
+        if state == common.FileState.A:
+            return True
+
+        return False
+
+Manager = FakeManager
 
 @withlogger
 class InstallManager:
@@ -15,6 +41,10 @@ class InstallManager:
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.archiver = ArchiveHandler()
+
+        self.current_fomod = None
+
+        self.install_state = installState()
 
     def is_fomod(self, archive):
         for e in self.iter_archive(archive, files=False):
@@ -34,9 +64,6 @@ class InstallManager:
         with TemporaryDirectory() as tmpdir:
             self.extract(archive, tmpdir, entries=[fomod_path])
 
-
-
-
     def extract(self, archive, destination, entries=None):
         """
 
@@ -55,17 +82,72 @@ class InstallManager:
         return list(self.archiver.list_archive(archive, dirs=dirs, files=files))
 
 
-from skymodman.installer.fomod import Fomod
-def reference_fomod_handler(xml_file):
-    f=Fomod(xml_file)
+    def prepare_fomod(self, xmlfile):
+        self.current_fomod = Fomod(xmlfile)
+        self.install_state = installState()
 
-    # stepper = f.steps()
+        self.install_state.install_dest = Manager.conf.paths.dir_mods
 
-    mod={}
 
-    next_val = None #used for getting values out of loops/conditionals
-    # First to be yield is the modname;
-    # each new section is preceded by the element name:
+
+    dep_checks = {
+        "fileDependency": lambda s, d: s.check_file(d.file, d.state),
+        "flagDependency": lambda s, d: s.check_flag(d.flag, d.value),
+        "gameDependency": lambda s, d: s.check_game_version(d),
+        "fommDependency": lambda s, d: s.check_fomm_version(d),
+    }
+
+    def set_flag(self, flag, value):
+        self.install_state.flags[flag]=value
+
+    def unset_flag(self, flag):
+        try: del self.install_state.flags[flag]
+        except KeyError: pass
+
+    def check_dependencies_pattern(self, dependencies):
+        """
+
+        :param common.Dependencies dependencies:
+        :return:
+        """
+        if dependencies.operator == common.Operator.OR:
+            for dtype, dep in dependencies:
+                if self.dep_checks[dtype](self, dep):
+                    return True
+            return False
+
+        else:  # assume AND (the default)
+            for dtype, dep in dependencies:
+                if not self.dep_checks[dtype](self, dep):
+                    return False
+
+        return True
+
+    def check_file(self, file, state):
+        print("check file", file, state)
+        ret = Manager.checkFileState(file, state)
+
+        print(ret)
+        return ret
+
+    def check_flag(self, flag, value):
+        print(flag, value)
+        print( self.install_state.flags[flag] if flag in self.install_state.flags else "flag {} missing".format(flag))
+
+        ret= flag in self.install_state.flags \
+               and self.install_state.flags[flag] == value
+
+        print(ret)
+        return ret
+
+    def check_game_version(self, version):
+        return True
+
+    def check_fomm_version(self, version):
+        return True
+
+
+
 
 
 

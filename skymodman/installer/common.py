@@ -2,7 +2,7 @@ from enum import Enum
 from collections import namedtuple
 from itertools import chain, repeat
 
-# from skymodman.thirdparty.humanizer import  humanize
+from skymodman.thirdparty.humanizer import  humanize
 
 
 from skymodman import exceptions
@@ -67,7 +67,7 @@ Flag = namedtuple("flag", "name value")
 FileDep = namedtuple("filedep", "file state")
 FlagDep = namedtuple("flagdep", "flag value")
 
-# @humanize
+@humanize
 class Dependencies:
     __slots__ = "operator", "fileDependency", "flagDependency", "gameDependency", "fommDependency"
 

@@ -64,7 +64,7 @@ class ArchiveHandler:
 
         for prog in ['unrar', 'unar', '7z']:
             if shutil.which(prog):
-                programs[prog]=self.TEMPLATES["prog"]
+                programs[prog]=self.TEMPLATES[prog]
 
         return programs
 

@@ -289,4 +289,27 @@ def install_mod_from_dir(directory):
 ## fomod installer
 ##===============================================
 
+from skymodman.installer.common import FileState
+def checkFileState(file, state):
+    """
+    M = "Missing"
+    I = "Inactive"
+    A = "Active"
+
+    :param file:
+    :param state:
+    :return:
+    """
+    # todo: this needs to check the 'virtual' skyrim directory for the named file and discover if it is present; if it is not present, then we also need to check if the file COULD be present--i.e. it is available in a mod that is installed but diabled.
+
+    if state==FileState.A:
+        return True
+    if state == FileState.M:
+        return False
+    if state == FileState.I:
+        return True
+
+
+
+    return False
 
