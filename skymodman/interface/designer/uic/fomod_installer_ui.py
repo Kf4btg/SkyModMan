@@ -13,7 +13,7 @@ class Ui_Wizard(object):
         Wizard.setObjectName("Wizard")
         Wizard.resize(600, 500)
         Wizard.setWizardStyle(QtWidgets.QWizard.ClassicStyle)
-        Wizard.setOptions(QtWidgets.QWizard.NoBackButtonOnStartPage)
+        Wizard.setOptions(QtWidgets.QWizard.NoBackButtonOnLastPage|QtWidgets.QWizard.NoBackButtonOnStartPage|QtWidgets.QWizard.NoCancelButtonOnLastPage)
         self.page_start = QtWidgets.QWizardPage()
         self.page_start.setSubTitle("")
         self.page_start.setObjectName("page_start")

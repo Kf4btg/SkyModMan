@@ -17,7 +17,7 @@
    <enum>QWizard::ClassicStyle</enum>
   </property>
   <property name="options">
-   <set>QWizard::NoBackButtonOnStartPage</set>
+   <set>QWizard::NoBackButtonOnLastPage|QWizard::NoBackButtonOnStartPage|QWizard::NoCancelButtonOnLastPage</set>
   </property>
   <widget class="QWizardPage" name="page_start">
    <property name="title">

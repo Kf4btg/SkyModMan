@@ -1,5 +1,6 @@
 import os
 from tempfile import TemporaryDirectory
+from functools import lru_cache
 
 from skymodman.utils import withlogger
 from skymodman.managers.archive import ArchiveHandler
@@ -94,7 +95,7 @@ class InstallManager:
         if self.current_fomod.reqfiles:
             self.install_state.files_to_install=self.current_fomod.reqfiles
 
-        pprint(self.install_state.files_to_install)
+        # pprint(self.install_state.files_to_install)
 
 
 
@@ -107,12 +108,12 @@ class InstallManager:
 
     def set_flag(self, flag, value):
         self.install_state.flags[flag]=value
-        print(self.install_state.flags)
+        # print(self.install_state.flags)
 
     def unset_flag(self, flag):
         try: del self.install_state.flags[flag]
         except KeyError: pass
-        print(self.install_state.flags)
+        # print(self.install_state.flags)
 
 
     def mark_file_for_install(self, file, install=True):
@@ -124,7 +125,7 @@ class InstallManager:
             self.install_state.files_to_install.append(file)
         else:
             self.install_state.files_to_install.remove(file)
-        pprint(self.install_state.files_to_install)
+        # pprint(self.install_state.files_to_install)
 
 
     def check_dependencies_pattern(self, dependencies):
@@ -133,6 +134,8 @@ class InstallManager:
         :param common.Dependencies dependencies:
         :return:
         """
+        # print(self.check_file.cache_info())
+
         if dependencies.operator == common.Operator.OR:
             for dtype, dep in dependencies:
                 if self.dep_checks[dtype](self, dep):
@@ -144,8 +147,10 @@ class InstallManager:
                 if not self.dep_checks[dtype](self, dep):
                     return False
 
+
         return True
 
+    @lru_cache(256)
     def check_file(self, file, state):
         # print("check file", file, state)
         # ret = Manager.checkFileState(file, state)
@@ -173,14 +178,24 @@ class InstallManager:
         """
         Called after all the install steps have run.
         """
+        flist = self.install_state.files_to_install
         if self.current_fomod.condinstalls:
             for pattern in self.current_fomod.condinstalls:
                 if self.check_dependencies_pattern(pattern.dependencies):
-                    self.install_state.files_to_install.extend(pattern.files)
-
-        pprint(self.install_state.files_to_install)
+                    flist.extend(pattern.files)
 
 
+
+        # sort on priority
+        flist.sort(key=lambda f: f.priority)
+        flist.sort(key=lambda f: f.source.lower())
+
+        # pprint(self.install_state.files_to_install)
+        # self.install_state.files_to_install.sort(key=lambda f: f.priority)
+
+    @property
+    def install_files(self):
+        return self.install_state.files_to_install
 
 
 

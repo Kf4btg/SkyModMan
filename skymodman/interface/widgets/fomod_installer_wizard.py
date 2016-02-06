@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (QWizard, QWizardPage,
 from skymodman.managers import installer
 from skymodman.installer.common import GroupType, PluginType#, Dependencies, Operator
 from skymodman.interface.designer.uic.plugin_wizpage_ui import Ui_InstallStepPage
+from skymodman.interface.designer.uic.installation_wizpage_ui import Ui_FinalPage
 
 class FomodInstaller(QWizard):
 
@@ -46,13 +47,15 @@ class FomodInstaller(QWizard):
 
         self.setObjectName("fomod_installer")
         self.setWizardStyle(QWizard.ClassicStyle)
-        self.setOptions(QWizard.NoBackButtonOnStartPage)
+        self.setOptions(QWizard.NoBackButtonOnStartPage |
+                        QWizard.NoBackButtonOnLastPage  |
+                        QWizard.NoCancelButtonOnLastPage)
         self.setWindowTitle("Mod Installation: " + self.fomod.modname.name)
 
         self.page_start = StartPage(self.rootpath, self.fomod.modname, self.fomod.modimage, next(self.page_count))
 
         self.addPage(self.page_start)
-        self.Pages.append(self.page_start)
+        FomodInstaller.Pages.append(self.page_start)
 
         steplist=self.fomod.installsteps
         for step in steplist:
@@ -66,7 +69,15 @@ class FomodInstaller(QWizard):
 
             self.addPage(self.step_pages[-1])
 
-        self.Pages.extend(self.step_pages)
+        FomodInstaller.Pages.extend(self.step_pages)
+
+        self._final_page = FinalPage(self.rootpath,
+                                     self.fomod.modname.name,
+                                     self.fomod.modimage,
+                                     self.installer)
+
+        self.addPage(self._final_page)
+        FomodInstaller.Pages.append(self._final_page)
 
     def done(self, result):
         if result != QDialog.Rejected:
@@ -90,6 +101,46 @@ class StartPage(QWizardPage):
             self.setPixmap(QWizard.WatermarkPixmap,
                               QPixmap(modimgpath))
 
+class FinalPage(QWizardPage, Ui_FinalPage):
+    def __init__(self, path, modname, modimage, install_manager, *args):
+        super().__init__(*args)
+
+        self.man = install_manager
+
+        self.setupUi(self)
+
+        self._opening_html = """
+            <html><head><style type="text/css">
+            body {font-family: monospace;}
+            p, li { white-space: pre-wrap; }
+            </style></head><body>
+            <p>Installing the following files:</p>
+            <ul>
+            """
+
+        self._closing_html = """</ul></body></html>"""
+        self._html = []
+
+        self.setTitle(modname)
+
+
+    def initializePage(self):
+
+        self.man.check_conditional_installs()
+        self._html.append(self._opening_html)
+        for f in self.man.install_files:
+            self._html.append("<li>{0.source}</li>".format(f))
+
+
+        self._html.append(self._closing_html)
+        self.install_summary.setHtml("".join(self._html))
+
+        self.install_progress.reset()
+
+    def cleanupPage(self):
+        self._html = []
+        self.install_summary.setHtml("<html><body></body></html>")
+        self.install_progress.reset()
 
 class InstallStepPage(QWizardPage, Ui_InstallStepPage):
 
@@ -120,6 +171,7 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
         self.plugin_list.clear()
 
         self.pageid = pageid
+        self.next_page_visible = True
         # print(pageid, step.name)
 
 
@@ -254,8 +306,11 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
         next_id = super().nextId()
 
         if next_id != -1:
-            if not FomodInstaller.Pages[next_id].checkVisible():
-                next_id = FomodInstaller.Pages[next_id].nextId()
+            try:
+                if not FomodInstaller.Pages[next_id].checkVisible():
+                    next_id = FomodInstaller.Pages[next_id].nextId()
+            except AttributeError: # final final page
+                pass
 
         return next_id
 
