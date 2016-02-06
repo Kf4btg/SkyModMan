@@ -9,6 +9,9 @@ from PyQt5.QtWidgets import (QWizard, QWizardPage,
                              QStyle, QProxyStyle,
                              QDialog)
 
+import asyncio
+from quamash import QThreadExecutor, QEventLoop
+
 # from skymodman.installer.fomod import Fomod
 from skymodman.managers import installer
 from skymodman.installer.common import GroupType, PluginType#, Dependencies, Operator
@@ -540,13 +543,15 @@ if __name__ == '__main__':
     import sys
 
     app = QApplication(sys.argv)
+    loop = QEventLoop(app)
+    asyncio.set_event_loop(loop)
+
     # ffile, fpath = 'res/STEP/ModuleConfig.xml','res/STEP'
     # ffile, fpath = 'res/SMIM/fomod/ModuleConfig.xml','res/SMIM'
     ffile, fpath = 'res/SkyFallsMills/FOMod/ModuleConfig.xml','res/SkyFallsMills'
 
     im = installer.InstallManager()
     im.prepare_fomod(ffile)
-
     fwiz = FomodInstaller(im, fpath)
 
     # img='res/PerMa.jpg'
@@ -554,8 +559,9 @@ if __name__ == '__main__':
     # fwiz.setPixmap(QWizard.BannerPixmap, QPixmap(img))
     # fwiz.setPixmap(QWizard.LogoPixmap, QPixmap(img))
     # fwiz.setPixmap(QWizard.WatermarkPixmap, QPixmap(img))
-
-
     fwiz.show()
 
-    sys.exit(app.exec_())
+    with loop:
+        loop.run_forever()
+
+    # sys.exit(app.exec_())

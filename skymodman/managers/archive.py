@@ -4,6 +4,7 @@ import subprocess
 import sys
 from collections import OrderedDict
 from pathlib import Path
+import asyncio
 
 import libarchive
 from libarchive import file_reader, ArchiveError, ffi
@@ -111,13 +112,14 @@ class ArchiveHandler:
                         or (files and entry.isfile))
 
 
-    def extract_archive(self, archive, dest_dir, entries=None):
+    async def extract_archive(self, archive, dest_dir, entries=None, progress_callback=None):
         """
         Extract all or a subset of the contents of `archive` to the destination directory
 
         :param archive: path to the archive file
         :param dest_dir: The directory into which the files will be extracted. Must already exist.
         :param entries: If given, must be a list of strings to the paths of the specific items within the archive to be extracted.  If not specified or None, all entries will be extracted.
+        :param progress_callback: if provided, will be called periodically during the excecution of the extraction process to report the percentage progress.
         :return: Tuple of (bool, list[ArchiveError]); the first item  is whether the archive was sucessfully unpacked, while the second is the list of errors encountered, if any, during the operations.
         """
 
@@ -133,18 +135,18 @@ class ArchiveHandler:
         success = True
 
         if apath.suffix == 'rar':
-            success, errors = self._unpack_rar(str(archive), str(dest_dir), entries)
+            success, errors = await self._unpack_rar(str(archive), str(dest_dir), entries, progress_callback)
 
         else:
             try:
-                self._libarchive_extract(str(archive), str(dest_dir), entries)
+                await self._libarchive_extract(str(archive), str(dest_dir), entries, progress_callback)
             except ArchiveError as e:
                 success = False
                 errors.append(e)
 
         return success, errors
 
-    def _unpack_rar(self, archive, dest_dir, entries=None):
+    async def _unpack_rar(self, archive, dest_dir, entries=None, callback=None):
         """
         While most archives can be handled just fine using libarchive,
         Rar archives can sometimes partially fail to unpack. For that
@@ -185,7 +187,7 @@ class ArchiveHandler:
 
         return success, errors
 
-    def _libarchive_extract(self, archive, dest_dir, entries=None):
+    async def _libarchive_extract(self, archive, dest_dir, entries=None, callback=None):
         """
         Extract the archive using the libarchive library. This should work fine for most archives, but should only be used as a last resort for 'rar' archives.
 
@@ -200,7 +202,7 @@ class ArchiveHandler:
             try:
                 if entries:
                     with file_reader(archive) as arc:
-                        self._extract_matching_entries(arc, entries)
+                        await self._extract_matching_entries(arc, entries, callback)
                 else:
                     libarchive.extract_file(archive)
             except libarchive.ArchiveError as lae:
@@ -210,7 +212,8 @@ class ArchiveHandler:
         if errmsg:
             raise ArchiveError(errmsg)
 
-    def _extract_matching_entries(self, archive, entries, flags=0, *,
+    async def _extract_matching_entries(self, archive, entries, flags=0,
+                                        callback=None, *,
                                   write_header=ffi.write_header,
                                   read_data_block=ffi.read_data_block,
                                   write_data_block=ffi.write_data_block,
