@@ -159,6 +159,7 @@ class Fomod:
 
             files.append(
                 ftype(_pathfix(f["source"]),
+                      "" if f["destination"]=="" else
                       _pathfix(f["destination"] or f["source"]),
 
                       int(f["priority"]
@@ -238,6 +239,8 @@ class Fomod:
             if plugin.conditionFlags:
                 p.conditionFlags = [Flag(f["name"], f.cdata)
                                     for f in plugin.conditionFlags.flag]
+
+            p.files = cls._getfiles(plugin)
 
             tipe = plugin.typeDescriptor
             if tipe.type: #simple type

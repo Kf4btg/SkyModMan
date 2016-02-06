@@ -7,6 +7,9 @@ from skymodman.installer.fomod import Fomod
 from skymodman.installer import common
 # from skymodman.managers import modmanager as Manager
 
+from pprint import pprint
+
+
 class installState:
     def __init__(self):
         self.file_path = None
@@ -91,6 +94,8 @@ class InstallManager:
         if self.current_fomod.reqfiles:
             self.install_state.files_to_install=self.current_fomod.reqfiles
 
+        pprint(self.install_state.files_to_install)
+
 
 
     dep_checks = {
@@ -102,21 +107,25 @@ class InstallManager:
 
     def set_flag(self, flag, value):
         self.install_state.flags[flag]=value
-        # print(self.install_state.flags)
+        print(self.install_state.flags)
 
     def unset_flag(self, flag):
         try: del self.install_state.flags[flag]
         except KeyError: pass
-        # print(self.install_state.flags)
+        print(self.install_state.flags)
 
 
-    def mark_file_for_install(self, file):
+    def mark_file_for_install(self, file, install=True):
         """
-
         :param common.File file:
         :return:
         """
-        self.install_state.files_to_install.append(file)
+        if install:
+            self.install_state.files_to_install.append(file)
+        else:
+            self.install_state.files_to_install.remove(file)
+        pprint(self.install_state.files_to_install)
+
 
     def check_dependencies_pattern(self, dependencies):
         """
@@ -159,6 +168,18 @@ class InstallManager:
 
     def check_fomm_version(self, version):
         return True
+
+    def check_conditional_installs(self):
+        """
+        Called after all the install steps have run.
+        """
+        if self.current_fomod.condinstalls:
+            for pattern in self.current_fomod.condinstalls:
+                if self.check_dependencies_pattern(pattern.dependencies):
+                    self.install_state.files_to_install.extend(pattern.files)
+
+        pprint(self.install_state.files_to_install)
+
 
 
 

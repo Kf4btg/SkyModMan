@@ -6,7 +6,8 @@ from PyQt5.QtCore import Qt, pyqtProperty
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (QWizard, QWizardPage,
                              QLabel, QTreeWidgetItem,
-                             QStyle, QProxyStyle)
+                             QStyle, QProxyStyle,
+                             QDialog)
 
 # from skymodman.installer.fomod import Fomod
 from skymodman.managers import installer
@@ -67,6 +68,12 @@ class FomodInstaller(QWizard):
 
         self.Pages.extend(self.step_pages)
 
+    def done(self, result):
+        if result != QDialog.Rejected:
+            self.installer.check_conditional_installs()
+
+
+        super().done(result)
 
 class StartPage(QWizardPage):
     def __init__(self,path, modname, modimage, pageid, *args):
@@ -355,7 +362,7 @@ class PluginGroup(QTreeWidgetItem):
                     ctype = pat.type
                     break
 
-        print(child.plugin.name, ctype)
+        # print(child.plugin.name, ctype)
 
         if ctype == PluginType.REQ:
             child.setCheckState(0, Qt.Checked)
@@ -376,19 +383,26 @@ class PluginGroup(QTreeWidgetItem):
             if c.checkState(0) & Qt.Checked:
                 c.setCheckState(0, Qt.Unchecked)
 
-    def enable_plugin_flags(self, plugin, enable):
+    def change_plugin_status(self, plugin, enable):
         """
 
         :param plugin:
         :param bool enable:
         :return:
         """
+
+        # print(plugin.files)
+
         if enable:
             for flag in plugin.conditionFlags:
                 self.installman.set_flag(flag.name, flag.value)
+            for file in plugin.files:
+                self.installman.mark_file_for_install(file)
         else:
             for flag in plugin.conditionFlags:
                 self.installman.unset_flag(flag.name)
+            for file in plugin.files:
+                self.installman.mark_file_for_install(file, False)
 
     def uncheck_others(self, checked_item):
         """
@@ -404,9 +418,7 @@ class PluginGroup(QTreeWidgetItem):
                 # will ever get unchecked...
                 QTreeWidgetItem.setCheckState(item, 0, Qt.Unchecked)
 
-                for f in self.get_plugin(item).conditionFlags:
-                    self.installman.unset_flag(f.name)
-
+                self.change_plugin_status(item.plugin, False)
 
 class PluginItem(QTreeWidgetItem):
     def __init__(self, plugin, *args, **kwargs):
@@ -421,7 +433,7 @@ class PluginItem(QTreeWidgetItem):
     def setCheckState(self, column, state):
         super().setCheckState(column, state)
 
-        self.group.enable_plugin_flags(self.plugin, state & Qt.Checked)
+        self.group.change_plugin_status(self.plugin, state & Qt.Checked)
 
 
 
@@ -473,9 +485,9 @@ if __name__ == '__main__':
     import sys
 
     app = QApplication(sys.argv)
-    ffile, fpath = 'res/STEP/ModuleConfig.xml','res/STEP'
+    # ffile, fpath = 'res/STEP/ModuleConfig.xml','res/STEP'
     # ffile, fpath = 'res/SMIM/fomod/ModuleConfig.xml','res/SMIM'
-    # ffile, fpath = 'res/SkyFallsMills/FOMod/ModuleConfig.xml','res/SkyFallsMills'
+    ffile, fpath = 'res/SkyFallsMills/FOMod/ModuleConfig.xml','res/SkyFallsMills'
 
     im = installer.InstallManager()
     im.prepare_fomod(ffile)
