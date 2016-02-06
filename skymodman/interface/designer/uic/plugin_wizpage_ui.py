@@ -77,6 +77,7 @@ class Ui_InstallStepPage(object):
         sizePolicy.setHeightForWidth(self.plugin_description_view.sizePolicy().hasHeightForWidth())
         self.plugin_description_view.setSizePolicy(sizePolicy)
         self.plugin_description_view.setMinimumSize(QtCore.QSize(0, 100))
+        self.plugin_description_view.setPlaceholderText("")
         self.plugin_description_view.setObjectName("plugin_description_view")
         self.label = ScaledLabel(self.h_splitter)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
@@ -105,6 +106,5 @@ class Ui_InstallStepPage(object):
         self.plugin_list.topLevelItem(0).child(1).setText(0, _translate("InstallStepPage", "Choice2"))
         self.plugin_list.setSortingEnabled(__sortingEnabled)
         self.plugin_view.setTitle(_translate("InstallStepPage", "Description"))
-        self.plugin_description_view.setPlaceholderText(_translate("InstallStepPage", "Testing Testing We\'ll put some stuff here it\'ll be great you just know it haha."))
 
 from skymodman.interface.widgets.scaledlabel import ScaledLabel

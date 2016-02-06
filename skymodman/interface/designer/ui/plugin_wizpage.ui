@@ -142,7 +142,7 @@ QTreeWidget QLabel {
            </size>
           </property>
           <property name="placeholderText">
-           <string>Testing Testing We'll put some stuff here it'll be great you just know it haha.</string>
+           <string/>
           </property>
          </widget>
          <widget class="ScaledLabel" name="label">
