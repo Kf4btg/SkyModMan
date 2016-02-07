@@ -68,6 +68,8 @@ class Fomod:
     def __init__(self, config_xml):
         self.fomod_config = untangle.parse(config_xml)
 
+        self.all_images = []
+
 
         self.modname = None
         self.modimage = None
@@ -106,6 +108,8 @@ class Fomod:
                                  int(mimg["height"]
                                      or defs["height"])
                                  )
+        if self.modimage.path:
+            self.all_images.append(self.modimage.path)
 
         ## mod dependencies
         self.moddeps = self._getdeps(root.moduleDependencies)
@@ -173,8 +177,7 @@ class Fomod:
                       ))
         return files
 
-    @classmethod
-    def _getpatterns(cls, element):
+    def _getpatterns(self, element):
         if not element: return None
 
         pats=[]
@@ -187,30 +190,28 @@ class Fomod:
 
             if pat.type:
                 p.type = PluginType(pat.type["name"])
-            p.dependencies = cls._getdeps(pat)
-            p.files = cls._getfiles(pat)
+            p.dependencies = self._getdeps(pat)
+            p.files = self._getfiles(pat)
             pats.append(p)
 
         return pats
 
-    @classmethod
-    def _getinstallsteps(cls, element):
+    def _getinstallsteps(self, element):
         if not element: return None
 
         steps = []
 
         for step in element.installStep:
             s = InstallStep(step["name"])
-            s.visible = cls._getdeps(step.visible)
-            s.optionalFileGroups = cls._getgroups(step.optionalFileGroups)
+            s.visible = self._getdeps(step.visible)
+            s.optionalFileGroups = self._getgroups(step.optionalFileGroups)
 
             steps.append(s)
 
 
         return steps
 
-    @classmethod
-    def _getgroups(cls, element):
+    def _getgroups(self, element):
         if not element: return None
 
         groups = []
@@ -218,14 +219,13 @@ class Fomod:
         for group in element.group:
             g = Group(group["name"], GroupType(group["type"]))
             g.plugin_order = group.plugins["order"]
-            g.plugins = cls._getplugins(group.plugins)
+            g.plugins = self._getplugins(group.plugins)
 
             groups.append(g)
 
         return groups
 
-    @classmethod
-    def _getplugins(cls, element):
+    def _getplugins(self, element):
         if not element: return None
         plugs = []
 
@@ -235,12 +235,13 @@ class Fomod:
 
             if plugin.image:
                 p.image = _pathfix(plugin.image["path"])
+                self.all_images.append(p.image)
 
             if plugin.conditionFlags:
                 p.conditionFlags = [Flag(f["name"], f.cdata)
                                     for f in plugin.conditionFlags.flag]
 
-            p.files = cls._getfiles(plugin)
+            p.files = self._getfiles(plugin)
 
             tipe = plugin.typeDescriptor
             if tipe.type: #simple type
@@ -248,7 +249,7 @@ class Fomod:
             else: # dependency type
                 dt = tipe.dependencyType
                 p.type = PluginType(dt.defaultType["name"])
-                p.patterns = cls._getpatterns(dt.patterns)
+                p.patterns = self._getpatterns(dt.patterns)
 
             plugs.append(p)
 
