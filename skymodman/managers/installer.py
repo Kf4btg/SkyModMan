@@ -1,6 +1,7 @@
 import os
 from tempfile import TemporaryDirectory
 from functools import lru_cache
+from collections import deque
 import asyncio
 
 from skymodman.utils import withlogger
@@ -17,6 +18,7 @@ class installState:
         self.file_path = None
         self.install_dest = None
         self.files_to_install = []
+        self.files_installed_so_far = deque()
 
         self.flags = {}
 
@@ -204,12 +206,35 @@ class InstallManager:
 
     async def copyfiles(self, callback=print):
         flist = self.install_state.files_to_install
+        progress = self.install_state.files_installed_so_far
 
         amt_copied=0
         for file in flist:
             await asyncio.sleep(0.02)
+            progress.append(file)
             amt_copied+=1
-            asyncio.get_event_loop().call_soon_threadsafe(callback, amt_copied)
+            # print(amt_copied)
+            asyncio.get_event_loop().call_soon_threadsafe(
+                callback, file.source, amt_copied)
+
+    async def rewind_install(self, callback=print):
+        """
+        Called when an install is cancelled during file copy/unpacking.
+        Any files that have already been moved to the install directory
+        will be removed.
+
+        :param callback:
+        :return:
+        """
+        uninstalls=self.install_state.files_installed_so_far
+        remaining=len(uninstalls)
+
+        while remaining>0:
+            await asyncio.sleep(0.02)
+            f=uninstalls.pop()
+            remaining -= 1
+            asyncio.get_event_loop().call_soon_threadsafe(
+                callback, f.source, remaining)
 
 
 

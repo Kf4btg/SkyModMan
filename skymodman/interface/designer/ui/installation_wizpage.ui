@@ -19,7 +19,16 @@
      <property name="orientation">
       <enum>Qt::Vertical</enum>
      </property>
+     <property name="childrenCollapsible">
+      <bool>false</bool>
+     </property>
      <widget class="QTextBrowser" name="install_summary">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Expanding" vsizetype="Ignored">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
       <property name="html">
        <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
 &lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
@@ -30,10 +39,35 @@ p, li { white-space: pre-wrap; }
 &lt;li style=&quot; font-family:'monospace';&quot; style=&quot; margin-top:0px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Cool file 2&lt;/li&gt;&lt;/ul&gt;&lt;/body&gt;&lt;/html&gt;</string>
       </property>
      </widget>
-     <widget class="QProgressBar" name="install_progress">
-      <property name="value">
-       <number>24</number>
+     <widget class="QGroupBox" name="progress_box">
+      <property name="alignment">
+       <set>Qt::AlignBottom|Qt::AlignLeading|Qt::AlignLeft</set>
       </property>
+      <property name="flat">
+       <bool>true</bool>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout">
+       <property name="topMargin">
+        <number>6</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item alignment="Qt::AlignBottom">
+        <widget class="QLabel" name="progress_label">
+         <property name="text">
+          <string>TextLabel</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QProgressBar" name="install_progress">
+         <property name="value">
+          <number>24</number>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </widget>
     </widget>
    </item>

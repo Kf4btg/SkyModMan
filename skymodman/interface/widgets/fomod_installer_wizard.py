@@ -3,15 +3,14 @@ from os.path import exists
 from itertools import count
 
 from PyQt5.QtCore import Qt, pyqtProperty
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QIcon
 from PyQt5.QtWidgets import (QWizard, QWizardPage,
                              QLabel, QTreeWidgetItem,
                              QStyle, QProxyStyle,
-                             QDialog)
+                             QDialog, QPushButton)
 
 import asyncio
 import quamash
-# from quamash import QThreadExecutor, QEventLoop
 
 # from skymodman.installer.fomod import Fomod
 from skymodman.managers import installer
@@ -33,6 +32,7 @@ class FomodInstaller(QWizard):
         """
         super().__init__(*args, **kwargs)
         self.installer = install_manager
+        self.skip_startpage = True
 
         self.fomod = self.installer.current_fomod
         self.rootpath = files_path
@@ -46,14 +46,20 @@ class FomodInstaller(QWizard):
         self.initUI()
 
         self.resize(800,800)
+        if self.skip_startpage:
+            self.setStartId(1)
 
     def initUI(self):
 
         self.setObjectName("fomod_installer")
         self.setWizardStyle(QWizard.ClassicStyle)
-        self.setOptions(QWizard.NoBackButtonOnStartPage |
-                        QWizard.NoBackButtonOnLastPage  |
-                        QWizard.NoCancelButtonOnLastPage)
+
+
+
+        self.setOptions(QWizard.NoBackButtonOnStartPage  |
+                        QWizard.NoBackButtonOnLastPage   |
+                        QWizard.NoCancelButtonOnLastPage
+                        )
         self.setWindowTitle("Mod Installation: " + self.fomod.modname.name)
 
         self.page_start = StartPage(self.rootpath, self.fomod.modname, self.fomod.modimage, next(self.page_count))
@@ -78,7 +84,8 @@ class FomodInstaller(QWizard):
         self._final_page = FinalPage(self.rootpath,
                                      self.fomod.modname.name,
                                      self.fomod.modimage,
-                                     self.installer)
+                                     self.installer,
+                                     parent=self)
 
         self.addPage(self._final_page)
         FomodInstaller.Pages.append(self._final_page)
@@ -106,12 +113,16 @@ class StartPage(QWizardPage):
                               QPixmap(modimgpath))
 
 class FinalPage(QWizardPage, Ui_FinalPage):
-    def __init__(self, path, modname, modimage, install_manager, *args):
-        super().__init__(*args)
+    def __init__(self, path, modname, modimage, install_manager, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
         self.man = install_manager
 
         self.setupUi(self)
+
+        self.btn_cancel_unpack = QPushButton(QIcon.fromTheme("stop"),
+                                             "Stop", self)
+        self.task = None
 
         self._opening_html = """
             <html><head><style type="text/css">
@@ -126,14 +137,22 @@ class FinalPage(QWizardPage, Ui_FinalPage):
         self._html = []
 
         self.setTitle(modname)
+        self._splitter.setSizes([900,1])
+
+        self.max=0
 
 
     def initializePage(self):
+
+        self.wizard().setOption(QWizard.HaveCustomButton1)
+
+        self.wizard().setButton(QWizard.CustomButton1, self.btn_cancel_unpack)
+        self.wizard().customButtonClicked.connect(self.stop_install)
+
         self.man.check_conditional_installs()
         self._html.append(self._opening_html)
         for f in self.man.install_files:
             self._html.append("<li>{0.source}</li>".format(f))
-
 
         self._html.append(self._closing_html)
         self.install_summary.setHtml("".join(self._html))
@@ -142,19 +161,41 @@ class FinalPage(QWizardPage, Ui_FinalPage):
         self.install_progress.setMaximum(self.man.num_files_to_install)
         self.max=self.install_progress.maximum()
 
-        asyncio.get_event_loop().create_task(self.do_install())
+        self.progress_label.setText("")
 
-    def setprogress(self, val):
-        self.install_progress.setValue(val)
-        if self.install_progress.value() >= self.max:
-            self.completeChanged.emit()
+        self.task = asyncio.get_event_loop().create_task(self.do_install()) #type: asyncio.Task
+        self.task.add_done_callback(self.on_install_done)
+
+    def setprogress(self, current_item, num_complete):
+        self.progress_label.setText(current_item)
+        self.install_progress.setValue(num_complete)
 
 
     async def do_install(self):
-        await self.man.copyfiles(self.setprogress)
+        try:
+            await self.man.copyfiles(self.setprogress)
+        except asyncio.CancelledError:
+            await self.man.rewind_install(self.setprogress)
+            raise
+
+    def stop_install(self, button):
+        self.task.cancel()
+        self.btn_cancel_unpack.setEnabled(False)
+
+
+    def on_install_done(self, install_task):
+        if install_task.cancelled():
+            self.progress_label.setText("Install Cancelled")
+        else:
+            self.progress_label.setText("Done!")
+
+        self.btn_cancel_unpack.setEnabled(False)
+        self.completeChanged.emit()
+
 
     def isComplete(self):
-        return self.install_progress.value() >= self.install_progress.maximum()
+        return (self.task is not None) and self.task.done()
+
 
 
     def cleanupPage(self):
