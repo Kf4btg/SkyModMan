@@ -31,13 +31,17 @@ class FomodInstaller(QWizard):
         :return:
         """
         super().__init__(*args, **kwargs)
+
+        # mainly used to pass to children
         self.installer = install_manager
         self.skip_startpage = True
 
+        # keep local reference to fomod
         self.fomod = self.installer.current_fomod
         self.rootpath = files_path
         self.step_pages = []
 
+        # make sure this is empty
         FomodInstaller.Pages = []
 
         # tracking page ids
@@ -45,28 +49,35 @@ class FomodInstaller(QWizard):
 
         self.initUI()
 
+        # make it big
         self.resize(800,800)
+
+        # skip the splash page maybe
         if self.skip_startpage:
             self.setStartId(1)
 
     def initUI(self):
 
         self.setObjectName("fomod_installer")
+
+        # modern style looks kinda bad...but it does support
+        # the banner pixmap... have to think about this.
         self.setWizardStyle(QWizard.ClassicStyle)
 
-
-
+        # buttons buttons buttons
         self.setOptions(QWizard.NoBackButtonOnStartPage  |
                         QWizard.NoBackButtonOnLastPage   |
                         QWizard.NoCancelButtonOnLastPage
                         )
         self.setWindowTitle("Mod Installation: " + self.fomod.modname.name)
 
+        # create and add the title/splash/firstwhatever page.
         self.page_start = StartPage(self.rootpath, self.fomod.modname, self.fomod.modimage, next(self.page_count))
 
         self.addPage(self.page_start)
         FomodInstaller.Pages.append(self.page_start)
 
+        # create a page for every install step in the fomod
         steplist=self.fomod.installsteps
         for step in steplist:
             self.step_pages.append(
@@ -81,6 +92,7 @@ class FomodInstaller(QWizard):
 
         FomodInstaller.Pages.extend(self.step_pages)
 
+        # create final page that will show files being installed
         self._final_page = FinalPage(self.rootpath,
                                      self.fomod.modname.name,
                                      self.fomod.modimage,
@@ -90,12 +102,6 @@ class FomodInstaller(QWizard):
         self.addPage(self._final_page)
         FomodInstaller.Pages.append(self._final_page)
 
-    def done(self, result):
-        if result != QDialog.Rejected:
-            self.installer.check_conditional_installs()
-
-
-        super().done(result)
 
 class StartPage(QWizardPage):
     def __init__(self,path, modname, modimage, pageid, *args):
@@ -113,17 +119,33 @@ class StartPage(QWizardPage):
                               QPixmap(modimgpath))
 
 class FinalPage(QWizardPage, Ui_FinalPage):
+    """
+    Always shown as the final page of the wizard, this displays a list
+    of files that will be installed and shows a progress bar detailing
+    how many of those files have been properly installed so far. When all
+    files are in the mod directory, the finish button is enabled and
+    the user can exit the installer.
+    """
     def __init__(self, path, modname, modimage, install_manager, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # the install manager will do the actual install work;
+        # this page just interfaces with it.
         self.man = install_manager
 
         self.setupUi(self)
 
+        # create a custom button that will allow the user to stop
+        # the installation process if desired.
         self.btn_cancel_unpack = QPushButton(QIcon.fromTheme("stop"),
                                              "Stop", self)
+        # track the asyncio.Task that wraps the install method;
+        # this is used to cancel the install and to signal the wizard
+        # to activate the finish button when done
         self.task = None
 
+        # html boilerplate for text box that will display list of files
+        # to be installed
         self._opening_html = """
             <html><head><style type="text/css">
             body {font-family: monospace;}
@@ -137,41 +159,61 @@ class FinalPage(QWizardPage, Ui_FinalPage):
         self._html = []
 
         self.setTitle(modname)
+
+        # make text box as big as possible, bottom section (progress bar
+        # and label) take only as much room as absolutely needed
         self._splitter.setSizes([900,1])
 
-        self.max=0
 
 
     def initializePage(self):
 
+        # enable the "Stop" button and connect it to the stop_install method
         self.wizard().setOption(QWizard.HaveCustomButton1)
-
         self.wizard().setButton(QWizard.CustomButton1, self.btn_cancel_unpack)
         self.wizard().customButtonClicked.connect(self.stop_install)
 
+        # make sure that the conditional installs are analyzed and
+        # added to the list of files to be installed
         self.man.check_conditional_installs()
+
+        # build the list (in html) of files chosen for install
         self._html.append(self._opening_html)
         for f in self.man.install_files:
             self._html.append("<li>{0.source}</li>".format(f))
-
         self._html.append(self._closing_html)
+
+        # Set the box to display the html list
         self.install_summary.setHtml("".join(self._html))
 
+        # set progress bar to empty, calculate maximum
         self.install_progress.reset()
         self.install_progress.setMaximum(self.man.num_files_to_install)
-        self.max=self.install_progress.maximum()
 
         self.progress_label.setText("")
 
+        # schedule the installation task, save handle for poss. cancellation
         self.task = asyncio.get_event_loop().create_task(self.do_install()) #type: asyncio.Task
+
+        # add the finalization callback
         self.task.add_done_callback(self.on_install_done)
 
     def setprogress(self, current_item, num_complete):
+        """
+        As items are installed, change the label above the progress bar to the name of the `current_item`, and calculate the bar's percentage done from `num_complete`
+
+        :param current_item:
+        :param num_complete:
+        :return:
+        """
         self.progress_label.setText(current_item)
         self.install_progress.setValue(num_complete)
 
 
     async def do_install(self):
+        """
+        This is the coroutine that handles calling the installation methods in the install manager. If the operation is cancelled, it will also request that the manager remove any files installed so far.
+        """
         try:
             await self.man.copyfiles(self.setprogress)
         except asyncio.CancelledError:
@@ -179,29 +221,58 @@ class FinalPage(QWizardPage, Ui_FinalPage):
             raise
 
     def stop_install(self, button):
+        """
+        If the "Stop" button is pressed (NOT the wizard's cancel button, which isn't shown on this page), cancel the installation task via its saved handle and disable the stop button.
+        :param button:
+        :return:
+        """
         self.task.cancel()
         self.btn_cancel_unpack.setEnabled(False)
 
 
     def on_install_done(self, install_task):
+        """
+        Callback that is invoked after the installation progress finishes (or rewinds if cancelled). Does a final update of the buttons and text
+
+        :param install_task:
+        """
         if install_task.cancelled():
+            # after the bar "rewinds", this text will be shown
             self.progress_label.setText("Install Cancelled")
         else:
+            # if everything went well and the install was not cancelled
             self.progress_label.setText("Done!")
 
+        # can't cancel a task that isn't running
         self.btn_cancel_unpack.setEnabled(False)
+        # enable the Finish button
         self.completeChanged.emit()
 
 
     def isComplete(self):
+        """Will return true when the installation is done (or cancelled)"""
         return (self.task is not None) and self.task.done()
 
 
 
     def cleanupPage(self):
+        """
+        I don't think this will ever get called, but just in case...
+        clears the text box, resets the progress bar, and reenables the
+        cancel button.
+        :return:
+        """
+        if self.task is not None:
+            self.task.cancel()
+        self.task = None
+
         self._html = []
         self.install_summary.setHtml("<html><body></body></html>")
         self.install_progress.reset()
+        self.progress_label.setText("")
+
+        self.btn_cancel_unpack.setEnabled(True)
+
 
 class InstallStepPage(QWizardPage, Ui_InstallStepPage):
 
@@ -216,8 +287,13 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
     def __init__(self, path, modname, step, pageid, install_manager, *args):
         """
 
-        :param Fomod.InstallStep step:
+        :param path:
+        :param modname:
+        :param step:
+        :param pageid:
+        :param install_manager:
         :param args:
+        :return:
         """
         super().__init__(*args)
         self.step = step
@@ -304,15 +380,33 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
         self.plugin_list.itemEntered.connect(self.show_item_info)
 
     def initializePage(self):
+        """
+        Before this page is shown, analyze the most recently available
+        information on flags/installed-files and make sure that each
+        group has its plugin options set up accordingly.
+        """
         for g in self.groups:
             for c in g.children():
                 g.check_child_type(c)
 
     def cleanupPage(self):
+        """
+        When going 'back' to a previous page, unmark all groups and reset
+        any flags that were set so far on this page.
+        """
         for g in self.groups:
             g.reset()
 
     def checkVisible(self):
+        """
+        If the install step represented by this page contains a 'visible'
+        element, check the dependency patterns in that element and return
+        the result of the analysis; if they were satisfied (or the visible
+        element did not exist), return True and the page will be shown.
+        Otherwise, return False and the page will be skipped.
+
+        :return:
+        """
         # print(self.step.visible)
 
         if self.step.visible:
@@ -324,23 +418,46 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
 
     def on_plugin_list_itemClicked(self, item, column):
         """
+        Since we do weird things (like having a qlabel display the text
+        for the tree items, enabling/disabling different part of the item,
+        using custom items, etc.), we can't really rely on being able to
+        actually click the checkbox as normal. Thus, we react to every
+        click event on an item as if it were a click on the checkbox/
+        radiobutton (that being the only meaningful action that a user can
+        do with these items).
 
         :param QTreeWidgetItem item:
         :param column:
         """
         if item.flags() & Qt.ItemIsUserCheckable:
+
+            # save original checkstate for reference
             ostate = item.checkState(column)
+
+            # toggle the check-state
             item.setCheckState(column, ostate ^ Qt.Checked)
+
+            # because each sub-tree represents a plugin group, notify
+            # the parent (the group) of the clicked item to handle any
+            # special group-related actions that need to be taken
             item.parent().on_child_checkstateChanged(item, ostate, item.checkState(column))
+
             # noinspection PyUnresolvedReferences
+            # tell wizard to recheck the page's completed status
             self.completeChanged.emit()
 
 
     def show_item_info(self, item):
         """
+        When a user moves their mouse over an item in the list of plugins,
+        update the description on the right with the description of that
+        item. If the fomod defines an image associated with the plugin,
+        also load and display said image (if it can be found).
+
         :param QTreeWidgetItem item:
         """
 
+        # only the plugins (sub-items, not the parent/group-labels)
         if item.flags() & Qt.ItemNeverHasChildren:
             plugin = item.data(0, Qt.UserRole)
             self.plugin_description_view.setText(plugin.description)
@@ -379,6 +496,14 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
 
 
 class PluginGroup(QTreeWidgetItem):
+    """
+    An abstraction that represents an "optionalFileGroup" as defined in a
+    Fomod's ModuleConfig.xml. These are displayed on the top level of the
+    list (treewidget) as a plain text label, visually dividing the various
+    plugin groups from each other. On the backend, though, they hold a lot
+    of functions for handling the specifics of the various group- and plugin-
+    types, as well as interactions with the non-gui install-manager.
+    """
 
     def __init__(self, group_type, plugin_order, install_manager, *args, **kwargs):
         # noinspection PyArgumentList
@@ -407,6 +532,12 @@ class PluginGroup(QTreeWidgetItem):
             GroupType.ANY:
                 lambda g: True
         }
+    """
+    Used when verifying that a group has a valid selection, based on the
+    defined type of the group; the "Next" button on the wizard page will not
+    become active until every group on the page returns True from its valid
+    check.
+    """
 
     @pyqtProperty(bool)
     def isValid(self):
@@ -495,6 +626,11 @@ class PluginGroup(QTreeWidgetItem):
 
 
     def reset(self):
+        """
+        When going back to a previous page, need to clear any modifications
+        to the install state that were made for this group.
+        :return:
+        """
         for c in self.children():
             if c.checkState(0) & Qt.Checked:
                 c.setCheckState(0, Qt.Unchecked)
@@ -537,6 +673,10 @@ class PluginGroup(QTreeWidgetItem):
                 self.change_plugin_status(item.plugin, False)
 
 class PluginItem(QTreeWidgetItem):
+    """
+    Represents a plugin from the fomod config; each belongs to a single
+    ``PluginGroup``.
+    """
     def __init__(self, plugin, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -556,6 +696,11 @@ class PluginItem(QTreeWidgetItem):
 
 
 class RadioItem(PluginItem):
+    """
+    A specialized plugin item that is used when a group defines a mutually-
+    exclusive selection type. These items are shown with a radio button rather
+    than the usual checkbox, and only per-group can ever be active.
+    """
     def __init__(self, *args, **kwargs):
         """
         :param group: The Plugin Group this item belongs to
