@@ -307,7 +307,7 @@ def checkFileState(file, state):
     if state == FileState.M:
         return False
     if state == FileState.I:
-        return True
+        return False
 
 
 

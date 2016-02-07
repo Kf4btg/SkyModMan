@@ -25,16 +25,16 @@ from skymodman.constants import (Tab as TAB,
                                  qModels as M,
                                  qFilters as F,
                                  Column)
-from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow
 from skymodman.interface.models import (
     ModTable_TreeModel,
     ProfileListModel,
     ModFileTreeModel,
     ActiveModsListFilter,
     FileViewerTreeFilter)
-from skymodman.interface.widgets import message, NewProfileDialog
+from skymodman.interface.widgets import message, NewProfileDialog, LabeledProgressBar
 from skymodman.utils import withlogger, Notifier, checkPath
 
+from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow
 
 
 @withlogger
@@ -67,6 +67,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # slots (methods) to be called after __init__ is finished
         setupSlots = [
             self._setup_toolbar,
+            self._setup_statusbar,
             self._setup_profile_selector,
             self._setup_table,
             self._setup_file_tree,
@@ -142,6 +143,21 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.file_toolBar.addActions(macts)
 
         notify_done()
+
+    def _setup_statusbar(self, notify_done):
+        """
+        Add a progress bar to the status bar. Will be used for showing
+        progress or activity of long-running processes.
+
+        :param notify_done:
+        :return:
+        """
+        self.sb_progress = LabeledProgressBar("Current Operation:")
+        self.status_bar.addPermanentWidget(self.sb_progress)
+        self.sb_progress.setVisible(False)
+
+        notify_done()
+
 
     def _setup_table(self, notify_done):
         """

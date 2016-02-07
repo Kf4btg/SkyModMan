@@ -164,8 +164,6 @@ class FinalPage(QWizardPage, Ui_FinalPage):
         # and label) take only as much room as absolutely needed
         self._splitter.setSizes([900,1])
 
-
-
     def initializePage(self):
 
         # enable the "Stop" button and connect it to the stop_install method
@@ -188,12 +186,14 @@ class FinalPage(QWizardPage, Ui_FinalPage):
 
         # set progress bar to empty, calculate maximum
         self.install_progress.reset()
-        self.install_progress.setMaximum(self.man.num_files_to_install)
+        self.install_progress.setMaximum(
+            self.man.num_files_to_install)
 
         self.progress_label.setText("")
 
         # schedule the installation task, save handle for poss. cancellation
-        self.task = asyncio.get_event_loop().create_task(self.do_install()) #type: asyncio.Task
+        self.task = asyncio.get_event_loop().create_task(
+            self.do_install()) #type: asyncio.Task
 
         # add the finalization callback
         self.task.add_done_callback(self.on_install_done)
