@@ -1,4 +1,5 @@
 import os
+from shlex import quote, split as shsplit
 import shutil
 import subprocess
 import sys
@@ -20,16 +21,17 @@ class ArchiveHandler:
     FORMATS = ["zip", "rar", "7z"]
     PROGRAMS = ["unrar", "unar", "7z"]
     TEMPLATES = {
-        "unrar": "unrar x {input} {includes} {dest}",
+        # x=extract; cl=convert names to lowercase; inul=disable msgs
+        "unrar": "unrar x -cl -inul {input} {includes} {dest}",
         "unar":  "unar -o {dest} {input} {includes}",
         "7z":    "7z x -o{dest} {includes} {input}",
     }
     INCLUDE_FILTERS = {
-        "unrar": lambda paths: "-n" + " -n".join(paths),
-        "7z":    lambda paths: "-i!" + " -i!".join(paths),
+        "unrar": lambda paths: "-n" + " -n".join(quote(p) for p in paths),
+        "7z":    lambda paths: "-i!" + " -i!".join(quote(p) for p in paths),
         "unar":  lambda paths: " ".join(
-            p + '*' if p.endswith('/')
-            else p
+            quote(p) + '*' if p.endswith('/')
+            else quote(p)
             for p in paths),
     }
     """A mapping  from the command name to a callable crafted to return the unique include-file syntax for each of the different commands"""
@@ -134,19 +136,23 @@ class ArchiveHandler:
         errors = []
         success = True
 
-        if apath.suffix == 'rar':
-            success, errors = await self._unpack_rar(str(archive), str(dest_dir), entries, progress_callback)
+
+        if apath.suffix == '.rar':
+            self.LOGGER << "rar detected"
+            success, errors = self._unpack_rar(str(archive), str(dest_dir), entries, progress_callback)
 
         else:
+            self.LOGGER << "not a rar"
             try:
-                await self._libarchive_extract(str(archive), str(dest_dir), entries, progress_callback)
+                self._libarchive_extract(str(archive), str(dest_dir), entries, progress_callback)
             except ArchiveError as e:
+                self.logger.error(e)
                 success = False
                 errors.append(e)
 
         return success, errors
 
-    async def _unpack_rar(self, archive, dest_dir, entries=None, callback=None):
+    def _unpack_rar(self, archive, dest_dir, entries=None, callback=None):
         """
         While most archives can be handled just fine using libarchive,
         Rar archives can sometimes partially fail to unpack. For that
@@ -165,13 +171,17 @@ class ArchiveHandler:
 
         # first, try our other programs
         for cmdname, cmd in self._programs.items():
+
+            self.LOGGER << "attempting {}".format(cmdname)
+
             if cmdname == '7z' and not self._7zrar: continue
 
             if entries:
-                fullcmd = cmd.format(input=archive, dest=dest_dir,includes=self.INCLUDE_FILTERS[cmdname](entries))
+                fullcmd = cmd.format(input=quote(archive), dest=quote(dest_dir),includes=self.INCLUDE_FILTERS[cmdname](entries))
             else:
-                fullcmd = cmd.format(input=archive, dest=dest_dir, includes="")
+                fullcmd = cmd.format(input=quote(archive), dest=quote(dest_dir), includes="")
 
+            print(fullcmd)
             try:
                 self.run_external(fullcmd)
                 break # on success
@@ -180,14 +190,14 @@ class ArchiveHandler:
         else:
             # no command succeeded; try libarchive
             try:
-                self._libarchive_extract(archive, dest_dir, entries)
+                self._libarchive_extract(archive, dest_dir, entries, callback=callback)
             except ArchiveError as e:
                 errors.append(e)
             success = False
 
         return success, errors
 
-    async def _libarchive_extract(self, archive, dest_dir, entries=None, callback=None):
+    def _libarchive_extract(self, archive, dest_dir, entries=None, callback=None):
         """
         Extract the archive using the libarchive library. This should work fine for most archives, but should only be used as a last resort for 'rar' archives.
 
@@ -202,7 +212,7 @@ class ArchiveHandler:
             try:
                 if entries:
                     with file_reader(archive) as arc:
-                        await self._extract_matching_entries(arc, entries, callback)
+                        self._extract_matching_entries(arc, entries, callback)
                 else:
                     libarchive.extract_file(archive)
             except libarchive.ArchiveError as lae:
@@ -212,7 +222,7 @@ class ArchiveHandler:
         if errmsg:
             raise ArchiveError(errmsg)
 
-    async def _extract_matching_entries(self, archive, entries, flags=0,
+    def _extract_matching_entries(self, archive, entries, flags=0,
                                         callback=None, *,
                                   write_header=ffi.write_header,
                                   read_data_block=ffi.read_data_block,
@@ -233,15 +243,22 @@ class ArchiveHandler:
         :param write_finish_entry:
         :param ARCHIVE_EOF:
         """
+        if callback is None:
+            def callback(*args): pass
+
         buff, size, offset = c_void_p(), c_size_t(), c_longlong()
 
         buff_p, size_p, offset_p = byref(buff), byref(size), byref(offset)
 
+        count_extracted = 0
         with new_archive_write_disk(flags) as write_p:
             for entry in archive:
                 # using the check below will make sure we get all child
                 # entries for any folder listed in `entries`
                 if any(entry.name.startswith(e) for e in entries):
+                    count_extracted+=1
+                    callback(entry.name, count_extracted)
+
                     write_header(write_p, entry._entry_p)
                     read_p = entry._archive_p
                     while 1:
@@ -263,19 +280,18 @@ class ArchiveHandler:
         """
 
         try:
-            subprocess.run(command.split(), check=True,
+            subprocess.run(shsplit(command), check=True,
                            stdout=stdout,
                            stderr=stderr,
                            timeout=timeout)
         except subprocess.CalledProcessError as cpe:
-            errmsg = "External command `{err.cmd}` failed with exit code {err.returncode}: {err.stderr}".format(cpe)
+            errmsg = "External command `{err.cmd}` failed with exit code {err.returncode}: {err.stderr}".format(err=cpe)
             self.logger.error(errmsg)
 
             raise ArchiverError(errmsg).with_traceback(
                 sys.exc_info()[2])
         except subprocess.TimeoutExpired as toe:
-            errmsg = "External command `{err.cmd}` failed to respond after {err.timeout} seconds: {err.stderr}".format(
-                toe)
+            errmsg = "External command `{err.cmd}` failed to respond after {err.timeout} seconds: {err.stderr}".format(err=toe)
             self.logger.error(errmsg)
             raise ArchiverError(errmsg).with_traceback(
                 sys.exc_info()[2])
