@@ -209,7 +209,12 @@ class InstallManager:
     def num_files_to_install(self):
         return len(self.install_state.files_to_install)
 
-    async def copyfiles(self, dest_dir, callback=None):
+    async def copyfiles(self, dest_dir=None, callback=None):
+
+        if dest_dir is None:
+            dest_dir="/tmp/testinstall"
+
+
         flist = self.install_state.files_to_install
         progress = self.install_state.files_installed_so_far
 
@@ -220,10 +225,12 @@ class InstallManager:
         def track_progress(filename, num_done):
             progress.append(flist[num_done])
             asyncio.get_event_loop().call_soon_threadsafe(
-                callback, filename, num_done)
+                _callback, filename, num_done)
 
 
-        await self.extract(dest_dir, [f.source for f in flist], track_progress)
+        # await self.extract(dest_dir, [f.source for f in flist], track_progress)
+        # fixme: source files need to end up in the correct destination
+        self.extract(dest_dir, [f.source for f in flist], callback=track_progress)
 
 
 

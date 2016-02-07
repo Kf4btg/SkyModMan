@@ -274,11 +274,9 @@ def get_errors(error_type):
 
 
 
-from tempfile import TemporaryDirectory
 import os
-import asyncio
-from functools import partial
-from concurrent.futures import ThreadPoolExecutor
+# import asyncio
+# from functools import partial
 
 installman=None
 async def extract_fomod(archive, extract_dir):
@@ -289,7 +287,6 @@ async def extract_fomod(archive, extract_dir):
 
     _logger << "fomodpath: {}".format(fomodpath)
 
-    # return fompath
 
     if fomodpath is not None:
         installman.extract(extract_dir, [fomodpath])
@@ -307,61 +304,6 @@ async def extract_fomod(archive, extract_dir):
 
     return None
 
-
-def install_mod(archive, extract_dir):
-    """
-    Examine an archive file for mod contents. If it contains a fomod-installer script, run the fomod wizard. If it just contains the mod files, check for proper directory structure and extract to the configured mod directory. Return status that lets the caller know whether the install succeeded and whether it should update its display.
-
-    :param archive: path to the archive file.
-    :return:
-    """
-
-
-    # Create an instance of the install manager
-    installman = _install.InstallManager(archive)
-
-    fomodpath = installman.get_fomod()
-    # yield fomodpath
-
-    _logger << "fomodpath: {}".format(fomodpath)
-    if fomodpath is not None:
-
-            # first, extract the fomod directory and check
-            # for a ModuleConfig.xml file (not all of them have this)
-
-            # t = asyncio.get_event_loop().create_task(
-            #     )
-            loop = asyncio.get_event_loop()
-
-
-            # asyncio.wait_for(installman.extract(tmpdir, [fomodpath]), 60)
-
-            with ThreadPoolExecutor(1) as ex:
-                f=ex.submit(partial(installman.extract, extract_dir, [fomodpath]))
-
-            modconf = os.path.join(extract_dir, fomodpath, "ModuleConfig.xml")
-            print(modconf)
-            print(os.path.exists(modconf))
-            print(os.path.exists(modconf.lower()))
-
-            if os.path.exists(modconf) or os.path.exists(modconf.lower()):
-                installman.prepare_fomod(modconf, extract_dir)
-                yield extract_dir
-                yield installman
-                return True
-
-
-    # if this is not a fomod
-    yield None
-    if installman.check_mod_structure():
-        with TemporaryDirectory() as tmpdir:
-            # asyncio.get_event_loop().create_task(installman.extract(tmpdir, callback=lambda f,n: print(f,n)))
-
-            yield tmpdir
-    else:
-        yield None
-
-    return True
 
 
 

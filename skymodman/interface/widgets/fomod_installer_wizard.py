@@ -216,7 +216,8 @@ class FinalPage(QWizardPage, Ui_FinalPage):
         This is the coroutine that handles calling the installation methods in the install manager. If the operation is cancelled, it will also request that the manager remove any files installed so far.
         """
         try:
-            await self.man.copyfiles(self.setprogress, "")
+            # fixme: rar files don't call the callback
+            await self.man.copyfiles(callback=self.setprogress)
         except asyncio.CancelledError:
             await self.man.rewind_install(self.setprogress)
             raise
