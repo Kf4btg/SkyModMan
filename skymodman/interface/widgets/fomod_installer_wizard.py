@@ -7,7 +7,7 @@ from PyQt5.QtGui import QPixmap, QIcon
 from PyQt5.QtWidgets import (QWizard, QWizardPage,
                              QLabel, QTreeWidgetItem,
                              QStyle, QProxyStyle,
-                             QDialog, QPushButton)
+                             QPushButton)
 
 import asyncio
 import quamash

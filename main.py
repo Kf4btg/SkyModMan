@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import sys
+import asyncio
 
 from skymodman.managers import modmanager
 from skymodman import constants, skylog
@@ -37,12 +38,14 @@ if __name__ == '__main__':
         from PyQt5.QtWidgets import QApplication
         from PyQt5.QtGui import QGuiApplication
         from skymodman.interface.managerwindow import ModManagerWindow
+        import quamash
 
         app = QApplication(sys.argv)
+        loop = quamash.QEventLoop(app)
+        asyncio.set_event_loop(loop)
 
-        #init the ModManager
+        #initialize the main ModManager
         modmanager.init()
-
 
         w = ModManagerWindow()
         # noinspection PyArgumentList
@@ -50,16 +53,24 @@ if __name__ == '__main__':
         w.resize(QGuiApplication.primaryScreen().availableSize()*5/7)
         w.show()
 
-        ret = None
         try:
-            ret = app.exec_()
+            with loop:
+                loop.run_forever()
         except:
             skylog.stop_listener()
             modmanager.db.shutdown()
             raise
-        finally:
-            if ret is not None:
-                sys.exit(ret)
+
+        # ret = None
+        # try:
+        #     ret = app.exec_()
+        # except:
+        #     skylog.stop_listener()
+        #     modmanager.db.shutdown()
+        #     raise
+        # finally:
+        #     if ret is not None:
+        #         sys.exit(ret)
 
     else:
         main()
