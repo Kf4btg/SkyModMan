@@ -1,5 +1,4 @@
 import os
-from tempfile import TemporaryDirectory
 from functools import lru_cache
 from collections import deque
 import asyncio
@@ -8,9 +7,9 @@ from skymodman.utils import withlogger
 from skymodman.managers.archive import ArchiveHandler
 from skymodman.installer.fomod import Fomod
 from skymodman.installer import common
-# from skymodman.managers import modmanager as Manager
+from skymodman.managers import modmanager as Manager
 
-from pprint import pprint
+# from pprint import pprint
 
 
 class installState:
@@ -23,20 +22,20 @@ class installState:
         self.flags = {}
 
 
-    # fake manager for testing
-class FakeManager:
-    class conf:
-        class paths:
-            dir_mods="res"
-
-    @staticmethod
-    def checkFileState(file, state):
-        if state == common.FileState.A:
-            return True
-
-        return False
-
-Manager = FakeManager
+# fake manager for testing
+# class FakeManager:
+#     class conf:
+#         class paths:
+#             dir_mods="res"
+#
+#     @staticmethod
+#     def checkFileState(file, state):
+#         if state == common.FileState.A:
+#             return True
+#
+#         return False
+#
+# Manager = FakeManager
 
 @withlogger
 class InstallManager:
@@ -45,53 +44,61 @@ class InstallManager:
     """
 
     # noinspection PyArgumentList
-    def __init__(self, *args, **kwargs):
+    def __init__(self, mod_archive, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.archiver = ArchiveHandler()
 
+        self.archive = mod_archive
         self.current_fomod = None
 
         self.install_state = installState()
 
-    def is_fomod(self, archive):
-        for e in self.iter_archive(archive, files=False):
-            if os.path.basename(e).lower() == "fomod":
+    def get_fomod_path(self):
+        for e in self.iter_archive(files=False):
+            # drop the last char because it is always '/' for directories
+            if os.path.basename(e[:-1]).lower() == "fomod":
                 return e
 
         return None
 
-    def extract_fomod(self, archive, fomod_path):
-        """
-        Extracts fomod install script to a temporary directory
+    # def extract_fomod(self, fomod_path):
+    #     """
+    #     Extracts fomod install script to a temporary directory
+    #
+    #     :param fomod_path: The internal path to the 'fomod' directory within the archive (as returned by is_fomod)
+    #     :return: Path to the extracted install script
+    #     """
+    #     with TemporaryDirectory() as tmpdir:
+    #         self.extract(archive, tmpdir, entries=[fomod_path])
 
-        :param archive:
-        :param fomod_path: The internal path to the 'fomod' directory within the archive (as returned by is_fomod)
-        :return: Path to the extracted install script
-        """
-        with TemporaryDirectory() as tmpdir:
-            self.extract(archive, tmpdir, entries=[fomod_path])
-
-    def extract(self, archive, destination, entries=None):
+    def extract(self, destination, entries=None, callback=None):
         """
 
-        :param archive: the archive to unpack
         :param destination: extraction destination
         :param entries: list of archive entries (i.e. directories or files) to extract; if None, all entries will be extracted
-        :return:
         """
+        self.archiver.extract_archive(self.archive, destination, entries, callback)
 
-        self.archiver.extract_archive(archive, destination, entries)
+    def iter_archive(self, *, dirs=True, files=True):
+        yield from self.archiver.list_archive(self.archive, dirs=dirs, files=files)
 
-    def iter_archive(self, archive, *, dirs=True, files=True):
-        yield from self.archiver.list_archive(archive, dirs=dirs, files=files)
+    def archive_contents(self, *, dirs=True, files=True):
+        return list(self.archiver.list_archive(self.archive, dirs=dirs, files=files))
 
-    def archive_contents(self, archive, *, dirs=True, files=True):
-        return list(self.archiver.list_archive(archive, dirs=dirs, files=files))
+    def check_mod_structure(self):
+        # todo: check that everything which should go in the Skyrim/Data directory is on the top level of the archive
+        return True
 
 
-    def prepare_fomod(self, xmlfile):
+    def prepare_fomod(self, xmlfile, extract_dir=None):
         self.current_fomod = Fomod(xmlfile)
         self.install_state = installState()
+
+        # we don't want to extract the entire archive before we start,
+        # but we do need to extract any images defined in the
+        # config file so that they can be shown during installation
+        if self.archive and extract_dir is not None:
+            self.extract(extract_dir, self.current_fomod.all_images)
 
         self.install_state.install_dest = Manager.conf.paths.dir_mods
 
@@ -149,8 +156,6 @@ class InstallManager:
             for dtype, dep in dependencies:
                 if not self.dep_checks[dtype](self, dep):
                     return False
-
-
         return True
 
     @lru_cache(256)
@@ -204,18 +209,32 @@ class InstallManager:
     def num_files_to_install(self):
         return len(self.install_state.files_to_install)
 
-    async def copyfiles(self, callback=print):
+    async def copyfiles(self, dest_dir, callback=None):
         flist = self.install_state.files_to_install
         progress = self.install_state.files_installed_so_far
 
-        amt_copied=0
-        for file in flist:
-            await asyncio.sleep(0.02)
-            progress.append(file)
-            amt_copied+=1
-            # print(amt_copied)
+        _callback = callback
+        if _callback is None:
+            def _callback(*args): pass
+
+        def track_progress(filename, num_done):
+            progress.append(flist[num_done])
             asyncio.get_event_loop().call_soon_threadsafe(
-                callback, file.source, amt_copied)
+                callback, filename, num_done)
+
+
+        await self.extract(dest_dir, [f.source for f in flist], track_progress)
+
+
+
+        # amt_copied=0
+        # for file in flist:
+        #     await asyncio.sleep(0.02)
+        #     progress.append(file)
+        #     amt_copied+=1
+        #     # print(amt_copied)
+        #     asyncio.get_event_loop().call_soon_threadsafe(
+        #         callback, file.source, amt_copied)
 
     async def rewind_install(self, callback=print):
         """

@@ -278,18 +278,18 @@ def _tobool(val):
 setattr(untangle, "_Element", untangle.Element)
 setattr(untangle, "Element", Element)
 
-
-if __name__ == '__main__':
-    import sys
-    f = Fomod(sys.argv[1])
-
-    print("\n----Mod Name----")
-    print(f.modname)
-    print("\n----Mod Image----")
-    print(f.modimage)
-    print("\n----Required Installs----")
-    print(f.reqfiles)
-    print("\n----Conditional Installs----")
-    print(f.condinstalls)
-    print("\n----Install Steps----")
-    print(f.installsteps)
+#
+# if __name__ == '__main__':
+#     import sys
+#     f = Fomod(sys.argv[1])
+#
+#     print("\n----Mod Name----")
+#     print(f.modname)
+#     print("\n----Mod Image----")
+#     print(f.modimage)
+#     print("\n----Required Installs----")
+#     print(f.reqfiles)
+#     print("\n----Conditional Installs----")
+#     print(f.condinstalls)
+#     print("\n----Install Steps----")
+#     print(f.installsteps)

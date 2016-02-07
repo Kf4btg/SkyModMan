@@ -1,4 +1,5 @@
 from functools import partial
+import asyncio
 
 from PyQt5.QtCore import (Qt,
                           pyqtSignal,
@@ -830,7 +831,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.LOGGER.info(
                     "Activating profile '{}'".format(new_profile))
 
-            # fixme: change this setter to a method so it's clear how much happens at this point
             Manager.set_active_profile(new_profile)
 
             self.logger << "Resetting views for new profile"
@@ -1062,25 +1062,65 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             # todo: maybe run this method in a separate thread? at least the dialog
             # todo: setup 2nd tab with data from xml file and begin installation process
 
+
+
     # noinspection PyTypeChecker,PyArgumentList
     def install_mod_archive(self):
         # todo: default to home folder or something instead of current dir
         filename=QFileDialog.getOpenFileName(
             self, "Select Mod Archive",
-            QDir.currentPath(),
+            QDir.currentPath() + "/res",
             "Archives [zip, 7z, rar] (*.zip *.7z *.rar);;All Files(*)")[0]
         if filename:
-            # Manager.install_mod(filename)
-            from skymodman.interface.widgets.fomod_installer_wizard import FomodInstaller
+            asyncio.get_event_loop().create_task(
+                self._handle_install(filename))
 
-            fomodinstaller = FomodInstaller()
+
+    async def _handle_install(self, archive):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as tmpdir:
+            self.sb_progress.label_text = "Preparing install:"
+            self.sb_progress.bar.reset()
+            self.sb_progress.bar.setRange(0,0)
+            self.sb_progress.setVisible(True)
+
+            try:
+                await asyncio.sleep(5)
+                installer = await Manager.extract_fomod(archive, tmpdir)
+                self.sb_progress.setVisible(False)
+
+                if installer is not None:
+
+                    from skymodman.interface.widgets.fomod_installer_wizard import FomodInstaller
+
+                    wizard = FomodInstaller(installer, tmpdir)
+
+                    wizard.exec_()
+                else:
+                    print("not fomod")
+                    # extract_location =  # should extract the archive
+                    # if extract_location is None:
+                    #     extract_location="The mod structure is incorrect"
+
+                    # message("information", text=extract_location)
+            finally:
+                self.sb_progress.setVisible(False)
+
+
+
+
+
+
+
+
+        # from skymodman.interface.widgets.fomod_installer_wizard import FomodInstaller
+
+            # fomodinstaller = FomodInstaller()
 
             # fomodinstaller.show()
-            fomodinstaller.exec_()
+            # fomodinstaller.exec_()
 
 
-            # message('information','The Thing', filename)
-            
     def choose_mod_folder(self):
         """
         Show dialog allowing user to choose a mod folder.

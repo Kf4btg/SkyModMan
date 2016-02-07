@@ -261,7 +261,54 @@ def get_errors(error_type):
 ## Mod [Un]Installation
 ##===============================================
 
-def install_mod(archive):
+# def extract_fomod(archive):
+#     """
+#     Examines the given archive file for a fomod install script;
+#     if found, the relative path (inside the archive) to the fomod folder
+#     is returned. Otherwise, None is returned.
+#     :param archive:
+#     :return:
+#     """
+#     installman = _install.InstallManager()
+#     if installman.get_fomod(archive):
+
+
+
+from tempfile import TemporaryDirectory
+import os
+import asyncio
+from functools import partial
+from concurrent.futures import ThreadPoolExecutor
+
+installman=None
+async def extract_fomod(archive, extract_dir):
+    global installman
+    installman = _install.InstallManager(archive)
+
+    fomodpath = installman.get_fomod_path()
+
+    _logger << "fomodpath: {}".format(fomodpath)
+
+    # return fompath
+
+    if fomodpath is not None:
+        installman.extract(extract_dir, [fomodpath])
+        modconf = os.path.join(extract_dir, fomodpath,
+                               "ModuleConfig.xml")
+        # print(modconf)
+        # print(os.path.exists(modconf))
+        # print(os.path.exists(modconf.lower()))
+        if os.path.exists(modconf):
+            installman.prepare_fomod(modconf, extract_dir)
+            return installman
+        elif os.path.exists(modconf.lower()):
+            installman.prepare_fomod(modconf.lower(), extract_dir)
+            return installman
+
+    return None
+
+
+def install_mod(archive, extract_dir):
     """
     Examine an archive file for mod contents. If it contains a fomod-installer script, run the fomod wizard. If it just contains the mod files, check for proper directory structure and extract to the configured mod directory. Return status that lets the caller know whether the install succeeded and whether it should update its display.
 
@@ -269,13 +316,63 @@ def install_mod(archive):
     :return:
     """
 
-    # Create an instance of the install manager
-    installman = _install.InstallManager()
 
-    # check for fomod
-    fomod_dir = installman.is_fomod(archive)
-    if fomod_dir:
-        pass
+    # Create an instance of the install manager
+    installman = _install.InstallManager(archive)
+
+    fomodpath = installman.get_fomod()
+    # yield fomodpath
+
+    _logger << "fomodpath: {}".format(fomodpath)
+    if fomodpath is not None:
+
+            # first, extract the fomod directory and check
+            # for a ModuleConfig.xml file (not all of them have this)
+
+            # t = asyncio.get_event_loop().create_task(
+            #     )
+            loop = asyncio.get_event_loop()
+
+
+            # asyncio.wait_for(installman.extract(tmpdir, [fomodpath]), 60)
+
+            with ThreadPoolExecutor(1) as ex:
+                f=ex.submit(partial(installman.extract, extract_dir, [fomodpath]))
+
+            modconf = os.path.join(extract_dir, fomodpath, "ModuleConfig.xml")
+            print(modconf)
+            print(os.path.exists(modconf))
+            print(os.path.exists(modconf.lower()))
+
+            if os.path.exists(modconf) or os.path.exists(modconf.lower()):
+                installman.prepare_fomod(modconf, extract_dir)
+                yield extract_dir
+                yield installman
+                return True
+
+
+    # if this is not a fomod
+    yield None
+    if installman.check_mod_structure():
+        with TemporaryDirectory() as tmpdir:
+            # asyncio.get_event_loop().create_task(installman.extract(tmpdir, callback=lambda f,n: print(f,n)))
+
+            yield tmpdir
+    else:
+        yield None
+
+    return True
+
+
+
+
+
+
+
+        # check for fomod
+    # fomod_dir = installman.is_fomod(archive)
+    # if fomod_dir:
+    #     pass
 
 
 def install_mod_from_dir(directory):
@@ -300,16 +397,20 @@ def checkFileState(file, state):
     :param state:
     :return:
     """
-    # todo: this needs to check the 'virtual' skyrim directory for the named file and discover if it is present; if it is not present, then we also need to check if the file COULD be present--i.e. it is available in a mod that is installed but diabled.
+    # todo: this needs to check the 'virtual' skyrim directory for the named file and discover if it is present; if it is not present, then we also need to check if the file COULD be present--i.e. it is available in a mod that is installed but disabled.
 
-    if state==FileState.A:
-        return True
-    if state == FileState.M:
-        return False
-    if state == FileState.I:
-        return False
+    # for testing purposes:
+    return state == FileState.A
 
 
-
-    return False
+    # if state==FileState.A:
+    #     return True
+    # if state == FileState.M:
+    #     return False
+    # if state == FileState.I:
+    #     return False
+    #
+    #
+    #
+    # return False
 

@@ -21,13 +21,15 @@ class ArchiveHandler:
     FORMATS = ["zip", "rar", "7z"]
     PROGRAMS = ["unrar", "unar", "7z"]
     TEMPLATES = {
-        # x=extract; cl=convert names to lowercase; inul=disable msgs
+        # x=extract; -cl=convert names to lowercase; -inul=disable msgs
         "unrar": "unrar x -cl -inul {input} {includes} {dest}",
         "unar":  "unar -o {dest} {input} {includes}",
         "7z":    "7z x -o{dest} {includes} {input}",
     }
     INCLUDE_FILTERS = {
-        "unrar": lambda paths: "-n" + " -n".join(quote(p) for p in paths),
+        "unrar": lambda paths: "-n" + " -n".join(
+            (quote(p[:-1]) if p.endswith('/') else quote(p)).lower()
+            for p in paths),
         "7z":    lambda paths: "-i!" + " -i!".join(quote(p) for p in paths),
         "unar":  lambda paths: " ".join(
             quote(p) + '*' if p.endswith('/')
@@ -106,15 +108,21 @@ class ArchiveHandler:
         :rtype: __generator[str, Any, None]
         """
         with file_reader(archive) as arc:
-            yield from (entry.path + "/" # add a final / to paths to differentiate
-                        if entry.isdir else entry.path
-                        for entry in arc
-                        if (dirs and files)
-                        or (dirs and entry.isdir)
-                        or (files and entry.isfile))
+            for entry in arc:
+                # print(entry.path)
+                # print("dirs:", dirs, "files:", files, "isdir:", entry.isdir,"isfile:", entry.isfile )
+                if (dirs and files) or (dirs and entry.isdir) or (files and entry.isfile):
+                    yield entry.path + "/" if entry.isdir else entry.path
+
+        # yield from (entry.path + "/" # add a final / to paths to differentiate
+        #                 if entry.isdir else entry.path
+        #                 for entry in arc
+        #                 if (dirs and files)
+        #                 or (dirs and entry.isdir)
+        #                 or (files and entry.isfile))
 
 
-    async def extract_archive(self, archive, dest_dir, entries=None, progress_callback=None):
+    def extract_archive(self, archive, dest_dir, entries=None, progress_callback=None):
         """
         Extract all or a subset of the contents of `archive` to the destination directory
 

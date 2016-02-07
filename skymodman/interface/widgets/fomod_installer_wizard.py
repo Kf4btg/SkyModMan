@@ -26,6 +26,7 @@ class FomodInstaller(QWizard):
         """
 
         :param installer.InstallManager install_manager:
+        :param files_path:
         :param args:
         :param kwargs:
         :return:
@@ -215,7 +216,7 @@ class FinalPage(QWizardPage, Ui_FinalPage):
         This is the coroutine that handles calling the installation methods in the install manager. If the operation is cancelled, it will also request that the manager remove any files installed so far.
         """
         try:
-            await self.man.copyfiles(self.setprogress)
+            await self.man.copyfiles(self.setprogress, "")
         except asyncio.CancelledError:
             await self.man.rewind_install(self.setprogress)
             raise
@@ -464,7 +465,7 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
 
             # show image if there is one
             if plugin.image:
-                imgpath = Path(self.modroot, plugin.image).as_posix()
+                imgpath = Path(self.modroot, plugin.image.lower()).as_posix()
 
                 if exists(imgpath):
                     self.label.setScaledPixmap(imgpath)
