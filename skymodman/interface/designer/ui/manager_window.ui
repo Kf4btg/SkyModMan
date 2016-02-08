@@ -416,6 +416,8 @@
      <string>&amp;Mod</string>
     </property>
     <addaction name="action_install_mod"/>
+    <addaction name="action_manual_install"/>
+    <addaction name="action_reinstall_mod"/>
     <addaction name="action_uninstall_mod"/>
     <addaction name="separator"/>
     <addaction name="action_show_search"/>
@@ -459,7 +461,10 @@
     <string>&amp;Install...</string>
    </property>
    <property name="toolTip">
-    <string>Install Mod</string>
+    <string>Install Mod From Archive</string>
+   </property>
+   <property name="statusTip">
+    <string>Install a mod archive using the Automated Installer.</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+I</string>
@@ -776,6 +781,38 @@
    </property>
    <property name="toolTip">
     <string>Rename Profile</string>
+   </property>
+  </action>
+  <action name="action_reinstall_mod">
+   <property name="icon">
+    <iconset theme="view-refresh">
+     <normaloff>.</normaloff>.</iconset>
+   </property>
+   <property name="text">
+    <string>&amp;Reinstall</string>
+   </property>
+   <property name="toolTip">
+    <string>Reinstall Mod</string>
+   </property>
+   <property name="statusTip">
+    <string>Rerun installation for selected mod</string>
+   </property>
+   <property name="autoRepeat">
+    <bool>false</bool>
+   </property>
+  </action>
+  <action name="action_manual_install">
+   <property name="text">
+    <string>Manual Install...</string>
+   </property>
+   <property name="toolTip">
+    <string>Manually Install a Mod Archive</string>
+   </property>
+   <property name="statusTip">
+    <string>Manually define which of the contents from a mod archive to install.</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+I</string>
    </property>
   </action>
  </widget>
