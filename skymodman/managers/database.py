@@ -265,11 +265,11 @@ class DBManager:
             p = PurePath(row['directory'], row['filepath'])
             pathparts = p.parts[:-1]
 
-            tree.treeInsert(htree, pathparts, p.name)
+            htree.insert(pathparts, p.name)
 
 
         with json_target.open('w') as f:
-            f.write(tree.toString(htree))
+            f.write(str(htree))
 
 
         # print(tree.toString(htree, 2))
