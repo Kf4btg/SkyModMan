@@ -52,3 +52,17 @@ db_fields = ["ordinal", "directory", "name", "modid", "version", "enabled"]
 # simply for convenience. As it constructed from a set, it
 # Should only be used where the order of the fields doesn't matter
 noordinal_dbfields = tuple(set(db_fields) ^ {"ordinal"})
+
+## After about two months of working on this, this was my first time diving into the ModOrganizer code to search for the answer to a question I couldn't otherwise figure out. Specifically: "What constitutes 'proper' mod structure?" As I expected, the answer was pretty specific.
+
+TopLevelDirs = {"distantlod", "facegen", "fonts", "interface",
+                "menus", "meshes", "music", "scripts", "shaders",
+                "sound", "strings", "textures", "trees", "video",
+                "skse", "obse", "nvse", "fose", "asi", "skyproc patchers"
+                }
+
+TopLevelDirs_Bain = TopLevelDirs | {"docs", "ini tweaks"}
+
+TopLevelSuffixes = {"esp", "esm", "bsa"}
+
+## PS: It was also the first time I realized that MO was already written in Qt...
