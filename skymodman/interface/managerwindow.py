@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (QApplication,
                              QMessageBox,
                              QFileDialog, QInputDialog,
                              QAction, QAbstractButton,  # QHeaderView,
-                             QActionGroup)
+                             QActionGroup, QProgressBar, QLabel)
 
 from skymodman import skylog, exceptions
 from skymodman.managers import modmanager as Manager
@@ -143,6 +143,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.file_toolBar.addActions(macts)
 
+        # show_busybar_action = QAction("busy",self)
+        # show_busybar_action.triggered.connect(self._show_busy_bar)
+        # self.file_toolBar.addAction(show_busybar_action)
+
         notify_done()
 
     def _setup_statusbar(self, notify_done):
@@ -153,12 +157,40 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         :param notify_done:
         :return:
         """
-        self.sb_progress = LabeledProgressBar("Current Operation:")
-        self.status_bar.addPermanentWidget(self.sb_progress)
-        self.sb_progress.setVisible(False)
+
+        # putting the bar and label together into a container
+        # widget caused the 'busy' animation not to play...
+        # I never did figure out why, but adding them separately
+        # bypasses the issue.
+        self.sb_progress_label = QLabel("Working:", self)
+        self.sb_progress_bar = QProgressBar(self)
+        self.sb_progress_bar.setMaximumWidth(100)
+
+        self.status_bar.addPermanentWidget(self.sb_progress_label)
+        self.status_bar.addPermanentWidget(self.sb_progress_bar)
+        self.sb_progress_label.setVisible(False)
+        self.sb_progress_bar.setVisible(False)
+
 
         notify_done()
 
+    def show_sb_progress(self, text="Working:", minimum=0, maximum=0, show_bar_text=False):
+        self.sb_progress_label.setText(text)
+        self.sb_progress_bar.reset()
+        self.sb_progress_bar.setRange(minimum, maximum)
+        self.sb_progress_bar.setTextVisible(show_bar_text)
+
+        self.sb_progress_label.setVisible(True)
+        self.sb_progress_bar.setVisible(True)
+
+    def update_sb_progress(self, value, labeltext=None):
+        self.sb_progress_bar.setValue(value)
+        if labeltext is not None:
+            self.sb_progress_label.setText(labeltext)
+
+    def hide_sb_progress(self):
+        self.sb_progress_bar.setVisible(False)
+        self.sb_progress_label.setVisible(False)
 
     def _setup_table(self, notify_done):
         """
@@ -1072,6 +1104,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             QDir.currentPath() + "/res",
             "Archives [zip, 7z, rar] (*.zip *.7z *.rar);;All Files(*)")[0]
         if filename:
+
+            self.show_sb_progress("Preparing installer:")
             asyncio.get_event_loop().create_task(
                 self._handle_install(filename))
 
@@ -1079,17 +1113,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     async def _handle_install(self, archive):
         from tempfile import TemporaryDirectory
         with TemporaryDirectory() as tmpdir:
-            self.sb_progress.label_text = "Preparing install:"
-            self.sb_progress.bar.reset()
-            self.sb_progress.bar.setRange(0,0)
-            self.sb_progress.setVisible(True)
-
             try:
-                await asyncio.sleep(5)
+                # await asyncio.sleep(5)
                 installer = await Manager.extract_fomod(archive, tmpdir)
-                self.sb_progress.setVisible(False)
 
                 if installer is not None:
+                    self.hide_sb_progress()
 
                     from skymodman.interface.widgets.fomod_installer_wizard import FomodInstaller
 
@@ -1104,21 +1133,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
                     # message("information", text=extract_location)
             finally:
-                self.sb_progress.setVisible(False)
-
-
-
-
-
-
-
-
-        # from skymodman.interface.widgets.fomod_installer_wizard import FomodInstaller
-
-            # fomodinstaller = FomodInstaller()
-
-            # fomodinstaller.show()
-            # fomodinstaller.exec_()
+                self.hide_sb_progress()
 
 
     def choose_mod_folder(self):
