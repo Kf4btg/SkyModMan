@@ -95,13 +95,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # setup the base ui
         self.setupUi(self)
 
-        # set placeholder fields
-        self.loaded_fomod = None
-
         self._currtab = TAB.MODTABLE
         # make sure the correct initial pages are showing
         self.manager_tabs.setCurrentIndex(self._currtab.value)
-        self.installerpages.setCurrentIndex(0)
 
         self._search_text=''
 
@@ -603,7 +599,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         ].tablehaschanges.connect(
                 self.on_table_unsaved_change)
 
-
         # depending on selection in table, the movement actions will be enabled
         # or disabled
         self.mod_table.enableModActions.connect(
@@ -644,16 +639,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     # def update_UI(self, *args):
     def update_UI(self):
-        self.fomod_tab.setEnabled(self.loaded_fomod is not None)
 
         self._visible_components_for_tab()
-
-        # self.save_cancel_btnbox.setVisible(
-        #         curtab in [TAB.MODTABLE, TAB.FILETREE])
-        #
-        # self.next_button.setVisible(curtab == TAB.INSTALLER)
-        # self.modtable_search_button.setVisible(curtab == TAB.MODTABLE)
-        # self.modtable_search_box.setVisible(curtab == TAB.MODTABLE)
 
     def _visible_components_for_tab(self):
         """
@@ -673,7 +660,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         visible = {
             TAB.MODTABLE:  [1, 0, 1, 1],
             TAB.FILETREE:  [1, 0, 0, 0],
-            TAB.INSTALLER: [0, 1, 0, 0]
         }
 
         for comp, isvis in zip(all_components, visible[tab]):
@@ -713,7 +699,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         elif tab == TAB.FILETREE:
             s[2] = s[3] = self.models[M.file_viewer].has_unsaved_changes
 
-        # else: Installer has everything disabled
 
         for comp, select in zip(all_components, s):
             comp.setEnabled(select)
@@ -1072,32 +1057,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     def edit_preferences(self):
         # todo
         message(text="Preferences?")
-
-    # noinspection PyArgumentList
-    def load_fomod(self):
-
-        # mimes = [m for m in QImageReader.supportedMimeTypes()]
-        # print(mimes)
-        # mimes = ['application/x-7z-compressed']
-        mimes = ['application/xml']
-        # start_locs = QStandardPaths.standardLocations(
-        #     QStandardPaths.HomeLocation)
-        dialog = QFileDialog(self, "Choose ModuleConfig.xml file",
-                             QDir.currentPath()
-                             # start_locs.pop() if start_locs else QDir.currentPath()
-                             )
-        dialog.setAcceptMode(QFileDialog.AcceptOpen)
-        dialog.setMimeTypeFilters(mimes)
-        dialog.selectMimeTypeFilter(mimes[0])
-
-        if dialog.exec_() == QFileDialog.Accepted:
-            files = dialog.selectedFiles()
-            print(files)
-
-            self.loaded_fomod = files[0]
-            # todo: maybe run this method in a separate thread? at least the dialog
-            # todo: setup 2nd tab with data from xml file and begin installation process
-
 
 
     # noinspection PyTypeChecker,PyArgumentList
