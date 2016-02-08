@@ -72,7 +72,8 @@ def newLogger(name, configuration=None, level="DEBUG"):
     except ValueError:
         pass # let it default to warning
 
-    logger.addHandler(q_handler)
+    if not logger.hasHandlers():
+        logger.addHandler(q_handler)
 
     return logger
 
