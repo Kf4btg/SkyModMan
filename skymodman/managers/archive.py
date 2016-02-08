@@ -6,6 +6,7 @@ import sys
 from collections import OrderedDict
 from pathlib import Path
 import asyncio
+import re
 
 import libarchive
 from libarchive import file_reader, ArchiveError, ffi
@@ -22,14 +23,16 @@ class ArchiveHandler:
     PROGRAMS = ["unrar", "unar", "7z"]
     TEMPLATES = {
         # x=extract; -cl=convert names to lowercase; -inul=disable msgs
-        "unrar": "unrar x -cl -inul {input} {includes} {dest}",
+        "unrar": "unrar x -cl {input} {includes} {dest}",
         "unar":  "unar -o {dest} {input} {includes}",
         "7z":    "7z x -o{dest} {includes} {input}",
     }
     INCLUDE_FILTERS = {
-        "unrar": lambda paths: "-n" + " -n".join(
-            (quote(p[:-1]) if p.endswith('/') else quote(p)).lower()
-            for p in paths),
+        # "unrar": lambda paths: "-n" + " -n".join(
+        #     quote(p.rstrip('/')).lower() for p in paths),
+            # p.rstrip('/').lower() for p in paths),
+        "unrar": lambda paths: ["-n"+p.rstrip('/').lower() for p in paths],
+
         "7z":    lambda paths: "-i!" + " -i!".join(quote(p) for p in paths),
         "unar":  lambda paths: " ".join(
             quote(p) + '*' if p.endswith('/')
@@ -69,7 +72,10 @@ class ArchiveHandler:
 
         for prog in ['unrar', 'unar', '7z']:
             if shutil.which(prog):
+                self.LOGGER << "Detected {}: True".format(prog)
                 programs[prog]=self.TEMPLATES[prog]
+            else:
+                self.LOGGER << "Detected {}: False".format(prog)
 
         return programs
 
@@ -82,7 +88,6 @@ class ArchiveHandler:
 
         :return: True if the Rar codec lib
         """
-        import re
         codec_dir = 'p7zip/Codecs'
         codec_name = re.compile(r'Rar[0-9]*\.so')
 
@@ -95,7 +100,9 @@ class ArchiveHandler:
             if os.path.exists(codec_path) and any(
                     codec_name.match(c)
                     for c in os.listdir(codec_path)):
+                self.LOGGER << "System 7z has rar support"
                 return True
+            self.LOGGER << "System 7z does not have rar support"
         return False
 
     def list_archive(self, archive, *, dirs=True, files=True):
@@ -109,25 +116,21 @@ class ArchiveHandler:
         """
         with file_reader(archive) as arc:
             for entry in arc:
-                # print(entry.path)
-                # print("dirs:", dirs, "files:", files, "isdir:", entry.isdir,"isfile:", entry.isfile )
-                if (dirs and files) or (dirs and entry.isdir) or (files and entry.isfile):
+                if (dirs and files) or (
+                            dirs and entry.isdir) or (
+                            files and entry.isfile):
                     yield entry.path + "/" if entry.isdir else entry.path
 
-        # yield from (entry.path + "/" # add a final / to paths to differentiate
-        #                 if entry.isdir else entry.path
-        #                 for entry in arc
-        #                 if (dirs and files)
-        #                 or (dirs and entry.isdir)
-        #                 or (files and entry.isfile))
 
-
-    def extract_archive(self, archive, dest_dir, entries=None, progress_callback=None):
+    async def extract_archive(self, archive, dest_dir,
+                              entries=None,
+                              srcdestpairs=None,
+                              progress_callback=None):
         """
         Extract all or a subset of the contents of `archive` to the destination directory
 
         :param archive: path to the archive file
-        :param dest_dir: The directory into which the files will be extracted. Must already exist.
+        :param dest_dir: The directory into which the files will be extracted.
         :param entries: If given, must be a list of strings to the paths of the specific items within the archive to be extracted.  If not specified or None, all entries will be extracted.
         :param progress_callback: if provided, will be called periodically during the excecution of the extraction process to report the percentage progress.
         :return: Tuple of (bool, list[ArchiveError]); the first item  is whether the archive was sucessfully unpacked, while the second is the list of errors encountered, if any, during the operations.
@@ -141,18 +144,29 @@ class ArchiveHandler:
 
         assert apath.exists()
 
+        dest_dir = Path(dest_dir)
+        if not dest_dir.is_absolute():
+            raise ArchiverError("Destination directory '{}' is not an absolute path.".format(dest_dir))
+
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        self.LOGGER << "created destination folder at {}".format(dest_dir)
+
+
         errors = []
         success = True
 
 
         if apath.suffix == '.rar':
             self.LOGGER << "rar detected"
-            success, errors = self._unpack_rar(str(archive), str(dest_dir), entries, progress_callback)
+            success, errors = await self._unpack_rar(
+               archive=str(archive), dest_dir=str(dest_dir),
+                entries=entries, srcdestpairs=srcdestpairs,
+                callback=progress_callback)
 
         else:
             self.LOGGER << "not a rar"
             try:
-                self._libarchive_extract(str(archive), str(dest_dir), entries, progress_callback)
+                await self._libarchive_extract(str(archive), str(dest_dir), entries, srcdestpairs, progress_callback)
             except ArchiveError as e:
                 self.logger.error(e)
                 success = False
@@ -160,7 +174,10 @@ class ArchiveHandler:
 
         return success, errors
 
-    def _unpack_rar(self, archive, dest_dir, entries=None, callback=None):
+    async def _unpack_rar(self, archive, dest_dir,
+                          entries=None,
+                          srcdestpairs=None,
+                          callback=None):
         """
         While most archives can be handled just fine using libarchive,
         Rar archives can sometimes partially fail to unpack. For that
@@ -182,30 +199,45 @@ class ArchiveHandler:
 
             self.LOGGER << "attempting {}".format(cmdname)
 
-            if cmdname == '7z' and not self._7zrar: continue
+            if cmdname == '7z' and not self._7zrar:
+                self.LOGGER << "Skipping 7z due to lack of rar support"
+                continue
 
-            if entries:
-                fullcmd = cmd.format(input=quote(archive), dest=quote(dest_dir),includes=self.INCLUDE_FILTERS[cmdname](entries))
-            else:
-                fullcmd = cmd.format(input=quote(archive), dest=quote(dest_dir), includes="")
-
-            print(fullcmd)
             try:
-                self.run_external(fullcmd)
+                await self.extern_cmd(program=cmdname, cmd_template=cmd,
+                                      archive=archive, dest=dest_dir,
+                                      entries=entries,
+                                      srcdestpairs=srcdestpairs,
+                                      callback=callback)
+
+                    # fullcmd = cmd.format(input=quote(archive), dest=quote(dest_dir),includes=self.INCLUDE_FILTERS[cmdname](entries))
+                # else:
+
+                # fullcmd = cmd.format(input=quote(archive), dest=quote(dest_dir), includes="")
+
+            # print(fullcmd)
+                # self.run_external(fullcmd)
                 break # on success
             except ArchiveError as e:
+                self.logger << e
                 errors.append(e)
         else:
             # no command succeeded; try libarchive
             try:
-                self._libarchive_extract(archive, dest_dir, entries, callback=callback)
+                await self._libarchive_extract(archive=archive, dest_dir=dest_dir,
+                                               entries=entries,
+                                               srcdestpairs=srcdestpairs,
+                                               callback=callback)
             except ArchiveError as e:
                 errors.append(e)
             success = False
 
         return success, errors
 
-    def _libarchive_extract(self, archive, dest_dir, entries=None, callback=None):
+    async def _libarchive_extract(self, archive, dest_dir,
+                                  entries=None,
+                                  srcdestpairs=None,
+                                  callback=None):
         """
         Extract the archive using the libarchive library. This should work fine for most archives, but should only be used as a last resort for 'rar' archives.
 
@@ -220,9 +252,9 @@ class ArchiveHandler:
             try:
                 if entries:
                     with file_reader(archive) as arc:
-                        self._extract_matching_entries(arc, entries, callback)
+                        await self._extract_matching_entries(arc, entries, callback)
                 else:
-                    libarchive.extract_file(archive)
+                    await libarchive.extract_file(archive)
             except libarchive.ArchiveError as lae:
                 errmsg = "Libarchive experienced an error attempting to unpack '{}': {}".format(archive, lae)
                 self.logger.error(errmsg)
@@ -230,7 +262,9 @@ class ArchiveHandler:
         if errmsg:
             raise ArchiveError(errmsg)
 
-    def _extract_matching_entries(self, archive, entries, flags=0,
+    async def _extract_matching_entries(self, archive, entries,
+                                        srcdestpairs=None,
+                                        flags=0,
                                         callback=None, *,
                                   write_header=ffi.write_header,
                                   read_data_block=ffi.read_data_block,
@@ -303,3 +337,157 @@ class ArchiveHandler:
             self.logger.error(errmsg)
             raise ArchiverError(errmsg).with_traceback(
                 sys.exc_info()[2])
+
+
+    async def extern_cmd(self, program, cmd_template,
+                         archive, dest,
+                         entries=None,
+                         srcdestpairs=None,
+                         callback=None,
+                         stdout=asyncio.subprocess.PIPE):
+        if callback is None:
+            def callback(*args): pass
+
+        errors = []
+        if program == "unrar":
+            errors = await self._extern_cmd_unrar(archive=archive, dest=dest, entries=entries, srcdestpairs=srcdestpairs, callback=callback, stdout=stdout)
+
+        return errors
+
+
+    async def _extern_cmd_unrar(self, archive, dest,
+                                entries, srcdestpairs, callback,
+                                stdout=asyncio.subprocess.PIPE
+                                ):
+
+        errors = []
+        program = "unrar"
+        opts=["x", "-cl", "-y",
+              "-iddpc"]  # disables most messages
+
+        if not srcdestpairs:
+
+            if entries:
+                self.LOGGER << "entry list given"
+                total = len(entries)
+
+                self.LOGGER << entries
+
+                includes = self.INCLUDE_FILTERS[program](entries)
+
+                self.LOGGER << includes
+            else:
+                self.LOGGER << "extracting all files"
+                includes = []
+                proc = await asyncio.create_subprocess_exec(
+                    program, "l", archive, stdout=stdout)
+
+                self.LOGGER << program + " l " + archive
+
+                total = 0
+                prev = ""
+                line = await proc.stdout.readline()
+                while line:
+                    prev, line = line, await proc.stdout.readline()
+
+                self.LOGGER << "prev: "+prev
+                # last line summarizes total bytes/items
+                if prev: total = prev.split()[-1]
+
+            self.logger.debug("total items to extract: {}".format(total))
+
+            # we're either extracting everything, or just
+            # the files listed in entries
+
+            self.logger.debug(" ".join([program, *opts, archive, *includes, dest]))
+
+            proc = await asyncio.create_subprocess_exec(
+                program, *opts,
+                archive,
+                *includes, dest,
+                stdout=stdout, stderr=None)
+
+            parse = re.compile(r'^(Creating|Extracting)\s+(\S.*)\s+OK$')
+            line = await proc.stdout.readline()
+            numdone = 0
+            while line:
+                line = line.decode('ascii').rstrip()
+                print(line)
+                # m=parse.match(line.decode('ascii').rstrip())
+                m = parse.match(line)
+                if m:
+                    numdone += 1  # send to callback as pct
+                    callback(m.group(1),
+                             numdone)
+                line = await proc.stdout.readline()
+
+            if proc.returncode != 0:
+                errors.append((archive, proc.returncode))
+
+        # we were given source, destination pairs from fomod
+        else:
+            # self.LOGGER << "src-dest pairs"
+            self.LOGGER << "Running src-dest installs"
+            print(srcdestpairs)
+            total = len(srcdestpairs)
+            print(total)
+
+
+            # Notes: if dest does not exist, files will be extracted to
+            # current directory.
+            # so just to be safe...let's change our working dir
+            with change_dir(str(dest)):
+
+                numdone=0
+                for src, ddest in srcdestpairs:
+                    # print(src, ddest)
+                    src, ddest = src.lower(), ddest.lower()
+
+                    if src.endswith("/"): # directory
+                        # 'archive path' should be the src directory (ending slash does not matter)
+                        opts.append("-ap{}".format(src.lower()))
+
+                        # file-mask/include should be the same directory WITHOUT the ending slash (very important! weird things happen when the slash is left on...)
+                        includes=src.rstrip('/').lower()
+
+                    else: # file
+                        # archive path and file mask will be the same
+                        opts.append("-ap{}".format(src))
+                        includes=src
+
+                    if not ddest:  # empty string
+                        # destination is just the root dest folder
+                        exdest = dest
+
+                    else:
+                        # if dest was given, we need to create it first
+                        exdest = Path(dest, ddest)
+                        exdest.mkdir(parents=True, exist_ok=True)
+
+                    # print(program, *opts,
+                    #       archive, includes,
+                    #       exdest)
+
+                    proc = await asyncio.create_subprocess_exec(
+                        program, *opts,
+                        archive, includes,
+                        exdest,
+                        stdout=None,
+                        # stdout=sys.stdout, # leave this normal stdout for now
+                        stderr = sys.stdout)
+                        # stderr = None)
+
+                    # tried to do this with asyncio.wait_for()...
+                    # but it never stopped waiting. So hopefully
+                    # we'll never need a timeout!  :|
+                    result = await proc.wait()
+
+                    # print(result)
+
+                    if result != 0:
+                        errors.append((src, result))
+                    numdone+=1
+                    print("numdone:", numdone)
+                    callback(src, numdone)
+
+        return errors

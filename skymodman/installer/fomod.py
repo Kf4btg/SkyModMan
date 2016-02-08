@@ -108,7 +108,7 @@ class Fomod:
                                  int(mimg["height"]
                                      or defs["height"])
                                  )
-        if self.modimage.path:
+        if self.modimage.path and self.modimage.path != "screenshot.png":
             self.all_images.append(self.modimage.path)
 
         ## mod dependencies
@@ -235,7 +235,8 @@ class Fomod:
 
             if plugin.image:
                 p.image = _pathfix(plugin.image["path"])
-                self.all_images.append(p.image)
+                if p.image:
+                    self.all_images.append(p.image)
 
             if plugin.conditionFlags:
                 p.conditionFlags = [Flag(f["name"], f.cdata)

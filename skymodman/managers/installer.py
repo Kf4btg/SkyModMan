@@ -61,23 +61,19 @@ class InstallManager:
 
         return None
 
-    # def extract_fomod(self, fomod_path):
-    #     """
-    #     Extracts fomod install script to a temporary directory
-    #
-    #     :param fomod_path: The internal path to the 'fomod' directory within the archive (as returned by is_fomod)
-    #     :return: Path to the extracted install script
-    #     """
-    #     with TemporaryDirectory() as tmpdir:
-    #         self.extract(archive, tmpdir, entries=[fomod_path])
-
-    def extract(self, destination, entries=None, callback=None):
+    async def extract(self, destination, entries=None,
+                      srcdestpairs=None, callback=None):
         """
 
         :param destination: extraction destination
         :param entries: list of archive entries (i.e. directories or files) to extract; if None, all entries will be extracted
         """
-        self.archiver.extract_archive(self.archive, destination, entries, callback)
+        await self.archiver.extract_archive(
+            archive=self.archive,
+            dest_dir=destination,
+            entries=entries,
+            srcdestpairs=srcdestpairs,
+            progress_callback=callback)
 
     def iter_archive(self, *, dirs=True, files=True):
         yield from self.archiver.list_archive(self.archive, dirs=dirs, files=files)
@@ -90,7 +86,7 @@ class InstallManager:
         return True
 
 
-    def prepare_fomod(self, xmlfile, extract_dir=None):
+    async def prepare_fomod(self, xmlfile, extract_dir=None):
         self.current_fomod = Fomod(xmlfile)
         self.install_state = installState()
 
@@ -98,9 +94,9 @@ class InstallManager:
         # but we do need to extract any images defined in the
         # config file so that they can be shown during installation
         if self.archive and extract_dir is not None:
-            self.extract(extract_dir, self.current_fomod.all_images)
+            await self.extract(extract_dir,
+                               entries=self.current_fomod.all_images)
 
-        self.install_state.install_dest = Manager.conf.paths.dir_mods
 
         if self.current_fomod.reqfiles:
             self.install_state.files_to_install=self.current_fomod.reqfiles
@@ -118,12 +114,10 @@ class InstallManager:
 
     def set_flag(self, flag, value):
         self.install_state.flags[flag]=value
-        # print(self.install_state.flags)
 
     def unset_flag(self, flag):
         try: del self.install_state.flags[flag]
         except KeyError: pass
-        # print(self.install_state.flags)
 
 
     def mark_file_for_install(self, file, install=True):
@@ -160,21 +154,12 @@ class InstallManager:
 
     @lru_cache(256)
     def check_file(self, file, state):
-        # print("check file", file, state)
-        # ret = Manager.checkFileState(file, state)
-
-        # print(ret)
         return Manager.checkFileState(file, state)
 
     def check_flag(self, flag, value):
-        # print(flag, value)
-        # print( self.install_state.flags[flag] if flag in self.install_state.flags else "flag {} missing".format(flag))
-
-        ret= flag in self.install_state.flags \
+        return flag in self.install_state.flags \
                and self.install_state.flags[flag] == value
 
-        # print(ret)
-        return ret
 
     def check_game_version(self, version):
         return True
@@ -191,7 +176,6 @@ class InstallManager:
             for pattern in self.current_fomod.condinstalls:
                 if self.check_dependencies_pattern(pattern.dependencies):
                     flist.extend(pattern.files)
-
 
 
         # sort on priority
@@ -223,25 +207,16 @@ class InstallManager:
             def _callback(*args): pass
 
         def track_progress(filename, num_done):
-            progress.append(flist[num_done])
+            progress.append(flist[num_done-1])
             asyncio.get_event_loop().call_soon_threadsafe(
                 _callback, filename, num_done)
 
 
-        # await self.extract(dest_dir, [f.source for f in flist], track_progress)
-        # fixme: source files need to end up in the correct destination
-        self.extract(dest_dir, [f.source for f in flist], callback=track_progress)
+        await self.extract(destination=dest_dir,
+                           srcdestpairs=[(f.source, f.destination)
+                                         for f in flist],
+                           callback=track_progress)
 
-
-
-        # amt_copied=0
-        # for file in flist:
-        #     await asyncio.sleep(0.02)
-        #     progress.append(file)
-        #     amt_copied+=1
-        #     # print(amt_copied)
-        #     asyncio.get_event_loop().call_soon_threadsafe(
-        #         callback, file.source, amt_copied)
 
     async def rewind_install(self, callback=print):
         """
@@ -261,14 +236,6 @@ class InstallManager:
             remaining -= 1
             asyncio.get_event_loop().call_soon_threadsafe(
                 callback, f.source, remaining)
-
-
-
-
-
-
-
-
 
 
 def __test_extract():
@@ -319,31 +286,5 @@ if __name__ == '__main__':
     # __test_fomod()
     # __test_exentries()
 
-
-
-
-    # fr = libarchive.file_reader
-
-    # for file in ['res/ziptest.zip',
-    #              'res/7ztest.7z',
-    #              'res/rartest.rar',
-    #              'res/bad7ztest.rar']:
-    # for file in ['res/ziptest.zip',
-    #             'res/notazip.zip']:
-    #
-    #     print(file)
-    #     with _catchArchiveError():
-    #         with fr(file) as aarc:
-    #             # print(type(arc))
-    #             for entry in aarc: # type: libarchive.ArchiveEntry
-    #                 print(entry)
-    #                 print('\t',entry.filetype)
-    #                 # for a in dir(entry):
-    #
-    #                     # print(a,getattr(entry,a),sep=": ")
-    #                 # pprint(dir(entry))
-    #                 # print(type(entry))
-    #                 # print(entry)
-    #         print()
 
     skylog.stop_listener()

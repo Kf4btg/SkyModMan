@@ -1,5 +1,7 @@
-from PyQt5.QtWidgets import QWidget, QLabel, QProgressBar, QHBoxLayout
-from PyQt5.QtCore import Qt, pyqtProperty
+from PyQt5.QtWidgets import QWidget, QLabel, QProgressBar, QHBoxLayout, \
+    QApplication
+from PyQt5.QtCore import Qt, pyqtProperty, QTimer
+
 
 class LabeledProgressBar(QWidget):
 
@@ -7,13 +9,17 @@ class LabeledProgressBar(QWidget):
                  label_text="Progress:",
                  label_font_size=10,
                  bar_width=100,
+                 use_bar=None,
                  label_on_left=True,
                  show_bar_text=False,
                  *args, **kwargs):
 
         super().__init__(*args, **kwargs)
 
-        self.bar = QProgressBar(self)
+        if use_bar:
+            self.bar = use_bar
+        else:
+            self.bar = QProgressBar(self)
         self.bar.reset()
         self.bar.setFixedWidth(bar_width)
         self.bar.setTextVisible(show_bar_text)

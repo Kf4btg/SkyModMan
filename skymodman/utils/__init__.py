@@ -59,15 +59,15 @@ from contextlib import contextmanager
 
 import os
 @contextmanager
-def change_dir(dir):
+def change_dir(dir_):
     """
     A context manager that changes to the working directory to the path given by `dir` for the operations given in the with block, then changes back to the original wd on exit.  The full path of the original working directory is returned as the value of the contextmanager and can be bound with ``as``; this can be useful for referencing paths that are relative to the original wd.
 
-    :param dir:
+    :param dir_:
     """
 
     pwd = os.getcwd()
-    os.chdir(dir)
+    os.chdir(dir_)
     yield pwd
 
     os.chdir(pwd)

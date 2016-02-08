@@ -289,17 +289,17 @@ async def extract_fomod(archive, extract_dir):
 
 
     if fomodpath is not None:
-        installman.extract(extract_dir, [fomodpath])
+        await installman.extract(extract_dir, [fomodpath])
         modconf = os.path.join(extract_dir, fomodpath,
                                "ModuleConfig.xml")
         # print(modconf)
         # print(os.path.exists(modconf))
         # print(os.path.exists(modconf.lower()))
         if os.path.exists(modconf):
-            installman.prepare_fomod(modconf, extract_dir)
+            await installman.prepare_fomod(modconf, extract_dir)
             return installman
         elif os.path.exists(modconf.lower()):
-            installman.prepare_fomod(modconf.lower(), extract_dir)
+            await installman.prepare_fomod(modconf.lower(), extract_dir)
             return installman
 
     return None

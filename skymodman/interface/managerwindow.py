@@ -32,7 +32,7 @@ from skymodman.interface.models import (
     ModFileTreeModel,
     ActiveModsListFilter,
     FileViewerTreeFilter)
-from skymodman.interface.widgets import message, NewProfileDialog, LabeledProgressBar
+from skymodman.interface.widgets import message, NewProfileDialog
 from skymodman.utils import withlogger, Notifier, checkPath
 
 from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow
@@ -60,6 +60,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         super().__init__(**kwargs)
         self.LOGGER.info("Initializing ModManager Window")
         ModManagerWindow._this = self
+
+        # for cancelling asyncio actions
+        self.task = None
 
         # setup trackers for all of our models and proxies
         self.models  = {} #type: dict[M,QAbstractItemModel]
@@ -143,8 +146,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.file_toolBar.addActions(macts)
 
+        ## This is for testing the progress indicator::
         # show_busybar_action = QAction("busy",self)
-        # show_busybar_action.triggered.connect(self._show_busy_bar)
+        # show_busybar_action.triggered.connect(self.show_sb_progress)
         # self.file_toolBar.addAction(show_busybar_action)
 
         notify_done()
@@ -1105,9 +1109,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             "Archives [zip, 7z, rar] (*.zip *.7z *.rar);;All Files(*)")[0]
         if filename:
 
+            # show busy indicator while installer loads
             self.show_sb_progress("Preparing installer:")
-            asyncio.get_event_loop().create_task(
+
+
+            self.task = asyncio.get_event_loop().create_task(
                 self._handle_install(filename))
+
+            # todo: add callback to show the new mod if install succeeded
+            # self.task.add_done_callback(self.on_new_mod())
 
 
     async def _handle_install(self, archive):
@@ -1119,12 +1129,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
                 if installer is not None:
                     self.hide_sb_progress()
-
                     from skymodman.interface.widgets.fomod_installer_wizard import FomodInstaller
 
                     wizard = FomodInstaller(installer, tmpdir)
 
                     wizard.exec_()
+
+                    del FomodInstaller
                 else:
                     print("not fomod")
                     # extract_location =  # should extract the archive
@@ -1134,6 +1145,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                     # message("information", text=extract_location)
             finally:
                 self.hide_sb_progress()
+                del TemporaryDirectory
+
 
 
     def choose_mod_folder(self):
