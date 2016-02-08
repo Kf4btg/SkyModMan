@@ -272,7 +272,7 @@ class DBManager:
             f.write(str(htree))
 
 
-        # print(tree.toString(htree, 2))
+        # print(tree.to_string(2))
 
 
     # def fillTable(self, mod_list, doprint=False):

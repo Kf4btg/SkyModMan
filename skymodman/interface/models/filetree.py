@@ -750,9 +750,9 @@ if __name__ == '__main__':
     #             pathparts = [os.path.basename(self.rootpath)]+list(child.ppath.parts[:-1])
     #             # add unchecked dirs, but todo: do not descend
     #             if child.isdir:
-    #                 tree.treeInsert(hiddens, pathparts) # todo: don't descend; just mark folder excluded, assume contents
+    #                 tree.insert(hiddens, pathparts) # todo: don't descend; just mark folder excluded, assume contents
     #             else:
-    #                 tree.treeInsert(hiddens, pathparts, child.name)
+    #                 tree.insert(hiddens, pathparts, child.name)
     #
     #     # return json.dumps(hiddens, indent=1)
     #     return tree.toString(hiddens)

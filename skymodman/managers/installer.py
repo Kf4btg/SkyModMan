@@ -3,8 +3,9 @@ from functools import lru_cache
 from collections import deque
 import asyncio
 import re
+from pathlib import PurePath
 
-from skymodman.utils import withlogger
+from skymodman.utils import withlogger, tree
 from skymodman.managers.archive import ArchiveHandler
 from skymodman.installer.fomod import Fomod
 from skymodman.installer import common
@@ -112,6 +113,16 @@ class InstallManager:
         :return:
         """
         return list(self.archiver.list_archive(self.archive, dirs=dirs, files=files, depth=depth))
+
+    async def mod_structure_tree(self):
+        modtree = tree.Tree()
+
+        for arc_entry in self.iter_archive(dirs=False):
+            ap = PurePath(arc_entry)
+
+            modtree.insert(ap.parent.parts, ap.name)
+
+        return modtree
 
     def check_mod_structure(self):
         # todo: check that everything which should go in the Skyrim/Data directory is on the top level of the archive

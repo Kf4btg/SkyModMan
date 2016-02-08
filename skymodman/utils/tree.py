@@ -2,11 +2,11 @@ from collections import defaultdict
 import json
 
 def Tree():
-    """Autovivifying Tree"""
+    """Return an instance of an autovivifying Tree"""
     # return defaultdict(Tree)
     return AutoTree(Tree)
 
-def insert(tree, key_list, value=None, leaf_list_key="_files"):
+def tree_insert(tree, key_list, value=None, leaf_list_key="_files"):
     """
     Given an ordered list of key names, descend down the tree by key, creating child branches (aka tree-levels, aka sub-dictionaries, aka child-trees,...) as needed.
 
@@ -42,13 +42,16 @@ def insert(tree, key_list, value=None, leaf_list_key="_files"):
 
 
 
-def toString(tree, indent=1):
+def tree_toString(tree, indent=1):
     """Return representation of tree structure in json-compatible string"""
     return json.dumps(tree, indent=indent)
 
 
 class AutoTree(defaultdict):
-
+    """
+    A simple tree convenience class that includes the tree insert and tostring operations as instance methods.
+    This should not be instantiated directly: use mytree = tree.Tree() to create an instance of this type.
+    """
 
     def __call__(self, *args, **kwargs):
         return AutoTree(*args, **kwargs)

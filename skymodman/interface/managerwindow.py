@@ -34,6 +34,7 @@ from skymodman.interface.models import (
     FileViewerTreeFilter)
 from skymodman.interface.widgets import message, NewProfileDialog
 from skymodman.utils import withlogger, Notifier, checkPath
+from skymodman.interface.install_helpers import InstallerUI
 
 from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow
 
@@ -1113,9 +1114,14 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             else:
                 # show busy indicator while installer loads
                 self.show_sb_progress("Preparing installer:")
+                self.installui = InstallerUI()
 
                 self.task = asyncio.get_event_loop().create_task(
-                    self._handle_install(filename))
+                    self.installui.do_install(filename, self.hide_sb_progress))
+
+
+                # self.task = asyncio.get_event_loop().create_task(
+                #     self._handle_install(filename))
 
                 # todo: add callback to show the new mod if install succeeded
                 # self.task.add_done_callback(self.on_new_mod())
@@ -1143,8 +1149,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                     structure = await Manager.install_archive()
                     # todo: if there's an issue with the mod structure, show manual-install dialog and ask the user to restructure the archive.
                     # also todo: go ahead and install the mod if the structure is fine
-                    message("information", title="Mod Structure", text="\n".join(structure))
 
+
+                    message("information", title="Mod Structure",
+                            text=str(structure))
+                            # text="\n".join(structure))
                     # extract_location =  # should extract the archive
                     # if extract_location is None:
                     #     extract_location="The mod structure is incorrect"
@@ -1162,6 +1171,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         await asyncio.sleep(3)
         self.LOGGER << "Here's where we'd show the manual-installation dialog."
         self.hide_sb_progress()
+
+        from skymodman.interface.designer.uic.archive_structure_ui import Ui_mod_structure_dialog
+
+        self.mod
+
+        mod_contents = await Manager.prepare_manual_install(archive)
+
+        self.man
+
 
     def reinstall_mod(self):
         # todo: implement re-running the installer

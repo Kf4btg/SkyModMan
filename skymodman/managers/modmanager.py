@@ -321,11 +321,27 @@ async def install_archive(archive=None):
 
     # fixme: all of this.
     if not installman.check_mod_structure():
-        toplev_plus1 = installman.archive_contents(depth=2)
-        return toplev_plus1
+        # toplev_plus1 = installman.archive_contents(depth=2)
+        modstruct = await installman.mod_structure_tree()
+        # print(modstruct)
+        return modstruct
 
     else:
         return ["install", "good", "go", "happy", "you", "play"]
+
+
+async def prepare_manual_install(archive=None):
+    global installman
+
+    if not archive and not installman:
+        raise TypeError(
+            "If no InstallManager is active, the `archive` element cannot be None.")
+
+    if archive and (not installman or installman.archive != archive):
+        installman = _install.InstallManager(archive)
+
+    modstruct = await installman.mod_structure_tree()
+    return modstruct
 
 
 def install_mod_from_dir(directory):
