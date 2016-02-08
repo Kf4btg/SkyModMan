@@ -105,21 +105,34 @@ class ArchiveHandler:
             self.LOGGER << "System 7z does not have rar support"
         return False
 
-    def list_archive(self, archive, *, dirs=True, files=True):
+    def list_archive(self, archive, *, dirs=True, files=True, depth=-1):
         """
 
         :param str archive: path to an archive
         :param dirs: include directories in the output
         :param files: include files in the output
+        :param depth: if >= 0, only yield items whose directory level is below `depth`. Use depth=1 for top level items; depth=2 for top level and immediate children; etc. If depth is negative, results will not be limited by level.
+
         :return: generator over the internal paths of all files in the archive; directories, if included, will end in a final '/'
         :rtype: __generator[str, Any, None]
         """
+
+        # israr = os.path.splitext(archive)[-1].lower()==".rar"
+
         with file_reader(archive) as arc:
-            for entry in arc:
+            for entry in arc: #type: libarchive.ArchiveEntry
+
+                # RARS don't end dirs in '/';
+                # the other archive types do...
+
+                if -1 < depth <= entry.path.rstrip('/').count('/'):
+                    continue # skip any files in lower directories
                 if (dirs and files) or (
                             dirs and entry.isdir) or (
                             files and entry.isfile):
-                    yield entry.path + "/" if entry.isdir else entry.path
+
+                    # this is silly...stupid rars
+                    yield entry.path.rstrip('/') + '/' if (entry.isdir and not entry.path.endswith('/')) else entry.path
 
 
     async def extract_archive(self, archive, dest_dir,
@@ -382,7 +395,7 @@ class ArchiveHandler:
                 proc = await asyncio.create_subprocess_exec(
                     program, "l", archive, stdout=stdout)
 
-                self.LOGGER << program + " l " + archive
+                # self.LOGGER << program + " l " + archive
 
                 total = 0
                 prev = ""
@@ -399,7 +412,7 @@ class ArchiveHandler:
             # we're either extracting everything, or just
             # the files listed in entries
 
-            self.logger.debug(" ".join([program, *opts, archive, *includes, dest]))
+            # self.logger.debug(" ".join([program, *opts, archive, *includes, dest]))
 
             proc = await asyncio.create_subprocess_exec(
                 program, *opts,
@@ -412,7 +425,7 @@ class ArchiveHandler:
             numdone = 0
             while line:
                 line = line.decode('ascii').rstrip()
-                print(line)
+                # print(line)
                 # m=parse.match(line.decode('ascii').rstrip())
                 m = parse.match(line)
                 if m:
@@ -428,9 +441,9 @@ class ArchiveHandler:
         else:
             # self.LOGGER << "src-dest pairs"
             self.LOGGER << "Running src-dest installs"
-            print(srcdestpairs)
+            # print(srcdestpairs)
             total = len(srcdestpairs)
-            print(total)
+            # print(total)
 
 
             # Notes: if dest does not exist, files will be extracted to
@@ -474,7 +487,7 @@ class ArchiveHandler:
                         exdest,
                         stdout=None,
                         # stdout=sys.stdout, # leave this normal stdout for now
-                        stderr = sys.stdout)
+                        stderr = None)
                         # stderr = None)
 
                     # tried to do this with asyncio.wait_for()...
@@ -487,7 +500,7 @@ class ArchiveHandler:
                     if result != 0:
                         errors.append((src, result))
                     numdone+=1
-                    print("numdone:", numdone)
+                    # print("numdone:", numdone)
                     callback(src, numdone)
 
         return errors

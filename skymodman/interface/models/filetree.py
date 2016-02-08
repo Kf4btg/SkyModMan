@@ -428,6 +428,10 @@ class ModFileTreeModel(QAbstractItemModel):
 
     def _mark_hidden_files(self):
         hfiles = list(Manager.hidden_files(for_mod=self.modname))
+        # only files (with their full paths relative to the root of
+        # the mod directory) are in the hidden files list; thus we
+        # need only compare files and not dirs to the list. As usual,
+        # a directory's checkstate will be derived from its children
         for c in self.rootitem.iterchildren(True):
             if c.lpath in hfiles:
                 c.checkState = Qt_Unchecked

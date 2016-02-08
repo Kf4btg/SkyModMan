@@ -175,6 +175,19 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         notify_done()
 
     def show_sb_progress(self, text="Working:", minimum=0, maximum=0, show_bar_text=False):
+        """
+        Set up and display the small progress bar on the bottom right of the window
+        (in the status bar). If `minimum` == `maximum` == 0, the bar will be in
+        indeterminate ('busy') mode: this is useful for indicating to the user
+        that *something* is going on on the background during activities that may
+        take a moment or two to complete, so the user need not worry
+        that their last command had no effect.
+
+        :param text: Text that will be shown to the left of the progress bar
+        :param minimum: Minumum value for the bar
+        :param maximum: Maximum value for the bar
+        :param show_bar_text: Whether to show the bar's text (% done by default)
+        """
         self.sb_progress_label.setText(text)
         self.sb_progress_bar.reset()
         self.sb_progress_bar.setRange(minimum, maximum)
@@ -184,11 +197,23 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.sb_progress_bar.setVisible(True)
 
     def update_sb_progress(self, value, labeltext=None):
+        """
+        Set the status-progress-bar's value to `value`. If provided,
+        also change the label to `labeltext`; otherwise leave the
+        label as is. This method can be used as a callback.
+
+        :param value:
+        :param labeltext:
+        :return:
+        """
         self.sb_progress_bar.setValue(value)
         if labeltext is not None:
             self.sb_progress_label.setText(labeltext)
 
     def hide_sb_progress(self):
+        """
+        Make the statusbar-progress go away.
+        """
         self.sb_progress_bar.setVisible(False)
         self.sb_progress_label.setVisible(False)
 
@@ -368,6 +393,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             * action_quit
 
             * action_install_mod
+            * action_reinstall_mod
+            * action_manual_install
             * action_uninstall_mod
             * action_choose_mod_folder
 
@@ -420,6 +447,18 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # action_install_mod
         self.action_install_mod.triggered.connect(
             self.install_mod_archive)
+
+        self.action_manual_install.triggered.connect(
+            self.manual_install)
+
+        # action_reinstall_mod
+        self.action_reinstall_mod.triggered.connect(
+            self.reinstall_mod)
+
+        # action_uninstall_mod
+        self.action_uninstall_mod.triggered.connect(
+            self.uninstall_mod)
+
         # action_choose_mod_folder
         self.action_choose_mod_folder.triggered.connect(
             self.choose_mod_folder)
@@ -911,10 +950,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         Enable or disable buttons and actions that rely on having a selection in the mod table.
         """
         # self.LOGGER << "modtable selection->{}".format(has_selection)
-
-        self.mod_movement_group.setEnabled(has_selection)
-        self.action_toggle_mod.setEnabled(has_selection)
-        self.action_uninstall_mod.setEnabled(has_selection)
+        for a in (self.mod_movement_group,
+                  self.action_uninstall_mod,
+                  self.action_reinstall_mod,
+                  self.action_toggle_mod):
+            a.setEnabled(has_selection)
 
     def on_table_unsaved_change(self, unsaved_changes_present):
         # self.LOGGER << "table status: {}".format("dirty" if unsaved_changes_present else "clean")
@@ -1004,7 +1044,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         Tell the view to search for 'text'; depending on success, we
         will change the appearance of the search text and the status
         bar message
-
         """
 
         if self._search_text:
@@ -1047,7 +1086,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.modtable_search_box.setStyleSheet('')
             self.status_bar.clearMessage()
 
-
     # </editor-fold>
 
     ##===============================================
@@ -1058,9 +1096,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # todo
         message(text="Preferences?")
 
-
     # noinspection PyTypeChecker,PyArgumentList
-    def install_mod_archive(self):
+    def install_mod_archive(self, manual=False):
         # todo: default to home folder or something instead of current dir
         filename=QFileDialog.getOpenFileName(
             self, "Select Mod Archive",
@@ -1068,15 +1105,20 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             "Archives [zip, 7z, rar] (*.zip *.7z *.rar);;All Files(*)")[0]
         if filename:
 
-            # show busy indicator while installer loads
-            self.show_sb_progress("Preparing installer:")
+            if manual:
+                self.show_sb_progress("Loading archive:")
+                self.task = asyncio.get_event_loop().create_task(
+                    self._do_manual_install(filename))
 
+            else:
+                # show busy indicator while installer loads
+                self.show_sb_progress("Preparing installer:")
 
-            self.task = asyncio.get_event_loop().create_task(
-                self._handle_install(filename))
+                self.task = asyncio.get_event_loop().create_task(
+                    self._handle_install(filename))
 
-            # todo: add callback to show the new mod if install succeeded
-            # self.task.add_done_callback(self.on_new_mod())
+                # todo: add callback to show the new mod if install succeeded
+                # self.task.add_done_callback(self.on_new_mod())
 
 
     async def _handle_install(self, archive):
@@ -1086,7 +1128,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 # await asyncio.sleep(5)
                 installer = await Manager.extract_fomod(archive, tmpdir)
 
-                if installer is not None:
+                # if installer is not None:
+                if False:
                     self.hide_sb_progress()
                     from skymodman.interface.widgets.fomod_installer_wizard import FomodInstaller
 
@@ -1097,6 +1140,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                     del FomodInstaller
                 else:
                     print("not fomod")
+                    structure = await Manager.install_archive()
+                    # todo: if there's an issue with the mod structure, show manual-install dialog and ask the user to restructure the archive.
+                    # also todo: go ahead and install the mod if the structure is fine
+                    message("information", title="Mod Structure", text="\n".join(structure))
+
                     # extract_location =  # should extract the archive
                     # if extract_location is None:
                     #     extract_location="The mod structure is incorrect"
@@ -1106,7 +1154,28 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 self.hide_sb_progress()
                 del TemporaryDirectory
 
+    def manual_install(self):
+        self.install_mod_archive(manual=True)
 
+    async def _do_manual_install(self, archive):
+        #todo: implement manual install
+        await asyncio.sleep(3)
+        self.LOGGER << "Here's where we'd show the manual-installation dialog."
+        self.hide_sb_progress()
+
+    def reinstall_mod(self):
+        # todo: implement re-running the installer
+        row = self.mod_table.currentIndex().row()
+        if row > -1:
+            mod = self.models[M.mod_table][row]
+            self.LOGGER << "Here's where we'd reinstall this mod."
+
+    def uninstall_mod(self):
+        # todo: implement removing the mod
+        row = self.mod_table.currentIndex().row()
+        if row > -1:
+            mod = self.models[M.mod_table][row]
+            self.LOGGER << "Here's where we'd uninstall this mod."
 
     def choose_mod_folder(self):
         """

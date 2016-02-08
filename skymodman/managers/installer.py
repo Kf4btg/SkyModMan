@@ -2,12 +2,14 @@ import os
 from functools import lru_cache
 from collections import deque
 import asyncio
+import re
 
 from skymodman.utils import withlogger
 from skymodman.managers.archive import ArchiveHandler
 from skymodman.installer.fomod import Fomod
 from skymodman.installer import common
 from skymodman.managers import modmanager as Manager
+from skymodman.constants import TopLevelDirs_Bain, TopLevelSuffixes
 
 # from pprint import pprint
 
@@ -49,24 +51,38 @@ class InstallManager:
         self.archiver = ArchiveHandler()
 
         self.archive = mod_archive
-        self.current_fomod = None
+        self.fomod = None
+        self.fomoddir = None
+
+        self.toplevitems = []
+        self.docs = []
+        self.inis = []
+        self.baditems = []
+
 
         self.install_state = installState()
 
     def get_fomod_path(self):
+        """
+        If the associated mod archive contains a directory named 'fomod',
+        return the internal path to that folder. Otherwise, return None.
+
+        :return: str|None
+        """
         for e in self.iter_archive(files=False):
             # drop the last char because it is always '/' for directories
             if os.path.basename(e[:-1]).lower() == "fomod":
                 return e
-
         return None
 
     async def extract(self, destination, entries=None,
                       srcdestpairs=None, callback=None):
         """
+        Extract all or select items from the installer's associated mod archive to the `destination`. If either `entries` or `srcdestpairs` is specified, only the items found in those collections will be extracted (srcdestpairs takes precedence if both are provided). If neither are given, all files from the archive will be extracted to the destination.
 
         :param destination: extraction destination
-        :param entries: list of archive entries (i.e. directories or files) to extract; if None, all entries will be extracted
+        :param entries: list of archive entries (i.e. directories or files) to extract
+        :param srcdestpairs: A list of 2-tuples where the first item is the source path within the archive of a file to install, and the second item is the path (relative to the mod installation directory) where the source should be extracted.
         """
         await self.archiver.extract_archive(
             archive=self.archive,
@@ -75,42 +91,80 @@ class InstallManager:
             srcdestpairs=srcdestpairs,
             progress_callback=callback)
 
-    def iter_archive(self, *, dirs=True, files=True):
-        yield from self.archiver.list_archive(self.archive, dirs=dirs, files=files)
+    def iter_archive(self, *, dirs=True, files=True, depth=-1):
+        """
 
-    def archive_contents(self, *, dirs=True, files=True):
-        return list(self.archiver.list_archive(self.archive, dirs=dirs, files=files))
+        :param dirs: if False, directories will be excluded from the output
+        :param files: if False, files will be excluded from the output.
+        :param depth:
+
+        :return: an iterator over the contents of the archive, filtered by the values of `dirs` and `files`
+        """
+        yield from self.archiver.list_archive(self.archive, dirs=dirs, files=files, depth=depth)
+
+    def archive_contents(self, *, dirs=True, files=True, depth=-1):
+        """
+        As iter_archive, but returns a list rather than an iterator.
+        Convenience method.
+
+        :param dirs:
+        :param files:
+        :return:
+        """
+        return list(self.archiver.list_archive(self.archive, dirs=dirs, files=files, depth=depth))
 
     def check_mod_structure(self):
         # todo: check that everything which should go in the Skyrim/Data directory is on the top level of the archive
-        return True
+        self.LOGGER << "Checking mod structure"
+        # self.archive_contents(toplevel=False)
+        # for i in self.iter_archive(toplevel=False):
+        #     print(i)
+        self.toplevitems = self.archive_contents(depth=1)
+        docs = []
+        bad = []
+        for name in self.toplevitems:
+            if re.search(r'read.?me', name, re.IGNORECASE):
+                docs.append(name)
+            elif re.match(r'fomod/?$', name, re.IGNORECASE):
+                self.fomoddir=name
 
+            elif name.endswith('/'):
+                if name[:-1].lower() not in TopLevelDirs_Bain:
+                    bad.append(name)
+
+            elif os.path.splitext(name)[-1].lstrip('.').lower() \
+                    not in TopLevelSuffixes:
+                    bad.append(name)
+
+        self.docs, self.baditems = docs, bad
+
+        return not self.baditems
 
     async def prepare_fomod(self, xmlfile, extract_dir=None):
-        self.current_fomod = Fomod(xmlfile)
-        self.install_state = installState()
+        """
+        Using the specified ModuleConfig.xml file `xmlfile`, (most likely extracted from this installer's associated archive in an earlier phase of installation), parse and analyze the script to prepare a Fomod object to give to an installer interface. Go ahead and mark any files marked as 'required installs' for installation. Finally, extract any images that were referenced in the script so that they can be shown during the installation process.
+
+        :param xmlfile:
+        :param extract_dir: Where any images referenced by the script will be extracted. It is best to use a temporary directory for this so it can be easily cleaned up after install.
+        :return:
+        """
+        self.fomod = Fomod(xmlfile)
+        self.install_state = installState() # tracks flags, install files
 
         # we don't want to extract the entire archive before we start,
         # but we do need to extract any images defined in the
         # config file so that they can be shown during installation
         if self.archive and extract_dir is not None:
-            await self.extract(extract_dir,
-                               entries=self.current_fomod.all_images)
+
+            await self.extract(
+                extract_dir,
+                entries=self.fomod.all_images)
 
 
-        if self.current_fomod.reqfiles:
-            self.install_state.files_to_install=self.current_fomod.reqfiles
+        if self.fomod.reqfiles:
+            self.install_state.files_to_install=self.fomod.reqfiles
 
         # pprint(self.install_state.files_to_install)
-
-
-
-    dep_checks = {
-        "fileDependency": lambda s, d: s.check_file(d.file, d.state),
-        "flagDependency": lambda s, d: s.check_flag(d.flag, d.value),
-        "gameDependency": lambda s, d: s.check_game_version(d),
-        "fommDependency": lambda s, d: s.check_fomm_version(d),
-    }
 
     def set_flag(self, flag, value):
         self.install_state.flags[flag]=value
@@ -119,11 +173,10 @@ class InstallManager:
         try: del self.install_state.flags[flag]
         except KeyError: pass
 
-
     def mark_file_for_install(self, file, install=True):
         """
         :param common.File file:
-        :return:
+        :param install: if true, mark the file for install; if False, remove it from the list of files to install
         """
         if install:
             self.install_state.files_to_install.append(file)
@@ -131,26 +184,50 @@ class InstallManager:
             self.install_state.files_to_install.remove(file)
         # pprint(self.install_state.files_to_install)
 
+    dep_checks = { # s=self, d=dependency item (key=dependency type)
+        "fileDependency": lambda s, d: s.check_file(d.file, d.state),
+        "flagDependency": lambda s, d: s.check_flag(d.flag, d.value),
+        "gameDependency": lambda s, d: s.check_game_version(d),
+        "fommDependency": lambda s, d: s.check_fomm_version(d),
+    }  ## used below
+
+    operator_func = {
+        common.Operator.OR:  any, # true if any item is true
+        common.Operator.AND: all  # true iff all items are true
+    } ## also used below
 
     def check_dependencies_pattern(self, dependencies):
         """
 
-        :param common.Dependencies dependencies:
-        :return:
+        :param common.Dependencies dependencies: A ``Dependencies`` object extracted from the fomod config.
+        :return: boolean indicating whether the dependencies were satisfied.
         """
         # print(self.check_file.cache_info())
 
-        if dependencies.operator == common.Operator.OR:
-            for dtype, dep in dependencies:
-                if self.dep_checks[dtype](self, dep):
-                    return True
-            return False
+        condition = self.operator_func[dependencies.operator]
 
-        else:  # assume AND (the default)
-            for dtype, dep in dependencies:
-                if not self.dep_checks[dtype](self, dep):
-                    return False
-        return True
+        return condition(self.dep_checks[dtype](self, dep)
+                         for dtype, dep in dependencies)
+
+        # if dependencies.operator == common.Operator.OR:
+        #     # true if any item is true
+        #     return any(self.dep_checks[dtype](self, dep)
+        #                for dtype, dep in dependencies)
+        # else:  # assume AND (the default)
+        #     # true iff all items are true
+        #     return all(self.dep_checks[dtype](self, dep)
+        #                for dtype, dep in dependencies)
+
+            # for dtype, dep in dependencies:
+            #     if self.dep_checks[dtype](self, dep):
+            #         return True
+            # return False
+
+
+            # for dtype, dep in dependencies:
+            #     if not self.dep_checks[dtype](self, dep):
+            #         return False
+        # return True
 
     @lru_cache(256)
     def check_file(self, file, state):
@@ -159,7 +236,6 @@ class InstallManager:
     def check_flag(self, flag, value):
         return flag in self.install_state.flags \
                and self.install_state.flags[flag] == value
-
 
     def check_game_version(self, version):
         return True
@@ -172,13 +248,13 @@ class InstallManager:
         Called after all the install steps have run.
         """
         flist = self.install_state.files_to_install
-        if self.current_fomod.condinstalls:
-            for pattern in self.current_fomod.condinstalls:
+        if self.fomod.condinstalls:
+            for pattern in self.fomod.condinstalls:
                 if self.check_dependencies_pattern(pattern.dependencies):
                     flist.extend(pattern.files)
 
 
-        # sort on priority
+        # sort files by priority, then by name
         flist.sort(key=lambda f: f.priority)
         flist.sort(key=lambda f: f.source.lower())
 
@@ -217,7 +293,6 @@ class InstallManager:
                                          for f in flist],
                            callback=track_progress)
 
-
     async def rewind_install(self, callback=print):
         """
         Called when an install is cancelled during file copy/unpacking.
@@ -237,54 +312,3 @@ class InstallManager:
             asyncio.get_event_loop().call_soon_threadsafe(
                 callback, f.source, remaining)
 
-
-def __test_extract():
-    os.mkdir('res/test-extract')
-
-    im.extract(
-        # 'res/ziptest.zip',
-        'res/rartest.rar',
-        'res/test-extract')
-
-    for r, d, f in os.walk('res/test-extract'):
-        print(r, d, f)
-
-def __test_list():
-    [print(e) for e in im.archive_contents('res/rartest.rar')]
-
-def __test_fomod():
-    assert not im.is_fomod('res/7ztest.7z')
-    print(im.is_fomod('res/rartest.rar'))
-
-def __test_exentries():
-    from pathlib import Path
-    rar = Path('res/rartest.rar').absolute()
-    print(rar)
-    fpath = im.is_fomod(str(rar))
-    print(fpath)
-
-    expath = Path('res/test-extract2').absolute()
-    expath.mkdir(exist_ok=True)
-
-    print(expath)
-
-    im.extract(str(rar), str(expath), [fpath])
-
-    for r,d,f in os.walk(str(fpath)):
-        print(r,d,f)
-
-    # print(os.listdir('res/test-extract'))
-
-
-if __name__ == '__main__':
-    from skymodman import skylog
-
-    im = InstallManager(None)
-
-    __test_list()
-    # __test_extract()
-    # __test_fomod()
-    # __test_exentries()
-
-
-    skylog.stop_listener()

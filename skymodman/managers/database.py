@@ -252,12 +252,12 @@ class DBManager:
         hmm...I'd like to avoid changing the files on disk if possible
 
         :param str|Path json_target: path to hiddenfiles.json file for current profile
-        # :param tree.Tree hiddentree:
         """
 
         if not isinstance(json_target, Path):
             json_target = Path(json_target)
 
+        # build a tree from the database and jsonify it to disk
         htree = tree.Tree()
 
         for row in self._con.execute("SELECT * FROM hiddenfiles ORDER BY directory, filepath"):

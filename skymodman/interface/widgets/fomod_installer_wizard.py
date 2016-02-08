@@ -38,7 +38,7 @@ class FomodInstaller(QWizard):
         self.skip_startpage = True
 
         # keep local reference to fomod
-        self.fomod = self.installer.current_fomod
+        self.fomod = self.installer.fomod
         self.rootpath = files_path
         self.step_pages = []
 
