@@ -1106,15 +1106,22 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             "Archives [zip, 7z, rar] (*.zip *.7z *.rar);;All Files(*)")[0]
         if filename:
 
+            self.installui = InstallerUI()
             if manual:
                 self.show_sb_progress("Loading archive:")
+
+
                 self.task = asyncio.get_event_loop().create_task(
-                    self._do_manual_install(filename))
+                    self.installui.do_manual_install(filename,
+                                              self.hide_sb_progress))
+
+
+                # self.task = asyncio.get_event_loop().create_task(
+                #     self._do_manual_install(filename))
 
             else:
                 # show busy indicator while installer loads
                 self.show_sb_progress("Preparing installer:")
-                self.installui = InstallerUI()
 
                 self.task = asyncio.get_event_loop().create_task(
                     self.installui.do_install(filename, self.hide_sb_progress))
@@ -1165,6 +1172,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def manual_install(self):
         self.install_mod_archive(manual=True)
+
+
+
+        # self.task = asyncio.get_event_loop().create_task(
+        #     self._do_manual_install(filename))
 
     async def _do_manual_install(self, archive):
         #todo: implement manual install
