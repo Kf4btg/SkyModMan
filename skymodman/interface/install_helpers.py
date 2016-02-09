@@ -2,13 +2,10 @@ import asyncio
 from tempfile import TemporaryDirectory
 
 import quamash
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QDialog, QTreeWidgetItem
 
 from skymodman.managers import modmanager as Manager
 # from skymodman.interface.widgets import FomodInstaller, message
-from skymodman.interface.widgets import message
-from skymodman.interface.designer.uic.archive_structure_ui import Ui_mod_structure_dialog
+from skymodman.interface.widgets import message, ManualInstallDialog
 
 
 
@@ -84,41 +81,6 @@ class InstallerUI:
 
 
 
-
-class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
-
-    def __init__(self, structure_tree, no_game_data =False, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self.setupUi(self)
-
-        self.structure = structure_tree
-
-        # todo: default to the manual install text instead of the problem text
-        if not no_game_data:
-            self.description.setText("""Arrange the archive contents shown to the right into the proper structure for installation, then click "OK" to install the mod.""")
-
-
-        self.create_tree(self.structure, self.mod_structure_view.invisibleRootItem())
-
-    def create_tree(self, dict_root, root_item):
-        for k,v in dict_root.items():
-            if k=="_files":
-                for f in v:
-                    i = QTreeWidgetItem(root_item)
-                    i.setText(0,f)
-                    i.setFlags(Qt.ItemIsEnabled |
-                               Qt.ItemIsSelectable |
-                               Qt.ItemIsDragEnabled |
-                               Qt.ItemNeverHasChildren)
-            else:
-                r=QTreeWidgetItem(root_item)
-                r.setText(0,k)
-                r.setFlags(Qt.ItemIsEnabled |
-                           Qt.ItemIsSelectable |
-                           Qt.ItemIsDragEnabled |
-                           Qt.ItemIsDropEnabled)
-                self.create_tree(v, r)
 
 
 
