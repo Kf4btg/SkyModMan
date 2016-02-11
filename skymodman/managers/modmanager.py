@@ -1,6 +1,6 @@
 import os
 
-from skymodman import ModEntry, skylog, exceptions
+from skymodman import ModEntry, skylog
 from skymodman.managers import (config as _config,
                                 database as _database,
                                 installer as _install)
@@ -9,17 +9,17 @@ from skymodman.constants import db_fields as _db_fields
 
 
 _configman  = None # type: _config.ConfigManager
-_dataman    = None # type: _database.DatabaseManager
+_dataman    = None # type: _database.DBManager
 _profileman = None # type: ProfileManager
 # _installman = None
 
 #shortcuts
 conf     = _configman   # type: _config.ConfigManager
-db       = _dataman     # type: _database.DatabaseManager
+db       = _dataman     # type: _database.DBManager
 profiles = _profileman  # type: ProfileManager
 
-file_conflicts = None               # type: collections.defaultdict[list]
-mods_with_conflicting_files = None  # type: collections.defaultdict[list]
+file_conflicts = None               # type collections.defaultdict[list]
+mods_with_conflicting_files = None  # type collections.defaultdict[list]
 
 _logger = None
 
@@ -247,7 +247,6 @@ def get_errors(error_type):
     :param error_type: constants.SyncError
     """
 
-
     q="""SELECT mod, ordinal from (
         SELECT moderrors.mod as mod, moderrors.errortype as etype, mods.ordinal as ordinal
         FROM moderrors INNER JOIN mods
@@ -265,7 +264,7 @@ def get_errors(error_type):
 
 
 installman=None # type: _install.InstallManager
-async def get_installer(archive, extract_dir, loop=None):
+async def get_installer(archive, extract_dir):
     global installman
     installman = _install.InstallManager(archive)
 
@@ -314,9 +313,9 @@ def install_mod_from_dir(directory):
 ##-----------------------------------------------
 ## These are used to query dependencies for the
 ## fomod installer
+from skymodman.installer.common import FileState
 ##===============================================
 
-from skymodman.installer.common import FileState
 def checkFileState(file, state):
     """
     M = "Missing"

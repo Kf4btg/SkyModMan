@@ -13,8 +13,7 @@ from skymodman.installer import common
 from skymodman.managers import modmanager as Manager
 from skymodman.constants import TopLevelDirs_Bain, TopLevelSuffixes
 
-# from pprint import pprint
-
+## todo: clean this thing up
 
 class installState:
     def __init__(self):
@@ -24,22 +23,6 @@ class installState:
         self.files_installed_so_far = deque()
 
         self.flags = {}
-
-
-# fake manager for testing
-# class FakeManager:
-#     class conf:
-#         class paths:
-#             dir_mods="res"
-#
-#     @staticmethod
-#     def checkFileState(file, state):
-#         if state == common.FileState.A:
-#             return True
-#
-#         return False
-#
-# Manager = FakeManager
 
 @withlogger
 class InstallManager:
@@ -102,19 +85,6 @@ class InstallManager:
             srcdestpairs=srcdestpairs,
             progress_callback=callback)
 
-    # async def iter_archive(self, *, dirs=True, files=True, depth=-1):
-    #     """
-    #
-    #     :param dirs: if False, directories will be excluded from the output
-    #     :param files: if False, files will be excluded from the output.
-    #     :param depth:
-    #
-    #     :return: an iterator over the contents of the archive, filtered by the values of `dirs` and `files`
-    #     """
-    #     yield from (await self.archive_contents(dirs=dirs, files=files))
-
-        # yield from self.archiver.list_archive(self.archive, include_dirs=dirs, include_files=files)
-
     async def archive_contents(self, *, dirs=True, files=True, depth=-1):
         """
         As iter_archive, but returns a list rather than an iterator.
@@ -138,17 +108,18 @@ class InstallManager:
 
         self.LOGGER << "counting files"
         return len(await self.archive_contents(dirs=include_dirs))
-        # return ArchiveHandler.count_entries(self.archive,
-        #                                    include_dirs=include_dirs)
-
-
 
     async def mod_structure_tree(self):
+        """
+        Build a Tree structure where the names of the branches and
+        leaves represent the directory and file names, respectively,
+        of the items within the archive.
+        :return:
+        """
         modtree = tree.Tree()
         self.LOGGER << "building tree"
         for arc_entry in (await self.archive_contents(dirs=False)):
             ap = PurePath(arc_entry)
-            # print(ap)
 
             modtree.insert(ap.parent.parts, ap.name)
 
@@ -159,7 +130,9 @@ class InstallManager:
         check the mod-structure for an already-created tree
         :param mod_tree:
         :return: a tuple where the first item is the number of recognized
-        top-level items found, and the second is a dict with the keys "files" and "folders", containing those recognized items, as well as "docs" and "fomod_dir", if anything of that kind was found.
+        top-level items found, and the second is a dict with the keys
+        "files" and "folders", containing those recognized items, as
+        well as "docs" and "fomod_dir", if anything of that kind was found.
         """
         self.logger.debug("Analyzing structure of tree")
         mod_data = {
@@ -202,32 +175,6 @@ class InstallManager:
 
         return len(mod_data["folders"])+len(mod_data["files"]), mod_data
 
-    async def check_mod_structure(self):
-        # todo: check that everything which should go in the Skyrim/Data directory is on the top level of the archive
-        self.LOGGER << "Checking mod structure"
-        # self.archive_contents(toplevel=False)
-        # for i in self.iter_archive(toplevel=False):
-        #     print(i)
-        self.toplevitems = await self.archive_contents(depth=1)
-        docs = []
-        bad = []
-        for name in self.toplevitems:
-            if re.search(r'read.?me', name, re.IGNORECASE):
-                docs.append(name)
-            elif re.match(r'fomod/?$', name, re.IGNORECASE):
-                self.fomoddir=name
-
-            elif name.endswith('/'):
-                if name[:-1].lower() not in TopLevelDirs_Bain:
-                    bad.append(name)
-
-            elif os.path.splitext(name)[-1].lstrip('.').lower() \
-                    not in TopLevelSuffixes:
-                    bad.append(name)
-
-        self.docs, self.baditems = docs, bad
-
-        return not self.baditems
 
     async def prepare_fomod(self, xmlfile, extract_dir=None):
         """
