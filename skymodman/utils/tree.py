@@ -98,6 +98,24 @@ class AutoTree(defaultdict):
             return self["_files"]
         return []
 
+    def count(self, leaves_only=True):
+        """Return the total number of items in the tree.
+
+        If `leaves_only` is True, only those items within a branch's leaf list count towards the total; otherwise each branch (effectively each dict key other than '_files') will add one to the final number. The root of the tree is not counted: an empty tree will return 0.
+        :param leaves_only:
+        :return: int
+        """
+        c=0
+        for k,v in self.items():
+            if k=="_files":
+                c+=len(v)
+            # don't count the '_files' key itself
+            elif not leaves_only:
+                c+=1
+            else:
+                c+=v.count(leaves_only)
+        return c
+
     def to_string(self, indent=1):
         """Return representation of tree structure in json-compatible string"""
         return json.dumps(self, indent=indent)
