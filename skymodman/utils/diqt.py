@@ -65,7 +65,10 @@ class diqt(deque):
         if isinstance(item, int):
             return super().__getitem__(item)
         else:
-            return self._values[self.index(item)]
+            try:
+                return self._values[self.index(item)]
+            except ValueError:
+                raise KeyError(item)
 
     def __setitem__(self, key, value):
         try:

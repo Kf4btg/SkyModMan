@@ -1,12 +1,12 @@
 import asyncio
 import os
 import re
-from itertools import count
-from functools import lru_cache
+# from itertools import count
+# from functools import lru_cache
 from pathlib import Path
 
 from skymodman.exceptions import ArchiverError
-from skymodman.utils import withlogger, change_dir
+from skymodman.utils import withlogger, diqt
 
 
 @withlogger
@@ -56,36 +56,48 @@ class ArchiveHandler:
             self.LOGGER << "System 7z does not have rar support"
         return False
 
-    @lru_cache(4)
+    _list_archive_cache=diqt(maxlen_=8)
+    _cache_hits=0
+    _cache_misses=0
     async def list_archive(self, archive, *, include_dirs=True, include_files=True):
         """
         By default, return a list of all the files and folders in the specified archive. Names will be normalized to lower case.
 
         If `include_files` or `include_dirs` is False, files or folders will be excluded from the results, respectively. There is no short-circuit if both are False, even though nothing will be returned--just try to avoid calling the function in that case.
 
-        :param archive:
+        :param str archive:
         :param include_dirs:
         :param include_files:
         :return:
         """
 
-        retcode, dirs, files = await self._archive_contents(archive)
+        try:
+            results = ArchiveHandler._list_archive_cache[(archive, include_dirs, include_files)]
+            ArchiveHandler._cache_hits+=1
+        except KeyError:
+            ArchiveHandler._cache_misses+=1
 
-        if retcode:
-            raise ArchiverError(
-                "7z-list process returned a non-zero exit code: {}".format(
-                    retcode))
-        else:
-            results = []
-            if include_dirs:
-                results.extend(dirs)
-            if include_files:
-                results.extend(files)
-            return results
+            retcode, dirs, files = await self._archive_contents(archive)
+
+            if retcode:
+                raise ArchiverError(
+                    "7z-list process returned a non-zero exit code: {}".format(
+                        retcode))
+            else:
+                results = []
+                if include_dirs:
+                    results.extend(dirs)
+                if include_files:
+                    results.extend(files)
+
+                ArchiveHandler._list_archive_cache[(archive, include_dirs, include_files)] = results
+
+        self.LOGGER << "Cache hits: {0._cache_hits}, misses: {0._cache_misses}".format(ArchiveHandler)
+        return results
 
 
     async def _archive_contents(self, archive):
-        self.LOGGER << "BEGIN _archive_contents"
+        # self.LOGGER << "BEGIN _archive_contents"
         files_buffer = bytearray()
         dirs_buffer = bytearray()
 
@@ -114,7 +126,7 @@ class ArchiveHandler:
                 files_buffer.extend(line[53:])
 
         # wait for subprocess to finish
-        self.LOGGER << "waiting for subprocess to finish"
+        # self.LOGGER << "waiting for subprocess to finish"
         await proc.wait()
 
         return_code = proc.returncode
@@ -130,7 +142,7 @@ class ArchiveHandler:
             self.LOGGER << "non-zero return code"
             files = dirs = []
 
-        self.LOGGER << "returning results"
+        # self.LOGGER << "returning results"
         return return_code, dirs, files
 
 
@@ -141,7 +153,7 @@ class ArchiveHandler:
         :param suffix:
         :return:
         """
-        self.LOGGER << "parsing results"
+        # self.LOGGER << "parsing results"
         if not output:
             return []
         lines = output.splitlines()
