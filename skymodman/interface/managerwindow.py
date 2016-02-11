@@ -1104,20 +1104,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self, "Select Mod Archive",
             QDir.currentPath() + "/res",
             "Archives [zip, 7z, rar] (*.zip *.7z *.rar);;All Files(*)")[0]
-        if filename:
 
-            self.installui = InstallerUI()
+        if filename:
+            self.installui = InstallerUI() # helper class
             if manual:
                 self.show_sb_progress("Loading archive:")
-
 
                 self.task = asyncio.get_event_loop().create_task(
                     self.installui.do_manual_install(filename,
                                               self.hide_sb_progress))
-
-
-                # self.task = asyncio.get_event_loop().create_task(
-                #     self._do_manual_install(filename))
 
             else:
                 # show busy indicator while installer loads
@@ -1126,72 +1121,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 self.task = asyncio.get_event_loop().create_task(
                     self.installui.do_install(filename, self.hide_sb_progress))
 
-
-                # self.task = asyncio.get_event_loop().create_task(
-                #     self._handle_install(filename))
-
                 # todo: add callback to show the new mod if install succeeded
                 # self.task.add_done_callback(self.on_new_mod())
 
 
-    async def _handle_install(self, archive):
-        from tempfile import TemporaryDirectory
-        with TemporaryDirectory() as tmpdir:
-            try:
-                # await asyncio.sleep(5)
-                installer = await Manager.extract_fomod(archive, tmpdir)
-
-                # if installer is not None:
-                if False:
-                    self.hide_sb_progress()
-                    from skymodman.interface.widgets.fomod_installer_wizard import FomodInstaller
-
-                    wizard = FomodInstaller(installer, tmpdir)
-
-                    wizard.exec_()
-
-                    del FomodInstaller
-                else:
-                    print("not fomod")
-                    structure = await Manager.install_archive()
-                    # todo: if there's an issue with the mod structure, show manual-install dialog and ask the user to restructure the archive.
-                    # also todo: go ahead and install the mod if the structure is fine
-
-
-                    message("information", title="Mod Structure",
-                            text=str(structure))
-                            # text="\n".join(structure))
-                    # extract_location =  # should extract the archive
-                    # if extract_location is None:
-                    #     extract_location="The mod structure is incorrect"
-
-                    # message("information", text=extract_location)
-            finally:
-                self.hide_sb_progress()
-                del TemporaryDirectory
-
     def manual_install(self):
         self.install_mod_archive(manual=True)
-
-
-
-        # self.task = asyncio.get_event_loop().create_task(
-        #     self._do_manual_install(filename))
-
-    async def _do_manual_install(self, archive):
-        #todo: implement manual install
-        await asyncio.sleep(3)
-        self.LOGGER << "Here's where we'd show the manual-installation dialog."
-        self.hide_sb_progress()
-
-        from skymodman.interface.designer.uic.archive_structure_ui import Ui_mod_structure_dialog
-
-        self.mod
-
-        mod_contents = await Manager.prepare_manual_install(archive)
-
-        self.man
-
 
     def reinstall_mod(self):
         # todo: implement re-running the installer
@@ -1226,9 +1161,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             # reverify and reload the mods.
             if not Manager.validate_mod_installs():
                 self.mod_table.model().reloadErrorsOnly()
-
-    # def get_tab(self, index: int):
-    #     return self.manager_tabs.widget(index)
 
     def safe_quit(self):
         """

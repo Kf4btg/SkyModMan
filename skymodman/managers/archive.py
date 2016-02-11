@@ -7,6 +7,7 @@ from collections import OrderedDict
 from pathlib import Path
 import asyncio
 import re
+from itertools import count
 
 import libarchive
 from libarchive import file_reader, ArchiveError, ffi
@@ -105,7 +106,8 @@ class ArchiveHandler:
             self.LOGGER << "System 7z does not have rar support"
         return False
 
-    def list_archive(self, archive, *, dirs=True, files=True, depth=-1):
+    @staticmethod
+    def list_archive(archive, *, dirs=True, files=True, depth=-1):
         """
 
         :param str archive: path to an archive
@@ -118,22 +120,76 @@ class ArchiveHandler:
         """
 
         # israr = os.path.splitext(archive)[-1].lower()==".rar"
-
+        from skymodman.utils import printattrs
+        fpreint=True
         with file_reader(archive) as arc:
             for entry in arc: #type: libarchive.ArchiveEntry
-
+                # printattrs(entry, entry.path, False, False)
                 # RARS don't end dirs in '/';
                 # the other archive types do...
 
-                if -1 < depth <= entry.path.rstrip('/').count('/'):
-                    continue # skip any files in lower directories
-                if (dirs and files) or (
-                            dirs and entry.isdir) or (
-                            files and entry.isfile):
+                # if -1 < depth <= entry.path.rstrip('/').count('/'):
+                #     continue # skip any files in lower directories
+                # if entry.isfile and entry.size <=0:
+                #     print(entry, entry.filetype, entry.mode, entry.mtime )
+                # if entry.size == 0:
+                if entry.path == 'Night-Comparison-Images':
+                    # print([b for b in entry.get_blocks()])
 
-                    # this is silly...stupid rars
-                    yield entry.path.rstrip('/') + '/' if (entry.isdir and not entry.path.endswith('/')) else entry.path
+                    printattrs(entry, entry.path, False, False)
 
+                if files and entry.isfile:
+                    if fpreint:
+                        # print([b for b in entry.get_blocks()])
+                        printattrs(entry, entry.path, False, False)
+                        fpreint=False
+                    # found a folder that was showing up as a file with a size of 0...but of course not all 0-size files are actually dirs...
+                    yield entry.path
+                elif dirs and entry.isdir:
+                        # this is silly...stupid rars
+                    if entry.path.endswith('/'):
+                        yield entry.path
+                    else: yield entry.path + '/'
+
+                # elif dirs and entry.isdir:
+                #     # this is silly...stupid rars
+                #     if entry.path.endswith('/'):
+                #         yield entry.path
+                #     else:
+                #         yield entry.path + '/'
+
+
+    @staticmethod
+    def count_entries(archive, include_dirs=True):
+        """
+        Return the number of files within the archive. If `include_dirs` is True, count directories separately.
+        :param archive:
+        :param include_dirs:
+        :return:
+        """
+        counter=count(start=-1)
+        lister = ArchiveHandler.list_archive(archive, dirs=include_dirs)
+
+        ### To handle the issue with the folders being reported as 0-size
+        # files, ... I guess we can do this:
+
+        while True:
+            try:
+                next(lister)
+                next(counter)
+            except StopIteration:
+                # break
+                return next(counter)
+
+
+
+        # with file_reader(archive) as arc:
+        #     if include_dirs:
+        #         for _ in arc: next(counter)
+        #     else:
+        #         for e in arc:
+        #             if e.isfile: next(counter)
+        # return next(counter)
 
     async def extract_archive(self, archive, dest_dir,
                               entries=None,
@@ -164,10 +220,8 @@ class ArchiveHandler:
         dest_dir.mkdir(parents=True, exist_ok=True)
         self.LOGGER << "created destination folder at {}".format(dest_dir)
 
-
         errors = []
         success = True
-
 
         if apath.suffix == '.rar':
             self.LOGGER << "rar detected"
@@ -217,8 +271,10 @@ class ArchiveHandler:
                 continue
 
             try:
-                await self.extern_cmd(program=cmdname, cmd_template=cmd,
-                                      archive=archive, dest=dest_dir,
+                await self.extern_cmd(program=cmdname,
+                                      cmd_template=cmd,
+                                      archive=archive,
+                                      dest=dest_dir,
                                       entries=entries,
                                       srcdestpairs=srcdestpairs,
                                       callback=callback)
@@ -237,7 +293,8 @@ class ArchiveHandler:
         else:
             # no command succeeded; try libarchive
             try:
-                await self._libarchive_extract(archive=archive, dest_dir=dest_dir,
+                await self._libarchive_extract(archive=archive,
+                                               dest_dir=dest_dir,
                                                entries=entries,
                                                srcdestpairs=srcdestpairs,
                                                callback=callback)
@@ -267,7 +324,8 @@ class ArchiveHandler:
                     with file_reader(archive) as arc:
                         await self._extract_matching_entries(arc, entries, callback)
                 else:
-                    await libarchive.extract_file(archive)
+                    await asyncio.get_event_loop().run_in_executor(None, libarchive.extract_file, archive)
+                    # libarchive.extract_file(archive)
             except libarchive.ArchiveError as lae:
                 errmsg = "Libarchive experienced an error attempting to unpack '{}': {}".format(archive, lae)
                 self.logger.error(errmsg)
@@ -305,14 +363,16 @@ class ArchiveHandler:
 
         buff_p, size_p, offset_p = byref(buff), byref(size), byref(offset)
 
-        count_extracted = 0
+        count_extracted = count()
+        loop = asyncio.get_event_loop()
         with new_archive_write_disk(flags) as write_p:
             for entry in archive:
                 # using the check below will make sure we get all child
                 # entries for any folder listed in `entries`
                 if any(entry.name.startswith(e) for e in entries):
-                    count_extracted+=1
-                    callback(entry.name, count_extracted)
+
+                    loop.call_soon_threadsafe(
+                        callback, entry.name, next(count_extracted))
 
                     write_header(write_p, entry._entry_p)
                     read_p = entry._archive_p
@@ -451,7 +511,7 @@ class ArchiveHandler:
             # so just to be safe...let's change our working dir
             with change_dir(str(dest)):
 
-                numdone=0
+                numdone=count()
                 for src, ddest in srcdestpairs:
                     # print(src, ddest)
                     src, ddest = src.lower(), ddest.lower()
@@ -477,9 +537,6 @@ class ArchiveHandler:
                         exdest = Path(dest, ddest)
                         exdest.mkdir(parents=True, exist_ok=True)
 
-                    # print(program, *opts,
-                    #       archive, includes,
-                    #       exdest)
 
                     proc = await asyncio.create_subprocess_exec(
                         program, *opts,
@@ -499,8 +556,8 @@ class ArchiveHandler:
 
                     if result != 0:
                         errors.append((src, result))
-                    numdone+=1
+
                     # print("numdone:", numdone)
-                    callback(src, numdone)
+                    callback(src, next(numdone))
 
         return errors

@@ -446,6 +446,7 @@
    </attribute>
    <addaction name="action_install_mod"/>
    <addaction name="separator"/>
+   <addaction name="action_manual_install"/>
    <addaction name="action_save_changes"/>
    <addaction name="action_revert_changes"/>
    <addaction name="action_undo"/>
@@ -600,7 +601,7 @@
     <bool>false</bool>
    </property>
    <property name="icon">
-    <iconset theme="document-save">
+    <iconset theme="edit-save">
      <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
@@ -784,6 +785,9 @@
    </property>
   </action>
   <action name="action_reinstall_mod">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="icon">
     <iconset theme="view-refresh">
      <normaloff>.</normaloff>.</iconset>
@@ -802,8 +806,11 @@
    </property>
   </action>
   <action name="action_manual_install">
+   <property name="icon">
+    <iconset theme="format-justify-left"/>
+   </property>
    <property name="text">
-    <string>Manual Install...</string>
+    <string>Ma&amp;nual Install...</string>
    </property>
    <property name="toolTip">
     <string>Manually Install a Mod Archive</string>

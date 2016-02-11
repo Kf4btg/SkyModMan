@@ -20,7 +20,7 @@
       <enum>Qt::Vertical</enum>
      </property>
      <property name="sizeType">
-      <enum>QSizePolicy::Minimum</enum>
+      <enum>QSizePolicy::Preferred</enum>
      </property>
      <property name="sizeHint" stdset="0">
       <size>
@@ -36,7 +36,7 @@
       <enum>Qt::Vertical</enum>
      </property>
      <property name="sizeType">
-      <enum>QSizePolicy::Minimum</enum>
+      <enum>QSizePolicy::Preferred</enum>
      </property>
      <property name="sizeHint" stdset="0">
       <size>
@@ -47,7 +47,10 @@
     </spacer>
    </item>
    <item row="0" column="2" rowspan="4">
-    <widget class="QTreeWidget" name="mod_structure_view">
+    <widget class="MyTreeWidget" name="mod_structure_view">
+     <property name="contextMenuPolicy">
+      <enum>Qt::ActionsContextMenu</enum>
+     </property>
      <property name="dragEnabled">
       <bool>true</bool>
      </property>
@@ -110,12 +113,32 @@
       <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
      </property>
      <property name="centerButtons">
-      <bool>false</bool>
+      <bool>true</bool>
      </property>
     </widget>
    </item>
   </layout>
+  <action name="action_set_data_directory">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Set Data Directory</string>
+   </property>
+  </action>
+  <action name="action_create_directory">
+   <property name="text">
+    <string>Create Directory</string>
+   </property>
+  </action>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>MyTreeWidget</class>
+   <extends>QTreeWidget</extends>
+   <header>skymodman.interface.widgets.mytreewidget</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections>
   <connection>

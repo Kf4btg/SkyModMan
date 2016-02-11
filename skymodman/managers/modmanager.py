@@ -1,4 +1,4 @@
-import asyncio
+import os
 
 from skymodman import ModEntry, skylog, exceptions
 from skymodman.managers import (config as _config,
@@ -263,32 +263,15 @@ def get_errors(error_type):
 ## Mod [Un]Installation
 ##===============================================
 
-# def extract_fomod(archive):
-#     """
-#     Examines the given archive file for a fomod install script;
-#     if found, the relative path (inside the archive) to the fomod folder
-#     is returned. Otherwise, None is returned.
-#     :param archive:
-#     :return:
-#     """
-#     installman = _install.InstallManager()
-#     if installman.get_fomod(archive):
-
-
-
-import os
-# import asyncio
-# from functools import partial
 
 installman=None # type: _install.InstallManager
-async def extract_fomod(archive, extract_dir, loop=None):
+async def get_installer(archive, extract_dir, loop=None):
     global installman
     installman = _install.InstallManager(archive)
 
     fomodpath = await installman.get_fomod_path()
 
-    _logger << "fomodpath: {}".format(fomodpath)
-
+    # _logger << "fomodpath: {}".format(fomodpath)
 
     if fomodpath is not None:
 
@@ -303,33 +286,12 @@ async def extract_fomod(archive, extract_dir, loop=None):
 
     return installman
 
+async def get_mod_archive_structure(archive=None):
+    """
 
-# async def install_archive(archive=None):
-#     """
-#     Called when a mod archive has been selected for install that does NOT contain a fomod install script. In this case, the manager first needs to verify that the structure of the files inside the archive is correct; if it is not, the user must be notified and allowed to redefine the structure before the install continues.
-#
-#     If the mod structure is correct or the user has manually corrected it, then all the files from the archive will be extracted to the installation directory.
-#
-#     :param archive:
-#     :return:
-#     """
-#     global installman
-#
-#     if not archive and not installman:
-#         raise TypeError("If no InstallManager is active, the `archive` element cannot be None.")
-#
-#     if archive and (not installman or installman.archive != archive):
-#         installman = _install.InstallManager(archive)
-#
-#     # fixme: all of this.
-#     if installman.check_mod_structure():
-#         modstruct = await installman.mod_structure_tree()
-#         return modstruct
-#     else:
-#         return ["install", "good", "go", "happy", "you", "play"]
-
-
-async def prepare_manual_install(archive=None):
+    :param archive:
+    :return: the internal folder structure of the mod `archive` represented by a Tree structure
+    """
     global installman
 
     if not archive and not installman:
