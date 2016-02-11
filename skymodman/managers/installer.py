@@ -6,7 +6,8 @@ import re
 from pathlib import PurePath
 
 from skymodman.utils import withlogger, tree
-from skymodman.managers.archive import ArchiveHandler
+# from skymodman.managers.archive import ArchiveHandler
+from skymodman.managers.archive_7z import ArchiveHandler
 from skymodman.installer.fomod import Fomod
 from skymodman.installer import common
 from skymodman.managers import modmanager as Manager
@@ -52,6 +53,7 @@ class InstallManager:
         self.archiver = ArchiveHandler()
 
         self.archive = mod_archive
+        self.archive_files = []
         self.fomod = None
         self.fomoddir = None
 
@@ -63,14 +65,22 @@ class InstallManager:
 
         self.install_state = installState()
 
-    def get_fomod_path(self):
+    @property
+    def has_fomod(self):
+        """
+        :return: True if this installer has found and prepared a
+         Fomod configuration within the mod
+        """
+        return self.fomod is not None
+
+    async def get_fomod_path(self):
         """
         If the associated mod archive contains a directory named 'fomod',
         return the internal path to that folder. Otherwise, return None.
 
         :return: str|None
         """
-        for e in self.iter_archive(files=False):
+        for e in (await self.archive_contents(files=False)):
             # drop the last char because it is always '/' for directories
             if os.path.basename(e[:-1]).lower() == "fomod":
                 return e
@@ -92,18 +102,20 @@ class InstallManager:
             srcdestpairs=srcdestpairs,
             progress_callback=callback)
 
-    def iter_archive(self, *, dirs=True, files=True, depth=-1):
-        """
+    # async def iter_archive(self, *, dirs=True, files=True, depth=-1):
+    #     """
+    #
+    #     :param dirs: if False, directories will be excluded from the output
+    #     :param files: if False, files will be excluded from the output.
+    #     :param depth:
+    #
+    #     :return: an iterator over the contents of the archive, filtered by the values of `dirs` and `files`
+    #     """
+    #     yield from (await self.archive_contents(dirs=dirs, files=files))
 
-        :param dirs: if False, directories will be excluded from the output
-        :param files: if False, files will be excluded from the output.
-        :param depth:
+        # yield from self.archiver.list_archive(self.archive, include_dirs=dirs, include_files=files)
 
-        :return: an iterator over the contents of the archive, filtered by the values of `dirs` and `files`
-        """
-        yield from self.archiver.list_archive(self.archive, dirs=dirs, files=files, depth=depth)
-
-    def archive_contents(self, *, dirs=True, files=True, depth=-1):
+    async def archive_contents(self, *, dirs=True, files=True, depth=-1):
         """
         As iter_archive, but returns a list rather than an iterator.
         Convenience method.
@@ -112,25 +124,91 @@ class InstallManager:
         :param files:
         :return:
         """
-        return list(self.archiver.list_archive(self.archive, dirs=dirs, files=files, depth=depth))
+        res = await self.archiver.list_archive(
+                self.archive, include_dirs=dirs, include_files=files)
+        return res
+
+    async def get_file_count(self, *, include_dirs=True):
+        """
+        returns the total number of files (and possibly directories)
+        within the mod archive
+        :param include_dirs:
+        :return:
+        """
+
+        self.LOGGER << "counting files"
+        return len(await self.archive_contents(dirs=include_dirs))
+        # return ArchiveHandler.count_entries(self.archive,
+        #                                    include_dirs=include_dirs)
+
+
 
     async def mod_structure_tree(self):
         modtree = tree.Tree()
-
-        for arc_entry in self.iter_archive(dirs=False):
+        self.LOGGER << "building tree"
+        for arc_entry in (await self.archive_contents(dirs=False)):
             ap = PurePath(arc_entry)
+            # print(ap)
 
             modtree.insert(ap.parent.parts, ap.name)
 
         return modtree
 
-    def check_mod_structure(self):
+    def analyze_structure_tree(self, mod_tree):
+        """
+        check the mod-structure for an already-created tree
+        :param mod_tree:
+        :return: a tuple where the first item is the number of recognized
+        top-level items found, and the second is a dict with the keys "files" and "folders", containing those recognized items, as well as "docs" and "fomod_dir", if anything of that kind was found.
+        """
+        self.logger.debug("Analyzing structure of tree")
+        mod_data = {
+            "folders": [],
+            "files": [],
+            "docs": [],
+            # some mods have a fomod dir that just contains information
+            # about the mod, with no config script
+            "fomod_dir": None
+        }
+        doc_match = re.compile(r'(read.?me|doc(s|umentation)|info)', re.IGNORECASE)
+        for topdir in mod_tree.keys():
+            # grab anything that looks like mod data from the
+            # the top level of the tree
+            if topdir.lower() in TopLevelDirs_Bain:
+                mod_data["folders"].append(topdir)
+
+            elif doc_match.search(topdir):
+                mod_data["docs"].append(topdir)
+            elif topdir.lower()=="fomod":
+                mod_data["fomod_dir"] = topdir
+
+        for topfile in mod_tree.leaves:
+            if os.path.splitext(topfile)[-1].lstrip('.').lower() in  TopLevelSuffixes:
+                mod_data["files"].append(topfile)
+            elif doc_match.search(topfile):
+                mod_data["docs"].append(topfile)
+
+        # one last check: if there is only one item on the top level
+        # of the mod and that item is a directory, then check inside that
+        # directory for the necessary files.
+        if not mod_data["folders"] and not mod_data["files"]:
+            if len(mod_tree) == 1 and "_files" not in mod_tree.keys():
+                for _, subtree in mod_tree.items():
+                    # this recursive call could obviously dig deeper than
+                    # one more level in the tree, but there'd have to be
+                    # several 1-folder nested directories of non-top-level
+                    # dirs for that to happen, which seems rather unlikely.
+                    return self.analyze_structure_tree(subtree)
+
+        return len(mod_data["folders"])+len(mod_data["files"]), mod_data
+
+    async def check_mod_structure(self):
         # todo: check that everything which should go in the Skyrim/Data directory is on the top level of the archive
         self.LOGGER << "Checking mod structure"
         # self.archive_contents(toplevel=False)
         # for i in self.iter_archive(toplevel=False):
         #     print(i)
-        self.toplevitems = self.archive_contents(depth=1)
+        self.toplevitems = await self.archive_contents(depth=1)
         docs = []
         bad = []
         for name in self.toplevitems:
@@ -159,6 +237,8 @@ class InstallManager:
         :param extract_dir: Where any images referenced by the script will be extracted. It is best to use a temporary directory for this so it can be easily cleaned up after install.
         :return:
         """
+
+        # todo: figure out what sort of things can go wrong while reading the fomod config, wrap them in a FomodError (within fomod.py), and catch that here so we can report it without crashing
         self.fomod = Fomod(xmlfile)
         self.install_state = installState() # tracks flags, install files
 
@@ -167,7 +247,7 @@ class InstallManager:
         # config file so that they can be shown during installation
         if self.archive and extract_dir is not None:
 
-            await self.extract(
+            self.extract(
                 extract_dir,
                 entries=self.fomod.all_images)
 
