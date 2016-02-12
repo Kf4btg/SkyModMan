@@ -78,12 +78,12 @@ class InstallManager:
         :param entries: list of archive entries (i.e. directories or files) to extract
         :param srcdestpairs: A list of 2-tuples where the first item is the source path within the archive of a file to install, and the second item is the path (relative to the mod installation directory) where the source should be extracted.
         """
-        await self.archiver.extract_archive(
+        await self.archiver.extract(
             archive=self.archive,
-            dest_dir=destination,
-            entries=entries,
-            srcdestpairs=srcdestpairs,
-            progress_callback=callback)
+            destination=destination,
+            specific_entries=entries,
+            callback=callback)
+        # srcdestpairs = srcdestpairs,
 
     async def archive_contents(self, *, dirs=True, files=True, depth=-1):
         """
@@ -193,8 +193,11 @@ class InstallManager:
         # but we do need to extract any images defined in the
         # config file so that they can be shown during installation
         if self.archive and extract_dir is not None:
-
-            self.extract(
+            # todo: maybe check to see if the images were inside
+            # the fomod directory, in which case they're already
+            # extracted.  Or, maybe only extract the config file
+            # by default instead of the entire fomod dir...
+            await self.extract(
                 extract_dir,
                 entries=self.fomod.all_images)
 
@@ -327,8 +330,9 @@ class InstallManager:
 
 
         await self.extract(destination=dest_dir,
-                           srcdestpairs=[(f.source, f.destination)
-                                         for f in flist],
+                           entries=[f.source for f in flist],
+                           # srcdestpairs=[(f.source, f.destination)
+                           #               for f in flist],
                            callback=track_progress)
 
     async def rewind_install(self, callback=print):

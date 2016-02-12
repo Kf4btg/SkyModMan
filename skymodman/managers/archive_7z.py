@@ -1,7 +1,7 @@
 import asyncio
 import os
 import re
-# from itertools import count
+from itertools import count
 # from functools import lru_cache
 from pathlib import Path
 
@@ -163,8 +163,6 @@ class ArchiveHandler:
 
     async def extract(self, archive, destination, specific_entries=None, callback=None):
 
-        destination = '/tmp/testinstall'
-
         if not callback:
             def callback(*args): pass
 
@@ -186,24 +184,35 @@ class ArchiveHandler:
 
 
     async def _extract_files(self, archive, dest, entries, callback):
-        self.LOGGER << "begin _extract_files"
+        # self.LOGGER << "begin _extract_files"
         if entries:
             includes = type(self).INCLUDE_FILTER(entries)
         else:
             includes = [""]
 
+        opts=("-bd",    # disable progress indic (uses readline, won't really work here...)
+              "-bb1",   # output verbosity 1 (show files as extracted)
+              "-ssc-",  # case-INsensitive mode
+              "-y",     # assume yes to queries
+              )
         create = asyncio.create_subprocess_exec(
-            "7z", "x", "-o{}".format(dest),
+            "7z", "x", *opts, "-o{}".format(dest),
             *includes, archive,
             stdout=asyncio.subprocess.PIPE
         )
+        # print("7z", "x", *opts, "-o{}".format(dest),
+        #       *includes, archive)
+
 
         proc = await create
-
+        c = count()
         while True:
             line = await proc.stdout.readline()
-            print("read {!r}".format(line))
+            # 7z logs filenames on lines starting w/ '- '
+            if line.startswith(b'- '):
+                callback(line[2:].decode(), next(c))
 
+            # print("read {!r}".format(line))
             if not line: break
 
         await proc.wait()
