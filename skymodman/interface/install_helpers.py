@@ -62,7 +62,7 @@ class InstallerUI:
                     #              )
                 else:
                     self.logger.debug("no toplevel items found; showing manual install dialog")
-                    await self._show_manual_install_dialog(tree, True)
+                    await self._show_manual_install_dialog(tree)
 
 
     async def run_fomod_installer(self, installer, tmpdir):
@@ -102,11 +102,11 @@ class InstallerUI:
         ready_callback()
         await self._show_manual_install_dialog(mod_contents)
 
-    async def _show_manual_install_dialog(self, contents, no_toplevel=False):
+    async def _show_manual_install_dialog(self, contents):
 
         self.logger.debug("creating manual install dialog")
         with quamash.QThreadExecutor(1) as ex:
-            mi_dialog = ManualInstallDialog(contents, no_toplevel)
+            mi_dialog = ManualInstallDialog(contents)
             mi_dialog.show()
             f = asyncio.get_event_loop(
                 ).run_in_executor(ex, mi_dialog.exec_)

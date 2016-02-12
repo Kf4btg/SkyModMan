@@ -19,7 +19,6 @@ class Ui_mod_structure_dialog(object):
         spacerItem1 = QtWidgets.QSpacerItem(20, 55, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Preferred)
         self.gridLayout.addItem(spacerItem1, 3, 0, 1, 1)
         self.mod_structure_view = MyTreeWidget(mod_structure_dialog)
-        self.mod_structure_view.setContextMenuPolicy(QtCore.Qt.ActionsContextMenu)
         self.mod_structure_view.setDragEnabled(True)
         self.mod_structure_view.setDragDropMode(QtWidgets.QAbstractItemView.InternalMove)
         self.mod_structure_view.setObjectName("mod_structure_view")
