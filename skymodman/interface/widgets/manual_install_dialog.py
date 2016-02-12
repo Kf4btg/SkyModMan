@@ -1,7 +1,6 @@
 from os.path import splitext
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIcon
+# from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QDialog, QTreeWidgetItem
 
 from skymodman.constants import TopLevelDirs_Bain, TopLevelSuffixes
@@ -33,8 +32,6 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         :return:
         """
         super().__init__(*args, **kwargs)
-        # from pprint import pprint
-        # pprint(structure_tree)
 
         self.setupUi(self)
 
@@ -42,47 +39,28 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.mod_data = Tree()
         self.num_to_copy = 0
 
-        self.create_tree(self.structure, self.mod_structure_view.invisibleRootItem())
-
         self.valid_structure = True
         self.data_root = self.structure
-        # validate tree structure
-        self.on_tree_change()
-
         self.mod_structure_view.tree_structure_changed.connect(self.on_tree_change)
 
+        # have the tree widget create the visible tree from the
+        # data-tree store in self.structure; this will trigger
+        # the validation check and change the UI accordingly
+        self.mod_structure_view.init_tree(self.structure)
+
         self.mod_structure_view.setToolTip(_tree_tooltip)
-
-    # noinspection PyTypeChecker,PyArgumentList
-    def create_tree(self, dict_root, root_item):
-        has_files = False
-        # sort by name
-        for k in sorted(list(dict_root.keys())):
-            if k != "_files":
-                r=FolderItem.create(root_item, k)
-
-                # store the sub tree in this item's user-data
-                # r.setData(0, Qt.UserRole, dict_root[k])
-                self.create_tree(dict_root[k], r)
-            else:
-                has_files=True
-        # show files after dirs
-        if has_files:
-            for f in dict_root["_files"]:
-                ArchiveItem.create(root_item, f)
-
 
 
     def on_tree_change(self):
         self.valid_structure = self.analyze_tree()
-        ss=""
+        # ss=""
 
         if self.valid_structure:
-            ss+="QLabel {color: green} "
+            ss = "QLabel {color: green} "
 
             self.description.setText(_description)
         else:
-            ss += "QLabel {color: tomato} "
+            ss = "QLabel {color: tomato} "
             self.description.setText(_bad_package_desc)
         self.setStyleSheet(ss)
 
@@ -90,22 +68,12 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
     def analyze_tree(self):
         _tree = self.mod_structure_view
 
-        # if the user has not defined a new root
-        if _tree.user_toplevel_dir is None:
-            for i in range(_tree.topLevelItemCount()):
-                tlitem = _tree.topLevelItem(i) # type: QTreeWidgetItem
-                text = tlitem.text(0).lower()
-                if text in TopLevelDirs_Bain or splitext(text)[
-                    -1].lstrip('.') in TopLevelSuffixes:
-                    return True
-
-        else: # user-defined root
-            for i in range(_tree.user_toplevel_dir.childCount()):
-                tlitem = _tree.user_toplevel_dir.child(i)
-                text = tlitem.text(0).lower()
-                if text in TopLevelDirs_Bain or splitext(text)[
-                    -1].lstrip('.') in TopLevelSuffixes:
-                    return True
+        for i in range(_tree.topLevelItemCount()):
+            tlitem = _tree.topLevelItem(i) # type: QTreeWidgetItem
+            text = tlitem.text(0).lower()
+            if text in TopLevelDirs_Bain or splitext(text)[
+                -1].lstrip('.') in TopLevelSuffixes:
+                return True
 
         return False
 

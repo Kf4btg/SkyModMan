@@ -13,17 +13,43 @@ class MyTreeWidget(QTreeWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.action_set_toplevel = QAction("&set top level directory", self, triggered=self.mark_toplevel_dir)
-        self.action_set_toplevel.setCheckable(True)
+        self.action_set_toplevel = QAction("&Set as top level directory", self, triggered=self.change_toplevel_dir)
+        self.action_unset_toplevel = QAction("&Unset top level directory", self, triggered=self.unset_toplevel_dir)
 
-        self.user_toplevel_dir = None
+        self.action_create_directory = QAction("&Create directory", self, triggered=self.create_directory)
 
-        self.action_create_directory = QAction("&create directory", self, triggered=self.create_directory)
+        self.action_rename = QAction("&Rename", self, triggered=self.rename_item)
 
-        self.action_rename = QAction("&rename", self, triggered=self.rename_item)
+        self.orig_root = None
 
+        self.user_toplevel_dir = False
         self.dragitem = None
         self.context_menu_item = None
+
+    def init_tree(self, root):
+        if self.orig_root is None:
+            self.orig_root = root
+
+        self.clear()
+        self.create_tree(root, self.invisibleRootItem())
+        self.tree_structure_changed.emit()
+
+    def create_tree(self, dict_root, root_item):
+        has_files = False
+        # sort by name
+        for k in sorted(list(dict_root.keys())):
+            if k != "_files":
+                r = FolderItem.create(root_item, k)
+
+                # save the subtree this key refers to in the widget's userdata
+                r.setData(0, Qt.UserRole, dict_root[k])
+                self.create_tree(dict_root[k], r)
+            else:
+                has_files = True
+        # show files after dirs
+        if has_files:
+            for f in sorted(dict_root["_files"]):
+                ArchiveItem.create(root_item, f)
 
     def startDrag(self, actions):
         # get item being moved (should only be 1)
@@ -32,6 +58,7 @@ class MyTreeWidget(QTreeWidget):
         super().startDrag(actions)
 
     def dropEvent(self, event):
+        # fixme: dragging items around doesn't change the tree-datastructures that are used to build the visual tree; thus, when a new root is set, all changes made via drag-and-drop are lost.
         super().dropEvent(event)
 
         target = self.itemAt(event.pos())
@@ -48,7 +75,6 @@ class MyTreeWidget(QTreeWidget):
         """
 
         :param PyQt5.QtGui.QDragMoveEvent.QDragMoveEvent event:
-        :return:
         """
 
         target = self.itemAt(event.pos())
@@ -64,9 +90,8 @@ class MyTreeWidget(QTreeWidget):
             # also ignore drags to self, immediate parent
             elif target in [src, src.parent()]:
                 event.ignore(self.visualItemRect(target))
-        except AttributeError as e:
+        except AttributeError:
             # this means we're hovering over empty space (the root)
-            # self.LOGGER << e
             if src.parent() is None:
                 # ignore drags to root if src is already on the top level
                 event.ignore(self.visualItemRect(target))
@@ -84,6 +109,11 @@ class MyTreeWidget(QTreeWidget):
         :return:
         """
         menu=QMenu(self)
+
+        # if they've set a new root dir, show option to unset
+        if self.user_toplevel_dir:
+            menu.addAction(self.action_unset_toplevel)
+
         # get item under cursor
         clikked = self.itemAt(event.pos())
 
@@ -95,8 +125,6 @@ class MyTreeWidget(QTreeWidget):
             if clikked.isdir:
                 self.context_menu_item = clikked
                 menu.addAction(self.action_set_toplevel)
-                # noinspection PyUnresolvedReferences
-                self.action_set_toplevel.setChecked(clikked.isTopDir)
 
             menu.addAction(self.action_rename)
 
@@ -104,20 +132,15 @@ class MyTreeWidget(QTreeWidget):
 
         menu.exec_(event.globalPos())
 
-    def mark_toplevel_dir(self):
-        curr = self.context_menu_item
+    def change_toplevel_dir(self):
+        self.user_toplevel_dir = True
 
-        curr.isTopDir = not curr.isTopDir
+        self.init_tree(self.context_menu_item.data(0,Qt.UserRole))
 
-        if curr.isTopDir:
-            if self.user_toplevel_dir is not None:
-                self.user_toplevel_dir.isTopDir = False
-            self.user_toplevel_dir = curr
-        else:
-            # this means curr was already topdir
-            self.user_toplevel_dir = None
+    def unset_toplevel_dir(self):
+        self.user_toplevel_dir = False
+        self.init_tree(self.orig_root)
 
-        self.tree_structure_changed.emit()
 
     def create_directory(self):
         curr = self.context_menu_item
@@ -143,6 +166,7 @@ class MyTreeWidget(QTreeWidget):
 
 
 class ArchiveItem(QTreeWidgetItem):
+    # noinspection PyShadowingBuiltins
     def __init__(self, *args, type=1002, **kwargs):
         # noinspection PyArgumentList
         super().__init__(*args, type=type, **kwargs)
@@ -175,6 +199,7 @@ class ArchiveItem(QTreeWidgetItem):
                    | Qt.ItemNeverHasChildren
                    | Qt.ItemIsUserCheckable)
         i.setCheckState(0, Qt.Checked)
+        # noinspection PyTypeChecker,PyArgumentList
         i.setIcon(0, QIcon.fromTheme("text-x-plain"))
         return i
 
@@ -189,6 +214,7 @@ class FolderItem(ArchiveItem):
 
     highlightBrush = (QBrush(Qt.white), QBrush(Qt.darkCyan))
 
+    # noinspection PyShadowingBuiltins
     def __init__(self, *args, type=1001, **kwargs):
         super().__init__(*args, type=type, **kwargs)
         self._istop = False
@@ -235,5 +261,6 @@ class FolderItem(ArchiveItem):
                    | Qt.ItemIsUserCheckable
                    | Qt.ItemIsTristate)
         r.setCheckState(0, Qt.Checked)
+        # noinspection PyTypeChecker,PyArgumentList
         r.setIcon(0, QIcon.fromTheme("folder"))
         return r
