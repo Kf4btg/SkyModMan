@@ -20,7 +20,7 @@ class MyTreeWidget(QTreeWidget):
 
         self.action_rename = QAction("&rename", self, triggered=self.rename_item)
 
-        self.context_menu_item = self.invisibleRootItem()
+        self.context_menu_item = None
 
 
 
@@ -36,10 +36,10 @@ class MyTreeWidget(QTreeWidget):
         :return:
         """
         menu=QMenu(self)
-        # curr = self.currentItem() # type: ArchiveItem
+        # get item under cursor
         clikked = self.itemAt(event.pos())
 
-        if not clikked or not isinstance(clikked, ArchiveItem):
+        if not isinstance(clikked, ArchiveItem):
             self.context_menu_item = None
         else:
             self.context_menu_item = clikked
@@ -57,7 +57,6 @@ class MyTreeWidget(QTreeWidget):
         menu.exec_(event.globalPos())
 
     def mark_toplevel_dir(self):
-        # curr = self.currentItem()
         curr = self.context_menu_item
 
         curr.isTopDir = not curr.isTopDir
@@ -74,33 +73,23 @@ class MyTreeWidget(QTreeWidget):
 
     def create_directory(self):
         curr = self.context_menu_item
-        # selected = self.selectedItems()
         if not curr:
             # if no selection, add as child of root
             parent = self.invisibleRootItem()
         else:
-            parent = curr if curr.isdir else curr.parent()
-            # curr = self.currentItem()
-            # if curr not in selected:
-            #     curr = selected[0]
-
             # add newdir as child of current if current is directory;
             # otherwise add as sibling.
+            parent = curr if curr.isdir else curr.parent()
+            # expand to show new dir
+            parent.setExpanded(True)
 
         newdir = FolderItem.create(parent,"")
+        self.scrollToItem(newdir)
 
         self.editItem(newdir, 0)
 
     def rename_item(self):
-        # curr=self.currentItem() #type: # QTreeWidgetItem
-        # self.editItem(self.currentItem())
         self.editItem(self.context_menu_item)
-        # self.openPersistentEditor(self.currentItem(), 0)
-
-
-
-
-
 
 
 
