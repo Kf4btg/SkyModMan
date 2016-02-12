@@ -4,7 +4,6 @@ from os.path import splitext
 from PyQt5.QtWidgets import QDialog, QTreeWidgetItem
 
 from skymodman.constants import TopLevelDirs_Bain, TopLevelSuffixes
-from skymodman.interface.widgets.mytreewidget import ArchiveItem, FolderItem
 from skymodman.interface.designer.uic.archive_structure_ui import Ui_mod_structure_dialog
 from skymodman.utils.tree import Tree
 
@@ -15,8 +14,6 @@ _bad_package_desc = """This mod does not appear to have been packaged correctly.
 _tree_tooltip = """Drag files and folders to rearrange.
 Uncheck items to exclude them from installation.
 Right click to set top-level directory or create a new folder."""
-
-
 
 
 class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
@@ -44,12 +41,11 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.mod_structure_view.tree_structure_changed.connect(self.on_tree_change)
 
         # have the tree widget create the visible tree from the
-        # data-tree store in self.structure; this will trigger
-        # the validation check and change the UI accordingly
+        # data-tree stored in self.structure; this will trigger
+        # the validation check and update the UI accordingly
         self.mod_structure_view.init_tree(self.structure)
 
         self.mod_structure_view.setToolTip(_tree_tooltip)
-
 
     def on_tree_change(self):
         self.valid_structure = self.analyze_tree()
@@ -57,13 +53,11 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
         if self.valid_structure:
             ss = "QLabel {color: green} "
-
             self.description.setText(_description)
         else:
             ss = "QLabel {color: tomato} "
             self.description.setText(_bad_package_desc)
         self.setStyleSheet(ss)
-
 
     def analyze_tree(self):
         _tree = self.mod_structure_view
@@ -80,6 +74,7 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
     def done(self, result):
         if result!=QDialog.Rejected:
+            # todo: make sure the final selection of data to install is made available once the dialog closes, as well as the total number of files that need installing so that a progress dialog may be shown.
             self.num_to_copy = self.mod_data.count()
 
         super().done(result)

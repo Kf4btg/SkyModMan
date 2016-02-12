@@ -58,7 +58,7 @@ class MyTreeWidget(QTreeWidget):
         super().startDrag(actions)
 
     def dropEvent(self, event):
-        # fixme: dragging items around doesn't change the tree-datastructures that are used to build the visual tree; thus, when a new root is set, all changes made via drag-and-drop are lost.
+        # fixme: dragging items around doesn't currently change the tree-datastructures that are used to build the visual tree; thus, when a new root is set (and the tree is rebuilt), all changes made via drag-and-drop are lost.
         super().dropEvent(event)
 
         target = self.itemAt(event.pos())
