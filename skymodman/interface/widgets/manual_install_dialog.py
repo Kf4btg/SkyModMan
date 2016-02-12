@@ -53,40 +53,24 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
         self.mod_structure_view.setToolTip(_tree_tooltip)
 
-
+    # noinspection PyTypeChecker,PyArgumentList
     def create_tree(self, dict_root, root_item):
         has_files = False
         # sort by name
         for k in sorted(list(dict_root.keys())):
             if k != "_files":
-                r = FolderItem(root_item)
-                r.setText(0, k)
-                r.setFlags(Qt.ItemIsEnabled |
-                           Qt.ItemIsSelectable |
-                           Qt.ItemIsDragEnabled |
-                           Qt.ItemIsDropEnabled |
-                           Qt.ItemIsUserCheckable |
-                           Qt.ItemIsTristate)
-                r.setCheckState(0, Qt.Checked)
-                r.setIcon(0, QIcon.fromTheme("folder"))
+                r=FolderItem.create(root_item, k)
 
                 # store the sub tree in this item's user-data
-                r.setData(0, Qt.UserRole, dict_root[k])
+                # r.setData(0, Qt.UserRole, dict_root[k])
                 self.create_tree(dict_root[k], r)
             else:
                 has_files=True
         # show files after dirs
         if has_files:
             for f in dict_root["_files"]:
-                i = ArchiveItem(root_item)
-                i.setText(0,f)
-                i.setFlags(Qt.ItemIsEnabled |
-                           Qt.ItemIsSelectable |
-                           Qt.ItemIsDragEnabled |
-                           Qt.ItemNeverHasChildren |
-                           Qt.ItemIsUserCheckable)
-                i.setCheckState(0,Qt.Checked)
-                i.setIcon(0, QIcon.fromTheme("text-x-plain"))
+                ArchiveItem.create(root_item, f)
+
 
 
     def on_tree_change(self):
@@ -111,7 +95,8 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
             for i in range(_tree.topLevelItemCount()):
                 tlitem = _tree.topLevelItem(i) # type: QTreeWidgetItem
                 text = tlitem.text(0).lower()
-                if text in TopLevelDirs_Bain or splitext(text)[-1].lstrip('.') in TopLevelSuffixes:
+                if text in TopLevelDirs_Bain or splitext(text)[
+                    -1].lstrip('.') in TopLevelSuffixes:
                     return True
 
         else: # user-defined root
@@ -121,6 +106,7 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
                 if text in TopLevelDirs_Bain or splitext(text)[
                     -1].lstrip('.') in TopLevelSuffixes:
                     return True
+
         return False
 
 

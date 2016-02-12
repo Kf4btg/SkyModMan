@@ -48,8 +48,8 @@
    </item>
    <item row="0" column="2" rowspan="4">
     <widget class="MyTreeWidget" name="mod_structure_view">
-     <property name="contextMenuPolicy">
-      <enum>Qt::ActionsContextMenu</enum>
+     <property name="editTriggers">
+      <set>QAbstractItemView::EditKeyPressed</set>
      </property>
      <property name="dragEnabled">
       <bool>true</bool>
