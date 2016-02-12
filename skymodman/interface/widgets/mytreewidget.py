@@ -2,7 +2,9 @@ from PyQt5.QtWidgets import QTreeWidget, QTreeWidgetItem, QAction, QMenu
 from PyQt5.QtCore import pyqtSignal, pyqtProperty, Qt
 from PyQt5.QtGui import QBrush, QIcon
 
+from skymodman.utils import withlogger
 
+@withlogger
 class MyTreeWidget(QTreeWidget):
 
     tree_structure_changed = pyqtSignal()
@@ -20,14 +22,60 @@ class MyTreeWidget(QTreeWidget):
 
         self.action_rename = QAction("&rename", self, triggered=self.rename_item)
 
+        self.dragitem = None
         self.context_menu_item = None
 
+    def startDrag(self, actions):
+        # get item being moved (should only be 1)
+        self.dragitem = self.selectedItems()[0]
 
+        super().startDrag(actions)
 
     def dropEvent(self, event):
         super().dropEvent(event)
 
+        target = self.itemAt(event.pos())
+        if target is None or (target.isfile and target.parent() is None):
+            self.invisibleRootItem().sortChildren(0, Qt.AscendingOrder)
+        elif target.isdir:
+            target.sortChildren(0, Qt.AscendingOrder)
+        else:
+            target.parent().sortChildren(0, Qt.AscendingOrder)
+
         self.tree_structure_changed.emit()
+
+    def dragMoveEvent(self, event):
+        """
+
+        :param PyQt5.QtGui.QDragMoveEvent.QDragMoveEvent event:
+        :return:
+        """
+
+        target = self.itemAt(event.pos())
+        src = self.dragitem
+
+        event.accept() # init flag to true
+
+        try:
+            if target.isfile:
+                # target is a file, but is it a sibling?
+                if target.parent() is src.parent():
+                    event.ignore(self.visualItemRect(target))
+            # also ignore drags to self, immediate parent
+            elif target in [src, src.parent()]:
+                event.ignore(self.visualItemRect(target))
+        except AttributeError as e:
+            # this means we're hovering over empty space (the root)
+            # self.LOGGER << e
+            if src.parent() is None:
+                # ignore drags to root if src is already on the top level
+                event.ignore(self.visualItemRect(target))
+
+        # check whether we unset the accept flag;
+        # if not, call the super()
+        if event.isAccepted():
+            super().dragMoveEvent(event)
+
 
     def contextMenuEvent(self, event):
         """
@@ -90,18 +138,23 @@ class MyTreeWidget(QTreeWidget):
 
     def rename_item(self):
         self.editItem(self.context_menu_item)
+        self.tree_structure_changed.emit()
 
 
 
 class ArchiveItem(QTreeWidgetItem):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, type=1002, **kwargs):
         # noinspection PyArgumentList
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, type=type, **kwargs)
         self.unchecked_brush = QBrush(Qt.gray)
 
     @property
     def isdir(self):
         return not self.flags() & Qt.ItemNeverHasChildren
+
+    @property
+    def isfile(self):
+        return self.flags() & Qt.ItemNeverHasChildren
 
     def data(self, col, role):
         if role == Qt.ForegroundRole and self.checkState(
@@ -125,12 +178,19 @@ class ArchiveItem(QTreeWidgetItem):
         i.setIcon(0, QIcon.fromTheme("text-x-plain"))
         return i
 
+    def __lt__(self, other):
+        if self.type() == other.type():
+            return self.text(0) < other.text(0)
+
+        return self.type() < other.type()
+
+
 class FolderItem(ArchiveItem):
 
     highlightBrush = (QBrush(Qt.white), QBrush(Qt.darkCyan))
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, *args, type=1001, **kwargs):
+        super().__init__(*args, type=type, **kwargs)
         self._istop = False
 
     @pyqtProperty(bool)
