@@ -37,7 +37,7 @@ def change_dir(dir_):
     os.chdir(pwd)
 
 
-def dir_move_merge(source, destination, overwite=True):
+def dir_move_merge(source, destination, overwite=True, name_mod=lambda n:n):
     """
     Moves a directory `source` to the directory `destination`. If `destination` does not exist, then `source` is simply renamed to `destination`. If `destination` is an existing directory, then the contents of `source` are recursively moved or merged with the contents of `destination` as needed.
 
@@ -45,23 +45,30 @@ def dir_move_merge(source, destination, overwite=True):
 
     :param str|Path source:
     :param str|Path destination:
+    :param name_mod: A callable used when recursively merging sub-directories; takes as an argument the str path of a sub-directory in `source` relative to `source` and returns a modified version of that relpath; the returned path wilil be appended to `destination` to form the final, absolute destination path. The default value for this parameter just returns the original relpath unaltered.
     :param overwite: If `overwrite` is True, any files from `source` that are in conflict with an existing file of the same name in `destination` will replace the destination's file with the version coming from the source, irreversibly deleting the file in `destination`. If `overwrite` is False, then the pre-existing file in `destination` will be kept and the version from `source` will be deleted.
     """
     src = Path(source)
     dst = Path(destination)
 
-    if dst.exists():
-        for child in src.iterdir():
-            if child.is_dir():
-                dir_move_merge(child, dst / child.relative_to(src))
-            elif overwite:
-                child.replace(dst / child.relative_to(src))
-            else:
-                child.unlink()
-        # after all children taken care of, remove the source
-        src.rmdir()
-    else:
+    if not dst.exists():
         # create the parent hierarchy to the destination
         dst.mkdir(parents=True, exist_ok=True)
-        # move source into place
-        src.replace(dst)
+
+    # recursively merge; we can't just do a rename if the destination doesn't exist
+    # because we need to make sure every item gets run through name_mod()
+    _merge_dir(src, dst, overwite, name_mod)
+
+
+def _merge_dir(src, dst, ow, name_mod):
+    for child in src.iterdir():
+        if child.is_dir():
+            dir_move_merge(child,
+                           dst / name_mod(str(child.relative_to(src))),
+                           ow, name_mod)
+        elif ow:
+            child.replace(dst / name_mod(str(child.relative_to(src))))
+        else:
+            child.unlink()
+    # after all children taken care of, remove the source
+    src.rmdir()

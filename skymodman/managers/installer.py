@@ -394,7 +394,7 @@ class InstallManager:
         for file_item in flist:
 
             installed=Path(dest_dir, file_item.source)
-            destination = Path(dest_dir, file_item.destination)
+            destination = Path(dest_dir, file_item.destination.lower())
 
             if file_item.type == 'file':
                 # files are moved "inside" the destination
@@ -404,7 +404,7 @@ class InstallManager:
 
             elif not installed.samefile(destination):
                 # folder are moved "to" the destination (their contents are merged with it)
-                dir_move_merge(installed, destination)
+                dir_move_merge(installed, destination, overwite=True, name_mod=str.lower)
 
 
 
