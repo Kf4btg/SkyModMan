@@ -6,7 +6,8 @@ import itertools
 import os
 from pathlib import Path
 
-from skymodman.utils import withlogger, checkPath #, tree
+from skymodman.utils import withlogger #, tree
+from skymodman.utils.fsutils import checkPath
 from skymodman.managers import modmanager as Manager
 # from skymodman.utils import humanizer
 

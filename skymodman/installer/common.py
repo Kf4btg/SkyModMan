@@ -59,8 +59,8 @@ class Operator(Enum):
 ModName = namedtuple("modname", "name position colour")
 ModImage = namedtuple("modimage", "path showImage showFade height")
 
-File = namedtuple("file", "source destination priority alwaysInstall installIfUsable")
-Folder = namedtuple("folder", File._fields)
+File = namedtuple("file", "type source destination priority alwaysInstall installIfUsable")
+# Folder = namedtuple("folder", File._fields)
 
 Flag = namedtuple("flag", "name value")
 

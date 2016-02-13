@@ -6,6 +6,7 @@ import re
 from pathlib import PurePath, Path
 
 from skymodman.utils import withlogger, tree
+from skymodman.utils.fsutils import dir_move_merge
 # from skymodman.managers.archive import ArchiveHandler
 from skymodman.managers.archive_7z import ArchiveHandler
 from skymodman.installer.fomod import Fomod
@@ -334,16 +335,14 @@ class InstallManager:
                 if self.check_dependencies_pattern(pattern.dependencies):
                     flist.extend(pattern.files)
 
-        # sort files by priority, then by name
-        flist.sort(key=lambda f: f.priority)
-        flist.sort(key=lambda f: f.source.lower())
+
 
 
     @property
     def num_files_to_install(self):
         n=0
         for f in self.files_to_install:
-            if isinstance(f, common.Folder):
+            if f.type=="folder":
                 n+=self._count_folder_contents(f.source)
             else:
                 n+=1
@@ -365,12 +364,17 @@ class InstallManager:
         :param callback: called with args (name_of_file, total_extracted_so_far) during extraction process to indicate progress
         """
 
+
         if dest_dir is None:
             # dest_dir="/tmp/testinstall"
             dest_dir = self.install_dir
 
         flist = self.files_to_install
         progress = self.files_installed
+
+        # sort files by priority, then by name
+        flist.sort(key=lambda f: f.priority)
+        flist.sort(key=lambda f: f.source.lower())
 
         _callback = callback
         if _callback is None:
@@ -385,6 +389,26 @@ class InstallManager:
                            # srcdestpairs=[(f.source, f.destination)
                            #               for f in flist],
                            callback=track_progress)
+
+        # after unpack, files must be moved to correct destinations as specified by fomod config
+        for file_item in flist:
+
+            installed=Path(dest_dir, file_item.source)
+            destination = Path(dest_dir, file_item.destination)
+
+            if file_item.type == 'file':
+                # files are moved "inside" the destination
+                destination.mkdir(parents=True, exist_ok=True)
+                # dest = Path(dest_dir, file_item.destination, installed.name)
+                installed.rename(destination / installed.name)
+
+            elif not installed.samefile(destination):
+                # folder are moved "to" the destination (their contents are merged with it)
+                dir_move_merge(installed, destination)
+
+
+
+
 
     async def rewind_install(self, callback=print):
         """

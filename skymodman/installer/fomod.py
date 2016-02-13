@@ -159,10 +159,11 @@ class Fomod:
 
         files = []
         for f in chain(fparent.file, fparent.folder):
-            ftype = File if f._name == "file" else Folder
+            # ftype = File if f._name == "file" else Folder
 
             files.append(
-                ftype(_pathfix(f["source"]),
+                File(f._name.lower(), # either 'file' or 'folder'
+                    _pathfix(f["source"]),
                       "" if f["destination"]=="" else
                       _pathfix(f["destination"] or f["source"]),
 

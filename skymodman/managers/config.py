@@ -6,7 +6,8 @@ from copy import deepcopy
 import appdirs
 
 from skymodman import exceptions
-from skymodman.utils import withlogger, checkPath
+from skymodman.utils import withlogger
+from skymodman.utils.fsutils import checkPath
 # from skymodman.managers import modmanager as Manager
 from skymodman.constants import (EnvVars, INIKey, INISection)
 

@@ -33,7 +33,8 @@ from skymodman.interface.models import (
     ActiveModsListFilter,
     FileViewerTreeFilter)
 from skymodman.interface.widgets import message, NewProfileDialog
-from skymodman.utils import withlogger, Notifier, checkPath
+from skymodman.utils import withlogger, Notifier
+from skymodman.utils.fsutils import checkPath
 from skymodman.interface.install_helpers import InstallerUI
 
 from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow

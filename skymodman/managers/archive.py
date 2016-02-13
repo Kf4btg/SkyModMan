@@ -15,7 +15,9 @@ from libarchive.extract import new_archive_write_disk
 from ctypes import byref, c_longlong, c_size_t, c_void_p
 
 from skymodman.exceptions import ArchiverError
-from skymodman.utils import withlogger, change_dir #, printattrs #, checkPath
+from skymodman.utils import withlogger #, printattrs #, checkPath
+from skymodman.utils.fsutils import change_dir
+
 
 
 @withlogger

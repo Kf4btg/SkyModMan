@@ -1,4 +1,6 @@
-from skymodman.utils import allcombos, checkPath, reduceall
+from skymodman.utils import allcombos, reduceall
+from skymodman.utils.fsutils import checkPath
+
 import pytest
 
 testpaths = [("", False), (".", True), ("/", True),
