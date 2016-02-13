@@ -7,7 +7,7 @@ from skymodman.thirdparty.humanizer import  humanize
 
 from skymodman import exceptions
 
-__all__ = ['ModName', 'ModImage', 'File', 'Folder', 'Flag', 'FileDep',
+__all__ = ['ModName', 'ModImage', 'File', 'Flag', 'FileDep',
            'FlagDep', 'Dependencies', 'Pattern', 'InstallStep',
            'Group', 'Plugin',
 
