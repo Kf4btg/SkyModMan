@@ -137,22 +137,6 @@ class ConfigManager:
             # update config-file mirror
             self.currentValues[_S_GENERAL][inikey] = self[paths_attr]
 
-        #
-        #
-        # env_sky = os.getenv(EnvVars.SKYDIR)
-        # if checkPath(env_sky):
-        #     self.paths.dir_skyrim = Path(env_sky)
-        # else:
-        #     self.paths.dir_skyrim = Path(config[_S_GENERAL][_K_SKYDIR])
-        #
-        # # then, the mods dir
-        #
-        # env_md = os.getenv(EnvVars.MOD_DIR)
-        # if checkPath(env_md):
-        #     self.paths.dir_mods = Path(env_md)
-        # else:
-        #     self.paths.dir_mods = Path(config[_S_GENERAL][_K_MODDIR])
-
 
         ######################################################################
         ######################################################################
@@ -175,8 +159,7 @@ class ConfigManager:
         self.currentValues[_S_GENERAL][_K_LASTPRO] = self._lastprofile
 
         ######################################################################
-        ######################################################################
-        # now check env for vfs mount
+        #  check env for vfs mount
 
         # env_vfs = os.getenv(EnvVars.VFS_MOUNT)
 
@@ -186,12 +169,6 @@ class ConfigManager:
         #     self.paths.dir_vfs = Path(env_vfs)
         # else:
         #     self.paths.dir_vfs = Path(config[_S_GENERAL][_K_VFSMNT])
-
-        # update config-file mirror
-        # self.currentValues[_S_GENERAL][_K_SKYDIR] = str(self.paths.dir_skyrim)
-        # self.currentValues[_S_GENERAL][_K_MODDIR] = str(self.paths.dir_mods)
-        # self.currentValues[_S_GENERAL][_K_VFSMNT] = str(self.paths.dir_vfs)
-
 
 
     def ensureDefaultSetup(self):

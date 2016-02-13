@@ -2,7 +2,6 @@ import asyncio
 import os
 import re
 from itertools import count
-# from functools import lru_cache
 from pathlib import Path
 
 from skymodman.exceptions import ArchiverError
@@ -51,9 +50,10 @@ class ArchiveHandler:
             if os.path.exists(codec_path) and any(
                     codec_name.match(c)
                     for c in os.listdir(codec_path)):
-                self.LOGGER << "System 7z has rar support"
+                # self.LOGGER << "System 7z has rar support"
                 return True
-            self.LOGGER << "System 7z does not have rar support"
+
+        self.LOGGER << "System 7z does not have rar support"
         return False
 
     _list_archive_cache=diqt(maxlen_=8)
@@ -64,16 +64,6 @@ class ArchiveHandler:
 
         Returns a 2-tuple where the first item is a list of all the directories in the `archive`, the second a list of all the files
         """
-
-        # By default, return a list of all the files and folders in the specified archive. Names will be normalized to lower case.
-        #
-        # If `include_files` or `include_dirs` is False, files or folders will be excluded from the results, respectively. There is no short-circuit if both are False, even though nothing will be returned--just try to avoid calling the function in that case.
-        #
-        # If `separate_dirs` is True and both directories and files are included in the output, this will instead return a tuple of
-        #
-        # :param str archive:
-        # :return:
-        # """
 
         try:
             dirs, files = ArchiveHandler._list_archive_cache[archive]
@@ -99,14 +89,13 @@ class ArchiveHandler:
         files_buffer = bytearray()
         dirs_buffer = bytearray()
 
-        self.LOGGER << "Creating 7z process"
+        # self.LOGGER << "Creating 7z process"
         create = asyncio.create_subprocess_exec(
             "7z", "l", archive,
             stdout=asyncio.subprocess.PIPE)
 
         proc = await create
 
-        # wait for process to be created and become ready
         # self.LOGGER << "waiting for process creation"
         while True:
             # as each line comes in
@@ -123,13 +112,12 @@ class ArchiveHandler:
             elif line.find(b'...A') > -1: # file
                 files_buffer.extend(line[53:])
 
-        # wait for subprocess to finish
         # self.LOGGER << "waiting for subprocess to finish"
         await proc.wait()
 
         return_code = proc.returncode
         if not return_code: # == 0
-            self.LOGGER << "Return code was 0; parsing results"
+            # self.LOGGER << "Return code was 0; parsing results"
             # decode bytes results to str and parse into a list
             files = self._parse_7z_filelisting(bytes(files_buffer).decode())
 
@@ -161,9 +149,6 @@ class ArchiveHandler:
 
     async def extract(self, archive, destination, specific_entries=None, callback=None):
 
-        if not callback:
-            def callback(*args): pass
-
         dpath = Path(destination)
 
         if not dpath.is_absolute():
@@ -172,8 +157,10 @@ class ArchiveHandler:
         if not dpath.exists():
             dpath.mkdir(parents=True, exist_ok=True)
 
-        retcode = await self._extract_files(archive, str(dpath),
-                                            specific_entries, callback)
+        retcode = await self._extract_files(archive=archive,
+                                            dest=str(dpath),
+                                            entries=specific_entries,
+                                            callback=callback)
 
         if retcode:
             raise ArchiverError(
@@ -183,6 +170,9 @@ class ArchiveHandler:
 
     async def _extract_files(self, archive, dest, entries, callback):
         # self.LOGGER << "begin _extract_files"
+        if not callback:
+            def callback(*args): pass
+
         if entries:
             includes = type(self).INCLUDE_FILTER(entries)
         else:
@@ -201,17 +191,17 @@ class ArchiveHandler:
         # print("7z", "x", *opts, "-o{}".format(dest),
         #       *includes, archive)
 
-
         proc = await create
-        c = count()
+        c = count(start=1)
+        loop = asyncio.get_event_loop()
         while True:
             line = await proc.stdout.readline()
+            # print("{!r}".format(line))
+            if not line: break
+
             # 7z logs filenames on lines starting w/ '- '
             if line.startswith(b'- '):
-                callback(line[2:].decode(), next(c))
-
-            # print("read {!r}".format(line))
-            if not line: break
+                loop.call_soon_threadsafe(callback, line[2:].decode(), next(c))
 
         await proc.wait()
 

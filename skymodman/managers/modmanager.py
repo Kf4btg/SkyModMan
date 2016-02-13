@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 from skymodman import ModEntry, skylog
 from skymodman.managers import (config as _config,
@@ -290,18 +291,24 @@ async def get_installer(archive, extract_dir):
 
     fomodpath = await installman.get_fomod_path()
 
-    # _logger << "fomodpath: {}".format(fomodpath)
+    _logger << "fomodpath: {}".format(fomodpath)
 
     if fomodpath is not None:
 
         await installman.extract(extract_dir, [fomodpath])
-        modconf = os.path.join(extract_dir, fomodpath,
-                               "ModuleConfig.xml")
+        # modconf = os.path.join(extract_dir, fomodpath,
+        #                        "ModuleConfig.xml")
 
-        if os.path.exists(modconf):
-            await installman.prepare_fomod(modconf, extract_dir)
-        elif os.path.exists(modconf.lower()):
-            await installman.prepare_fomod(modconf.lower(), extract_dir)
+        fdirpath = Path(extract_dir, fomodpath)
+        for fpath in fdirpath.iterdir():
+            if fpath.name.lower() == 'moduleconfig.xml':
+                await installman.prepare_fomod(str(fpath), extract_dir)
+                break
+
+        # if os.path.exists(modconf):
+        #     await installman.prepare_fomod(modconf, extract_dir)
+        # elif os.path.exists(modconf.lower()):
+        #     await installman.prepare_fomod(modconf.lower(), extract_dir)
 
     return installman
 
@@ -365,10 +372,10 @@ def checkFileState(file, state):
 
 
 def mod_is_enabled(mod_directory):
+    global __enabled_mods
     try:
         return mod_directory in __enabled_mods
     except TypeError:
         # __enabled_mods is uninitialized
-        global __enabled_mods
         __enabled_mods = list(enabled_mods())
         return mod_directory in __enabled_mods

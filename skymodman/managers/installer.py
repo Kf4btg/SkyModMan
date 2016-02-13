@@ -15,14 +15,14 @@ from skymodman.constants import TopLevelDirs_Bain, TopLevelSuffixes
 
 ## todo: clean this thing up
 
-class installState:
-    def __init__(self):
-        self.file_path = None
-        self.install_dest = None
-        self.files_to_install = []
-        self.files_installed_so_far = deque()
-
-        self.flags = {}
+# class installState:
+#     def __init__(self):
+#         self.file_path = None
+#         self.install_dest = None
+#         self.files_to_install = []
+#         self.files_installed_so_far = deque()
+#
+#         self.flags = {}
 
 @withlogger
 class InstallManager:
@@ -49,7 +49,13 @@ class InstallManager:
 
 
         # self.install_state = installState()
-        self.img_basepath=""
+
+        # maintain a mapping of lower-case versions of the image-paths
+        # defined in the fomod config to the actual filesystem-location of the
+        # extracted images (likely in a temp dir, having been extracted
+        # for display with the Fomod-installer)
+        self.normalized_imgpaths = {}
+
         self.install_dir = Manager.conf.paths.dir_mods / self.arc_path.stem.lower()
         # Used to track state during installation
         self.files_to_install = []
@@ -78,7 +84,7 @@ class InstallManager:
         """
         for e in (await self.archive_contents(files=False)):
             # drop the last char because it is always '/' for directories
-            if os.path.basename(e[:-1]).lower() == "fomod":
+            if os.path.basename(e.rstrip('/')).lower() == "fomod":
                 return e
         return None
 
@@ -206,36 +212,59 @@ class InstallManager:
         :return:
         """
         self.init_install_state()
+        # self.install_state = installState() # tracks flags, install files
 
         # todo: figure out what sort of things can go wrong while reading the fomod config, wrap them in a FomodError (within fomod.py), and catch that here so we can report it without crashing
         self.fomod = Fomod(xmlfile)
-        # self.install_state = installState() # tracks flags, install files
 
         # we don't want to extract the entire archive before we start,
         # but we do need to extract any images defined in the
         # config file so that they can be shown during installation
-        if self.archive and extract_dir is not None:
-            # todo: maybe check to see if the images were inside
-            # the fomod directory, in which case they're already
-            # extracted.  Or, maybe only extract the config file
-            # by default instead of the entire fomod dir...
-            await self.extract(
-                extract_dir,
-                entries=self.fomod.all_images)
+        if self.archive and self.fomod.all_images and extract_dir is not None:
+            await self._extract_fomod_images(extract_dir)
 
-        self.img_basepath = os.path.commonpath(self.fomod.all_images)
-
-
+        # go ahead and mark any required installs
         if self.fomod.reqfiles:
             self.files_to_install=self.fomod.reqfiles
 
         # pprint(self.files_to_install)
 
-    def get_fomod_image(self, image_path):
+    async def _extract_fomod_images(self, extract_dir, *, join=os.path.join, relpath=os.path.relpath):
         """
-        Guaranteed to return the actual extraction path for an image path specified in a fomod config file even in spite of name-case-conflicts
+        if there is a (legitimate) common base-path to the images
+        (they are often kept in a single directory), then extract
+        that entire folder. Otherwise, extract each image path
+        individually.
+
+        :param extract_dir:
         :return:
         """
+        # todo: maybe check to see if the images were inside the fomod directory, in which case they're already extracted.  Or, maybe only extract the config file by default instead of the entire fomod dir...
+        await self.extract(
+            extract_dir,
+            entries=self.fomod.all_images)
+
+        # get lowercase, relative versions of all files extracted so far and
+        # store them for later reference
+        norm_fomodfiles = {}
+        for root, dirs, files in os.walk(extract_dir):
+            for f in files:
+                norm_fomodfiles[
+                    relpath(join(root, f), extract_dir).lower()
+                    ]=join(root, f)
+
+        # ok, so this contains more than just the img paths...but it's the most
+        # reliable way to make sure all the images are represented correctly.
+        self.normalized_imgpaths = norm_fomodfiles
+
+    def get_fomod_image(self, image_path):
+        """
+        Guaranteed to return the actual extraction path for an image path specified in a fomod config file even in spite of name-case-conflicts, so long as the file exists. If it does not exist, None is returned.
+        """
+        try:
+            return self.normalized_imgpaths[image_path.lower()]
+        except KeyError:
+            return None
 
 
 
@@ -312,7 +341,22 @@ class InstallManager:
 
     @property
     def num_files_to_install(self):
-        return len(self.files_to_install)
+        n=0
+        for f in self.files_to_install:
+            if isinstance(f, common.Folder):
+                n+=self._count_folder_contents(f.source)
+            else:
+                n+=1
+
+        return n
+        # return len(self.files_to_install)
+
+    def _count_folder_contents(self, folder):
+        folder += '/'
+
+        n= len([f for f in self.archive_files+self.archive_dirs if f.startswith(folder)])
+        # print(folder, n)
+        return n
 
     async def install_files(self, dest_dir=None, callback=None):
         """
@@ -333,9 +377,8 @@ class InstallManager:
             def _callback(*args): pass
 
         def track_progress(filename, num_done):
-            progress.append(flist[num_done-1])
-            asyncio.get_event_loop().call_soon_threadsafe(
-                _callback, filename, num_done)
+            progress.append(filename)
+            _callback(filename, num_done)
 
         await self.extract(destination=dest_dir,
                            entries=[f.source for f in flist],

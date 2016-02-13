@@ -178,7 +178,7 @@ class FinalPage(QWizardPage, Ui_FinalPage):
 
         # build the list (in html) of files chosen for install
         self._html.append(self._opening_html)
-        for f in self.man.install_files:
+        for f in self.man.files_to_install:
             self._html.append("<li>{0.source}</li>".format(f))
         self._html.append(self._closing_html)
 
@@ -189,6 +189,8 @@ class FinalPage(QWizardPage, Ui_FinalPage):
         self.install_progress.reset()
         self.install_progress.setMaximum(
             self.man.num_files_to_install)
+
+        print("max:",self.install_progress.maximum())
 
         self.progress_label.setText("")
 
@@ -216,7 +218,7 @@ class FinalPage(QWizardPage, Ui_FinalPage):
         This is the coroutine that handles calling the installation methods in the install manager. If the operation is cancelled, it will also request that the manager remove any files installed so far.
         """
         try:
-            await self.man.copyfiles(callback=self.setprogress)
+            await self.man.install_files(callback=self.setprogress)
         except asyncio.CancelledError:
             await self.man.rewind_install(self.setprogress)
             raise
@@ -243,6 +245,7 @@ class FinalPage(QWizardPage, Ui_FinalPage):
         else:
             # if everything went well and the install was not cancelled
             self.progress_label.setText("Done!")
+            print("final:",self.install_progress.value())
 
         # can't cancel a task that isn't running
         self.btn_cancel_unpack.setEnabled(False)
@@ -327,21 +330,21 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
         # each group gets its own subsection in the list
         for group in step.optionalFileGroups:
 
-            group_label = PluginGroup(
-                group.type,
-                group.plugin_order,
-                self.installman,
-
-                # parent, text
-                self.plugin_list,
-                [group.name +
-                 self.group_label_suffixes[group.type]])
+            group_label = PluginGroup(group.type,
+                                      group.plugin_order,
+                                      self.installman,
+                                      # parent, text
+                                      self.plugin_list,
+                                      [group.name +
+                                       self.group_label_suffixes[
+                                           group.type]])
 
             for p in group.plugins:
 
                 # the mutually-exclusive groups get radiobuttons
                 if group.type in [GroupType.EXO, GroupType.AMO]:
                     i = RadioItem(p, group_label)
+
                 # the rest, plain treewidgetitems w/ checkboxes
                 else:
                     i = PluginItem(p, group_label)
@@ -464,9 +467,11 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
 
             # show image if there is one
             if plugin.image:
-                imgpath = Path(self.modroot, plugin.image.lower()).as_posix()
+                imgpath = self.installman.get_fomod_image(plugin.image)
+                # Path(self.modroot, plugin.i).as_posix()
 
-                if exists(imgpath):
+                # if exists(imgpath):
+                if imgpath:
                     self.label.setScaledPixmap(imgpath)
 
     def isComplete(self):
