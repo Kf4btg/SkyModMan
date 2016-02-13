@@ -3,14 +3,14 @@
 #                        reduce as _reduce)
 # from itertools import (chain as _chain,
 #                        combinations as _combos)
-from os.path import (exists as _exists,
-                     expanduser as _expand)
+
 
 from skymodman import skylog as _skylog
 
 from .notifier import Notifier
 from .diqt import diqt
 from .safewrite import open_for_safe_write
+
 
 def withlogger(cls):
     """Class decorator to add a logger to the class"""
@@ -31,46 +31,21 @@ def withlogger(cls):
     setattr(cls, 'LOGGER', logger)
 
     return cls
+#
+# def counter():
+#     count=0
+#     def inc():
+#         nonlocal count
+#         count+=1
+#         return count
+#     return inc
 
-def counter():
-    count=0
-    def inc():
-        nonlocal count
-        count+=1
-        return count
-    return inc
 
 
 
-def checkPath(path, exp_user=False):
-    """
-    Verifies that path is not None or an empty string, then returns whether
-    the path exists on the filesystem.
 
-    :param str path:
-    :param exp_user: expand ~ in path string
-    :return:
-    """
-    if exp_user:
-        return path and _exists(_expand(path))
-    return path and _exists(path)
 
-from contextlib import contextmanager
 
-import os
-@contextmanager
-def change_dir(dir_):
-    """
-    A context manager that changes to the working directory to the path given by `dir` for the operations given in the with block, then changes back to the original wd on exit.  The full path of the original working directory is returned as the value of the contextmanager and can be bound with ``as``; this can be useful for referencing paths that are relative to the original wd.
-
-    :param dir_:
-    """
-
-    pwd = os.getcwd()
-    os.chdir(dir_)
-    yield pwd
-
-    os.chdir(pwd)
 
 
 
@@ -106,17 +81,17 @@ def printattrs(obj, name=None, dunder=True, sunder=True):
         else:
             print(a, attr, sep=": ")
 
-class classprop:
-    """
-    Decorator that allows the creation of readonly calculated properties for classes, accessible via ''Class.propname'', just like an instance property. However, only getters are supported, not setters or deleters.
-    """
-
-    def __init__(self, getter=None):
-        self.fget = getter
-
-    # instance will (usually) always be None
-    def __get__(self, instance, cls):
-        return self.fget(cls)
+# class classprop:
+#     """
+#     Decorator that allows the creation of readonly calculated properties for classes, accessible via ''Class.propname'', just like an instance property. However, only getters are supported, not setters or deleters.
+#     """
+#
+#     def __init__(self, getter=None):
+#         self.fget = getter
+#
+#     # instance will (usually) always be None
+#     def __get__(self, instance, cls):
+#         return self.fget(cls)
 
 
 #
