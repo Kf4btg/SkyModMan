@@ -37,7 +37,8 @@ class InstallManager:
 
         self.archive = mod_archive
         self.arc_path = Path(mod_archive)
-        self.archive_files = []
+        self.archive_files = None
+        self.archive_dirs = None
         self.fomod = None
         self.fomoddir = None
 
@@ -48,7 +49,7 @@ class InstallManager:
 
 
         # self.install_state = installState()
-
+        self.img_basepath=""
         self.install_dir = Manager.conf.paths.dir_mods / self.arc_path.stem.lower()
         # Used to track state during installation
         self.files_to_install = []
@@ -97,18 +98,26 @@ class InstallManager:
             callback=callback)
         # srcdestpairs = srcdestpairs,
 
-    async def archive_contents(self, *, dirs=True, files=True, depth=-1):
+    async def archive_contents(self, *, dirs=True, files=True):
         """
-        As iter_archive, but returns a list rather than an iterator.
-        Convenience method.
+        Return list of all files within the archive
 
-        :param dirs:
-        :param files:
+        :param dirs: include directories in the output
+        :param files: include files in the output
         :return:
         """
-        res = await self.archiver.list_archive(
-                self.archive, include_dirs=dirs, include_files=files)
-        return res
+        if self.archive_files is None:
+            self.archive_dirs, self.archive_files = await self.archiver.list_archive(self.archive)
+
+        if dirs and not files:
+            return self.archive_dirs
+        if files and not dirs:
+            return self.archive_files
+
+        return self.archive_dirs + self.archive_files
+
+        # res = await self.archiver.list_archive(
+        #         self.archive, include_dirs=dirs, include_files=files)
 
     async def get_file_count(self, *, include_dirs=True):
         """
@@ -214,11 +223,21 @@ class InstallManager:
                 extract_dir,
                 entries=self.fomod.all_images)
 
+        self.img_basepath = os.path.commonpath(self.fomod.all_images)
+
 
         if self.fomod.reqfiles:
             self.files_to_install=self.fomod.reqfiles
 
         # pprint(self.files_to_install)
+
+    def get_fomod_image(self, image_path):
+        """
+        Guaranteed to return the actual extraction path for an image path specified in a fomod config file even in spite of name-case-conflicts
+        :return:
+        """
+
+
 
     def set_flag(self, flag, value):
         self.flags[flag]=value

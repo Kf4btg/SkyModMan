@@ -59,20 +59,24 @@ class ArchiveHandler:
     _list_archive_cache=diqt(maxlen_=8)
     _cache_hits=0
     _cache_misses=0
-    async def list_archive(self, archive, *, include_dirs=True, include_files=True):
+    async def list_archive(self, archive):
         """
-        By default, return a list of all the files and folders in the specified archive. Names will be normalized to lower case.
 
-        If `include_files` or `include_dirs` is False, files or folders will be excluded from the results, respectively. There is no short-circuit if both are False, even though nothing will be returned--just try to avoid calling the function in that case.
-
-        :param str archive:
-        :param include_dirs:
-        :param include_files:
-        :return:
+        Returns a 2-tuple where the first item is a list of all the directories in the `archive`, the second a list of all the files
         """
+
+        # By default, return a list of all the files and folders in the specified archive. Names will be normalized to lower case.
+        #
+        # If `include_files` or `include_dirs` is False, files or folders will be excluded from the results, respectively. There is no short-circuit if both are False, even though nothing will be returned--just try to avoid calling the function in that case.
+        #
+        # If `separate_dirs` is True and both directories and files are included in the output, this will instead return a tuple of
+        #
+        # :param str archive:
+        # :return:
+        # """
 
         try:
-            results = ArchiveHandler._list_archive_cache[(archive, include_dirs, include_files)]
+            dirs, files = ArchiveHandler._list_archive_cache[archive]
             ArchiveHandler._cache_hits+=1
         except KeyError:
             ArchiveHandler._cache_misses+=1
@@ -84,16 +88,10 @@ class ArchiveHandler:
                     "7z-list process returned a non-zero exit code: {}".format(
                         retcode))
             else:
-                results = []
-                if include_dirs:
-                    results.extend(dirs)
-                if include_files:
-                    results.extend(files)
-
-                ArchiveHandler._list_archive_cache[(archive, include_dirs, include_files)] = results
+                ArchiveHandler._list_archive_cache[archive] = (dirs, files)
 
         self.LOGGER << "Cache hits: {0._cache_hits}, misses: {0._cache_misses}".format(ArchiveHandler)
-        return results
+        return dirs, files
 
 
     async def _archive_contents(self, archive):
@@ -148,7 +146,7 @@ class ArchiveHandler:
 
     def _parse_7z_filelisting(self, output, suffix=''):
         """
-        Split the lines returned from the ``7z l`` command into a list of filenames; names will be normalized to lowercase. If suffix is a non-empty string, it will be appended to the end of each file name.
+        Split the lines returned from the ``7z l`` command into a list of filenames. If suffix is a non-empty string, it will be appended to the end of each file name.
         :param output:
         :param suffix:
         :return:
@@ -159,7 +157,7 @@ class ArchiveHandler:
         lines = output.splitlines()
 
         # normalize to lower case
-        return [l.lower()+suffix for l in lines]
+        return [l+suffix for l in lines]
 
     async def extract(self, archive, destination, specific_entries=None, callback=None):
 
