@@ -29,6 +29,7 @@ class EnvVars(str, Enum):
     PROFILE = "SMM_PROFILE"
     USE_QT  = "SMM_QTGUI"
     VFS_MOUNT = "SMM_VFS"
+    SKYDIR = "SMM_SKYRIMDIR"
 
 # labels for the sections and settings in the main INI config file.
 # making these strEnums because I tire of typing .value over and over...
@@ -38,9 +39,10 @@ class INISection(str, Enum):
     GENERAL = DEFAULT
 
 class INIKey(str, Enum):
-    LASTPROFILE = "lastprofile"
-    MODDIR = "modsdirectory"
-    VFSMOUNT = "virtualfsmountpoint"
+    SKYRIMDIR   = "skyriminstalldir"    # location of base skyrim install
+    LASTPROFILE = "lastprofile"         # name of last loaded profile
+    MODDIR      = "modsdirectory"       # location of mod storage
+    VFSMOUNT    = "virtualfsmountpoint" # mount point for "virtual" skyrim install
 
 
 

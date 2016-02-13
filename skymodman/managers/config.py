@@ -5,7 +5,8 @@ from copy import deepcopy
 
 import appdirs
 
-from skymodman import utils, exceptions
+from skymodman import exceptions
+from skymodman.utils import withlogger, checkPath
 # from skymodman.managers import modmanager as Manager
 from skymodman.constants import (EnvVars, INIKey, INISection)
 
@@ -16,31 +17,34 @@ _S_GENERAL = INISection.GENERAL.value
 _K_LASTPRO = INIKey.LASTPROFILE.value
 _K_MODDIR  = INIKey.MODDIR.value
 _K_VFSMNT  = INIKey.VFSMOUNT.value
+_K_SKYDIR  = INIKey.SKYRIMDIR.value
 
 class ConfigPaths:
-    __slots__=["file_main", "dir_config", "dir_data", "dir_profiles", "dir_mods", "dir_vfs"]
+    __slots__=["file_main", "dir_config", "dir_data", "dir_profiles", "dir_mods", "dir_vfs", "dir_skyrim"]
 
-    def __init__(self, *, file_main=None, dir_config=None, dir_data=None, dir_profiles=None, dir_mods=None, dir_vfs=None) :
+    def __init__(self, *, file_main=None, dir_config=None, dir_data=None, dir_mods=None, dir_profiles=None, dir_skyrim=None, dir_vfs=None) :
         """
 
         :param Path file_main:
         :param Path dir_config:
         :param Path dir_data:
-        :param Path dir_profiles:
         :param Path dir_mods:
+        :param Path dir_profiles:
+        :param Path dir_skyrim:
         :param Path dir_vfs:
         """
 
         self.file_main    = file_main
         self.dir_config   = dir_config
         self.dir_data     = dir_data
-        self.dir_profiles = dir_profiles
         self.dir_mods     = dir_mods
+        self.dir_profiles = dir_profiles
+        self.dir_skyrim   = dir_skyrim
         self.dir_vfs      = dir_vfs
 
 
 # @humanize
-@utils.withlogger
+@withlogger
 class ConfigManager:
 
     __MAIN_CONFIG = "skymodman.ini"
@@ -50,6 +54,7 @@ class ConfigManager:
 
     __DEFAULT_CONFIG={
         _S_GENERAL: {
+            _K_SKYDIR: "",
             _K_MODDIR: appdirs.user_data_dir(__APPNAME) +"/mods",
             _K_VFSMNT: appdirs.user_data_dir(__APPNAME) +"/skyrimfs",
             _K_LASTPRO: __DEFAULT_PROFILE
@@ -79,12 +84,14 @@ class ConfigManager:
         """
         Use dict-access to get string versions of any of the items from the "paths"
         of this config instance by property name
-        E.g.: config['dir_mods']
+        E.g.: config['dir_mods'] -> '/path/to/mod/install/directory'
 
         :param str config_file_or_dir:
-        :return: str(Path(...))
+        :return: str(Path(...)), or None if the item was not found or was actually None
         """
-        return str(getattr(self.paths, config_file_or_dir, None))
+        path = getattr(self.paths, config_file_or_dir, None)
+        return str(path) if path else None
+        # return str(getattr(self.paths, config_file_or_dir, None))
 
     @property
     def lastprofile(self) -> str:
@@ -103,13 +110,48 @@ class ConfigManager:
         ######################################################################
         # allow setting some things via ENV
         ######################################################################
-        # first, the mods dir
+        # first, the skyrim installation, mod storage, vfs mount
 
-        env_md = os.getenv(EnvVars.MOD_DIR)
-        if env_md and os.path.exists(env_md):
-            self.paths.dir_mods = Path(env_md)
-        else:
-            self.paths.dir_mods = Path(config[_S_GENERAL][_K_MODDIR])
+        for evar, paths_attr, inikey in (
+                (EnvVars.SKYDIR, 'dir_skyrim', _K_SKYDIR),
+                (EnvVars.MOD_DIR, 'dir_mods', _K_MODDIR),
+                (EnvVars.VFS_MOUNT, 'dir_vfs', _K_VFSMNT),
+        ):
+            envval = os.getenv(evar)
+            if checkPath(envval):
+                setattr(self.paths, paths_attr,
+                    Path(envval))
+            else:
+                try:
+                    p = Path(config[_S_GENERAL][inikey])
+                except KeyError:
+                    # if key wasn't in config file for some reason,
+                    # check that we have a default value (skydir, for example, does not (i.e. the default val is ""))
+                    default = ConfigManager.__DEFAULT_CONFIG[_S_GENERAL][inikey]
+                    if default:
+                        p = Path(default)
+                    else:
+                        p=None
+                finally:
+                    setattr(self.paths, paths_attr, p)
+            # update config-file mirror
+            self.currentValues[_S_GENERAL][inikey] = self[paths_attr]
+
+        #
+        #
+        # env_sky = os.getenv(EnvVars.SKYDIR)
+        # if checkPath(env_sky):
+        #     self.paths.dir_skyrim = Path(env_sky)
+        # else:
+        #     self.paths.dir_skyrim = Path(config[_S_GENERAL][_K_SKYDIR])
+        #
+        # # then, the mods dir
+        #
+        # env_md = os.getenv(EnvVars.MOD_DIR)
+        # if checkPath(env_md):
+        #     self.paths.dir_mods = Path(env_md)
+        # else:
+        #     self.paths.dir_mods = Path(config[_S_GENERAL][_K_MODDIR])
 
 
         ######################################################################
@@ -130,24 +172,25 @@ class ConfigManager:
         if not self._lastprofile:
             self._lastprofile = config[_S_GENERAL][_K_LASTPRO]
 
+        self.currentValues[_S_GENERAL][_K_LASTPRO] = self._lastprofile
 
         ######################################################################
         ######################################################################
         # now check env for vfs mount
 
-        env_vfs = os.getenv(EnvVars.VFS_MOUNT)
+        # env_vfs = os.getenv(EnvVars.VFS_MOUNT)
 
         # check to see if the given path is a valid mount point
         # todo: this is assuming that the vfs has already been mounted manually; I'd much rather do it automatically, so I really should just check that the given directory is empty
-        if env_vfs and os.path.exists(env_vfs) and os.path.ismount(env_vfs):
-            self.paths.dir_vfs = Path(env_vfs)
-        else:
-            self.paths.dir_vfs = Path(config[_S_GENERAL][_K_VFSMNT])
+        # if checkPath(env_vfs) and os.path.ismount(env_vfs):
+        #     self.paths.dir_vfs = Path(env_vfs)
+        # else:
+        #     self.paths.dir_vfs = Path(config[_S_GENERAL][_K_VFSMNT])
 
         # update config-file mirror
-        self.currentValues[_S_GENERAL][_K_MODDIR] = str(self.paths.dir_mods)
-        self.currentValues[_S_GENERAL][_K_VFSMNT] = str(self.paths.dir_vfs)
-        self.currentValues[_S_GENERAL][_K_LASTPRO] = self._lastprofile
+        # self.currentValues[_S_GENERAL][_K_SKYDIR] = str(self.paths.dir_skyrim)
+        # self.currentValues[_S_GENERAL][_K_MODDIR] = str(self.paths.dir_mods)
+        # self.currentValues[_S_GENERAL][_K_VFSMNT] = str(self.paths.dir_vfs)
 
 
 
@@ -169,6 +212,7 @@ class ConfigManager:
         if not paths.dir_config.exists():
             self.LOGGER.warning("Configuration directory not found.")
             self.LOGGER.info("Creating configuration directory at: {}".format(paths.dir_config))
+
             paths.dir_config.mkdir(parents=True)
 
         ## check for profiles dir ##
@@ -177,12 +221,13 @@ class ConfigManager:
 
         if not paths.dir_profiles.exists():
             self.LOGGER.info("Creating profiles directory at: {}".format(paths.dir_profiles))
+
             paths.dir_profiles.mkdir(parents=True)
 
-            def_pro = paths.dir_profiles / ConfigManager.__DEFAULT_PROFILE
+            default_prof = paths.dir_profiles / ConfigManager.__DEFAULT_PROFILE
 
             self.LOGGER.info("Creating directory for default profile.")
-            def_pro.mkdir()
+            default_prof.mkdir()
 
 
         ## check that main config file exists ##
@@ -201,7 +246,9 @@ class ConfigManager:
             # for now, only create if the location in the config is same as the default
             if str(paths.dir_mods) == \
                 appdirs.user_data_dir(self.__APPNAME) + "/mods":
+
                 self.LOGGER.info("Creating new mods directory at: {}".format(paths.dir_mods))
+
                 paths.dir_mods.mkdir(parents=True)
             else:
                 self.LOGGER.error("Configured mods directory not found")
@@ -209,7 +256,9 @@ class ConfigManager:
         # ensure that 'lastprofile' exists in profiles dir, or fallback to default
         lpdir = paths.dir_profiles / self._lastprofile
         if not lpdir.exists():
+
             self.LOGGER.error("Directory for last-loaded profile '{}' could not be found! Falling back to default.".format(self._lastprofile))
+
             self._lastprofile = self.__DEFAULT_PROFILE
 
 
@@ -252,7 +301,7 @@ class ConfigManager:
         config.read(str(self.paths.file_main))
 
         # validate new value
-        if key in [_K_MODDIR, _K_VFSMNT]:
+        if key in [_K_MODDIR, _K_VFSMNT, _K_SKYDIR]:
             p=Path(value)
 
         elif key == _K_LASTPRO:
@@ -260,13 +309,15 @@ class ConfigManager:
         else:
             raise exceptions.InvalidConfigKeyError(key)
 
-        if p.exists() and p.is_dir():
+        if checkPath(str(p)):
 
             for case in [key.__eq__]:
                 if case(_K_MODDIR):
                     self.paths.dir_mods = p
                 elif case(_K_VFSMNT):
                     self.paths.dir_vfs = p
+                elif case(_K_SKYDIR):
+                    self.paths.dir_skyrim = p
                 elif case(_K_LASTPRO):
                     self._lastprofile = value
 
