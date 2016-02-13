@@ -3,6 +3,7 @@ from PyQt5.QtCore import pyqtSignal, pyqtProperty, Qt
 from PyQt5.QtGui import QBrush, QIcon
 
 from skymodman.utils import withlogger
+from copy import deepcopy
 
 @withlogger
 class MyTreeWidget(QTreeWidget):
@@ -21,14 +22,20 @@ class MyTreeWidget(QTreeWidget):
         self.action_rename = QAction("&Rename", self, triggered=self.rename_item)
 
         self.orig_root = None
+        self.modified_tree = None
+        self.current_root = None
 
         self.user_toplevel_dir = False
-        self.dragitem = None
-        self.context_menu_item = None
+        self.dragitem = None # type: ArchiveItem
+        self.dragitem_parent = None
+        self.context_menu_item = None # type: ArchiveItem
 
     def init_tree(self, root):
         if self.orig_root is None:
             self.orig_root = root
+            self.modified_tree = deepcopy(root)
+            self.current_root = self.modified_tree
+            root = self.modified_tree
 
         self.clear()
         self.create_tree(root, self.invisibleRootItem())
@@ -55,24 +62,94 @@ class MyTreeWidget(QTreeWidget):
         # get item being moved (should only be 1)
         self.dragitem = self.selectedItems()[0]
 
+        # have to save this before the drop occurs
+        self.dragitem_parent = self.dragitem.parent()
+
         super().startDrag(actions)
 
     def dropEvent(self, event):
         # fixme: dragging items around doesn't currently change the tree-datastructures that are used to build the visual tree; thus, when a new root is set (and the tree is rebuilt), all changes made via drag-and-drop are lost.
         super().dropEvent(event)
 
+        key = self.dragitem.text(0)
+        # keep everything sorted by name, with directories first.
         target = self.itemAt(event.pos())
         if target is None or (target.isfile and target.parent() is None):
             self.invisibleRootItem().sortChildren(0, Qt.AscendingOrder)
+
+            old_parent = self.dragitem_parent.data(0, Qt.UserRole)
+            new_parent = self.current_root
+
+            # since we shouldn't be able to drag a top-level item to the root, we
+            # will assume that dragitem_parent cannot be None here.
+
+            # self._restructure_tree(key,
+            #                        self.dragitem_parent.data(0, Qt.UserRole),
+            #                        self.modified_tree,
+            #                        self.dragitem.isfile)
+
+            # key=self.dragitem.text(0)
+            # # rearrange tree to reflect change
+            # if self.dragitem.isdir:
+            #     # remove the moved directory (sub-tree, sub-dict, what-freakin-ever why can't there be an easy name for this crap.)
+            #     # from its old parent dict
+            #     subtree=self.dragitem_parent.data(0, Qt.UserRole).pop(key)
+            #
+            #     # now add to root, since this is the invisible root item
+            #     self.modified_tree[key] = subtree
+            #
+            # else: # file
+            #     # remove from previous _files list
+            #     self.dragitem_parent.data(0, Qt.UserRole).leaves.remove(key)
+            #     # insert at root
+            #     self.modified_tree.insert(key_list=[], value=key)
+
         elif target.isdir:
             target.sortChildren(0, Qt.AscendingOrder)
+
+            old_parent = (self.current_root
+                          if self.dragitem_parent is None
+                          else self.dragitem_parent.data(0, Qt.UserRole))
+
+            new_parent = target.data(0, Qt.UserRole)
+
+            # self._restructure_tree(key,
+            #                        self.modified_tree if self.dragitem_parent is None else self.dragitem_parent.data(0, Qt.UserRole),
+            #                        target.data(0, Qt.UserRole),
+            #                        self.dragitem.isfile)
         else:
             target.parent().sortChildren(0, Qt.AscendingOrder)
 
+            old_parent = (self.current_root
+                          if self.dragitem_parent is None
+                          else self.dragitem_parent.data(0, Qt.UserRole))
+
+            new_parent = target.parent().data(0, Qt.UserRole)
+
+            # self._restructure_tree(key,
+            #                        self.modified_tree if self.dragitem_parent is None else self.dragitem_parent.data(
+            #                            0, Qt.UserRole),
+            #                        target.data(0, Qt.UserRole),
+            #                        self.dragitem.isfile)
+        self._restructure_tree(key,
+                               old_parent,
+                               new_parent,
+                               self.dragitem.isfile)
+
         self.tree_structure_changed.emit()
+
+    def _restructure_tree(self, key, old_parent_tree, new_parent_tree, is_file):
+
+        if is_file:
+            old_parent_tree.leaves.remove(key)
+            new_parent_tree.insert([], key)
+        else:
+            new_parent_tree[key] = old_parent_tree.pop(key)
+
 
     def dragMoveEvent(self, event):
         """
+        Reimplemented to ignore drags to self or immediate parent
 
         :param PyQt5.QtGui.QDragMoveEvent.QDragMoveEvent event:
         """
@@ -104,6 +181,7 @@ class MyTreeWidget(QTreeWidget):
 
     def contextMenuEvent(self, event):
         """
+        Reimplemented to show various options depending on location of click.
 
         :param PyQt5.QtGui.QContextMenuEvent.QContextMenuEvent event:
         :return:
@@ -134,13 +212,14 @@ class MyTreeWidget(QTreeWidget):
 
     def change_toplevel_dir(self):
         self.user_toplevel_dir = True
+        self.current_root = self.context_menu_item.data(0, Qt.UserRole)
 
-        self.init_tree(self.context_menu_item.data(0,Qt.UserRole))
+        self.init_tree(self.current_root)
 
     def unset_toplevel_dir(self):
         self.user_toplevel_dir = False
-        self.init_tree(self.orig_root)
-
+        self.current_root = self.modified_tree
+        self.init_tree(self.modified_tree)
 
     def create_directory(self):
         curr = self.context_menu_item

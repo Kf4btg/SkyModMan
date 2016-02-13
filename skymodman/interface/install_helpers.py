@@ -48,7 +48,7 @@ class InstallerUI:
 
                 toplevcount, toplevdata = installer.analyze_structure_tree(tree)
 
-                print(toplevcount, toplevdata)
+                # print(toplevcount, toplevdata)
 
                 if toplevcount:
                     # await self.extraction_progress_dialog()
