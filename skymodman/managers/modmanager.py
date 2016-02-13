@@ -22,6 +22,7 @@ file_conflicts = None               # type collections.defaultdict[list]
 mods_with_conflicting_files = None  # type collections.defaultdict[list]
 
 _logger = None
+__enabled_mods = None
 
 def init():
     global _logger, _dataman, _profileman, _configman #_installman,
@@ -138,7 +139,19 @@ def load_active_profile_data():
     # FIXME: avoid doing this on profile change
     # _logger << "Loading list of all Mod Files on disk"
     _logger.info("Detecting file conflicts")
+
     _dataman.loadAllModFiles(_configman.paths.dir_mods)
+    # let's also add the files from the base Skyrim Data folder to the db
+
+    for f in _configman.paths.dir_skyrim.iterdir():
+        if f.name.lower() == "data":
+            _dataman.add_files_from_dir('Skyrim', str(f))
+            break
+
+    # [print(*r) for r in _dataman._con.execute("select * from modfiles where directory='Skyrim'")]
+
+
+
     # _logger << "Finished loading list of all Mod Files on disk"
 
     _dataman.detectFileConflicts()
@@ -184,7 +197,11 @@ def save_user_edits(changes):
 
     # a generator that creates tuples of values by sorting the values of the
     # modentry according the order defined in constants._db_fields
-    dbrowgen = (tuple([getattr(m, f) for f in sorted(m._fields, key=lambda fld: _db_fields.index(fld)) ] ) for m in changes)
+    dbrowgen = (tuple([getattr(m, f)
+                       for f in sorted(m._fields,
+                                       key=lambda fld: _db_fields.index(fld)
+                                       ) ] )
+                for m in changes)
 
     # using the context manager may allow deferrable foreign
     # to go unsatisfied for a moment
@@ -205,6 +222,9 @@ def save_user_edits(changes):
 def save_mod_list():
     """Request that database manager save modinfo to disk"""
     _dataman.saveModDB(active_profile().modinfo)
+    global __enabled_mods
+    # reset so that next install will reflect the new state
+    __enabled_mods = None
 
 def get_profile_setting(section, name):
     """
@@ -318,28 +338,37 @@ from skymodman.installer.common import FileState
 
 def checkFileState(file, state):
     """
+    Query the database of known mod files for the given filename and return whether it is in the given Activation State
+
     M = "Missing"
     I = "Inactive"
     A = "Active"
 
     :param file:
     :param state:
-    :return:
+    :return: bool
     """
-    # todo: this needs to check the 'virtual' skyrim directory for the named file and discover if it is present; if it is not present, then we also need to check if the file COULD be present--i.e. it is available in a mod that is installed but disabled.
 
-    # for testing purposes:
-    return state == FileState.A
+    matches = list(r['directory'] for r in _dataman.execute_("SELECT directory FROM modfiles WHERE filepath=?", (file.lower(), )))
+
+    if matches:
+        if any(m=='Skyrim' or mod_is_enabled(m) for m in matches):
+            # at least one mod containing the matched file is enabled
+            # (or base skyrim), so return true iff desired state is 'active'
+            return state == FileState.A
+        # otherwise, every matched mod was disabled ,
+        # so return True iff desired state was 'inactive'
+        return state == FileState.I
+
+    # if no matches found, return true iff state being checked is 'missing'
+    return state == FileState.M
 
 
-    # if state==FileState.A:
-    #     return True
-    # if state == FileState.M:
-    #     return False
-    # if state == FileState.I:
-    #     return False
-    #
-    #
-    #
-    # return False
-
+def mod_is_enabled(mod_directory):
+    try:
+        return mod_directory in __enabled_mods
+    except TypeError:
+        # __enabled_mods is uninitialized
+        global __enabled_mods
+        __enabled_mods = list(enabled_mods())
+        return mod_directory in __enabled_mods

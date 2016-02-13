@@ -4,13 +4,14 @@ import os
 import sqlite3
 from pathlib import Path, PurePath
 import functools
+from itertools import count, repeat
 from collections import defaultdict
 
 from skymodman.constants import db_fields, SyncError
-from skymodman.utils import withlogger, counter, tree
+from skymodman.utils import withlogger, tree
 from skymodman.managers import modmanager as Manager
 
-mcount = counter()
+mcount = count()
 
 # from skymodman.utils import humanizer
 # @humanizer.humanize
@@ -166,7 +167,7 @@ class DBManager:
         global mcount
         # reset counter so that mod-ordinal is determined by the order
         # in which the entries are read from the file
-        mcount = counter()
+        mcount = count()
 
         # self.LOGGER.debug("loading mod db from file")
 
@@ -505,30 +506,33 @@ class DBManager:
         # dpath = str(directory)
         # modfiles=[]
 
-        relpath = os.path.relpath
-        join = os.path.join
+        # relpath = os.path.relpath
+        # join = os.path.join
         # listdir = os.listdir
 
         # go through each folder indivually
         for modfolder in directory.iterdir():
             if not modfolder.is_dir(): continue
-            name=modfolder.name
-            modroot = str(modfolder)
-
-            mfiles = []
-            for root, dirs, files in os.walk(modroot):
-                # for d in dirs:
-                #     if len(listdir(join(root,d)))==0:
-                        # remove empty directories from the list
-                        # dirs.remove(d) ## todo: is this actually a good idea?
-                        ### I guess it wasn't a good idea, becuase it didn't actually work...
-
-                mfiles.extend(relpath(join(root, f), modroot).lower() for f in files)
-            # put the mod's files in the db
-            if mfiles:
-                self._con.executemany(
-                    "INSERT into modfiles values (?, ?)",
-                    ((name, p) for p in mfiles))
+            self.add_files_from_dir(modfolder.name, str(modfolder))
+            # name=modfolder.name
+            # modroot = str(modfolder) # the abs path for this mod's folder
+            #
+            # mfiles = []
+            # for root, dirs, files in os.walk(modroot):
+            #     # this gets the lowercase path to each file, starting at the
+            #     # root of this mod folder. So:
+            #     #   '/path/to/modstorage/CoolMod42/Meshes/WhatEver.NIF'
+            #     # becomes:
+            #     #   'meshes/whatever.nif'
+            #     mfiles.extend(relpath(join(root, f), modroot).lower() for f in files)
+            #
+            # # put the mod's files in the db, with the mod name as the first
+            # # field (e.g. 'CoolMod42'), and the filepath as the second (e.g.
+            # # 'meshes/whatever.nif')
+            # if mfiles:
+            #     self._con.executemany(
+            #         "INSERT into modfiles values (?, ?)",
+            #         ((name, p) for p in mfiles))
 
 
             # try: mfiles.remove('meta.ini') #don't care about these
@@ -538,6 +542,33 @@ class DBManager:
         # with open('res/test2.dump.sql', 'w') as f:
         #     for l in self._con.iterdump():
         #         f.write(l+'\n')
+
+
+    def add_files_from_dir(self, mod_name, mod_root, *, relpath = os.path.relpath, join = os.path.join):
+        """
+        Given a directory `mod_root` containing files for a mod named `mod_name`, add those files to the modfiles table.
+        :param str mod_root:
+        :return:
+        """
+        # modroot = str(directory)  # the abs path for this mod's folder
+
+        mfiles = []
+        for root, dirs, files in os.walk(mod_root):
+            # this gets the lowercase path to each file, starting at the
+            # root of this mod folder. So:
+            #   '/path/to/modstorage/CoolMod42/Meshes/WhatEver.NIF'
+            # becomes:
+            #   'meshes/whatever.nif'
+            mfiles.extend(
+                relpath(join(root, f), mod_root).lower() for f in files)
+
+        # put the mod's files in the db, with the mod name as the first
+        # field (e.g. 'CoolMod42'), and the filepath as the second (e.g.
+        # 'meshes/whatever.nif')
+        if mfiles:
+            self._con.executemany(
+                "INSERT into modfiles values (?, ?)", zip(repeat(mod_name), mfiles))
+                # ((mod_name, p) for p in mfiles))
 
     def detectFileConflicts(self):
         """
@@ -688,7 +719,7 @@ class DBManager:
         :return: Tuple containing just the values of the fields
         """
 
-        return (mcount(), ) + tuple(s[1] for s in sorted(pairs, key=lambda p: db_fields.index(p[0])))
+        return (next(mcount), ) + tuple(s[1] for s in sorted(pairs, key=lambda p: db_fields.index(p[0])))
 
 
 if __name__ == '__main__':

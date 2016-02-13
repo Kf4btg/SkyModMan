@@ -303,7 +303,8 @@ class InstallManager:
         """
 
         if dest_dir is None:
-            dest_dir="/tmp/testinstall"
+            # dest_dir="/tmp/testinstall"
+            dest_dir = self.install_dir
 
         flist = self.files_to_install
         progress = self.files_installed
