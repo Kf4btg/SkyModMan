@@ -62,6 +62,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.LOGGER.info("Initializing ModManager Window")
         ModManagerWindow._this = self
 
+        # verify basic setup
+        self.check_setup()
+
         # for cancelling asyncio actions
         self.task = None
 
@@ -677,6 +680,21 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     ## UI Helper Functions
     ##===============================================
 
+    def check_setup(self):
+        """
+        Make sure that every absolutely required piece of config information is available before everything gets fully loaded. So far, this means:
+                * Skyrim-installation directory
+        """
+
+        # must have a configured skyrim installation folder
+        if not Manager.conf["dir_skyrim"]:
+            if message("information", "Select Skyrim Installation", 'Before the manager runs, please take a moment to specify the folder where Skyrim itself is installed. Click "OK" to show the folder selection dialog.', buttons=('ok', 'cancel'), default_button='ok'):
+                self.select_skyrim_dir()
+            else:
+                self.safe_quit()
+
+
+
     # def update_UI(self, *args):
     def update_UI(self):
 
@@ -1161,6 +1179,19 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             # reverify and reload the mods.
             if not Manager.validate_mod_installs():
                 self.mod_table.model().reloadErrorsOnly()
+
+    def select_skyrim_dir(self):
+        skydir = QFileDialog.getExistingDirectory(
+            self,
+            "Select Skyrim Installation")
+
+        # update config with new path
+        if checkPath(skydir):
+            Manager.conf.updateConfig(skydir,
+                                      INIKey.SKYRIMDIR,
+                                      INISection.GENERAL)
+        else:
+            self.safe_quit()
 
     def safe_quit(self):
         """

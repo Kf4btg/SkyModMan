@@ -3,7 +3,7 @@ from functools import lru_cache
 from collections import deque
 import asyncio
 import re
-from pathlib import PurePath
+from pathlib import PurePath, Path
 
 from skymodman.utils import withlogger, tree
 # from skymodman.managers.archive import ArchiveHandler
@@ -36,6 +36,7 @@ class InstallManager:
         self.archiver = ArchiveHandler()
 
         self.archive = mod_archive
+        self.arc_path = Path(mod_archive)
         self.archive_files = []
         self.fomod = None
         self.fomoddir = None
@@ -46,7 +47,18 @@ class InstallManager:
         self.baditems = []
 
 
-        self.install_state = installState()
+        # self.install_state = installState()
+
+        self.install_dir = Manager.conf.paths.dir_mods / self.arc_path.stem.lower()
+        # Used to track state during installation
+        self.files_to_install = []
+        self.files_installed = deque()
+        self.flags = {}
+
+    def init_install_state(self):
+        self.files_to_install = []
+        self.files_installed = deque()
+        self.flags = {}
 
     @property
     def has_fomod(self):
@@ -184,10 +196,11 @@ class InstallManager:
         :param extract_dir: Where any images referenced by the script will be extracted. It is best to use a temporary directory for this so it can be easily cleaned up after install.
         :return:
         """
+        self.init_install_state()
 
         # todo: figure out what sort of things can go wrong while reading the fomod config, wrap them in a FomodError (within fomod.py), and catch that here so we can report it without crashing
         self.fomod = Fomod(xmlfile)
-        self.install_state = installState() # tracks flags, install files
+        # self.install_state = installState() # tracks flags, install files
 
         # we don't want to extract the entire archive before we start,
         # but we do need to extract any images defined in the
@@ -203,15 +216,15 @@ class InstallManager:
 
 
         if self.fomod.reqfiles:
-            self.install_state.files_to_install=self.fomod.reqfiles
+            self.files_to_install=self.fomod.reqfiles
 
-        # pprint(self.install_state.files_to_install)
+        # pprint(self.files_to_install)
 
     def set_flag(self, flag, value):
-        self.install_state.flags[flag]=value
+        self.flags[flag]=value
 
     def unset_flag(self, flag):
-        try: del self.install_state.flags[flag]
+        try: del self.flags[flag]
         except KeyError: pass
 
     def mark_file_for_install(self, file, install=True):
@@ -220,10 +233,9 @@ class InstallManager:
         :param install: if true, mark the file for install; if False, remove it from the list of files to install
         """
         if install:
-            self.install_state.files_to_install.append(file)
+            self.files_to_install.append(file)
         else:
-            self.install_state.files_to_install.remove(file)
-        # pprint(self.install_state.files_to_install)
+            self.files_to_install.remove(file)
 
     dep_checks = { # s=self, d=dependency item (key=dependency type)
         "fileDependency": lambda s, d: s.check_file(d.file, d.state),
@@ -250,33 +262,13 @@ class InstallManager:
         return condition(self.dep_checks[dtype](self, dep)
                          for dtype, dep in dependencies)
 
-        # if dependencies.operator == common.Operator.OR:
-        #     # true if any item is true
-        #     return any(self.dep_checks[dtype](self, dep)
-        #                for dtype, dep in dependencies)
-        # else:  # assume AND (the default)
-        #     # true iff all items are true
-        #     return all(self.dep_checks[dtype](self, dep)
-        #                for dtype, dep in dependencies)
-
-            # for dtype, dep in dependencies:
-            #     if self.dep_checks[dtype](self, dep):
-            #         return True
-            # return False
-
-
-            # for dtype, dep in dependencies:
-            #     if not self.dep_checks[dtype](self, dep):
-            #         return False
-        # return True
-
     @lru_cache(256)
     def check_file(self, file, state):
         return Manager.checkFileState(file, state)
 
     def check_flag(self, flag, value):
-        return flag in self.install_state.flags \
-               and self.install_state.flags[flag] == value
+        return flag in self.flags \
+               and self.flags[flag] == value
 
     def check_game_version(self, version):
         return True
@@ -288,36 +280,33 @@ class InstallManager:
         """
         Called after all the install steps have run.
         """
-        flist = self.install_state.files_to_install
+        flist = self.files_to_install
         if self.fomod.condinstalls:
             for pattern in self.fomod.condinstalls:
                 if self.check_dependencies_pattern(pattern.dependencies):
                     flist.extend(pattern.files)
 
-
         # sort files by priority, then by name
         flist.sort(key=lambda f: f.priority)
         flist.sort(key=lambda f: f.source.lower())
 
-        # pprint(self.install_state.files_to_install)
-        # self.install_state.files_to_install.sort(key=lambda f: f.priority)
-
-    @property
-    def install_files(self):
-        return self.install_state.files_to_install
 
     @property
     def num_files_to_install(self):
-        return len(self.install_state.files_to_install)
+        return len(self.files_to_install)
 
-    async def copyfiles(self, dest_dir=None, callback=None):
+    async def install_files(self, dest_dir=None, callback=None):
+        """
+
+        :param str dest_dir: path to installation directory for this mod
+        :param callback: called with args (name_of_file, total_extracted_so_far) during extraction process to indicate progress
+        """
 
         if dest_dir is None:
             dest_dir="/tmp/testinstall"
 
-
-        flist = self.install_state.files_to_install
-        progress = self.install_state.files_installed_so_far
+        flist = self.files_to_install
+        progress = self.files_installed
 
         _callback = callback
         if _callback is None:
@@ -327,7 +316,6 @@ class InstallManager:
             progress.append(flist[num_done-1])
             asyncio.get_event_loop().call_soon_threadsafe(
                 _callback, filename, num_done)
-
 
         await self.extract(destination=dest_dir,
                            entries=[f.source for f in flist],
@@ -344,7 +332,7 @@ class InstallManager:
         :param callback:
         :return:
         """
-        uninstalls=self.install_state.files_installed_so_far
+        uninstalls=self.files_installed
         remaining=len(uninstalls)
 
         while remaining>0:

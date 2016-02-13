@@ -40,6 +40,7 @@ _no_response = [QMessageBox.No, QMessageBox.Cancel, QMessageBox.Close, QMessageB
 def message(icon='question', title='', text='Are you sure?', info_text=None, buttons=('yes', 'no'), default_button = 'none', parent=None, min_width:int=500):
     """
     Helper for constructing and gettting replies from QMessageBoxes. Most arguments take strings (buttons an iterable of strings). Rather than return the response code from the QMessageBox, this method filters almost all the codes down to either 'positive' or 'negative' response and return True or False accordingly. If, somehow, the response does not fall in one of these categories, then the code will be returned instead.
+
     :param parent: QWidget parent
     :param min_width: minimum width of the created box
     :param icon:
@@ -48,7 +49,7 @@ def message(icon='question', title='', text='Are you sure?', info_text=None, but
     :param info_text:
     :param buttons:
     :param default_button:
-    :return:
+    :return: True or False
     """
     # defaults
     micon = QMessageBox.NoIcon
