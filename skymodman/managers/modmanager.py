@@ -328,6 +328,7 @@ async def get_mod_archive_structure(archive=None):
         installman = _install.InstallManager(archive)
 
     modstruct = await installman.mod_structure_tree()
+    modfs = await installman.mkarchivefs()
     return modstruct
 
 

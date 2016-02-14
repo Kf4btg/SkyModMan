@@ -42,6 +42,7 @@ class InstallerUI:
                 # count the files, and get the mod structure
                 # count = await installer.get_file_count()
                 tree = await installer.mod_structure_tree()
+                modfs = await installer.mkarchivefs()
 
                 # print("count:", count)
                 # print(tree)

@@ -5,7 +5,7 @@ import asyncio
 import re
 from pathlib import PurePath, Path
 
-from skymodman.utils import withlogger, tree
+from skymodman.utils import withlogger, tree, archivefs as arcfs
 from skymodman.utils.fsutils import dir_move_merge
 # from skymodman.managers.archive import ArchiveHandler
 from skymodman.managers.archive_7z import ArchiveHandler
@@ -123,9 +123,6 @@ class InstallManager:
 
         return self.archive_dirs + self.archive_files
 
-        # res = await self.archiver.list_archive(
-        #         self.archive, include_dirs=dirs, include_files=files)
-
     async def get_file_count(self, *, include_dirs=True):
         """
         returns the total number of files (and possibly directories)
@@ -152,6 +149,26 @@ class InstallManager:
             modtree.insert(ap.parent.parts, ap.name)
 
         return modtree
+
+    async def mkarchivefs(self):
+        """
+        Create an instance of an ArchiveFS pseudo-filesystem from the installer's associated mod archive.
+        :return:
+        """
+        # create an empty archivefs--just has a root.
+        modfs = arcfs.ArchiveFS()
+        for arc_entry in (await self.archive_contents(dirs=False)):
+            # add root anchor to all entries
+            modfs.touch("/"+arc_entry)
+
+        # indent="  "
+        # for d,p,t in modfs.itertree2(include_root=False):
+        #     print(indent*d,
+        #           p.name,
+        #           {"d":"/", "f":""}[t],
+        #           sep="")
+
+        return modfs
 
     def analyze_structure_tree(self, mod_tree):
         """

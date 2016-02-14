@@ -1,26 +1,35 @@
-# from collections import namedtuple
 from pathlib import PurePath, _PosixFlavour
 
 from skymodman.exceptions import Error
 
 class FSError(Error):
     """ Represents some sort of error in the ArchiveFS """
+    msg = "{path}"
+    def __init__(self, path, message=None):
+        if message is not None:
+            self.msg = message
+        self.path = path
+    def __str__(self):
+        return self.msg.format(path=self.path)
+
 class Error_EEXIST(FSError):
     """ File Exists Error """
+    msg="File exists: {path}"
 class Error_ENOTDIR(FSError):
     """ Not a Directory """
+    msg="Not a directory: {path}"
 class Error_EISDIR(FSError):
     """ Is a directory """
+    msg="Path '{path}' is a directory"
 class Error_ENOTEMPTY(FSError):
     """ Directory not Empty """
+    msg="Directory not empty: {path}"
 class Error_ENOENT(FSError):
     """ No such File or Directory """
+    msg="No such file or directory: {path}"
 class Error_EIO(FSError):
     """ Input/Output Error (inode not found) """
-
-# fileinfo = namedtuple("fileinfo", "inode is_dir is_file path name")
-
-
+    msg="I/O Error: bad inode {path}" # not actually a path in this case
 
 class _CIFlavour(_PosixFlavour):
     """
@@ -45,20 +54,9 @@ class PureCIPath(PurePath):
     def str(self):
         return str(self)
 
-# class CIFile:
-#     __slots__= "inode", "parent_inode", "is_dir", "is_file", "name"
-#
-#     def __init__(self, inode, parent_inode, is_dir, name):
-#         self.name=name
-#         self.inode=inode
-#         self.parent_inode = parent_inode
-#
-#         # for now, this is a binary relationship
-#         self.is_dir=is_dir
-#         self.is_file= not is_dir
-
-
 class ArchiveFS:
+
+    ROOT_INODE=0
 
     # noinspection PyUnresolvedReferences
     def __init__(self):
@@ -95,13 +93,13 @@ class ArchiveFS:
         try:
             return self.p2i_table[path]
         except KeyError:
-            raise Error_ENOENT(path.str)
+            raise Error_ENOENT(path.str) from None
 
     def pathfor(self, inode):
         try:
             return self.i2p_table[inode]
         except IndexError:
-            raise Error_EIO(inode)
+            raise Error_EIO(inode) from None
 
     def storedpath(self, path):
         """
@@ -113,7 +111,7 @@ class ArchiveFS:
         try:
             return self.directories[self.inodeof(dirpath)]
         except KeyError:
-            raise Error_ENOTDIR(dirpath.str)
+            raise Error_ENOTDIR(dirpath.str) from None
 
     def listdir(self, directory):
         return [self.i2p_table[i] for i in self.dir_inodes(directory)]
@@ -122,15 +120,73 @@ class ArchiveFS:
         #            inode -> path
         yield from (self.i2p_table[i] for i in self.dir_inodes(directory))
 
+    def itertree(self, root="/", include_root=True):
+        """
+        Return a generator that recursively yields all paths under the specified directory 'root'. The only requirements for `root` are that it be an existing directory within the filesystem, though the method will not fail if a file-path is passed instead. If `include_root` is True, the rootpath itself will be the first item yielded by the generator; if False, the root will be not be included in the output and iteration will begin with the root's children.
+
+        Directory entries are visited in a depth-first manner: the path of each entry is returned as soon as it is encountered; then, if the entry is a directory, the contents of the entry will be yielded (recursively), with iteration of the remaining children in the current directory resuming only once the full subtree for the entry has been returned.
+
+        :param str|Path root:
+        :param bool include_root:
+        :return:
+        """
+
+        rootpath = PureCIPath(root)
+        # if root was actually a file, just yield that file
+        if not self.is_dir(rootpath):
+            if include_root: yield rootpath
+        else:
+
+            def _iter(base):
+                for c in self.iterdir(base):
+                    yield c
+                    if self.is_dir(c):
+                        yield from _iter(c)
+
+            if include_root: yield rootpath
+
+            yield from _iter(rootpath)
+
+    def itertree2(self, root="/", include_root=True):
+        """
+        Almost identical to itertree, but yields tuples with signature (int, PureCIPath, str). The first item is the depth (from root) of the yielded path, the second is the path object, and the third is a single character indicating the type of file the path refers to. For now, the only type-codes are:
+
+            * d - Directory
+            * f - File
+
+        :param root:
+        :param include_root:
+        :return:
+        """
+        rootpath = PureCIPath(root)
+        # if root was actually a file, just yield that file
+        if not self.is_dir(rootpath):
+            if include_root: yield (0, rootpath, "f")
+        else:
+
+            depth=0
+            def _iter(base):
+                nonlocal depth
+                depth+=1
+                for c in self.iterdir(base):
+                    if self.is_dir(c):
+                        yield (depth, c, "d")
+                        yield from _iter(c)
+                    else:
+                        yield (depth, c, "f")
+                depth-=1
+
+            if include_root: yield (0, rootpath, "d")
+
+            yield from _iter(rootpath)
+
     def is_dir(self, path):
         return self.inodeof(path) in self.directories
 
     def exists(self, path):
         return path in self.p2i_table
 
-
-
-    # File Creation
+    ## File Creation
 
     def _create(self, path):
         """
@@ -140,7 +196,7 @@ class ArchiveFS:
         """
 
         if path in self.p2i_table:
-            raise Error_EEXIST(path.str)
+            raise Error_EEXIST(path.str) from None
 
         new_inode = len(self.i2p_table)
         self.i2p_table.append(path)
@@ -245,8 +301,6 @@ class ArchiveFS:
         # now delete it like any other file
         self._delfile(dirpath)
 
-
-
     def rmtree(self, directory):
         """
         Recursively remove a non-empty directory tree.
@@ -291,40 +345,6 @@ class ArchiveFS:
         """
         self.dir_inodes(dir1).remove(inode)
         self.dir_inodes(dir2).add(inode)
-
-    def move(self, path, destination, overwrite=False):
-        """
-        Move the file or directory pointed to by `path` to `destination`.
-
-        :param path:
-        :param destination:
-            If `destination` is an existing directory, `path` will become a child of `destination`. Otherwise, the filesystem path of the file-object `path` will be changed to `destination`.
-        :param overwrite:
-            If `destination` is an already-existing file and `overwrite` is False, a File-Exists error will be raised; if overwrite is True, `destination` will be deleted and replaced with `path`
-        :return: True if all went well
-        """
-        src = PureCIPath(path)
-        dst = PureCIPath(destination)
-
-        # if someone attempted to move an item to itself, just return
-        if src == dst: return True
-
-        # if the destination is an existing directory, move the source inside of it.
-        if self.is_dir(dst):
-            return self._move_to_dir(src, dst)
-
-        # now we know dst is either a file or a non-existing path
-        # so if it's a file, either delete it or raise an error
-        self._check_collision(dst, overwrite)
-
-        # and now we can be sure it doesn't exist! Muahahahaha...ha....oh
-
-        # if destination path is in the same folder as the source, this is just a name change
-        if dst.parent == src.parent:
-            return self._change_name(src, dst.name)
-
-        # and if we made it here, we can finally just move src to dst
-        return self._move_to_path(src, dst)
 
     def _move_to_dir(self, path, dest_dir):
         """
@@ -388,6 +408,40 @@ class ArchiveFS:
 
             else: raise Error_EEXIST(target.str)
 
+    def move(self, path, destination, overwrite=False):
+        """
+        Move the file or directory pointed to by `path` to `destination`.
+
+        :param path:
+        :param destination:
+            If `destination` is an existing directory, `path` will become a child of `destination`. Otherwise, the filesystem path of the file-object `path` will be changed to `destination`.
+        :param overwrite:
+            If `destination` is an already-existing file and `overwrite` is False, a File-Exists error will be raised; if overwrite is True, `destination` will be deleted and replaced with `path`
+        :return: True if all went well
+        """
+        src = PureCIPath(path)
+        dst = PureCIPath(destination)
+
+        # if someone attempted to move an item to itself, just return
+        if src == dst: return True
+
+        # if the destination is an existing directory, move the source inside of it.
+        if self.is_dir(dst):
+            return self._move_to_dir(src, dst)
+
+        # now we know dst is either a file or a non-existing path
+        # so if it's a file, either delete it or raise an error
+        self._check_collision(dst, overwrite)
+
+        # and now we can be sure it doesn't exist! Muahahahaha...ha....oh
+
+        # if destination path is in the same folder as the source, this is just a name change
+        if dst.parent == src.parent:
+            return self._change_name(src, dst.name)
+
+        # and if we made it here, we can finally just move src to dst
+        return self._move_to_path(src, dst)
+
     def rename(self, path, destination, overwrite=False):
         src = PureCIPath(path)
         dest = PureCIPath(destination)
@@ -419,12 +473,31 @@ class ArchiveFS:
         """
         self.rename(path, destination, True)
 
-
     # todo: copy and copytree (maybe...since our 'files' are really just names and contain no data, a 'copy' operation may be unnecessary)
 
+    async def mkfs(self, archive, archive_manager):
+        """
+
+        :param archive:
+        :param ArchiveHandler archive_manager:
+        :return:
+        """
 
 
 
+# fileinfo = namedtuple("fileinfo", "inode is_dir is_file path name")
+
+# class CIFile:
+#     __slots__= "inode", "parent_inode", "is_dir", "is_file", "name"
+#
+#     def __init__(self, inode, parent_inode, is_dir, name):
+#         self.name=name
+#         self.inode=inode
+#         self.parent_inode = parent_inode
+#
+#         # for now, this is a binary relationship
+#         self.is_dir=is_dir
+#         self.is_file= not is_dir
 
 
 
@@ -450,4 +523,5 @@ def __test1():
 
 
 if __name__ == '__main__':
+    # from skymodman.managers.archive_7z import ArchiveHandler
     __test1()
