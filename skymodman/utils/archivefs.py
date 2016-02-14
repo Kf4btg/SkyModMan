@@ -1,4 +1,4 @@
-from collections import namedtuple
+# from collections import namedtuple
 from pathlib import PurePath, _PosixFlavour
 
 from skymodman.exceptions import Error
@@ -18,7 +18,7 @@ class Error_ENOENT(FSError):
 class Error_EIO(FSError):
     """ Input/Output Error (inode not found) """
 
-fileinfo = namedtuple("fileinfo", "inode is_dir is_file path name")
+# fileinfo = namedtuple("fileinfo", "inode is_dir is_file path name")
 
 
 
@@ -64,12 +64,12 @@ class ArchiveFS:
     def __init__(self):
         # list of paths, where an item's index in the list corresponds to its inode number.
         self.i2p_table = [] # type: list[PureCIPath]
-        self.inodePathTable = []
+        # self.inodePathTable = []
         # inode -> path
 
         # mapping of filepaths to inodes
         self.p2i_table = dict() # type: dict[PureCIPath, int]
-        self.pathInodeTable = dict()
+        # self.pathInodeTable = dict()
         # path -> inode
 
         # mapping of directory-inodes to set of inodes they contain
@@ -83,7 +83,7 @@ class ArchiveFS:
         self._root=PureCIPath("/")
         self.i2p_table.append(self._root) # inode 0
         self.p2i_table[self._root]=0
-        self.directories[0]=set() # create empty list
+        self.directories[0]=set() # create empty set
 
     @property
     def root(self):
