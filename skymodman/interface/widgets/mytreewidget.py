@@ -62,89 +62,74 @@ class MyTreeWidget(QTreeWidget):
         # get item being moved (should only be 1)
         self.dragitem = self.selectedItems()[0]
 
+        # print("ditem:", self.dragitem.text(0))
+
         # have to save this before the drop occurs
         self.dragitem_parent = self.dragitem.parent()
+        #
+        # if self.dragitem_parent is not None:
+        #     print("ditem_par:", self.dragitem_parent.text(0))
+        # else:
+        #     print("ditem_par:", self.dragitem_parent)
 
         super().startDrag(actions)
 
     def dropEvent(self, event):
         # fixme: dragging items around doesn't currently change the tree-datastructures that are used to build the visual tree; thus, when a new root is set (and the tree is rebuilt), all changes made via drag-and-drop are lost.
-        super().dropEvent(event)
-
-        key = self.dragitem.text(0)
-        # keep everything sorted by name, with directories first.
         target = self.itemAt(event.pos())
-        if target is None or (target.isfile and target.parent() is None):
-            self.invisibleRootItem().sortChildren(0, Qt.AscendingOrder)
 
-            old_parent = self.dragitem_parent.data(0, Qt.UserRole)
-            new_parent = self.current_root
+        if target and target.isfile:
+            target = target.parent() # always target a directory
 
-            # since we shouldn't be able to drag a top-level item to the root, we
-            # will assume that dragitem_parent cannot be None here.
-
-            # self._restructure_tree(key,
-            #                        self.dragitem_parent.data(0, Qt.UserRole),
-            #                        self.modified_tree,
-            #                        self.dragitem.isfile)
-
-            # key=self.dragitem.text(0)
-            # # rearrange tree to reflect change
-            # if self.dragitem.isdir:
-            #     # remove the moved directory (sub-tree, sub-dict, what-freakin-ever why can't there be an easy name for this crap.)
-            #     # from its old parent dict
-            #     subtree=self.dragitem_parent.data(0, Qt.UserRole).pop(key)
-            #
-            #     # now add to root, since this is the invisible root item
-            #     self.modified_tree[key] = subtree
-            #
-            # else: # file
-            #     # remove from previous _files list
-            #     self.dragitem_parent.data(0, Qt.UserRole).leaves.remove(key)
-            #     # insert at root
-            #     self.modified_tree.insert(key_list=[], value=key)
-
-        elif target.isdir:
-            target.sortChildren(0, Qt.AscendingOrder)
-
-            old_parent = (self.current_root
-                          if self.dragitem_parent is None
-                          else self.dragitem_parent.data(0, Qt.UserRole))
-
-            new_parent = target.data(0, Qt.UserRole)
-
-            # self._restructure_tree(key,
-            #                        self.modified_tree if self.dragitem_parent is None else self.dragitem_parent.data(0, Qt.UserRole),
-            #                        target.data(0, Qt.UserRole),
-            #                        self.dragitem.isfile)
+        if target is self.dragitem or target is self.dragitem_parent:
+            event.ignore()
         else:
-            target.parent().sortChildren(0, Qt.AscendingOrder)
 
-            old_parent = (self.current_root
-                          if self.dragitem_parent is None
-                          else self.dragitem_parent.data(0, Qt.UserRole))
+            super().dropEvent(event)
 
-            new_parent = target.parent().data(0, Qt.UserRole)
+            key = self.dragitem.text(0)
+            # keep everything sorted by name, with directories first.
 
-            # self._restructure_tree(key,
-            #                        self.modified_tree if self.dragitem_parent is None else self.dragitem_parent.data(
-            #                            0, Qt.UserRole),
-            #                        target.data(0, Qt.UserRole),
-            #                        self.dragitem.isfile)
-        self._restructure_tree(key,
-                               old_parent,
-                               new_parent,
-                               self.dragitem.isfile)
+            # if target is not None:
+            #     print("target:", target.text(0))
+            # else:
+            #     print("target:", target)
 
-        self.tree_structure_changed.emit()
+            if target is None: # targeting root of tree
+                self.invisibleRootItem().sortChildren(0, Qt.AscendingOrder)
+
+                old_parent = self.dragitem_parent.data(0, Qt.UserRole)
+                new_parent = self.current_root
+
+            else: # some other directory
+                target.sortChildren(0, Qt.AscendingOrder)
+
+                old_parent = (self.dragitem_parent.data(0, Qt.UserRole)
+                              if self.dragitem_parent # if none, dragitem was a top-level item
+                              else self.current_root)
+
+                new_parent = target.data(0, Qt.UserRole)
+
+            # update modified-tree
+            self._restructure_tree(key,
+                                   old_parent,
+                                   new_parent,
+                                   self.dragitem.isfile)
+
+            print(self.modified_tree.to_string(indent=2))
+
+            self.tree_structure_changed.emit()
 
     def _restructure_tree(self, key, old_parent_tree, new_parent_tree, is_file):
+        # print("op:", old_parent_tree.keys(), old_parent_tree.leaves)
+        # print("np:", new_parent_tree.keys(), new_parent_tree.leaves)
 
         if is_file:
-            old_parent_tree.leaves.remove(key)
-            new_parent_tree.insert([], key)
+            old_parent_tree.remove_leaf(key)
+            new_parent_tree.add_leaf(key)
         else:
-            new_parent_tree[key] = old_parent_tree.pop(key)
+            new_parent_tree[key] = old_parent_tree[key]
+            del old_parent_tree[key]
 
 
     def dragMoveEvent(self, event):

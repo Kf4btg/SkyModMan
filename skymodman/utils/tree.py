@@ -53,10 +53,12 @@ class AutoTree(defaultdict):
     This should not be instantiated directly: use mytree = tree.Tree() to create an instance of this type.
     """
 
+    leaf_list_key="_files"
+
     def __call__(self, *args, **kwargs):
         return AutoTree(*args, **kwargs)
 
-    def insert(self, key_list, value=None, leaf_list_key="_files"):
+    def insert(self, key_list, value=None):
         """...
         Given an ordered list of key names, descend down the tree by key, creating child branches (aka tree-levels, aka sub-dictionaries, aka child-trees,...) as needed.
 
@@ -72,16 +74,15 @@ class AutoTree(defaultdict):
 
         :param key_list:
         :param value:
-        :param leaf_list_key:
         """
         tree = self
         for k in key_list:
             tree = tree[k]
         if value is not None:
-            if leaf_list_key in tree:
-                tree[leaf_list_key].append(value)
+            if self.leaf_list_key in tree:
+                tree[self.leaf_list_key].append(value)
             else:
-                tree[leaf_list_key] = [value]
+                tree[self.leaf_list_key] = [value]
 
     def __str__(self):
         return json.dumps(self, indent=1)
@@ -94,9 +95,25 @@ class AutoTree(defaultdict):
         :return: the list under the "_files" key, or an empty list if there is no such key
         """
 
-        if "_files" in self:
-            return self["_files"]
+        if self.leaf_list_key in self:
+            return self[self.leaf_list_key]
         return []
+
+    def add_leaf(self, item):
+        if self.leaf_list_key in self:
+            self[self.leaf_list_key].append(item)
+        else:
+            self[self.leaf_list_key] = [item]
+
+    def remove_leaf(self, item):
+        try:
+            self.leaves.remove(item)
+            if not self.leaves:
+                del self[self.leaf_list_key]
+        except ValueError:
+            pass
+
+
 
     def count(self, leaves_only=True):
         """Return the total number of items in the tree.
@@ -107,7 +124,7 @@ class AutoTree(defaultdict):
         """
         c=0
         for k,v in self.items():
-            if k=="_files":
+            if k==self.leaf_list_key:
                 c+=len(v)
             # don't count the '_files' key itself
             elif not leaves_only:

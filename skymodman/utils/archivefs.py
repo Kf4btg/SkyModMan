@@ -1,4 +1,4 @@
-from collections import namedtuple, defaultdict
+from collections import namedtuple
 from pathlib import PurePath, _PosixFlavour
 
 from skymodman.exceptions import Error
@@ -45,17 +45,17 @@ class PureCIPath(PurePath):
     def str(self):
         return str(self)
 
-class CIFile:
-    __slots__= "inode", "parent_inode", "is_dir", "is_file", "name"
-
-    def __init__(self, inode, parent_inode, is_dir, name):
-        self.name=name
-        self.inode=inode
-        self.parent_inode = parent_inode
-
-        # for now, this is a binary relationship
-        self.is_dir=is_dir
-        self.is_file= not is_dir
+# class CIFile:
+#     __slots__= "inode", "parent_inode", "is_dir", "is_file", "name"
+#
+#     def __init__(self, inode, parent_inode, is_dir, name):
+#         self.name=name
+#         self.inode=inode
+#         self.parent_inode = parent_inode
+#
+#         # for now, this is a binary relationship
+#         self.is_dir=is_dir
+#         self.is_file= not is_dir
 
 
 class ArchiveFS:
@@ -77,7 +77,6 @@ class ArchiveFS:
         # inode -> {inode, ...}
 
         # mapping of inodes to a CIFile instance describing the current state of a file representing that inode
-        # For now, an inode can only refer to one file (i.e. no hardlinks)
         # self.file_table = {} # inode -> CIFile
 
         # create root of filesystem
@@ -90,7 +89,7 @@ class ArchiveFS:
     def root(self):
         return self._root
 
-    # File Access/stats query
+    # File Access/stats
 
     def inodeof(self, path):
         try:
