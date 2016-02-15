@@ -31,23 +31,6 @@ def withlogger(cls):
     setattr(cls, 'LOGGER', logger)
 
     return cls
-#
-# def counter():
-#     count=0
-#     def inc():
-#         nonlocal count
-#         count+=1
-#         return count
-#     return inc
-
-
-
-
-
-
-
-
-
 
 def printattrs(obj, name=None, dunder=True, sunder=True):
     """
@@ -80,6 +63,17 @@ def printattrs(obj, name=None, dunder=True, sunder=True):
             pprint(attr, indent=4)
         else:
             print(a, attr, sep=": ")
+
+# FROM:
+# http://stackoverflow.com/questions/24601722/how-can-i-use-functools-singledispatch-with-instance-methods
+def singledispatch_m(func):
+    dispatcher = _singledispatch(func)
+
+    @_wraps(dispatcher)
+    def wrapper(*args, **kw):
+        return dispatcher.dispatch(
+            args[1].__class__)(*args, **kw)
+    return wrapper
 
 # class classprop:
 #     """
@@ -114,15 +108,7 @@ def printattrs(obj, name=None, dunder=True, sunder=True):
 #     """
 #     yield from map(lambda r: _reduce(binfunc, r), list_of_lists)
 
-# FROM:
-#http://stackoverflow.com/questions/24601722/how-can-i-use-functools-singledispatch-with-instance-methods
-def singledispatch_m(func):
-    dispatcher = _singledispatch(func)
-    @_wraps(dispatcher)
-    def wrapper(*args, **kw):
-        return dispatcher.dispatch(args[1].__class__)(*args, **kw)
-    # wrapper.register = dispatcher.register
-    return wrapper
+
 #
 # # variation that allows specifying an arbitrary arg-index
 #

@@ -52,7 +52,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         self._caches=[self._sorted_dirlist,
                       self._isdir]
 
-        print([(i, p.str) for i,p in enumerate(self._fs.i2p_table)])
+        # print([(i, p.str) for i,p in enumerate(self._fs.i2p_table)])
 
     @property
     def root_inode(self):
@@ -72,14 +72,11 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param index:
         :return: Number of filesystem entries contained by the directory pointed to by `index`
         """
-        # super().rowCount(parent, *args, **kwargs)
-        # need to return len of dir-inodes list for index
+        if not index.isValid():
+            return self._fs.dir_length(self.root_inode)
 
-        x=self._fs.dir_length(self.inode4index(index))
-        # self.LOGGER << "rowcount for {}: {}".format(self.path4index(index),x)
-        print("rowcount for {}: {}".format(self.path4index(index),x))
+        return self._fs.dir_length(index.internalId())
 
-        return x
 
     def columnCount(self, *args, **kwargs):
         """
@@ -95,36 +92,54 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param col:
         :param parent:
         """
-        print("index(",row, col, parent, ")")
+        if not parent.isValid():
+            # I'm not sure this will ever happen, so let's watch for it:
+            # edit: it happens...
+            # self.LOGGER << "index: parent is invalid"
+            parinode = self.root_inode
+        else:
+            parinode = parent.internalId()
 
-        parinode = self.inode4index(parent)
-        print("index(): parinode=", parinode)
 
         try:
             child = self._sorted_dirlist(parinode)[row]
 
+            # using an int for the third argument makes it internalId(),
+            # not internalPointer()
             return self.createIndex(row, col, self._fs.inodeof(child))
         except IndexError:
-            print("index(): indexError")
             return QModelIndex()
 
         # return QModelIndex()
 
+
+
+
     def parent(self, child_index=QModelIndex()):
-        print("parent()")
-        if not child_index.isValid(): return QModelIndex()
+
+        if not child_index.isValid():
+            return QModelIndex()
 
         # get the parent path
         parent = self._fs.pathfor(child_index.internalId()).parent
 
         # if parent is "/" return invalid index
-        if not parent or parent == self.root:
+        if parent == self.root:
             return QModelIndex()
 
         #now we need the parent's parent's path...
         grandpath = parent.parent
         # ...to find index of parent within its directory (by sorted position)
-        parent_row = self._sorted_dirlist(self._fs.inodeof(grandpath)).index(parent)
+
+        try:
+            parent_row = self._sorted_dirlist(self._fs.inodeof(grandpath)).index(parent)
+        except ValueError:
+            print("child:", self.path4index(child_index))
+            print("parent:", parent)
+            print("gp:", grandpath)
+            print("dirlist:",
+                  self._sorted_dirlist(self._fs.inodeof(grandpath)))
+            raise
 
         return self.createIndex(parent_row, 0, self._fs.inodeof(parent))
 
@@ -136,10 +151,11 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param role:
         :return:
         """
-        try:
-            inode=self.inode4index(index)
+
+        if role in (Qt.DisplayRole, Qt.DecorationRole, Qt.CheckStateRole):
+
+            inode=index.internalId()
             path=self._fs.pathfor(inode)
-            print("data: path=", path, ", inode=", inode, ", role=", role)
             return {
                 Qt.DisplayRole:
                     path.name,
@@ -150,16 +166,17 @@ class ModArchiveTreeModel(QAbstractItemModel):
                         inode == self._currentroot_inode or
                         inode not in self._unchecked]
             }[role]
-        except KeyError as ke:
-            self.LOGGER << ke
 
     def flags(self, index):
+        """
+        Return different values for directories and files
+        :param index:
+        :return:
+        """
         if not index.isValid():
             return Qt.ItemIsEnabled
 
-        inode=self.inode4index(index)
-
-        if self._isdir(inode):
+        if self._isdir(index.internalId()):
             return self.DIRFLAGS
         return self.FILEFLAGS
 
@@ -172,15 +189,14 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param role:
         :return:
         """
-        print("setdata()")
-        if not index.isValid(): return False
+        if not index.isValid():
+            self.LOGGER << "setData: invalid index"
+            return False
 
         if role == Qt.CheckStateRole:
-            inode=self.inode4index(index)
-
             # toggles the inode's membership in the set;
             # just ignore whatever `value` is
-            self._unchecked ^= {inode}
+            self._unchecked ^= {index.internalId()}
             self.dataChanged.emit(index, index, [role])
             return True
 
@@ -213,13 +229,14 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
     def mimeData(self, indexes):
         """
-        This is a single-selection model, so there should only be 1 row getting dragged. And what we're dragging around is simply a text version of the inode for the dragged file.
+        This is a single-selection model, so there should only be 1 row getting dragged.
+
+        And what we're dragging around is simply a text version of the inode for the dragged file.
         :param indexes:
         :return:
         """
-        inode = indexes[0].internalId()
         mimedata = QMimeData()
-        mimedata.setText(str(inode))
+        mimedata.setText(str(indexes[0].internalId()))
         return mimedata
 
     def dropMimeData(self, data, action, row, column, parent):
@@ -234,24 +251,101 @@ class ModArchiveTreeModel(QAbstractItemModel):
         par_inode = parent.internalId()
         src_inode = int(data.text())
         src_path = fs.pathfor(src_inode)
+        orig_parent = src_path.parent
 
-        if row == column == -1:
-            # this apparently means "dropped directly on parent"
-            if fs.is_dir(par_inode):
-                fs.move(src_path, fs.pathfor(par_inode))
+        if row < 0 and not self._isdir(par_inode):
+            # dropped directly on parent, and 'parent' is not a directory
+            tpath = fs.pathfor(par_inode).parent
+            # tinode = fs.inodeof(tpath)
+        else:
+            # either dropped directly on parent or before row,col in parent,
+            # tinode = par_inode
+            tpath = fs.pathfor(par_inode)
+
+        r = self.row4path(src_path)
+        # src_parent, srcFirst, srcLast, destParent, int destChild
+        self.beginMoveRows(self.index4path(orig_parent),
+                           r, r, self.index4path(tpath),
+                           self.future_row(src_path, tpath))
+
+        fs.move(src_path, fs.pathfor(par_inode))
+
+        self.endMoveRows()
+
+        self._invalidate_caches([self._sorted_dirlist])
+
+        self._print_fstree()
+        return True
+
+
+
+        # print("dropped {}::{} on {}::{}".format(
+        #     src_inode, src_path, par_inode, self._fs.pathfor(par_inode)
+        # ))
+
+        # if row < 0:
+
+        # this apparently means "dropped directly on parent"
+        # self.LOGGER << "Dropped directly on parent"
+        # if fs.is_dir(par_inode):
+        # tinode = par_inode
+        # tpath = fs.pathfor(par_inode)
+        # fs.move(src_path, fs.pathfor(par_inode))
+        # else:
+        # add as sibling
+
+        # fs.move(src_path, fs.pathfor(par_inode).parent)
+
+        # self._invalidate_caches([self._sorted_dirlist])
+        # self._print_fstree()
+        # return True
+        # self.LOGGER << "dropped before r{}c{} in {}".format(row, column, self._fs.pathfor(par_inode))
+        # dropped right before row & column in parent,
+        # so assume parent is dir?
+        # self.LOGGER << "dropMimeData: end, return False"
+        # return False #?
+
+    def canDropMimeData(self, data, action, row, col, parent):
+        """
+
+        :param QMimeData data:
+        :param Qt.DropAction action:
+        :param int row:
+        :param int col:
+        :param QModelIndex parent:
+        :return:
+        """
+
+        dropnode = int(data.text())
+
+        if not parent.isValid():
+            # parinode = self.root_inode
+            # target = self.root_inode
+            ## target is root directory, so return True so long as source
+            ## was not already a top-level item.
+            return dropnode not in self._fs.dir_inodes(self.root_inode)
+        else:
+            parinode = parent.internalId()
+
+            if row < 0 and not self._isdir(parinode):
+                # dropped directly on parent, and 'parent' is not a directory
+                pp = parent.parent()
+                target = pp.internalId() if pp.isValid() else self.root_inode
+
             else:
-                # add as sibling
-                fs.move(src_path, fs.pathfor(par_inode).parent)
-            return True
+                # either dropped directly on parent or before row,col in parent,
+                # doesn't really matter, we just need to add to parent's list
+                target = parinode
 
-        elif row>=0 or column>=0:
-            # dropped right before row & column in parent,
-            # so assume parent is dir?
-            fs.move(src_path, fs.pathfor(par_inode))
-            return True
+            # can't drop on self or on immediate parent
+            if target == dropnode or \
+                dropnode in self._fs.dir_inodes(target):
+                # or on child directory...do I need to check for that one? how?
+                return False
 
-        return False #?
-
+        # now that we've gone through all that, leave the rest of the decision
+            # up to the super class
+        return super().canDropMimeData(data, action, row, col, parent)
 
 
     ##===============================================
@@ -274,8 +368,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
             else:
                 files.append(p)
 
-        print("sorted dir list:", dirs+files)
-
         return dirs + files
 
     @lru_cache(None)
@@ -293,28 +385,27 @@ class ModArchiveTreeModel(QAbstractItemModel):
         for c in which:
             c.cache_clear()
 
+    def _print_fstree(self):
+        indent="  "
+        for d,p,t in self._fs.itertree2(include_root=False):
+            print(indent*d,
+                  p.name,
+                  {"d":"/", "f":""}[t],
+                  sep="")
+
 
     ##===============================================
     ## Translation
     ##===============================================
 
-    def inode4index(self, index) -> int:
-        """
-        Gets the inode for the path represented by `index`
-        :param QModelIndex index:
-        :return: inode of the item
-        """
-        print("inode4index(", index, ")")
+    # def inode4index(self, index) -> int:
+    #     """
+    #     Gets the inode for the path represented by `index`
+    #     :param QModelIndex index:
+    #     :return: inode of the item
+    #     """
+    #     return index.internalId() if index.isValid() else self.root_inode
 
-        if index.isValid():
-            print("index is valid")
-            print("row={}, col={}".format(index.row(), index.column()))
-            inode=index.internalId()
-            print("inode=",inode)
-            if inode: return inode
-
-        print("index is invalid")
-        return self.root_inode
 
     def path4index(self, index) -> PureCIPath:
         """
@@ -322,9 +413,59 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param QModelIndex index:
         :return: path to the item
         """
+        return self._fs.pathfor(index.internalId()) if index.isValid() else self.root
 
-        if index.isValid():
-            path = self._fs.pathfor(index.internalId())
-            if path: return path
-        return self.root
+    def index4inode(self, inode):
+        if inode == self.root_inode:
+            return QModelIndex()
 
+        row = self.row4inode(inode)
+
+        return self.createIndex(row, 0, inode)
+
+    def index4path(self, path):
+        if path == self.root:
+            return QModelIndex()
+        row = self.row4path(path)
+        return self.createIndex(row, 0, self._fs.inodeof(path))
+
+    def row4inode(self, inode):
+        """
+        Return the sorted position in the inode's parent directory where the inode's current path would appear
+        :param inode:
+        :return:
+        """
+        path = self._fs.pathfor(inode)
+        return self.row4path(path)
+
+    def row4path(self, path):
+        """
+        :param path:
+        :return:
+        """
+        return self._sorted_dirlist(
+            self._fs.inodeof(path.parent)
+        ).index(path)
+
+    def future_row(self, path, newdir):
+        """
+        Determine where in the target directory 'newdir' `path` will appear if it is moved there.
+
+        :param path:
+        :param newdir:
+        :return:
+        """
+        dirs = []
+        files = []
+        for p in self._fs.listdir(newdir):
+            if self._fs.is_dir(p):
+                dirs.append(p)
+            else:
+                files.append(p)
+
+        newpath = PureCIPath(newdir, path.name)
+        dirs.append(newpath) if self._fs.is_dir(path) else files.append(newpath)
+
+        allfiles = sorted(dirs) + sorted(files)
+
+        return allfiles.index(newpath)

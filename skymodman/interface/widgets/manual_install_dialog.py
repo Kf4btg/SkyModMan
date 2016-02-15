@@ -32,10 +32,9 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         :return:
         """
         super().__init__(*args, **kwargs)
-        self.LOGGER << "init manuual install dlg"
+        self.LOGGER << "init manual install dlg"
 
         self.setupUi(self)
-        self.LOGGER << "setupui done"
 
         self.structure = mod_fs
         # self.mod_data = Tree()
@@ -44,12 +43,8 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         # self.valid_structure = True
         # self.data_root = self.structure.root
 
-        # self.LOGGER << "about to create treemodel"
-        print("about to create treemodel")
         self.modfsmodel = ModArchiveTreeModel(mod_fs)
-        print("created treemodel")
 
-        print("setting model")
         self.mod_structure_view.setModel(self.modfsmodel)
 
 
