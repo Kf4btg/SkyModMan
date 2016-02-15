@@ -6,12 +6,31 @@ from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeD
 from skymodman.utils.archivefs import ArchiveFS, PureCIPath
 from skymodman.utils import withlogger
 
+# noinspection PyTypeChecker,PyArgumentList
 FOLDER_ICON = QtGui.QIcon.fromTheme("folder")
+# noinspection PyTypeChecker,PyArgumentList
 FILE_ICON = QtGui.QIcon.fromTheme("text-x-plain")
 
 @withlogger
 class ModArchiveTreeModel(QAbstractItemModel):
 
+    DIRFLAGS = (Qt.ItemIsEnabled
+                | Qt.ItemIsEditable
+                | Qt.ItemIsSelectable
+                | Qt.ItemIsDragEnabled
+                | Qt.ItemIsDropEnabled
+                | Qt.ItemIsUserCheckable
+                | Qt.ItemIsTristate)
+
+    FILEFLAGS = (Qt.ItemIsEnabled
+                 | Qt.ItemIsSelectable
+                 | Qt.ItemIsEditable
+                 | Qt.ItemIsDragEnabled
+                 | Qt.ItemNeverHasChildren
+                 | Qt.ItemIsUserCheckable)
+
+
+    folder_structure_changed = pyqtSignal()
 
     def __init__(self, mod_fs, *args, **kwargs):
         """
@@ -30,8 +49,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
         self._unchecked=set()
 
         # just tracking any functions with lru_caches
-        self._caches=[self._sorted_dirlist]
-
+        self._caches=[self._sorted_dirlist,
+                      self._isdir]
 
     @property
     def root_inode(self):
@@ -121,6 +140,17 @@ class ModArchiveTreeModel(QAbstractItemModel):
         except KeyError as ke:
             self.LOGGER << ke
 
+    def flags(self, index):
+        if not index.isValid():
+            return Qt.ItemIsEnabled
+
+        inode=self.inode4index(index)
+
+        if self._isdir(inode):
+            return self.DIRFLAGS
+        return self.FILEFLAGS
+
+    # noinspection PyUnresolvedReferences
     def setData(self, index, value, role=None):
         """
 
@@ -137,6 +167,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
             # toggles the inode's membership in the set;
             # just ignore whatever `value` is
             self._unchecked ^= {inode}
+            self.dataChanged.emit(index, index, [role])
             return True
 
         elif role == Qt.EditRole:
@@ -150,6 +181,63 @@ class ModArchiveTreeModel(QAbstractItemModel):
             # try:
             self._fs.chname(currpath, value)
             # except Error_EEXIST
+
+            self.dataChanged.emit(index, index)
+            return True
+
+        return super().setData(index, value, role)
+
+    ##===============================================
+    ## Drag and Drop
+    ##===============================================
+
+    def supportedDropActions(self):
+        return Qt.MoveAction
+
+    def mimeTypes(self):
+        return ['text/plain']
+
+    def mimeData(self, indexes):
+        """
+        This is a single-selection model, so there should only be 1 row getting dragged. And what we're dragging around is simply a text version of the inode for the dragged file.
+        :param indexes:
+        :return:
+        """
+        inode = indexes[0].internalPointer()
+        mimedata = QMimeData()
+        mimedata.setText(str(inode))
+        return mimedata
+
+    def dropMimeData(self, data, action, row, column, parent):
+
+        if not parent.isValid():
+            # dragging to root...maybe?
+            # let's check and deal with it later
+            self.logger << "drop-parent invalid"
+            return False
+
+        fs = self._fs
+        par_inode = parent.internalPointer()
+        src_inode = int(data.text())
+        src_path = fs.pathfor(src_inode)
+
+        if row == column == -1:
+            # this apparently means "dropped directly on parent"
+            if fs.is_dir(par_inode):
+                fs.move(src_path, fs.pathfor(par_inode))
+            else:
+                # add as sibling
+                fs.move(src_path, fs.pathfor(par_inode).parent)
+            return True
+
+        elif row>=0 or column>=0:
+            # dropped right before row & column in parent,
+            # so assume parent is dir?
+            fs.move(src_path, fs.pathfor(par_inode))
+            return True
+
+        return False #?
+
 
 
     ##===============================================
@@ -174,7 +262,9 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
         return dirs + files
 
-
+    @lru_cache(None)
+    def _isdir(self, inode):
+        return self._fs.is_dir(inode)
 
     def _invalidate_caches(self, which=None):
         """

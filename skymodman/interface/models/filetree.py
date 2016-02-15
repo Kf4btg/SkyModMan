@@ -416,7 +416,6 @@ class ModFileTreeModel(QAbstractItemModel):
 
         # this used to call resetModel() stuff, too, but I decided this wasn't the place for that. It's a little barren now...
 
-
     def _load_tree(self):
         """
         Build the tree from the rootitem
@@ -436,7 +435,6 @@ class ModFileTreeModel(QAbstractItemModel):
         for c in self.rootitem.iterchildren(True):
             if c.lpath in hfiles:
                 c.checkState = Qt_Unchecked
-
 
     def getItem(self, index) -> QFSItem:
         """Extracts actual item from given index
@@ -632,7 +630,6 @@ class ModFileTreeModel(QAbstractItemModel):
             self.cursor = self.dbconn.cursor()
             self.hasUnsavedChanges.emit(False)
 
-
     def revert(self):
         """
         Undo all changes made to the tree since the last save.
@@ -645,8 +642,6 @@ class ModFileTreeModel(QAbstractItemModel):
 
         self.endResetModel()
         self.hasUnsavedChanges.emit(False)
-
-
 
     def update_db(self):
         """Make  changes to database.

@@ -88,13 +88,14 @@ class ArchiveFS:
     def root(self):
         return self._root
 
-    ##===============================================
+    ##=====================================================
     ## File Access/stats
-    ##===============================================
-
+    ##-----------------------------------------------------
     ## Below, we will often use a version of singledispatch
-    ## that dispatches on the second argument (rather than the first, as
-    ## the original function does) to allow it to work with instance methods.
+    ## that dispatches on the second argument (rather than
+    ## the first, as the original function does) to allow
+    ## it to work with instance methods.
+    ##=====================================================
 
     @singledispatch_m
     def inodeof(self, path):
