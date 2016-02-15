@@ -494,9 +494,78 @@ class ArchiveFS:
 
         return subfs
 
+    def fsck(self, root="/"):
+        return fsck_modfs(self, root)
+
+    def fsck_quick(self, root="/"):
+        return fsck_modfs_quick(self, root)
 
 
+def fsck_modfs(modfs, root="/"):
+    """
+    Check if the pseudo-filesystem represented by `modfs` contains recognized game-data on its top level.
+    :param arcfs.ArchiveFS modfs:
+    :return: 3-tuple:
+        (number_of_recognized_valid_toplevel_items,
+         dict_of_that_data_and_other_stuff,
+         directory_which_contains_the_game_data),
 
+         where the last item may not be the same as the original root of `modfs`. (It will only be different if the only item in root was a directory that held all the actual data, i.e. should have just been the root directory in the first place.)
+    """
+    from skymodman.constants import TopLevelDirs_Bain, \
+        TopLevelSuffixes
+    import re
+
+    mod_data = {
+        "folders":   [],
+        "files":     [],
+        "docs":      [],
+        # some mods have a fomod dir that just contains information
+        # about the mod, with no config script
+        "fomod_dir": None
+    }
+    doc_match = re.compile(r'(read.?me|doc(s|umentation)|info)',
+                           re.IGNORECASE)
+
+    for topitem in modfs.iterdir(root):
+        if modfs.is_dir(
+                topitem) and topitem.name.lower() in TopLevelDirs_Bain:
+            mod_data["folders"].append(topitem)
+
+        elif topitem.suffix.lower().lstrip(".") in TopLevelSuffixes:
+            mod_data["files"].append(topitem)
+
+        elif doc_match.search(topitem):
+            mod_data["docs"].append(topitem)
+
+    # one last check if the previous searches turned up nothing:
+    # if there is only one item on the top level
+    # of the mod and that item is a directory, then check inside that
+    # directory for the necessary files.
+    if not (mod_data["folders"] and mod_data["files"]):
+        _list = modfs.listdir(root)
+        if len(_list) == 1 and modfs.is_dir(_list[0]):
+            return fsck_modfs(modfs, _list[0])
+
+    return len(mod_data["folders"]) + len(
+        mod_data["files"]), mod_data, root
+
+def fsck_modfs_quick(modfs, root="/"):
+    """
+    This simply returns True upon finding the first viable game-data item on the root level (or False if none is found)
+    :param root:
+    """
+    from skymodman.constants import TopLevelDirs_Bain, \
+        TopLevelSuffixes
+
+    for topitem in modfs.iterdir(root):
+        if (modfs.is_dir(topitem)
+            and topitem.name.lower() in TopLevelDirs_Bain) or \
+                (topitem.suffix.lower().lstrip(
+                    ".") in TopLevelSuffixes):
+            return True
+
+    return False
 
 
 # fileinfo = namedtuple("fileinfo", "inode is_dir is_file path name")

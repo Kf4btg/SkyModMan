@@ -170,69 +170,6 @@ class InstallManager:
 
         return modfs
 
-    def fsck_modfs_quick(self, modfs, root="/"):
-        """
-        This simply returns True upon finding the first viable game-data item on the root level (or False if none is found)
-        :param root:
-        :return:
-        """
-        self.LOGGER << "Searching root of mod-archive fs for gamedata"
-        for topitem in modfs.iterdir(root):
-            if (modfs.is_dir(topitem)
-                    and topitem.name.lower() in TopLevelDirs_Bain) or \
-                (topitem.suffix.lower().lstrip(".") in TopLevelSuffixes):
-
-                return True
-
-        return False
-
-    def fsck_modfs(self, modfs, root="/"):
-        """
-        Check if the pseudo-filesystem represented by `modfs` contains recognized game-data on its top level.
-        :param arcfs.ArchiveFS modfs:
-        :return: 3-tuple:
-            (number_of_recognized_valid_toplevel_items,
-             dict_of_that_data_and_other_stuff,
-             directory_which_contains_the_game_data),
-
-             where the last item may not be the same as the original root of `modfs`. (It will only be different if the only item in root was a directory that held all the actual data, i.e. should have just been the root directory in the first place.)
-        """
-        self.LOGGER << "Analyzing top level of mod-archive fs"
-
-        mod_data = {
-            "folders":   [],
-            "files":     [],
-            "docs":      [],
-            # some mods have a fomod dir that just contains information
-            # about the mod, with no config script
-            "fomod_dir": None
-        }
-        doc_match = re.compile(r'(read.?me|doc(s|umentation)|info)',
-                               re.IGNORECASE)
-
-        for topitem in modfs.iterdir(root):
-            if modfs.is_dir(topitem) and topitem.name.lower() in TopLevelDirs_Bain:
-                mod_data["folders"].append(topitem)
-
-            elif topitem.suffix.lower().lstrip(".") in TopLevelSuffixes:
-                mod_data["files"].append(topitem)
-
-            elif doc_match.search(topitem):
-                mod_data["docs"].append(topitem)
-
-        # one last check if the previous searches turned up nothing:
-        # if there is only one item on the top level
-        # of the mod and that item is a directory, then check inside that
-        # directory for the necessary files.
-        if not (mod_data["folders"] and mod_data["files"]):
-            _list = modfs.listdir(root)
-            if len(_list)==1 and modfs.is_dir(_list[0]):
-                return self.fsck_modfs(modfs, _list[0])
-
-
-        return len(mod_data["folders"]) + len(mod_data["files"]), mod_data, root
-
-
     def analyze_structure_tree(self, mod_tree):
         """
         check the mod-structure for an already-created tree

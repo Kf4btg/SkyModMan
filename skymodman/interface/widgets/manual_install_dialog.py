@@ -18,7 +18,7 @@ Right click to set top-level directory or create a new folder."""
 
 class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
-    def __init__(self, structure_tree, *args, **kwargs):
+    def __init__(self, mod_fs, *args, **kwargs):
         """
 
         :param structure_tree: An 'autovivifying dict'--aka a tree as per the implementation in utils.tree--that has been constructed so as to represent the directory structure within a mod archive. Each dict key (other than the root) will be the name of a directory, and files will be listed under the "_files" special key.
@@ -32,12 +32,12 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
         self.setupUi(self)
 
-        self.structure = structure_tree
-        self.mod_data = Tree()
+        self.structure = mod_fs
+        # self.mod_data = Tree()
         self.num_to_copy = 0
 
         self.valid_structure = True
-        self.data_root = self.structure
+        self.data_root = self.structure.root
         self.mod_structure_view.tree_structure_changed.connect(self.on_tree_change)
 
         # have the tree widget create the visible tree from the

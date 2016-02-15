@@ -61,7 +61,7 @@ class InstallerUI:
                 # print(toplevcount, toplevdata)
 
                 # if count:
-                if installer.fsck_modfs_quick(modfs):
+                if modfs.fsck_quick():
                     # await self.extraction_progress_dialog()
                     message("information", title="Game Data Found", text="")
 
@@ -77,7 +77,7 @@ class InstallerUI:
                     # of the mod and that item is a directory, then check inside that
                     # directory for the necessary files.
                     _list = modfs.listdir("/")
-                    if len(_list) == 1 and modfs.is_dir(_list[0]) and installer.fsck_modfs_quick(modfs, _list[0]):
+                    if len(_list) == 1 and modfs.is_dir(_list[0]) and modfs.fsck_quick(_list[0]):
                         message("information", title="Game Data Found",
                                 text="In immediate subdirectory '{}'".format(_list[0]))
 
