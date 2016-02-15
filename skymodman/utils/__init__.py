@@ -1,6 +1,6 @@
-# from functools import (singledispatch as _singledispatch,
-#                        wraps as _wraps,
-#                        reduce as _reduce)
+from functools import (singledispatch as _singledispatch,
+                       wraps as _wraps)
+                       # reduce as _reduce)
 # from itertools import (chain as _chain,
 #                        combinations as _combos)
 
@@ -116,13 +116,13 @@ def printattrs(obj, name=None, dunder=True, sunder=True):
 
 # FROM:
 #http://stackoverflow.com/questions/24601722/how-can-i-use-functools-singledispatch-with-instance-methods
-# def singledispatch_m(func):
-#     dispatcher = _singledispatch(func)
-#     @_wraps(dispatcher)
-#     def wrapper(*args, **kw):
-#         return dispatcher.dispatch(args[1].__class__)(*args, **kw)
-#     # wrapper.register = dispatcher.register
-#     return wrapper
+def singledispatch_m(func):
+    dispatcher = _singledispatch(func)
+    @_wraps(dispatcher)
+    def wrapper(*args, **kw):
+        return dispatcher.dispatch(args[1].__class__)(*args, **kw)
+    # wrapper.register = dispatcher.register
+    return wrapper
 #
 # # variation that allows specifying an arbitrary arg-index
 #

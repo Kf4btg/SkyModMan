@@ -1,6 +1,7 @@
 from pathlib import PurePath, _PosixFlavour
 
 from skymodman.exceptions import Error
+from skymodman.utils import singledispatch_m
 
 class FSError(Error):
     """ Represents some sort of error in the ArchiveFS """
@@ -89,7 +90,16 @@ class ArchiveFS:
 
     # File Access/stats
 
+    ## Below, we will often use a version of singledispatch
+    ## that dispatches on the second argument (rather than the first, as
+    ## the original function does) to allow it to work with instance methods.
+
+    @singledispatch_m
     def inodeof(self, path):
+        return self._ino(PureCIPath(path))
+
+    @inodeof.register(PureCIPath)
+    def _ino(self, path):
         try:
             return self.p2i_table[path]
         except KeyError:
@@ -99,7 +109,7 @@ class ArchiveFS:
         try:
             return self.i2p_table[inode]
         except IndexError:
-            raise Error_EIO(inode) from None
+            raise Error_EIO(inode)
 
     def storedpath(self, path):
         """
@@ -107,11 +117,32 @@ class ArchiveFS:
         """
         return self.i2p_table[self.p2i_table[path]]
 
-    def dir_inodes(self, dirpath):
+    @singledispatch_m
+    def dir_inodes(self, directory):
         try:
-            return self.directories[self.inodeof(dirpath)]
+            return self._dii(self.inodeof(directory))
+        # could be raised from the exception handler in _dii
+        except Error_EIO:
+            # I'd consider this a more specific (or maybe less specific...
+            # but certainly easier to understand) version of EIO
+            raise Error_ENOENT(directory) from None
+
+    @dir_inodes.register(int)
+    def _dii(self, directory):
+        try:
+            return self.directories[directory]
         except KeyError:
-            raise Error_ENOTDIR(dirpath.str) from None
+            raise Error_ENOTDIR(self.pathfor(directory)) from None
+
+
+    def dir_length(self, directory):
+        """
+        Returns the number of items contained by `directory`
+        :param directory: Can be a string, a path, or the directory's inode number (int)
+        :return: number of items contained by `directory`
+        """
+        # let the singledispatch mechanics take care of the type for directory
+        return len(self.dir_inodes(directory))
 
     def listdir(self, directory):
         return [self.i2p_table[i] for i in self.dir_inodes(directory)]
@@ -183,8 +214,17 @@ class ArchiveFS:
     def is_dir(self, path):
         return self.inodeof(path) in self.directories
 
-    def exists(self, path):
+    @singledispatch_m
+    def exists(self, path): # should catch str and other path-types
+        return self._ep(PureCIPath(path))
+
+    @exists.register(PureCIPath)
+    def _ep(self, path):
         return path in self.p2i_table
+
+    @exists.register(int) # for checking inodes
+    def _ei(self, inode):
+        return inode < len(self.i2p_table) and self.i2p_table[inode] is not None
 
     ## File Creation
 
@@ -226,10 +266,7 @@ class ArchiveFS:
         else:
             fullpath = PureCIPath(path)
 
-        # inode=self._create(fullpath)
         self._create(fullpath)
-
-        # self.file_table[inode] = CIFile(inode, self.inodeof(fullpath.parent), False, fullpath.name)
 
     def mkdir(self, path, exist_ok=False):
         """
@@ -291,7 +328,6 @@ class ArchiveFS:
         if not self.is_dir(dirpath):
             raise Error_ENOTDIR(dirpath.str)
 
-
         if len(self.dir_inodes(dirpath)):
             raise Error_ENOTEMPTY(dirpath.str)
 
@@ -308,7 +344,6 @@ class ArchiveFS:
         """
         if not isinstance(directory, PureCIPath):
             directory = PureCIPath(directory)
-
 
         assert directory != self.root, "No. Stop that."
 
@@ -493,6 +528,29 @@ class ArchiveFS:
                 subfs.touch("/" / rel_path)
 
         return subfs
+
+    def mkdupefs(self):
+        """
+        Create and return an exact duplicate of this filesystem
+        """
+        import copy
+        dupefs = type(self)()
+
+        dupefs.i2p_table = copy.deepcopy(self.i2p_table)
+        for i,p in enumerate(dupefs.i2p_table):
+            if p is not None:
+                dupefs.p2i_table[p]=i
+        dupefs.directories = copy.deepcopy(self.directories)
+
+        del copy
+
+        # for p in self.itertree("/", False):
+        #     if self.is_dir(p):
+        #         dupefs.mkdir(p)
+        #     else:
+        #         dupefs.touch(p)
+
+        return dupefs
 
     def fsck(self, root="/"):
         return fsck_modfs(self, root)
