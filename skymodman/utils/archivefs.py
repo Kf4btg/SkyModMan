@@ -88,7 +88,9 @@ class ArchiveFS:
     def root(self):
         return self._root
 
-    # File Access/stats
+    ##===============================================
+    ## File Access/stats
+    ##===============================================
 
     ## Below, we will often use a version of singledispatch
     ## that dispatches on the second argument (rather than the first, as
@@ -211,8 +213,22 @@ class ArchiveFS:
 
             yield from _iter(rootpath)
 
+    @singledispatch_m
     def is_dir(self, path):
-        return self.inodeof(path) in self.directories
+        """
+        :param path:
+        :return: True if `path` is a directory, False if `path` is a regular file
+        """
+        return self._idi(self.inodeof(path))
+
+    @is_dir.register(int) # directly given inode
+    def _idi(self, inode):
+        """
+
+        :param inode:
+        :return: True if `inode` is the inode of a directory
+        """
+        return inode in self.directories
 
     @singledispatch_m
     def exists(self, path): # should catch str and other path-types
@@ -226,7 +242,36 @@ class ArchiveFS:
     def _ei(self, inode):
         return inode < len(self.i2p_table) and self.i2p_table[inode] is not None
 
+    ##===============================================
     ## File Creation
+    ##===============================================
+
+    def touch(self, path, name=None):
+        """
+        Create a file.
+        By default, any parents of `path` that do not exist will be created.
+
+        :param name: if given, path is assumed to be the path to the directory that will contain the file named 'name'. If absent or None, `path` itself is considered to be the full path to the new file.
+        """
+        if name:
+            fullpath = PureCIPath(path, name)
+        else:
+            fullpath = PureCIPath(path)
+
+        self._create(fullpath)
+
+    def mkdir(self, path, exist_ok=False):
+        """
+        By default, any parents of `path` that do not exist will be created.
+
+        :param exist_ok: if True, an error will not be raised when the directory already exists
+        """
+        try:
+            inode = self._create(PureCIPath(path))
+            self.directories[inode] = set()
+        except Error_EEXIST:
+            if not exist_ok:
+                raise
 
     def _create(self, path):
         """
@@ -254,49 +299,9 @@ class ArchiveFS:
             self.mkdir(path.parent) # starts recursion to create lowest-nonexisting parent and propagate back up
             self.dir_inodes(path.parent).add(inode)
 
-    def touch(self, path, name=None):
-        """
-        Create a file.
-        By default, any parents of `path` that do not exist will be created.
-
-        :param name: if given, path is assumed to be the path to the directory that will contain the file named 'name'. If absent or None, `path` itself is considered to be the full path to the new file.
-        """
-        if name:
-            fullpath = PureCIPath(path, name)
-        else:
-            fullpath = PureCIPath(path)
-
-        self._create(fullpath)
-
-    def mkdir(self, path, exist_ok=False):
-        """
-        By default, any parents of `path` that do not exist will be created.
-
-        :param exist_ok: if True, an error will not be raised when the directory already exists
-        """
-        try:
-            inode=self._create(PureCIPath(path))
-            self.directories[inode]=set()
-        except Error_EEXIST:
-            if not exist_ok:
-                raise
-
+    ##===============================================
     ## File Deletion
-
-    def _unlink(self, inode):
-        """
-        This does not delete the inode from the inode table,
-        (thus changing the length of the list and messing up all our inodes),
-        it replaces the path with ``None``.
-        :param inode:
-        :return:
-        """
-        self.i2p_table[inode] = None
-
-    def _delfile(self, path):
-        inode = self.p2i_table.pop(path)
-        self.dir_inodes(path.parent).remove(inode)
-        self._unlink(inode)
+    ##===============================================
 
     def rm(self, path):
         """
@@ -359,7 +364,139 @@ class ArchiveFS:
         # remove the empty dir when it's all done
         self.rmdir(directory)
 
-    ## File manipulation
+    def _unlink(self, inode):
+        """
+        This does not delete the inode from the inode table,
+        (thus changing the length of the list and messing up all our inodes),
+        it replaces the path with ``None``.
+        :param inode:
+        :return:
+        """
+        self.i2p_table[inode] = None
+
+    def _delfile(self, path):
+        inode = self.p2i_table.pop(path)
+        self.dir_inodes(path.parent).remove(inode)
+        self._unlink(inode)
+
+    ##===============================================
+    ## Name/Path Manipulation
+    ##===============================================
+
+    def move(self, path, destination, overwrite=False):
+        """
+        Move the file or directory pointed to by `path` to `destination`.
+
+        :param path:
+        :param destination:
+            If `destination` is an existing directory, `path` will become a child of `destination`. Otherwise, the filesystem path of the file-object `path` will be changed to `destination`.
+        :param overwrite:
+            If `destination` is an already-existing file and `overwrite` is False, a File-Exists error will be raised; if overwrite is True, `destination` will be deleted and replaced with `path`
+        :return: True if all went well
+        """
+        src = PureCIPath(path)
+        dst = PureCIPath(destination)
+
+        # if someone attempted to move an item to itself, just return
+        if src == dst: return True
+
+        # if the destination is an existing directory, move the source inside of it.
+        if self.is_dir(dst):
+            return self._move_to_dir(src, dst)
+
+        # now we know dst is either a file or a non-existing path
+        # so if it's a file, either delete it or raise an error
+        self._check_collision(dst, overwrite)
+
+        # and now we can be sure it doesn't exist! Muahahahaha...ha....oh
+
+        # if destination path is in the same folder as the source, this is just a name change
+        if dst.parent == src.parent:
+            return self._change_name(src, dst.name)
+
+        # and if we made it here, we can finally just move src to dst
+        return self._move_to_path(src, dst)
+
+    def rename(self, path, destination, overwrite=False):
+        """
+        Functions much like ``move``; the main difference is that, if the destination is a directory, instead of moving path inside that directory, an attempt will be made to overwrite it; if the destination directory is empty, this attempt will always succeed. If it is a file or non-empty directory, success depends on the value of `overwrite`.
+
+        :param path: path being renamed
+        :param destination: target path
+        :param overwrite: If True, then an existing target will be unconditionally replaced--this means that, if the target is a non-empty directory, all contents of that directory tree will be removed.
+        :return:
+        """
+        src = PureCIPath(path)
+        dest = PureCIPath(destination)
+
+        if src == dest:
+            return True
+
+        if self.is_dir(dest):
+            try:  # if the directory is empty, this will succeed and
+                # we can just rename the src
+                self.rmdir(dest)
+            except Error_ENOTEMPTY:
+                if overwrite:
+                    self.rmtree(dest)
+                else:
+                    raise
+
+        else:  # file
+            self._check_collision(dest, overwrite)
+
+            if dest.parent == src.parent:
+                return self._change_name(src, dest.name)
+
+        return self._move_to_path(src, dest)
+
+    def chname(self, path, new_name, overwrite=False):
+        """
+        A simplified rename that just changes the file name (final path component) of `path` to `new_name`
+
+        :param path:
+        :param new_name:
+        :return:
+        """
+        src = PureCIPath(path)
+        if new_name == src.name:
+            return True
+
+        dest = src.with_name(new_name)
+
+        if self.exists(dest) and dest != src:
+            if self.is_dir(dest):
+                # only directories can replace other directories
+                if self.is_dir(src):
+                    # cannot use this method to overwrite non-empty directories
+                    self.rmdir(dest)  # just let the error propagate
+                else:
+                    e = Error_ENOTDIR(src)
+                    e.msg = "Will not overwrite directory '{dest}' with non-directory '{path}'".format(
+                        dest=dest)
+                    raise e
+            # dest is file:
+            else:
+                self._check_collision(dest, overwrite)
+
+        # at this point, we should be able to guarantee that either
+        #   a) dest does not exist (or has been removed), or
+        #   b) dest technically exists, but only because its filename matches
+        #       that of src when compared case-insensitively; we ensured above
+        #       that new_name != src.name (a case-sensitive comparison), so the
+        #       user simply wants to change the displayed case of the filename
+        #
+        #   In either case (hah!), it should be safe to just do:
+        self._chname(src, dest)
+
+    def replace(self, path, destination):
+        """
+
+        :param path:
+        :param destination: If exists, will be unconditionally replaced; if it is a directory all its contents will be removed
+        :return:
+        """
+        self.rename(path, destination, True)
 
     def _change_inode_path(self, inode, new_path):
         old_path = self.i2p_table[inode]
@@ -417,7 +554,7 @@ class ArchiveFS:
         (Slightly simpler version of _change_inode_path())
 
         :param path:
-        :param new_name:
+        :param str new_name:
         :return:
         """
         # if dest.parent == src.parent:
@@ -428,89 +565,39 @@ class ArchiveFS:
         #     self._change_name(src, dest.name)
         #     return True
 
-        inode = self.inodeof(path)
-        new_path = path.with_name(new_name)
-        self.i2p_table[inode] = new_path
+        return self._chname(path, path.with_name(new_name))
 
-        del self.p2i_table[path]
-        self.p2i_table[new_path] = inode
+    def _chname(self, orig_path, renamed_path):
+        """
+        Assumes `orig_path` and `renamed_path` are in the same folder,
+        so skips the directory-inode rearrangement.
+        """
+        inode = self.inodeof(orig_path)         # get inode
+        self.i2p_table[inode] = renamed_path    # update inode->path table
+
+        del self.p2i_table[orig_path]           # del old path from path->inode table
+        self.p2i_table[renamed_path] = inode    # add new path to path->inode table
         return True
 
     def _check_collision(self, target, overwrite):
+        """
+        If the file `target` exists and overwrite is True, `target` will be deleted. If `target` exists and `overwrite` is False, raise Error_EEXIST. If `target` does not exist, do nothing.
+
+        :param target: must not be a directory
+        :param overwrite:
+        :return:
+        """
         if self.exists(target):
 
             if overwrite: self.rm(target)
 
             else: raise Error_EEXIST(target.str)
 
-    def move(self, path, destination, overwrite=False):
-        """
-        Move the file or directory pointed to by `path` to `destination`.
-
-        :param path:
-        :param destination:
-            If `destination` is an existing directory, `path` will become a child of `destination`. Otherwise, the filesystem path of the file-object `path` will be changed to `destination`.
-        :param overwrite:
-            If `destination` is an already-existing file and `overwrite` is False, a File-Exists error will be raised; if overwrite is True, `destination` will be deleted and replaced with `path`
-        :return: True if all went well
-        """
-        src = PureCIPath(path)
-        dst = PureCIPath(destination)
-
-        # if someone attempted to move an item to itself, just return
-        if src == dst: return True
-
-        # if the destination is an existing directory, move the source inside of it.
-        if self.is_dir(dst):
-            return self._move_to_dir(src, dst)
-
-        # now we know dst is either a file or a non-existing path
-        # so if it's a file, either delete it or raise an error
-        self._check_collision(dst, overwrite)
-
-        # and now we can be sure it doesn't exist! Muahahahaha...ha....oh
-
-        # if destination path is in the same folder as the source, this is just a name change
-        if dst.parent == src.parent:
-            return self._change_name(src, dst.name)
-
-        # and if we made it here, we can finally just move src to dst
-        return self._move_to_path(src, dst)
-
-    def rename(self, path, destination, overwrite=False):
-        src = PureCIPath(path)
-        dest = PureCIPath(destination)
-
-        if src == dest: return True
-
-        if self.is_dir(dest):
-            try:
-                # if the directory is empty, this will succeed and we will just rename the src
-                self.rmdir(dest)
-            except Error_ENOTEMPTY:
-                if overwrite: self.rmtree(dest)
-                else: raise
-
-        else:
-            self._check_collision(dest, overwrite)
-
-            if dest.parent == src.parent:
-                return self._change_name(src, dest.name)
-
-        return self._move_to_path(src, dest)
-
-    def replace(self, path, destination):
-        """
-
-        :param path:
-        :param destination: If exists, will be unconditionally replaced; if it is a directory all its contents will be removed
-        :return:
-        """
-        self.rename(path, destination, True)
-
     # todo: copy and copytree (maybe...since our 'files' are really just names and contain no data, a 'copy' operation may be unnecessary)
 
+    ##===============================================
     ## Misc
+    ##===============================================
 
     def mksubfs(self, from_path):
         """
