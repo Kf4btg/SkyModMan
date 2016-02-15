@@ -351,6 +351,9 @@ class ModTable_TreeModel(QAbstractItemModel):
                     start=current_row+1)
 
         except StopIteration:
+            # we've reached one end of the list, so wrap search to the opposite
+            # end and continue until we either find a match or return to the
+            # starting point.
             try:
                 next_result = searcher(
                         end=current_row-1, step=-1) \

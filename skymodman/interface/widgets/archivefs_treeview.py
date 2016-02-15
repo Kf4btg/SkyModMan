@@ -1,10 +1,11 @@
+from collections import deque
 from PyQt5.QtWidgets import QTreeWidget, QTreeWidgetItem, QAction, QMenu
 from PyQt5.QtCore import pyqtSignal, pyqtProperty, Qt
 from PyQt5.QtGui import QBrush, QIcon
 
 from skymodman.utils import withlogger
-from skymodman.utils.archivefs import ArchiveFS
-from copy import deepcopy
+from skymodman.utils.archivefs import ArchiveFS, PureCIPath
+# from copy import deepcopy
 
 @withlogger
 class ArchiveFSTree(QTreeWidget):
@@ -12,8 +13,25 @@ class ArchiveFSTree(QTreeWidget):
     tree_structure_changed = pyqtSignal()
 
     # noinspection PyArgumentList
-    def __init__(self, *args, **kwargs):
+    def __init__(self, arcfs, *args, **kwargs):
+        """
+
+        :param ArchiveFS arcfs:
+        """
         super().__init__(*args, **kwargs)
+
+        self.fs = arcfs
+        # save a copy of the original file structure
+        self.backupfs = self.fs.mkdupefs()
+
+        self.root_inode = ArchiveFS.ROOT_INODE
+        self.current_root = self.fs.root
+
+        # self.modified_tree = None
+        # self.user_toplevel_dir = False
+        # self.dragitem = None # type: ArchiveItem
+        # self.dragitem_parent = None
+        # self.context_menu_item = None # type: ArchiveItem
 
         self.action_set_toplevel = QAction("&Set as top level directory", self, triggered=self.change_toplevel_dir)
         self.action_unset_toplevel = QAction("&Unset top level directory", self, triggered=self.unset_toplevel_dir)
@@ -22,42 +40,59 @@ class ArchiveFSTree(QTreeWidget):
 
         self.action_rename = QAction("&Rename", self, triggered=self.rename_item)
 
-        self.root_inode = ArchiveFS.ROOT_INODE
-        self.modified_tree = None
-        self.current_root = None
+    def init_tree(self, root="/"):
+        # if self.orig_root is None:
+        #     self.orig_root = root
+        #     self.modified_tree = deepcopy(root)
+        #     self.current_root = self.modified_tree
+        #     root = self.modified_tree
 
-        self.user_toplevel_dir = False
-        self.dragitem = None # type: ArchiveItem
-        self.dragitem_parent = None
-        self.context_menu_item = None # type: ArchiveItem
-
-    def init_tree(self, root):
-        if self.orig_root is None:
-            self.orig_root = root
-            self.modified_tree = deepcopy(root)
-            self.current_root = self.modified_tree
-            root = self.modified_tree
+        rootpath = PureCIPath(root)
+        if rootpath != self.current_root:
+            self.current_root = rootpath
 
         self.clear()
-        self.create_tree(root, self.invisibleRootItem())
+        self.create_tree(rootpath, self.invisibleRootItem())
+
         self.tree_structure_changed.emit()
 
-    def create_tree(self, dict_root, root_item):
-        has_files = False
-        # sort by name
-        for k in sorted(list(dict_root.keys())):
-            if k != "_files":
-                r = FolderItem.create(root_item, k)
+    def create_tree(self, rootpath, root_item):
 
-                # save the subtree this key refers to in the widget's userdata
-                r.setData(0, Qt.UserRole, dict_root[k])
-                self.create_tree(dict_root[k], r)
+        files=deque()
+        for p in sorted(self.fs.listdir(rootpath)):
+            if self.fs.is_dir(p):
+                d = FolderItem.create(root_item, p.name)
+
+                # store file's inode in the user-data slot
+                d.setData(0, Qt.UserRole, self.fs.inodeof(p))
+                self.create_tree(p, d)
             else:
-                has_files = True
-        # show files after dirs
-        if has_files:
-            for f in sorted(dict_root["_files"]):
-                ArchiveItem.create(root_item, f)
+                # because we want to sort files after directories
+                files.append(p)
+
+        # and now add the files to the end
+        while files:
+            f = files.popleft()
+            fitem = ArchiveItem.create(root_item, f.name)
+            fitem.setData(0, Qt.UserRole, self.fs.inodeof(f))
+
+
+
+        # has_files = False
+        # # sort by name
+        # for k in sorted(list(dict_root.keys())):
+        #     if k != "_files":
+        #         r = FolderItem.create(root_item, k)
+        #
+        #         # save the subtree this key refers to in the widget's userdata
+        #         r.setData(0, Qt.UserRole, dict_root[k])
+        #         self.create_tree(dict_root[k], r)
+        #     else:
+        #         has_files = True
+        # # show files after dirs
+        # if has_files:
+        #     for f in sorted(dict_root["_files"]):
+        #         ArchiveItem.create(root_item, f)
 
     def startDrag(self, actions):
         # get item being moved (should only be 1)

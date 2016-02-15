@@ -81,7 +81,6 @@ class InstallerUI:
                         message("information", title="Game Data Found",
                                 text="In immediate subdirectory '{}'".format(_list[0]))
 
-
                     else:
                         self.logger.debug("no toplevel items found; showing manual install dialog")
                         await self._show_manual_install_dialog(modfs)

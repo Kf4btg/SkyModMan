@@ -577,7 +577,7 @@ class ModFileTreeModel(QAbstractItemModel):
         :param value:
         :param role:
         """
-        if not index.isValid(): return
+        if not index.isValid(): return False
 
         item = self.getItem(index)
         if role==Qt_CheckStateRole:
