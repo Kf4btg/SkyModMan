@@ -41,20 +41,30 @@ class InstallerUI:
 
                 # count the files, and get the mod structure
                 # count = await installer.get_file_count()
-                tree = await installer.mod_structure_tree()
+                # tree = await installer.mod_structure_tree()
                 modfs = await installer.mkarchivefs()
 
                 # print("count:", count)
                 # print(tree)
 
-                toplevcount, toplevdata = installer.analyze_structure_tree(tree)
+                # dataroot (folder which contains the actual game data) may
+                # be different the current root of the filesystem
+                # count, gamedata, dataroot = self.fsck_modfs(modfs)
+
+                # if dataroot != modfs.root:
+
+
+
+
+                # toplevcount, toplevdata = installer.analyze_structure_tree(tree)
 
                 # print(toplevcount, toplevdata)
 
-                if toplevcount:
+                # if count:
+                if installer.fsck_modfs_quick(modfs):
                     # await self.extraction_progress_dialog()
-                    message("information", title="Game Data Found",
-                            text=str(toplevdata))
+                    message("information", title="Game Data Found", text="")
+
 
                     # await installer.extract("/tmp/testinstall",
                     #                         entries=toplevdata["folders"]
@@ -62,8 +72,19 @@ class InstallerUI:
                     #                         callback=
                     #              )
                 else:
-                    self.logger.debug("no toplevel items found; showing manual install dialog")
-                    await self._show_manual_install_dialog(tree)
+                    # one last check if the previous search turned up nothing:
+                    # if there is only one item on the top level
+                    # of the mod and that item is a directory, then check inside that
+                    # directory for the necessary files.
+                    _list = modfs.listdir("/")
+                    if len(_list) == 1 and modfs.is_dir(_list[0]) and installer.fsck_modfs_quick(modfs, _list[0]):
+                        message("information", title="Game Data Found",
+                                text="In immediate subdirectory '{}'".format(_list[0]))
+
+
+                    else:
+                        self.logger.debug("no toplevel items found; showing manual install dialog")
+                        await self._show_manual_install_dialog(modfs)
 
 
     async def run_fomod_installer(self, installer, tmpdir):

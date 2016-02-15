@@ -327,10 +327,11 @@ async def get_mod_archive_structure(archive=None):
     if archive and (not installman or installman.archive != archive):
         installman = _install.InstallManager(archive)
 
-    modstruct = await installman.mod_structure_tree()
-    modfs = await installman.mkarchivefs()
-    return modstruct
+    # modstruct = await installman.mod_structure_tree()
+    # return modstruct
 
+    modfs = await installman.mkarchivefs()
+    return modfs
 
 def install_mod_from_dir(directory):
     pass

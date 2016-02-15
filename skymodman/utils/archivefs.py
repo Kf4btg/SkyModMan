@@ -475,13 +475,27 @@ class ArchiveFS:
 
     # todo: copy and copytree (maybe...since our 'files' are really just names and contain no data, a 'copy' operation may be unnecessary)
 
-    async def mkfs(self, archive, archive_manager):
-        """
+    ## Misc
 
-        :param archive:
-        :param ArchiveHandler archive_manager:
-        :return:
+    def mksubfs(self, from_path):
         """
+        Initialize a new ArchiveFS from a sub-directory in this one.
+        :param from_path: The path in this fs that will become the root of the new fs.
+        """
+        subfs = type(self)()
+
+        for p in self.itertree(from_path, False):
+            rel_path = p.relative_to(from_path)
+            if self.is_dir(p):
+                # re-root
+                subfs.mkdir("/" / rel_path)
+            else:
+                subfs.touch("/" / rel_path)
+
+        return subfs
+
+
+
 
 
 
