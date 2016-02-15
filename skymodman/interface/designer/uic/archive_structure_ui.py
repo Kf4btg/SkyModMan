@@ -50,11 +50,6 @@ class Ui_mod_structure_dialog(object):
         self.mod_structure_view.setObjectName("mod_structure_view")
         self.mod_structure_view.header().setDefaultSectionSize(0)
         self.gridLayout.addWidget(self.mod_structure_view, 0, 2, 4, 1)
-        self.action_set_data_directory = QtWidgets.QAction(mod_structure_dialog)
-        self.action_set_data_directory.setCheckable(True)
-        self.action_set_data_directory.setObjectName("action_set_data_directory")
-        self.action_create_directory = QtWidgets.QAction(mod_structure_dialog)
-        self.action_create_directory.setObjectName("action_create_directory")
 
         self.retranslateUi(mod_structure_dialog)
         self._buttonbox.accepted.connect(mod_structure_dialog.accept)
@@ -65,6 +60,4 @@ class Ui_mod_structure_dialog(object):
         _translate = QtCore.QCoreApplication.translate
         mod_structure_dialog.setWindowTitle(_translate("mod_structure_dialog", "Dialog"))
         self.description.setText(_translate("mod_structure_dialog", "This mod does not have game data on the top level of its archive.  Please modify the directory structure on the right to reorganize the data appropriately."))
-        self.action_set_data_directory.setText(_translate("mod_structure_dialog", "Set Data Directory"))
-        self.action_create_directory.setText(_translate("mod_structure_dialog", "Create Directory"))
 

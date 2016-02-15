@@ -116,19 +116,6 @@
     </widget>
    </item>
   </layout>
-  <action name="action_set_data_directory">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="text">
-    <string>Set Data Directory</string>
-   </property>
-  </action>
-  <action name="action_create_directory">
-   <property name="text">
-    <string>Create Directory</string>
-   </property>
-  </action>
  </widget>
  <resources/>
  <connections>

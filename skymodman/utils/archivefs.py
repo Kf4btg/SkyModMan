@@ -1,4 +1,5 @@
 from pathlib import PurePath, _PosixFlavour
+# from enum import Enum
 
 from skymodman.exceptions import Error
 from skymodman.utils import singledispatch_m
@@ -55,6 +56,20 @@ class PureCIPath(PurePath):
     def str(self):
         return str(self)
 
+
+class SortFlags:
+    NoSort      = 0x00
+    Ascending   = 0x01
+    Descending  = 0x02
+    Name        = 0x04
+    Inode       = 0x08
+    DirsFirst   = 0x10
+    FilesFirst  = 0x20
+    NameCS      = 0x40
+
+    Default     = Name|DirsFirst|Ascending
+
+
 class ArchiveFS:
 
     ROOT_INODE=0
@@ -83,6 +98,8 @@ class ArchiveFS:
         self.i2p_table.append(self._root) # inode 0
         self.p2i_table[self._root]=0
         self.directories[0]=set() # create empty set
+
+        self.sorting=SortFlags.Default
 
     @property
     def root(self):
@@ -148,9 +165,19 @@ class ArchiveFS:
         return len(self.dir_inodes(directory))
 
     def listdir(self, directory):
-        return [self.i2p_table[i] for i in self.dir_inodes(directory)]
+        """
+        List of all items in a directory, sorted according to self.sorting
+        :param directory:
+        :return:
+        """
+        return self._sort([self.i2p_table[i] for i in self.dir_inodes(directory)])
 
     def iterdir(self, directory):
+        """
+        An unsorted iteration
+        :param directory:
+        :return:
+        """
         #            inode -> path
         yield from (self.i2p_table[i] for i in self.dir_inodes(directory))
 
@@ -242,6 +269,49 @@ class ArchiveFS:
     @exists.register(int) # for checking inodes
     def _ei(self, inode):
         return inode < len(self.i2p_table) and self.i2p_table[inode] is not None
+
+
+    def _sort(self, filelist, flags=None):
+        """
+
+        :param list filelist: a list of paths corresponding to files in a common directory
+        :param flags: If None, use current FS.sorting
+        :return:
+        """
+        if flags is None:
+            flags = self.sorting
+        if not flags:
+            return filelist
+
+        lt_checks=[]
+        if flags & SortFlags.DirsFirst:
+            lt_checks.append(lambda x,y: self.is_dir(x) and not self.is_dir(y))
+        elif flags & SortFlags.FilesFirst:
+            lt_checks.append(lambda x, y: self.is_dir(y) and not self.is_dir(x))
+
+        if flags & SortFlags.Inode:
+            lt_checks.append(lambda x, y: self.inodeof(x) < self.inodeof(y))
+        elif flags & SortFlags.Name:
+            lt_checks.append(PureCIPath.__lt__)
+        elif flags & SortFlags.NameCS:
+            lt_checks.append(lambda x, y: x.name < y.name)
+
+        old_lt = PureCIPath.__lt__
+
+        PureCIPath.__lt__ = lambda x,y: any(lt(x,y) for lt in lt_checks)
+        rev = flags & SortFlags.Descending
+
+        filelist.sort(reverse=rev)
+
+        PureCIPath.__lt__ = old_lt
+        return filelist
+
+        # filelist[:] = sorted(filelist, key=lambda x: sum([-1 if lt(x) else 1 for lt in lt_checks]))
+
+
+
+
+
 
     ##===============================================
     ## File Creation
