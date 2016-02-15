@@ -46,27 +46,6 @@
      </property>
     </spacer>
    </item>
-   <item row="0" column="2" rowspan="4">
-    <widget class="MyTreeWidget" name="mod_structure_view">
-     <property name="editTriggers">
-      <set>QAbstractItemView::EditKeyPressed</set>
-     </property>
-     <property name="dragEnabled">
-      <bool>true</bool>
-     </property>
-     <property name="dragDropMode">
-      <enum>QAbstractItemView::InternalMove</enum>
-     </property>
-     <attribute name="headerVisible">
-      <bool>false</bool>
-     </attribute>
-     <column>
-      <property name="text">
-       <string notr="true">1</string>
-      </property>
-     </column>
-    </widget>
-   </item>
    <item row="0" column="0">
     <widget class="QLabel" name="description">
      <property name="sizePolicy">
@@ -117,6 +96,25 @@
      </property>
     </widget>
    </item>
+   <item row="0" column="2" rowspan="4">
+    <widget class="QTreeView" name="mod_structure_view">
+     <property name="editTriggers">
+      <set>QAbstractItemView::EditKeyPressed</set>
+     </property>
+     <property name="dragEnabled">
+      <bool>true</bool>
+     </property>
+     <property name="dragDropMode">
+      <enum>QAbstractItemView::InternalMove</enum>
+     </property>
+     <property name="headerHidden">
+      <bool>true</bool>
+     </property>
+     <attribute name="headerDefaultSectionSize">
+      <number>0</number>
+     </attribute>
+    </widget>
+   </item>
   </layout>
   <action name="action_set_data_directory">
    <property name="checkable">
@@ -132,13 +130,6 @@
    </property>
   </action>
  </widget>
- <customwidgets>
-  <customwidget>
-   <class>MyTreeWidget</class>
-   <extends>QTreeWidget</extends>
-   <header>skymodman.interface.widgets.mytreewidget</header>
-  </customwidget>
- </customwidgets>
  <resources/>
  <connections>
   <connection>

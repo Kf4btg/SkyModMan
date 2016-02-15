@@ -52,6 +52,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
         self._caches=[self._sorted_dirlist,
                       self._isdir]
 
+        print([(i, p.str) for i,p in enumerate(self._fs.i2p_table)])
+
     @property
     def root_inode(self):
         return self._currentroot_inode
@@ -72,9 +74,14 @@ class ModArchiveTreeModel(QAbstractItemModel):
         """
         # super().rowCount(parent, *args, **kwargs)
         # need to return len of dir-inodes list for index
-        return len(self._fs.dir_length(self.inode4index(index)))
 
-    def columnCount(self, QModelIndex_parent=None, *args, **kwargs):
+        x=self._fs.dir_length(self.inode4index(index))
+        # self.LOGGER << "rowcount for {}: {}".format(self.path4index(index),x)
+        print("rowcount for {}: {}".format(self.path4index(index),x))
+
+        return x
+
+    def columnCount(self, *args, **kwargs):
         """
         Just one column
         ... for now? todo: maybe add a type column. And/Or a size column?
@@ -88,22 +95,27 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param col:
         :param parent:
         """
+        print("index(",row, col, parent, ")")
 
         parinode = self.inode4index(parent)
+        print("index(): parinode=", parinode)
 
         try:
-            chinode = self._sorted_dirlist(parinode)[row]
-            return self.createIndex(row, col, chinode)
+            child = self._sorted_dirlist(parinode)[row]
+
+            return self.createIndex(row, col, self._fs.inodeof(child))
         except IndexError:
+            print("index(): indexError")
             return QModelIndex()
 
         # return QModelIndex()
 
     def parent(self, child_index=QModelIndex()):
+        print("parent()")
         if not child_index.isValid(): return QModelIndex()
 
         # get the parent path
-        parent = self._fs.pathfor(child_index.internalPointer()).parent
+        parent = self._fs.pathfor(child_index.internalId()).parent
 
         # if parent is "/" return invalid index
         if not parent or parent == self.root:
@@ -114,7 +126,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         # ...to find index of parent within its directory (by sorted position)
         parent_row = self._sorted_dirlist(self._fs.inodeof(grandpath)).index(parent)
 
-        return self.createIndex(parent_row, 0, parent)
+        return self.createIndex(parent_row, 0, self._fs.inodeof(parent))
 
 
     def data(self, index, role=Qt.DisplayRole):
@@ -127,6 +139,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         try:
             inode=self.inode4index(index)
             path=self._fs.pathfor(inode)
+            print("data: path=", path, ", inode=", inode, ", role=", role)
             return {
                 Qt.DisplayRole:
                     path.name,
@@ -159,6 +172,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param role:
         :return:
         """
+        print("setdata()")
         if not index.isValid(): return False
 
         if role == Qt.CheckStateRole:
@@ -203,7 +217,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param indexes:
         :return:
         """
-        inode = indexes[0].internalPointer()
+        inode = indexes[0].internalId()
         mimedata = QMimeData()
         mimedata.setText(str(inode))
         return mimedata
@@ -217,7 +231,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
             return False
 
         fs = self._fs
-        par_inode = parent.internalPointer()
+        par_inode = parent.internalId()
         src_inode = int(data.text())
         src_path = fs.pathfor(src_inode)
 
@@ -260,6 +274,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
             else:
                 files.append(p)
 
+        print("sorted dir list:", dirs+files)
+
         return dirs + files
 
     @lru_cache(None)
@@ -288,10 +304,16 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param QModelIndex index:
         :return: inode of the item
         """
+        print("inode4index(", index, ")")
 
         if index.isValid():
-            inode=index.internalPointer()
+            print("index is valid")
+            print("row={}, col={}".format(index.row(), index.column()))
+            inode=index.internalId()
+            print("inode=",inode)
             if inode: return inode
+
+        print("index is invalid")
         return self.root_inode
 
     def path4index(self, index) -> PureCIPath:
@@ -302,7 +324,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         """
 
         if index.isValid():
-            path = self._fs.pathfor(index.internalPointer())
+            path = self._fs.pathfor(index.internalId())
             if path: return path
         return self.root
 

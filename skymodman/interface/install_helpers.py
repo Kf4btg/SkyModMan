@@ -128,7 +128,9 @@ class InstallerUI:
         self.logger.debug("creating manual install dialog")
         with quamash.QThreadExecutor(1) as ex:
             mi_dialog = ManualInstallDialog(contents)
+            self.LOGGER << "calling dialog.show()"
             mi_dialog.show()
+            self.LOGGER << "dialog.show() done, about to exec"
             f = asyncio.get_event_loop(
                 ).run_in_executor(ex, mi_dialog.exec_)
             await f
