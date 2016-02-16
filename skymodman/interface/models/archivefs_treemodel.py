@@ -121,6 +121,10 @@ class ModArchiveTreeModel(QAbstractItemModel):
         # print(child_index.internalId())
         # print("---------------------------------")
 
+        # print(child_index.internalId())
+        # child = self.index2path(child_index)
+        # print("child:", child )
+        # print(child.inode)
         parent = self.index2path(child_index).sparent
 
         # if parent is "/" return invalid index
@@ -248,6 +252,9 @@ class ModArchiveTreeModel(QAbstractItemModel):
             self.logger << "drop-parent invalid"
             return False
 
+        # print(self._fs.i2p_table)
+        # print(self._fs.p2i_table)
+
         par_path = self.index2path(parent)
         src_path = self._fs.pathfor(int(data.text()))
         orig_parent = src_path.sparent
@@ -277,14 +284,16 @@ class ModArchiveTreeModel(QAbstractItemModel):
         # fs.move(src_path, fs.pathfor(par_inode))
         src_path.move(target_path)
         # fs.move(src_path, tpath)
-        self.logger.debug("endmoverows")
+        # self.logger.debug("endmoverows")
 
         self.endMoveRows()
 
         self._invalidate_caches([self._sorted_dirlist])
 
-        self._print_fstree()
-        print("..........................")
+        # self._print_fstree()
+        # print("..........................")
+        # print(self._fs.i2p_table)
+        # print(self._fs.p2i_table)
         return True
 
     def canDropMimeData(self, data, action, row, col, parent):

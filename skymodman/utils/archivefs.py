@@ -241,6 +241,8 @@ class ArchiveFS:
         # inode -> path
 
         # mapping of filepaths to inodes
+        ## FIXME: so...one of the fundamental building blocks of this class at the moment...is fundamentally broken. This abstraction was meant to prevent having to apply recursive or cascading changes to parent and child items in the tree on every change. However, because I store (absolute) path objects in the inode table and reference them everywhere, when, for example, a directory is moved to a new sub-directory, it's path gets updated to reflect the change...but all of its children's paths still show the old hierarchy. To fix that and still maintain this model, I'd have to do--cascading changes. Which defeats the entire point.
+        ## XXX: I suppose the "best" thing to do in this situation is just to store file-names in the inode table rather than path objects; when a path is requested, the Path object will have to be generated dynamically by piecing together the calculated hierarchy. This method can probably be improved by using a cache of some sort; I'll just have to be careful to make sure the cache (or part of it) is marked invalid when a change occurs.
         self.p2i_table = dict() # type: dict[CIPath, int]
         # path -> inode
 
@@ -708,8 +710,12 @@ class ArchiveFS:
     def _change_inode_path(self, inode, new_path):
         PRINT() << "_change_inode_path(" << inode << ", " << new_path << ")"
 
+        print(self.i2p_table[inode])
 
         old_path = self.i2p_table[inode]
+
+        print(self.p2i_table[old_path])
+        PRINT() << "..."
 
         # assert new_path != old_path
 
@@ -720,6 +726,11 @@ class ArchiveFS:
         del self.p2i_table[old_path]
 
         self.p2i_table[new_path] = inode
+
+        PRINT() << self.i2p_table[inode]
+        PRINT() << self.p2i_table[new_path]
+        print(".....................")
+
 
     def _swap_inode_dir(self, inode, dir1, dir2):
         """
