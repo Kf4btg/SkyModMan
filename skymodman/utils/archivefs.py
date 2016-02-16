@@ -114,6 +114,9 @@ class CIPath(PureCIPath):
     def exists(self):
         return self._accessor.exists(self)
 
+    def dir_length(self):
+        return self._accessor.dir_length(self)
+
     ##===============================================
     ## Directory listing/iteration
     ##===============================================
