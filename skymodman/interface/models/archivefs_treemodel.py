@@ -3,7 +3,7 @@ from functools import lru_cache
 from PyQt5 import QtGui
 from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData
 
-from skymodman.utils.archivefs import ArchiveFS, PureCIPath
+from skymodman.utils.archivefs import ArchiveFS, PureCIPath, CIPath
 from skymodman.utils import withlogger
 
 # noinspection PyTypeChecker,PyArgumentList
@@ -103,6 +103,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
         try:
             child = self._sorted_dirlist(parinode)[row]
+            # child = self._fs.listdir(parinode)[row]
 
             # using an int for the third argument makes it internalId(),
             # not internalPointer()
@@ -360,15 +361,43 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param int inode:
         :rtype: list[PureCIPath]
         """
-        dirs=[]
-        files=[]
-        for p in sorted(self._fs.listdir(inode)):
+        # let the fs's sorting handle that.
+        return self._fs.listdir(inode)
+
+
+        # dirs=[]
+        # files=[]
+        # for p in sorted(self._fs.listdir(inode)):
+        #     if self._fs.is_dir(p):
+        #         dirs.append(p)
+        #     else:
+        #         files.append(p)
+        #
+        # return dirs + files
+
+    def future_row(self, path, newdir):
+        """
+        Determine where in the target directory 'newdir' `path` will appear if it is moved there.
+
+        :param path:
+        :param newdir:
+        :return:
+        """
+        dirs = []
+        files = []
+        for p in self._fs.listdir(newdir):
             if self._fs.is_dir(p):
                 dirs.append(p)
             else:
                 files.append(p)
 
-        return dirs + files
+        newpath = PureCIPath(newdir, path.name)
+        dirs.append(newpath) if self._fs.is_dir(path) else files.append(
+            newpath)
+
+        allfiles = sorted(dirs) + sorted(files)
+
+        return allfiles.index(newpath)
 
     @lru_cache(None)
     def _isdir(self, inode):
@@ -447,25 +476,3 @@ class ModArchiveTreeModel(QAbstractItemModel):
             self._fs.inodeof(path.parent)
         ).index(path)
 
-    def future_row(self, path, newdir):
-        """
-        Determine where in the target directory 'newdir' `path` will appear if it is moved there.
-
-        :param path:
-        :param newdir:
-        :return:
-        """
-        dirs = []
-        files = []
-        for p in self._fs.listdir(newdir):
-            if self._fs.is_dir(p):
-                dirs.append(p)
-            else:
-                files.append(p)
-
-        newpath = PureCIPath(newdir, path.name)
-        dirs.append(newpath) if self._fs.is_dir(path) else files.append(newpath)
-
-        allfiles = sorted(dirs) + sorted(files)
-
-        return allfiles.index(newpath)

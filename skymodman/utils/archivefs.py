@@ -56,6 +56,151 @@ class PureCIPath(PurePath):
     def str(self):
         return str(self)
 
+class CIPath(PureCIPath):
+    __slots__ = ("_accessor", "_cache")
+
+    FS=None # type: ArchiveFS
+
+    def __new__(cls, *args, **kwargs):
+
+        if cls.FS is None:
+            # if no fs, return PureCIPath
+            return PureCIPath._from_parts(args, init=False)
+
+        return cls._from_parts(args)
+        # self._init()
+        # return self
+
+    def _init(self): # called from __new__
+        self._accessor = self.FS # type: ArchiveFS
+        self._cache = {}
+
+    # @classmethod
+    # def _from_parsed_parts(cls, drv, root, parts, init=True):
+    #     self = super()._from_parsed_parts(drv, root, parts, init=False)
+    #     if init:
+    #         self._init(self._accessor)
+    #     return self
+
+
+    ##===============================================
+    ## stats & info
+    ##===============================================
+
+    @property
+    def inode(self):
+        try:
+            return self._cache["inode"]
+        except KeyError:
+            value = self._cache["inode"] = self._accessor.inodeof(self)
+            return value
+
+    @property
+    def is_dir(self):
+        try:
+            return self._cache["isdir"]
+        except KeyError:
+            value = self._cache["isdir"] = self._accessor.is_dir(self)
+            return value
+
+    @property
+    def is_file(self):
+        try:
+            return not self._cache["isdir"]
+        except KeyError:
+            self._cache["isdir"] = self._accessor.is_dir(self)
+            return not self._cache["isdir"]
+
+    def exists(self):
+        return self._accessor.exists(self)
+
+    ##===============================================
+    ## Directory listing/iteration
+    ##===============================================
+
+    def listdir(self):
+        return self._accessor.listdir(self)
+
+    def iterdir(self):
+        yield from self._accessor.listdir(self)
+
+    def itertree(self):
+        yield from self._accessor.itertree(root=self, include_root=False)
+
+    ##===============================================
+    ## creation
+    ##===============================================
+
+    def touch(self):
+        self._accessor.touch(self)
+
+    def mkdir(self, exist_ok=False):
+        self._accessor.mkdir(self, exist_ok)
+
+    ##===============================================
+    ## deletion
+    ##===============================================
+
+    def rm(self):
+        self._accessor.rm(self)
+
+    def rmdir(self):
+        self._accessor.rmdir(self)
+
+    ##===============================================
+    ## path/name manipulation
+    ##===============================================
+
+    def move(self, destination, overwrite=False):
+        self._accessor.move(self, destination, overwrite)
+
+    def rename(self, destination, overwrite=False):
+        self._accessor.rename(self, destination, overwrite)
+
+    def chname(self, new_name, overwrite=False):
+        self._accessor.chname(self, new_name, overwrite)
+
+    def replace(self, destination):
+        self._accessor.replace(self, destination)
+
+    ##===============================================
+    ## Comparison
+    ##===============================================
+
+    def __lt__(self, other):
+        flags = self._accessor.sorting
+
+        if not flags: return True
+
+        val = super().__lt__(other)
+
+        reverse = bool(flags & SortFlags.Descending)
+
+
+        if val is not NotImplemented:
+            if flags & SortFlags.DirsFirst and \
+                (self.is_dir and not other.is_dir):
+                    return not reverse
+                # results.append(self.is_dir and not other.is_dir)
+            elif flags & SortFlags.FilesFirst and \
+                 (other.is_dir and not self.is_dir):
+                    return not reverse
+
+            if flags & SortFlags.Inode and self.inode < other.inode:
+                    return not reverse
+
+            if flags & SortFlags.NameCS:
+                # only applies for siblings
+                if self.parent == other.parent and self.name < other.name:
+                    return not reverse
+
+            if flags & SortFlags.Name and val:
+                return not reverse
+
+            return reverse
+
+        return val
+
 
 class SortFlags:
     NoSort      = 0x00
@@ -65,8 +210,10 @@ class SortFlags:
     Inode       = 0x08
     DirsFirst   = 0x10
     FilesFirst  = 0x20
-    NameCS      = 0x40
+    CaseSensitive = 0x40
 
+    # FilesFirst  = DirsFirst|Descending
+    NameCS      = Name|CaseSensitive
     Default     = Name|DirsFirst|Ascending
 
 
@@ -76,13 +223,15 @@ class ArchiveFS:
 
     # noinspection PyUnresolvedReferences
     def __init__(self):
+        # Associate CIPath objects with this filesystem (...i hope this works)
+        CIPath.FS = self
         # list of paths, where an item's index in the list corresponds to its inode number.
-        self.i2p_table = [] # type: list[PureCIPath]
+        self.i2p_table = [] # type: list[CIPath]
         # self.inodePathTable = []
         # inode -> path
 
         # mapping of filepaths to inodes
-        self.p2i_table = dict() # type: dict[PureCIPath, int]
+        self.p2i_table = dict() # type: dict[CIPath, int]
         # self.pathInodeTable = dict()
         # path -> inode
 
@@ -94,7 +243,7 @@ class ArchiveFS:
         # self.file_table = {} # inode -> CIFile
 
         # create root of filesystem
-        self._root=PureCIPath("/")
+        self._root=CIPath("/")
         self.i2p_table.append(self._root) # inode 0
         self.p2i_table[self._root]=0
         self.directories[0]=set() # create empty set
@@ -170,7 +319,8 @@ class ArchiveFS:
         :param directory:
         :return:
         """
-        return self._sort([self.i2p_table[i] for i in self.dir_inodes(directory)])
+        return [self.i2p_table[i] for i in self.dir_inodes(directory)]
+        # return self._sort([self.i2p_table[i] for i in self.dir_inodes(directory)])
 
     def iterdir(self, directory):
         """
@@ -191,11 +341,15 @@ class ArchiveFS:
         :param bool include_root:
         :return:
         """
-
         rootpath = PureCIPath(root)
+        # if isinstance(root, PureCIPath):
+        #     rootpath = root
+        # else:
+        #     rootpath = PureCIPath(root)
+
         # if root was actually a file, just yield that file
         if not self.is_dir(rootpath):
-            if include_root: yield rootpath
+            if include_root: yield self.storedpath(rootpath)
         else:
 
             def _iter(base):
@@ -204,7 +358,7 @@ class ArchiveFS:
                     if self.is_dir(c):
                         yield from _iter(c)
 
-            if include_root: yield rootpath
+            if include_root: yield self.storedpath(rootpath)
 
             yield from _iter(rootpath)
 
@@ -271,42 +425,58 @@ class ArchiveFS:
         return inode < len(self.i2p_table) and self.i2p_table[inode] is not None
 
 
-    def _sort(self, filelist, flags=None):
-        """
-
-        :param list filelist: a list of paths corresponding to files in a common directory
-        :param flags: If None, use current FS.sorting
-        :return:
-        """
-        if flags is None:
-            flags = self.sorting
-        if not flags:
-            return filelist
-
-        lt_checks=[]
-        if flags & SortFlags.DirsFirst:
-            lt_checks.append(lambda x,y: self.is_dir(x) and not self.is_dir(y))
-        elif flags & SortFlags.FilesFirst:
-            lt_checks.append(lambda x, y: self.is_dir(y) and not self.is_dir(x))
-
-        if flags & SortFlags.Inode:
-            lt_checks.append(lambda x, y: self.inodeof(x) < self.inodeof(y))
-        elif flags & SortFlags.Name:
-            lt_checks.append(PureCIPath.__lt__)
-        elif flags & SortFlags.NameCS:
-            lt_checks.append(lambda x, y: x.name < y.name)
-
-        old_lt = PureCIPath.__lt__
-
-        PureCIPath.__lt__ = lambda x,y: any(lt(x,y) for lt in lt_checks)
-        rev = flags & SortFlags.Descending
-
-        filelist.sort(reverse=rev)
-
-        PureCIPath.__lt__ = old_lt
-        return filelist
-
-        # filelist[:] = sorted(filelist, key=lambda x: sum([-1 if lt(x) else 1 for lt in lt_checks]))
+    # def _sort_key(self, filelist, flags=None):
+    #     """
+    #
+    #     :param list filelist: a list of paths corresponding to files in a common directory
+    #     :param flags: If None, use current FS.sorting
+    #     :return:
+    #     """
+    #     if flags is None:
+    #         flags = self.sorting
+    #     if not flags:
+    #         return filelist
+    #
+    #     # lt_checks=[]
+    #     sort_key = lambda: ""
+    #     key_parts=[]
+    #
+    #     if flags & SortFlags.DirsFirst:
+    #         # want this to return 0 if true
+    #         key_parts.append(lambda p: int(not self.is_dir(p)))
+    #         # lt_checks.append(lambda x,y: self.is_dir(x) and not self.is_dir(y))
+    #     elif flags & SortFlags.FilesFirst:
+    #         key_parts.append(lambda p: int(self.is_dir(p)))
+    #         # lt_checks.append(lambda x, y: self.is_dir(y) and not self.is_dir(x))
+    #
+    #     if flags & SortFlags.Inode:
+    #         key_parts.append(lambda p: self.inodeof(p))
+    #
+    #         # lt_checks.append(lambda x, y: self.inodeof(x) < self.inodeof(y))
+    #     elif flags & SortFlags.Name:
+    #         key_parts.append(lambda p: p.name.lower())
+    #
+    #         # lt_checks.append(PureCIPath.__lt__)
+    #     elif flags & SortFlags.NameCS:
+    #         key_parts.append(lambda p: p.name)
+    #
+    #         # lt_checks.append(lambda x, y: x.name < y.name)
+    #
+    #
+    #
+    #
+    #
+    #     old_lt = PureCIPath.__lt__
+    #
+    #     PureCIPath.__lt__ = lambda x,y: any(lt(x,y) for lt in lt_checks)
+    #     rev = flags & SortFlags.Descending
+    #
+    #     filelist.sort(reverse=rev)
+    #
+    #     PureCIPath.__lt__ = old_lt
+    #     return filelist
+    #
+    #     # filelist[:] = sorted(filelist, key=lambda x: sum([-1 if lt(x) else 1 for lt in lt_checks]))
 
 
 
@@ -325,11 +495,17 @@ class ArchiveFS:
         :param name: if given, path is assumed to be the path to the directory that will contain the file named 'name'. If absent or None, `path` itself is considered to be the full path to the new file.
         """
         if name:
-            fullpath = PureCIPath(path, name)
+            fullpath = CIPath(path, name)
+        elif not isinstance(path, CIPath):
+            fullpath = CIPath(path)
         else:
-            fullpath = PureCIPath(path)
+            fullpath = path
 
-        self._create(fullpath)
+        try:
+            self._create(fullpath)
+        except Error_EEXIST:
+            # touch doesn't fail on existing paths
+            pass
 
     def mkdir(self, path, exist_ok=False):
         """
@@ -337,8 +513,11 @@ class ArchiveFS:
 
         :param exist_ok: if True, an error will not be raised when the directory already exists
         """
+        if not isinstance(path, CIPath):
+            path = CIPath(path)
+
         try:
-            inode = self._create(PureCIPath(path))
+            inode = self._create(path)
             self.directories[inode] = set()
         except Error_EEXIST:
             if not exist_ok:
@@ -465,8 +644,8 @@ class ArchiveFS:
             If `destination` is an already-existing file and `overwrite` is False, a File-Exists error will be raised; if overwrite is True, `destination` will be deleted and replaced with `path`
         :return: True if all went well
         """
-        src = PureCIPath(path)
-        dst = PureCIPath(destination)
+        src = CIPath(path) if not isinstance(path, CIPath) else path
+        dst = CIPath(path) if not isinstance(destination, CIPath) else destination
 
         # if someone attempted to move an item to itself, just return
         if src == dst: return True
@@ -529,7 +708,11 @@ class ArchiveFS:
         :param new_name:
         :return:
         """
-        src = PureCIPath(path)
+
+        src = path
+        if not isinstance(path, CIPath):
+            src = CIPath(path)
+
         if new_name == src.name:
             return True
 
