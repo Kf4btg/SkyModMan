@@ -63,16 +63,20 @@ class CIPath(PureCIPath):
 
     def __new__(cls, *args, **kwargs):
 
-        if cls.FS is None:
+        # if cls.FS is None:
+            # raise FSError(None, "No Filesystem")
             # if no fs, return PureCIPath
-            return PureCIPath._from_parts(args, init=False)
+            # return PureCIPath._from_parts(args, init=False)
 
         return cls._from_parts(args)
         # self._init()
         # return self
 
     def _init(self): # called from __new__
-        self._accessor = self.FS # type: ArchiveFS
+        print("_init")
+        assert type(self).FS is not None, "No Filesystem"
+
+        self._accessor = type(self).FS # type: ArchiveFS
         self._cache = {}
 
     # @classmethod
@@ -116,6 +120,15 @@ class CIPath(PureCIPath):
 
     def dir_length(self):
         return self._accessor.dir_length(self)
+
+    ##===============================================
+    ## Stored Data Access
+    ##===============================================
+
+    @property
+    def sparent(self):
+        pp = PureCIPath(self)
+        return self._accessor.storedpath(pp.parent)
 
     ##===============================================
     ## Directory listing/iteration
@@ -194,7 +207,7 @@ class CIPath(PureCIPath):
 
             if flags & SortFlags.NameCS:
                 # only applies for siblings
-                if self.parent == other.parent and self.name < other.name:
+                if self.sparent == other.sparent and self.name < other.name:
                     return not reverse
 
             if flags & SortFlags.Name and val:
@@ -220,14 +233,27 @@ class SortFlags:
     Default     = Name|DirsFirst|Ascending
 
 
+def get_associated_pathtype(arcfs):
+
+    class assoc_cipath(CIPath):
+        FS = arcfs
+
+    return assoc_cipath
+
 class ArchiveFS:
 
     ROOT_INODE=0
 
+    ## note: most operations will convert a 'path' argument (whether it's a string or some type of path object) into a PureCIPath before doing any operations. The Pure version of the CIPath is much lighter-weight and doesn't have a need for an associated filesystem, yet still compares equal with CIPaths that have the same "value" (path-string), and thus can be used for dict-lookups even when the actual key is technically a different type.  Only when a path is about to be entered into the class's storage tables is it converted to a concrete CIPath
+
     # noinspection PyUnresolvedReferences
     def __init__(self):
         # Associate CIPath objects with this filesystem (...i hope this works)
-        CIPath.FS = self
+
+        # maybe, we can do this and just make sure to instantiate everything with this...
+        self.CIPath = get_associated_pathtype(self)
+
+        # CIPath.FS = self
         # list of paths, where an item's index in the list corresponds to its inode number.
         self.i2p_table = [] # type: list[CIPath]
         # self.inodePathTable = []
@@ -246,7 +272,7 @@ class ArchiveFS:
         # self.file_table = {} # inode -> CIFile
 
         # create root of filesystem
-        self._root=CIPath("/")
+        self._root=self.CIPath("/")
         self.i2p_table.append(self._root) # inode 0
         self.p2i_table[self._root]=0
         self.directories[0]=set() # create empty set
@@ -498,9 +524,9 @@ class ArchiveFS:
         :param name: if given, path is assumed to be the path to the directory that will contain the file named 'name'. If absent or None, `path` itself is considered to be the full path to the new file.
         """
         if name:
-            fullpath = CIPath(path, name)
-        elif not isinstance(path, CIPath):
-            fullpath = CIPath(path)
+            fullpath = PureCIPath(path, name)
+        elif not isinstance(path, PureCIPath):
+            fullpath = PureCIPath(path)
         else:
             fullpath = path
 
@@ -516,8 +542,8 @@ class ArchiveFS:
 
         :param exist_ok: if True, an error will not be raised when the directory already exists
         """
-        if not isinstance(path, CIPath):
-            path = CIPath(path)
+        if not isinstance(path, PureCIPath):
+            path = PureCIPath(path)
 
         try:
             inode = self._create(path)
@@ -537,6 +563,10 @@ class ArchiveFS:
             raise Error_EEXIST(path.str) from None
 
         new_inode = len(self.i2p_table)
+
+        if not isinstance(path, self.CIPath):
+            path = self.CIPath(path)
+
         self.i2p_table.append(path)
         self.p2i_table[path] = new_inode
 
@@ -546,11 +576,12 @@ class ArchiveFS:
 
     def _add_to_parent_dir(self, path):
         inode=self.inodeof(path)
+        pp = PureCIPath(path)
         try:
-            self.dir_inodes(path.parent).add(inode)
+            self.dir_inodes(pp.parent).add(inode)
         except Error_ENOENT:
-            self.mkdir(path.parent) # starts recursion to create lowest-nonexisting parent and propagate back up
-            self.dir_inodes(path.parent).add(inode)
+            self.mkdir(pp.parent) # starts recursion to create lowest-nonexisting parent and propagate back up
+            self.dir_inodes(pp.parent).add(inode)
 
     ##===============================================
     ## File Deletion
@@ -564,8 +595,8 @@ class ArchiveFS:
         :param str|PurePath path:
         :return:
         """
-        if not isinstance(path, PureCIPath):
-            path = PureCIPath(path)
+        # if not isinstance(path, PureCIPath):
+        path = PureCIPath(path)
 
         if self.is_dir(path):
             raise Error_EISDIR(path.str)
@@ -578,8 +609,8 @@ class ArchiveFS:
         :param str|PurePath dirpath:
         """
 
-        if not isinstance(dirpath, PureCIPath):
-            dirpath = PureCIPath(dirpath)
+        # if not isinstance(dirpath, PureCIPath):
+        dirpath = PureCIPath(dirpath)
 
         assert dirpath != self.root, "No."
 
@@ -600,8 +631,8 @@ class ArchiveFS:
         Recursively remove a non-empty directory tree.
         :param str|PurePath directory:
         """
-        if not isinstance(directory, PureCIPath):
-            directory = PureCIPath(directory)
+        # if not isinstance(directory, PureCIPath):
+        directory = PureCIPath(directory)
 
         assert directory != self.root, "No. Stop that."
 
@@ -647,8 +678,8 @@ class ArchiveFS:
             If `destination` is an already-existing file and `overwrite` is False, a File-Exists error will be raised; if overwrite is True, `destination` will be deleted and replaced with `path`
         :return: True if all went well
         """
-        src = CIPath(path) if not isinstance(path, CIPath) else path
-        dst = CIPath(path) if not isinstance(destination, CIPath) else destination
+        src = PureCIPath(path)# if not isinstance(path, PureCIPath) else path
+        dst = PureCIPath(destination)# if not isinstance(destination, PureCIPath) else destination
 
         # if someone attempted to move an item to itself, just return
         if src == dst: return True
@@ -712,9 +743,9 @@ class ArchiveFS:
         :return:
         """
 
-        src = path
-        if not isinstance(path, CIPath):
-            src = CIPath(path)
+        src = PureCIPath(path)
+        # if not isinstance(path, CIPath):
+        #     src = CIPath(path)
 
         if new_name == src.name:
             return True
@@ -759,6 +790,9 @@ class ArchiveFS:
         old_path = self.i2p_table[inode]
 
         assert new_path != old_path
+
+        # now make concrete
+        new_path = self.CIPath(new_path)
 
         self.i2p_table[inode] = new_path
         self.p2i_table[new_path] = inode
@@ -830,10 +864,13 @@ class ArchiveFS:
         so skips the directory-inode rearrangement.
         """
         inode = self.inodeof(orig_path)         # get inode
-        self.i2p_table[inode] = renamed_path    # update inode->path table
+
+        newpath = CIPath(renamed_path)          # make concrete
+
+        self.i2p_table[inode] = newpath    # update inode->path table
 
         del self.p2i_table[orig_path]           # del old path from path->inode table
-        self.p2i_table[renamed_path] = inode    # add new path to path->inode table
+        self.p2i_table[newpath] = inode    # add new path to path->inode table
         return True
 
     def _check_collision(self, target, overwrite):
@@ -862,6 +899,7 @@ class ArchiveFS:
         :param from_path: The path in this fs that will become the root of the new fs.
         """
         subfs = type(self)()
+        from_path = PureCIPath(from_path)
 
         for p in self.itertree(from_path, False):
             rel_path = p.relative_to(from_path)
@@ -880,10 +918,14 @@ class ArchiveFS:
         import copy
         dupefs = type(self)()
 
-        dupefs.i2p_table = copy.deepcopy(self.i2p_table)
+        # have to make sure the paths in the inode-table are of the correct type
+        dupefs.i2p_table = [dupefs.CIPath(p) if p is not None else p for p in self.i2p_table]
+            # copy.deepcopy(self.i2p_table)
         for i,p in enumerate(dupefs.i2p_table):
             if p is not None:
                 dupefs.p2i_table[p]=i
+
+        # directories just contains ints
         dupefs.directories = copy.deepcopy(self.directories)
 
         del copy

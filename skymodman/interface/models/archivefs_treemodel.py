@@ -106,7 +106,14 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
 
         try:
-            child = self._sorted_dirlist(parent)[row]
+            # print(type(parent))
+            # print(type(parent).FS)
+            print("  parent:", "--", parent)
+            dirlist = self._sorted_dirlist(parent)
+            print(dirlist)
+            child = dirlist[row]
+            print("child:", child)
+            # child = self._sorted_dirlist(parent)[row]
             # child = self._fs.listdir(parinode)[row]
 
             # using an int for the third argument makes it internalId(),
@@ -126,7 +133,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
             return QModelIndex()
 
         # get the parent path
-        parent = child_index.internalPointer().parent
+        parent = child_index.internalPointer().sparent
         # parent = self._fs.pathfor(child_index.internalId()).parent
 
         # if parent is "/" return invalid index
@@ -134,7 +141,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
             return QModelIndex()
 
         #now we need the parent's parent's path...
-        grandpath = parent.parent
+        grandpath = parent.sparent
         # ...to find index of parent within its directory (by sorted position)
 
         try:
@@ -260,7 +267,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         par_path = parent.internalPointer()
         # src_inode = int(data.text())
         src_path = self._fs.pathfor(int(data.text()))
-        orig_parent = src_path.parent
+        orig_parent = src_path.sparent
 
         # if row < 0 and not self._isdir(par_inode):
         if row < 0 and par_path.is_file:
@@ -347,7 +354,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
             if row < 0 and parpath.is_file():
                 # dropped directly on parent, and 'parent' is not a directory
-                target = parpath.parent
+                target = parpath.sparent
                 # pp = parent.parent()
                 # target = self.path4index(pp)
                 # target = pp.internal() if pp.isValid() else self.root_inode
@@ -493,7 +500,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :return:
         """
         return self._sorted_dirlist(
-            path.parent
+            path.sparent
             # self._fs.inodeof(path.parent)
         ).index(path)
 
