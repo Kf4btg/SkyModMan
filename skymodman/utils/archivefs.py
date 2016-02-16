@@ -225,8 +225,11 @@ def get_associated_pathtype(arcfs):
     return assoc_cipath
 
 
-class InodeRecord(int):
-    __slots__ = ("parent", "name")
+class InodeRecord:
+
+    # not supported?!
+    __slots__ = ("parent", "name", "__inode")
+
     def __init__(self, name, inode, parent_inode, *args, **kwargs):
         """
 
@@ -234,15 +237,21 @@ class InodeRecord(int):
         :param int inode:
         :param int parent_inode:
         """
-        super().__init__(inode, *args, **kwargs)
-
-        self.name = name
+        # super().__init__(inode, *args, **kwargs)
+        self.__inode = inode    # immutable
+        self.name = name          # mutable
         self.parent = parent_inode  # mutable
 
 
     @property
     def inode(self):
-        return self
+        return self.__inode
+
+    def __int__(self):
+        return self.__inode
+    def __index__(self):
+        return self.__inode
+
 
 
 
@@ -261,7 +270,7 @@ class ArchiveFS:
         self.CIPath = get_associated_pathtype(self)
 
         # list of paths, where an item's index in the list corresponds to its inode number.
-        self.i2p_table = [] # type: list[CIPath]
+        # self.i2p_table = [] # type: list[CIPath]
         # inode -> path
         self.inode_table = [] # type: list[InodeRecord]
 
@@ -310,10 +319,14 @@ class ArchiveFS:
 
         assert parts[0]=="/", "Path must be absolute: {}".format(path)
 
+        if len(parts)==1:
+            return self.ROOT_INODE
+
         ir=self.root
-        for p in PureCIPath(path).parts:
+        for p in parts[1:]:
 
             try:
+                # `ir` is the parent of the current path part
                 for i in self.dir_inodes(ir):
                     if self._inode_name_lower(i) == p.lower():
                         ir = self.inode_table[i]
@@ -325,31 +338,22 @@ class ArchiveFS:
                 raise Error_ENOENT(
                     PureCIPath(*parts[:parts.index(p) + 1])) from None
 
-        return ir
-
-        # return self._ino(PureCIPath(path))
+        return ir.inode
 
     @lru_cache(1024)
-    def _inode_name(self, int_inode):
+    def _inode_name(self, int_inode:int):
         try:
             return self.inode_table[int_inode].name
         except IndexError:
             raise Error_EIO(int_inode)
 
     @lru_cache(1024)
-    def _inode_name_lower(self, inode):
+    def _inode_name_lower(self, inode:int):
         return self._inode_name(inode).lower()
 
 
-    # @inodeof.register(PureCIPath)
-    # def _ino(self, path):
-    #     try:
-    #         return self.p2i_table[path]
-    #     except KeyError:
-    #         raise Error_ENOENT(path.str) from None
-
     @lru_cache(256)
-    def pathfor(self, inode):
+    def pathfor(self, inode:int):
 
         try:
             ir = self.inode_table[inode]
@@ -366,19 +370,11 @@ class ArchiveFS:
 
         return self.CIPath(*path_parts[::-1])
 
-        # try:
-        #     return self.i2p_table[inode]
-        # except IndexError:
-        #     raise Error_EIO(inode)
-
     def storedpath(self, path):
         """
         Return the version of `path` that is built from the inode-table
         """
         return self.pathfor(self.inodeof(path))
-
-
-        # return self.i2p_table[self.p2i_table[path]]
 
     @singledispatch_m
     def dir_inodes(self, directory):
@@ -424,7 +420,6 @@ class ArchiveFS:
         :param directory:
         :return:
         """
-        #            inode -> path
         yield from (self._inode_name(i) for i in self.dir_inodes(directory))
 
         # yield from (self.i2p_table[i] for i in self.dir_inodes(directory))
@@ -488,7 +483,6 @@ class ArchiveFS:
             if include_root: yield (0, rootpath, "d")
 
             yield from _iter(self.inodeof(rootpath))
-            # yield from _iter(rootpath)
 
     @singledispatch_m
     def is_dir(self, path):
@@ -509,11 +503,12 @@ class ArchiveFS:
 
     @singledispatch_m
     def exists(self, path): # should catch str and other path-types
-        return self._ei(self.inodeof(path))
-
-    # @exists.register(PureCIPath)
-    # def _ep(self, path):
-    #     return path in self.p2i_table
+        try:
+            # if it finds it...it's because it was findable
+            self.inodeof(path)
+            return True
+        except Error_ENOENT:
+            return False
 
     @exists.register(int) # for checking inodes
     def _ei(self, inode):
@@ -584,10 +579,6 @@ class ArchiveFS:
         # insert into position saved earlier
         self.inode_table[new_inode] = InodeRecord(path.name, new_inode, par_inode)
 
-        # path = self.CIPath(path)        # mix concrete
-        # self.i2p_table.append(path)
-        # self.p2i_table[path] = new_inode
-
         self._addtodir(new_inode, par_inode)
 
         return new_inode
@@ -600,19 +591,8 @@ class ArchiveFS:
             self.mkdir(parent) # recursive call
             return self.inodeof(parent)
 
-    def _addtodir(self, inode, parent_inode):
+    def _addtodir(self, inode:int, parent_inode:int):
         self.directories[parent_inode].add(inode)
-
-    # def _add_to_parent_dir(self, path, path_inode=None):
-    #     if path_inode is None:
-    #         path_inode=self.inodeof(path)
-    #     # pp = PureCIPath(path)
-    #
-    #     try:
-    #         self.dir_inodes(path.parent).add(path_inode)
-    #     except Error_ENOENT:
-    #         self.mkdir(path.parent) # starts recursion to create lowest-nonexisting parent and propagate back up
-    #         self.dir_inodes(path.parent).add(path_inode)
 
     ##===============================================
     ## File Deletion
@@ -629,9 +609,9 @@ class ArchiveFS:
         path = PureCIPath(path)
 
         if self.is_dir(path):
-            raise Error_EISDIR(path.str)
+            raise Error_EISDIR(path)
 
-        self._delfile(path)
+        self._unlink(self.inodeof(path))
 
     def rmdir(self, dirpath):
         """
@@ -640,22 +620,19 @@ class ArchiveFS:
         """
 
         dirpath = PureCIPath(dirpath)
+        dirinode = self.inodeof(dirpath)
 
         assert dirpath != self.root, "No."
 
-        if not self.is_dir(dirpath):
-            raise Error_ENOTDIR(dirpath.str)
+        if not self.is_dir(dirinode):
+            raise Error_ENOTDIR(dirpath)
 
-        if len(self.dir_inodes(dirpath)):
-            raise Error_ENOTEMPTY(dirpath.str)
+        if len(self.directories[dirinode]):
+            raise Error_ENOTEMPTY(dirpath)
 
-        # remove it from directory table
-        del self.directories[self.inodeof(dirpath)]
+        self._del_dir(dirinode)
 
-        # now delete it like any other file
-        self._delfile(dirpath)
-
-    def rmtree(self, directory):
+    def rmtree(self, directory:int):
         """
         Recursively remove a non-empty directory tree.
         :param str|PurePath directory:
@@ -664,39 +641,62 @@ class ArchiveFS:
 
         assert directory != self.root, "No. Stop that."
 
-        # iterdir will raise ENOTDIR if directory is not...a directory.
-        for child in self.iterdir(directory):
-            try:
-                # remove if file
-                self.rm(child)
-            except Error_EISDIR:
-                # or remove the child tree if dir
-                self.rmtree(child)
+        dirinode = self.inodeof(directory)
+        self._del_dir_tree(dirinode)
+
+        # have to do a final removal of the dir from its parent-list
+        # (since we skip that step in _del_dir_tree)
+        self.dir_inodes(self.inode_table[dirinode].parent).remove(dirinode)
+
+    def _del_dir(self, dirinode:int):
+        """
+        No checks, just does the job.
+        :param int dirinode:
+        """
+        # remove it from directory table
+        del self.directories[dirinode]
+
+        # now delete it like any other file
+        self._unlink(dirinode)
+
+    def _del_dir_tree(self, dirinode:int):
+
+        # will raise ENOTDIR if directory is not...a directory.
+        for childnode in self.dir_inodes(dirinode):
+            if not self.is_dir(childnode):
+                # don't need to bother removing it from the directory's
+                # node list since we're deleting the directory in just
+                # a second anyway.
+                self.inode_table[childnode] = None
+            else:
+                self._del_dir_tree(childnode)
 
         # remove the empty dir when it's all done
-        self.rmdir(directory)
+        del self.directories[dirinode]
+        self.inode_table[dirinode]=None
 
-    def _unlink(self, inode):
+
+    def _unlink(self, inode:int):
         """
-        This does not delete the inode from the inode table,
+        Instead of deleting the inode from the inode table,
         (thus changing the length of the list and messing up all our inodes),
-        it replaces the path with ``None``.
+        this replaces the index in the table with ``None``. Also removes
+        the inode from its parent's list of child-inodes
         :param inode:
         :return:
         """
-        self.i2p_table[inode] = None
-
-    def _delfile(self, path):
-        inode = self.p2i_table.pop(path)
-        self.dir_inodes(path.parent).remove(inode)
-        self._unlink(inode)
+        inorec = self.inode_table[inode]
+        # remove this node from its parent-directory's nodelist
+        self.dir_inodes(inorec.parent).remove(inode)
+        # and null out its entry in the inode table
+        self.inode_table[inode] = None
 
     ##===============================================
     ## Name/Path Manipulation
     ##===============================================
 
     def move(self, path, destination, overwrite=False):
-        """
+        """...
         Move the file or directory pointed to by `path` to `destination`.
 
         :param path:
@@ -708,9 +708,6 @@ class ArchiveFS:
         """
 
         PRINT() << "move(" << path << ", " << destination << ")"
-
-        # print("move(", path,",", destination)
-
 
         src = PureCIPath(path)
         dst = PureCIPath(destination)
@@ -728,7 +725,8 @@ class ArchiveFS:
 
         # and now we can be sure it doesn't exist! Muahahahaha...ha....oh
 
-        # if destination path is in the same folder as the source, this is just a name change
+        # if destination path is in the same folder as the source,
+        # this is just a name change
         if dst.parent == src.parent:
             return self._change_name(src, dst.name)
 
@@ -812,7 +810,7 @@ class ArchiveFS:
         #       user simply wants to change the displayed case of the filename
         #
         #   In either case (hah!), it should be safe to just do:
-        self._chname(src, dest)
+        self._change_name(src, new_name)
 
     def replace(self, path, destination):
         """
@@ -826,40 +824,18 @@ class ArchiveFS:
     def _change_inode_path(self, inode, new_path):
         PRINT() << "_change_inode_path(" << inode << ", " << new_path << ")"
 
-        print(self.i2p_table[inode])
+        inorec = self.inode_table[inode]
 
-        old_path = self.i2p_table[inode]
+        # remove from old dir
+        self.directories[inorec.parent].remove(inorec)
 
-        print(self.p2i_table[old_path])
-        PRINT() << "..."
+        # change name and parent
+        inorec.name = new_path.name
+        inorec.parent = self.inodeof(new_path.parent)
 
-        # assert new_path != old_path
+        # add to new dir
+        self.directories[inorec.parent].add(inorec)
 
-        # now make concrete
-        new_path = self.CIPath(new_path)
-        self.i2p_table[inode] = new_path
-
-        del self.p2i_table[old_path]
-
-        self.p2i_table[new_path] = inode
-
-        PRINT() << self.i2p_table[inode]
-        PRINT() << self.p2i_table[new_path]
-        print(".....................")
-
-
-    def _swap_inode_dir(self, inode, dir1, dir2):
-        """
-        "Swap" the given inode number from the directory-inode set of `dir1` to that of `dir2`
-
-        :param int inode:
-        :param PureCIPath dir1:
-        :param PureCIPath dir2:
-        """
-        PRINT() << "_swap_inode_dir(" << str(inode) << ", " << dir1 <<  dir2 <<")"
-
-        self.dir_inodes(dir1).remove(inode)
-        self.dir_inodes(dir2).add(inode)
 
     def _move_to_dir(self, path, dest_dir):
         """
@@ -868,7 +844,6 @@ class ArchiveFS:
 
         PRINT() << "_move_to_dir(" << path << ", " << dest_dir << ")"
 
-        # use inodeof() to preserve existing case
         dest_path = self.storedpath(dest_dir) / path.name # keep same name
 
         # if someone attempted to move an item inside its own parent, just return
@@ -892,10 +867,8 @@ class ArchiveFS:
 
         PRINT() << "_move(" << from_path << ", " << to_path << ")"
 
-        inode = self.inodeof(from_path)                     # get inode from current path value
-        self._swap_inode_dir(inode, from_path.parent,       # remove inode from old directory, add to new
-                             to_path.parent)
-        self._change_inode_path(inode, to_path)             # update the path and inode tables
+        inode = self.inodeof(from_path)           # get inode from current path value
+        self._change_inode_path(inode, to_path)   # update the inode table
         return True
 
     def _change_name(self, path, new_name):
@@ -905,34 +878,8 @@ class ArchiveFS:
 
         :param path:
         :param str new_name:
-        :return:
         """
-        # if dest.parent == src.parent:
-        #     # just moving to a new name in the same directory;
-        #     # only need to change the file name. Use dest.name
-        #     # instead of just putting dest in src's place so that
-        #     # the case of the names of any parents remains consistent.
-        #     self._change_name(src, dest.name)
-        #     return True
-
-        return self._chname(path, path.with_name(new_name))
-
-    def _chname(self, orig_path, renamed_path):
-        """
-        Assumes `orig_path` and `renamed_path` are in the same folder,
-        so skips the directory-inode rearrangement.
-        """
-
-        PRINT() << "_chname(" << orig_path << ", " << renamed_path << ")"
-
-        inode = self.inodeof(orig_path)         # get inode
-
-        newpath = self.CIPath(renamed_path)          # make concrete
-
-        self.i2p_table[inode] = newpath    # update inode->path table
-
-        del self.p2i_table[orig_path]           # del old path from path->inode table
-        self.p2i_table[newpath] = inode    # add new path to path->inode table
+        self.inode_table[self.inodeof(path)].name = new_name
         return True
 
     def _check_collision(self, target, overwrite):
@@ -980,17 +927,21 @@ class ArchiveFS:
         import copy
         dupefs = type(self)()
 
-        # have to make sure the paths in the inode-table are of the correct type
-        dupefs.i2p_table = [dupefs.CIPath(p) if p is not None else p for p in self.i2p_table]
-            # copy.deepcopy(self.i2p_table)
-        for i,p in enumerate(dupefs.i2p_table):
-            if p is not None:
-                dupefs.p2i_table[p]=i
+        dupefs.inode_table = copy.deepcopy(self.inode_table)
 
         # directories just contains ints
         dupefs.directories = copy.deepcopy(self.directories)
 
         del copy
+        return dupefs
+
+        # have to make sure the paths in the inode-table are of the correct type
+        # dupefs.i2p_table = [dupefs.CIPath(p) if p is not None else p for p in self.i2p_table]
+            # copy.deepcopy(self.i2p_table)
+        # for i,p in enumerate(dupefs.i2p_table):
+        #     if p is not None:
+        #         dupefs.p2i_table[p]=i
+
 
         # for p in self.itertree("/", False):
         #     if self.is_dir(p):
@@ -998,7 +949,7 @@ class ArchiveFS:
         #     else:
         #         dupefs.touch(p)
 
-        return dupefs
+
 
     def fsck(self, root="/"):
         return fsck_modfs(self, root)
