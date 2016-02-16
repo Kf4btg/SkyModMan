@@ -1,4 +1,5 @@
 from pathlib import PurePath, _PosixFlavour
+from functools import lru_cache
 # from enum import Enum
 
 from skymodman.exceptions import Error
@@ -223,6 +224,29 @@ def get_associated_pathtype(arcfs):
 
     return assoc_cipath
 
+
+class InodeRecord(int):
+    __slots__ = ("parent", "name")
+    def __init__(self, name, inode, parent_inode, *args, **kwargs):
+        """
+
+        :param str name:
+        :param int inode:
+        :param int parent_inode:
+        """
+        super().__init__(inode, *args, **kwargs)
+
+        self.name = name
+        self.parent = parent_inode  # mutable
+
+
+    @property
+    def inode(self):
+        return self
+
+
+
+
 class ArchiveFS:
 
     ROOT_INODE=0
@@ -239,11 +263,12 @@ class ArchiveFS:
         # list of paths, where an item's index in the list corresponds to its inode number.
         self.i2p_table = [] # type: list[CIPath]
         # inode -> path
+        self.inode_table = [] # type: list[InodeRecord]
 
         # mapping of filepaths to inodes
         ## FIXME: so...one of the fundamental building blocks of this class at the moment...is fundamentally broken. This abstraction was meant to prevent having to apply recursive or cascading changes to parent and child items in the tree on every change. However, because I store (absolute) path objects in the inode table and reference them everywhere, when, for example, a directory is moved to a new sub-directory, it's path gets updated to reflect the change...but all of its children's paths still show the old hierarchy. To fix that and still maintain this model, I'd have to do--cascading changes. Which defeats the entire point.
         ## XXX: I suppose the "best" thing to do in this situation is just to store file-names in the inode table rather than path objects; when a path is requested, the Path object will have to be generated dynamically by piecing together the calculated hierarchy. This method can probably be improved by using a cache of some sort; I'll just have to be careful to make sure the cache (or part of it) is marked invalid when a change occurs.
-        self.p2i_table = dict() # type: dict[CIPath, int]
+        # self.p2i_table = dict() # type: # dict[CIPath, int]
         # path -> inode
 
         # mapping of directory-inodes to set of inodes they contain
@@ -251,9 +276,14 @@ class ArchiveFS:
         # inode -> {inode, ...}
 
         # create root of filesystem
-        self._root=self.CIPath("/")
-        self.i2p_table.append(self._root) # inode 0
-        self.p2i_table[self._root]=0
+        # self._root=self.CIPath("/")
+
+        # only root should have its parent be the same as itself
+        self._root=InodeRecord("/", 0, 0)
+        self.inode_table.append(self._root)
+
+        # self.i2p_table.append(self._root) # inode 0
+        # self.p2i_table[self._root]=0
         self.directories[0]=set() # create empty set
 
         self.sorting=SortFlags.Default
@@ -271,28 +301,84 @@ class ArchiveFS:
     ## it to work with instance methods.
     ##=====================================================
 
-    @singledispatch_m
+    # @singledispatch_m
+
+    @lru_cache(256)
     def inodeof(self, path):
-        return self._ino(PureCIPath(path))
 
-    @inodeof.register(PureCIPath)
-    def _ino(self, path):
+        parts = PureCIPath(path).parts
+
+        assert parts[0]=="/", "Path must be absolute: {}".format(path)
+
+        ir=self.root
+        for p in PureCIPath(path).parts:
+
+            try:
+                for i in self.dir_inodes(ir):
+                    if self._inode_name_lower(i) == p.lower():
+                        ir = self.inode_table[i]
+                        break
+                else:
+                    raise Error_ENOENT(
+                        PureCIPath(*parts[:parts.index(p) + 1])) from None
+            except Error_EIO:
+                raise Error_ENOENT(
+                    PureCIPath(*parts[:parts.index(p) + 1])) from None
+
+        return ir
+
+        # return self._ino(PureCIPath(path))
+
+    @lru_cache(1024)
+    def _inode_name(self, int_inode):
         try:
-            return self.p2i_table[path]
-        except KeyError:
-            raise Error_ENOENT(path.str) from None
+            return self.inode_table[int_inode].name
+        except IndexError:
+            raise Error_EIO(int_inode)
 
+    @lru_cache(1024)
+    def _inode_name_lower(self, inode):
+        return self._inode_name(inode).lower()
+
+
+    # @inodeof.register(PureCIPath)
+    # def _ino(self, path):
+    #     try:
+    #         return self.p2i_table[path]
+    #     except KeyError:
+    #         raise Error_ENOENT(path.str) from None
+
+    @lru_cache(256)
     def pathfor(self, inode):
+
         try:
-            return self.i2p_table[inode]
+            ir = self.inode_table[inode]
         except IndexError:
             raise Error_EIO(inode)
 
+        path_parts = []
+
+        while ir > 0:
+            path_parts.append(ir.name)
+            ir = self.inode_table[ir.parent]
+
+        path_parts.append(self.root.name)
+
+        return self.CIPath(*path_parts[::-1])
+
+        # try:
+        #     return self.i2p_table[inode]
+        # except IndexError:
+        #     raise Error_EIO(inode)
+
     def storedpath(self, path):
         """
-        Return the version of `path` that is stored in the inode-table
+        Return the version of `path` that is built from the inode-table
         """
-        return self.i2p_table[self.p2i_table[path]]
+        return self.pathfor(self.inodeof(path))
+
+
+        # return self.i2p_table[self.p2i_table[path]]
 
     @singledispatch_m
     def dir_inodes(self, directory):
@@ -324,11 +410,13 @@ class ArchiveFS:
 
     def listdir(self, directory):
         """
-        List of all items in a directory, sorted according to self.sorting
+        List of names all items in `directory`
         :param directory:
         :return:
         """
-        return [self.i2p_table[i] for i in self.dir_inodes(directory)]
+        return [self._inode_name(i) for i in self.dir_inodes(directory)]
+
+        # return [self.i2p_table[i] for i in self.dir_inodes(directory)]
 
     def iterdir(self, directory):
         """
@@ -337,7 +425,9 @@ class ArchiveFS:
         :return:
         """
         #            inode -> path
-        yield from (self.i2p_table[i] for i in self.dir_inodes(directory))
+        yield from (self._inode_name(i) for i in self.dir_inodes(directory))
+
+        # yield from (self.i2p_table[i] for i in self.dir_inodes(directory))
 
     def itertree(self, root="/", include_root=True):
         """
@@ -387,17 +477,18 @@ class ArchiveFS:
             def _iter(base):
                 nonlocal depth
                 depth+=1
-                for c in self.iterdir(base):
+                for c in self.dir_inodes(base):
                     if self.is_dir(c):
-                        yield (depth, c, "d")
+                        yield (depth, self._inode_name(c), "d")
                         yield from _iter(c)
                     else:
-                        yield (depth, c, "f")
+                        yield (depth, self._inode_name(c), "f")
                 depth-=1
 
             if include_root: yield (0, rootpath, "d")
 
-            yield from _iter(rootpath)
+            yield from _iter(self.inodeof(rootpath))
+            # yield from _iter(rootpath)
 
     @singledispatch_m
     def is_dir(self, path):
@@ -418,15 +509,17 @@ class ArchiveFS:
 
     @singledispatch_m
     def exists(self, path): # should catch str and other path-types
-        return self._ep(PureCIPath(path))
+        return self._ei(self.inodeof(path))
 
-    @exists.register(PureCIPath)
-    def _ep(self, path):
-        return path in self.p2i_table
+    # @exists.register(PureCIPath)
+    # def _ep(self, path):
+    #     return path in self.p2i_table
 
     @exists.register(int) # for checking inodes
     def _ei(self, inode):
-        return inode < len(self.i2p_table) and self.i2p_table[inode] is not None
+        return inode < len(self.inode_table) and self.inode_table[inode] is not None
+
+        # return inode < len(self.i2p_table) and self.i2p_table[inode] is not None
 
 
     ##===============================================
@@ -473,30 +566,53 @@ class ArchiveFS:
         :return:
         """
 
-        if path in self.p2i_table:
-            raise Error_EEXIST(path.str) from None
+        if self.exists(path):
+            # if path in self.p2i_table:
+            raise Error_EEXIST(path.str)
 
         # new inode numbers are always == 1+current maximum inode.
         # since they start at 0, this is == the len of the table
-        new_inode = len(self.i2p_table)
+        # new_inode = len(self.i2p_table)
+        new_inode = len(self.inode_table)
 
-        path = self.CIPath(path)        # mix concrete
+        # append placeholder in case parent dirs have to be created
+        # in getparentinode(),
+        # so that they don't invalidate the above new_inode
+        self.inode_table.append(None)
+        par_inode = self._getparentinode(path)
 
-        self.i2p_table.append(path)
-        self.p2i_table[path] = new_inode
+        # insert into position saved earlier
+        self.inode_table[new_inode] = InodeRecord(path.name, new_inode, par_inode)
 
-        self._add_to_parent_dir(path)
+        # path = self.CIPath(path)        # mix concrete
+        # self.i2p_table.append(path)
+        # self.p2i_table[path] = new_inode
+
+        self._addtodir(new_inode, par_inode)
 
         return new_inode
 
-    def _add_to_parent_dir(self, path):
-        inode=self.inodeof(path)
-        pp = PureCIPath(path)
+    def _getparentinode(self, path):
+        parent = path.parent
         try:
-            self.dir_inodes(pp.parent).add(inode)
+            return self.inodeof(parent)
         except Error_ENOENT:
-            self.mkdir(pp.parent) # starts recursion to create lowest-nonexisting parent and propagate back up
-            self.dir_inodes(pp.parent).add(inode)
+            self.mkdir(parent) # recursive call
+            return self.inodeof(parent)
+
+    def _addtodir(self, inode, parent_inode):
+        self.directories[parent_inode].add(inode)
+
+    # def _add_to_parent_dir(self, path, path_inode=None):
+    #     if path_inode is None:
+    #         path_inode=self.inodeof(path)
+    #     # pp = PureCIPath(path)
+    #
+    #     try:
+    #         self.dir_inodes(path.parent).add(path_inode)
+    #     except Error_ENOENT:
+    #         self.mkdir(path.parent) # starts recursion to create lowest-nonexisting parent and propagate back up
+    #         self.dir_inodes(path.parent).add(path_inode)
 
     ##===============================================
     ## File Deletion
