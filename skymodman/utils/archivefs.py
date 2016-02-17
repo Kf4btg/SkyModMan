@@ -242,7 +242,6 @@ def get_associated_pathtype(arcfs):
 
 class InodeRecord:
 
-    # not supported?!
     __slots__ = ("parent", "name", "__inode")
 
     def __init__(self, name, inode, parent_inode, *args, **kwargs):
@@ -252,7 +251,6 @@ class InodeRecord:
         :param int inode:
         :param int parent_inode:
         """
-        # super().__init__(inode, *args, **kwargs)
         self.__inode = inode    # immutable
         self.name = name          # mutable
         self.parent = parent_inode  # mutable
@@ -268,14 +266,9 @@ class InodeRecord:
         return self.__inode
 
 
-
-
-
 class ArchiveFS:
 
     ROOT_INODE=0
-
-    ## note: most operations will convert a 'path' argument (whether it's a string or some type of path object) into a PureCIPath before doing any operations. The Pure version of the CIPath is much lighter-weight and doesn't have a need for an associated filesystem, yet still compares equal with CIPaths that have the same "value" (path-string), and thus can be used for dict-lookups even when the actual key is technically a different type.  Only when a path is about to be entered into the class's storage tables is it converted to a concrete CIPath
 
     # noinspection PyUnresolvedReferences
     def __init__(self):
@@ -285,30 +278,22 @@ class ArchiveFS:
         self.CIPath = get_associated_pathtype(self)
 
         # list of paths, where an item's index in the list corresponds to its inode number.
-        # self.i2p_table = [] # type: list[CIPath]
-        # inode -> path
         self.inode_table = [] # type: list[InodeRecord]
 
         # mapping of filepaths to inodes
         ## FIXME: so...one of the fundamental building blocks of this class at the moment...is fundamentally broken. This abstraction was meant to prevent having to apply recursive or cascading changes to parent and child items in the tree on every change. However, because I store (absolute) path objects in the inode table and reference them everywhere, when, for example, a directory is moved to a new sub-directory, it's path gets updated to reflect the change...but all of its children's paths still show the old hierarchy. To fix that and still maintain this model, I'd have to do--cascading changes. Which defeats the entire point.
         ## XXX: I suppose the "best" thing to do in this situation is just to store file-names in the inode table rather than path objects; when a path is requested, the Path object will have to be generated dynamically by piecing together the calculated hierarchy. This method can probably be improved by using a cache of some sort; I'll just have to be careful to make sure the cache (or part of it) is marked invalid when a change occurs.
-        # self.p2i_table = dict() # type: # dict[CIPath, int]
-        # path -> inode
 
         # mapping of directory-inodes to set of inodes they contain
         self.directories = dict() # type: dict[int, set[int]]
         # inode -> {inode, ...}
 
         # create root of filesystem
-        # self._root=self.CIPath("/")
-
         # only root should have its parent be the same as itself
         self._root=InodeRecord("/", 0, 0)
         self._rootpath = self.CIPath(self._root.name)
         self.inode_table.append(self._root)
 
-        # self.i2p_table.append(self._root) # inode 0
-        # self.p2i_table[self._root]=0
         self.directories[0]=set() # create empty set
 
         self.sorting=SortFlags.Default
@@ -374,9 +359,6 @@ class ArchiveFS:
     ## it to work with instance methods.
     ##=====================================================
 
-    # @singledispatch_m
-
-    # @lru_cache(256)
     # noinspection PyTypeChecker
     def inodeof(self, ppath):
         """
@@ -842,7 +824,6 @@ class ArchiveFS:
 
         # un-cache the parent-dir's file list
         self.del_from_caches(("listdir", "vlistdir"), parent_inode)
-        # self.remove_cached_values("listdir", parent_inode)
 
 
     ##===============================================
@@ -905,7 +886,6 @@ class ArchiveFS:
         self.directories[par_inode].remove(dirinode)
 
         # delete cached listdir() result for its parent
-        # self.remove_cached_values("listdir", par_inode)
         self.del_from_caches(("listdir", "vlistdir"), par_inode)
 
 
@@ -922,10 +902,7 @@ class ArchiveFS:
         """
         # remove it from directory table & listdir cache
         del self.directories[dirinode]
-        # self.remove_cached_values("listdir", dirinode)
         self.del_from_caches(("listdir", "vlistdir"), dirinode)
-
-
 
         # now delete it like any other file
         self._unlink(dirinode)
@@ -951,7 +928,6 @@ class ArchiveFS:
         # remove the empty dir when it's all done
         del self.directories[dirinode]
         self.inode_table[dirinode]=None
-        # self.remove_cached_values("listdir", dirinode)
         self.del_from_caches(("listdir", "vlistdir"), dirinode)
 
 
