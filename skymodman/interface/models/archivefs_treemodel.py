@@ -44,7 +44,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         self._backupfs = mod_fs.mkdupefs()
 
         self._currentroot_inode = ArchiveFS.ROOT_INODE
-        self._currentroot = self._fs.root
+        self._currentroot = self._fs.rootpath
 
         # set of unchecked inodes
         self._unchecked=set()
@@ -102,7 +102,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
             # not internalPointer()
             return self.createIndex(row, col, child.inode)
         except IndexError:
-            self.LOGGER << "Index: IndexError"
+            # self.LOGGER << "index({}, {}, {}): IndexError".format(row, col, parent.internalId())
+            self.LOGGER << self._sorted_dirlist(parentpath)
             return QModelIndex()
 
         # return QModelIndex()
@@ -352,8 +353,12 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param CIPath dirpath:
         :rtype: list[CIPath]
         """
+
+        # cipath = self._fs.CIPath
+
         # let the fs's sorting handle that.
-        return sorted(dirpath.listdir())
+        return sorted(dirpath.listdirpaths())
+        # return [cipath(dirpath, n) for n in sorted(dirpath.listdir())]
 
 
     class _FakeCIPath(PureCIPath):
@@ -394,7 +399,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :return:
         """
 
-        targetlist = newdir.listdir()
+        # targetlist = newdir.listdir()
+        targetlist = newdir.listdirpaths()
 
         newpath = self._FakeCIPath(newdir, path.name, original=path, targetdir=newdir)
 
@@ -419,7 +425,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
     def _print_fstree(self):
         indent="  "
-        for d,p,t in self._fs.itertree2(include_root=False):
+        for d,p,t in self._fs.itertree(self.root, False, True):
             print(indent*d,
                   p.name,
                   {"d":"/", "f":""}[t],
@@ -446,7 +452,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :return: path to the item
         """
         # return index.internalPointer() if index.isValid() else self.root
-        return self._fs.pathfor(index.internalId()) if index.isValid() else self.root
+        return self._fs.pathfor(index.internalId()
+                                ) if index.isValid() else self.root
 
     def index2path(self, index):
         """

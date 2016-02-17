@@ -122,11 +122,26 @@ class CIPath(PureCIPath):
     def listdir(self):
         return self._accessor.listdir(self)
 
+    def listdirpaths(self):
+        return [type(self)(self, n)
+                for n in self._accessor.listdir(self)]
+
     def iterdir(self):
         yield from self._accessor.listdir(self)
 
-    def itertree(self):
-        yield from self._accessor.itertree(root=self, include_root=False)
+    def iterdirpaths(self):
+        yield from (type(self)(self, n)
+                    for n in self._accessor.listdir(self))
+
+    def itertree(self, verbose=False):
+        yield from self._accessor.itertree(root=self,
+                                           include_root=False,
+                                           verbose=verbose)
+
+    def itertreepaths(self, verbose=False):
+        yield from self._accessor.itertreepaths(str(self),
+                                                include_root=False,
+                                                verbose=verbose)
 
     ##===============================================
     ## creation
@@ -289,6 +304,7 @@ class ArchiveFS:
 
         # only root should have its parent be the same as itself
         self._root=InodeRecord("/", 0, 0)
+        self._rootpath = self.CIPath(self._root.name)
         self.inode_table.append(self._root)
 
         # self.i2p_table.append(self._root) # inode 0
@@ -297,9 +313,57 @@ class ArchiveFS:
 
         self.sorting=SortFlags.Default
 
+
+        self.caches = {
+            "inodeof": dict(),
+            "_inode_name": dict(),
+            "_inode_name_lower": dict(),
+            "pathfor": dict(),
+            "listdir": dict(),
+            "vlistdir": dict(), # verbose version of listdir
+        }
+
     @property
     def root(self):
         return self._root
+
+    @property
+    def rootpath(self):
+        return self._rootpath
+
+    def clearcaches(self, *which):
+        if not which:
+            which = self.caches.keys()
+
+        for c in which:
+            self.caches[c].clear()
+
+    def remove_cached_values(self, cache_name, *keys):
+        """
+        Remove the specified items from the cache for `cache_name`
+        :param cache_name:
+        :param keys:
+        """
+        for key in keys:
+            # don't want to ignore KeyErrors here
+            cache = self.caches[cache_name]
+            try:
+                # but here we do
+                del cache[key]
+            except KeyError:
+                # the key may not have been in the cache, which is fine
+                pass
+
+    def del_from_caches(self, cache_list, *keys):
+        """
+        Remove the same key(s) from multiple caches
+
+        :param keylist:
+        :param cache_names:
+        :return:
+        """
+        for c in cache_list:
+            self.remove_cached_values(c, *keys)
 
     ##=====================================================
     ## File Access/stats
@@ -312,63 +376,115 @@ class ArchiveFS:
 
     # @singledispatch_m
 
-    @lru_cache(256)
-    def inodeof(self, path):
+    # @lru_cache(256)
+    # noinspection PyTypeChecker
+    def inodeof(self, ppath):
+        """
+        Return the inode number of the file represented by `path`.
 
-        parts = PureCIPath(path).parts
+        :raise: Error_ENOENT (File Not Found) if the path does not refer to an existing file.
+        """
+        path = PureCIPath(ppath)
 
-        assert parts[0]=="/", "Path must be absolute: {}".format(path)
+        try:
+            return self.caches["inodeof"][path]
+        except KeyError:
 
-        if len(parts)==1:
-            return self.ROOT_INODE
+            parts = path.parts
 
-        ir=self.root
-        for p in parts[1:]:
+            if parts[0] != "/":
+                raise ValueError("Path must be absolute: ".format(path))
 
-            try:
-                # `ir` is the parent of the current path part
-                for i in self.dir_inodes(ir):
-                    if self._inode_name_lower(i) == p.lower():
-                        ir = self.inode_table[i]
-                        break
-                else:
+            if len(parts)==1:
+                self.caches["inodeof"][path] = self.ROOT_INODE
+                return self.ROOT_INODE
+
+            ir=self.root
+            for p in parts[1:]:
+
+                try:
+                    # `ir` is the parent of the current path part
+                    for i in self.dir_inodes(ir.inode):
+                        if self._inode_name_lower(i) == p.lower():
+                            ir = self.inode_table[i]
+                            break
+                    else:
+                        raise Error_ENOENT(
+                            PureCIPath(*parts[:parts.index(p) + 1])) from None
+                except Error_EIO:
                     raise Error_ENOENT(
                         PureCIPath(*parts[:parts.index(p) + 1])) from None
-            except Error_EIO:
-                raise Error_ENOENT(
-                    PureCIPath(*parts[:parts.index(p) + 1])) from None
 
-        return ir.inode
+            res = self.caches["inodeof"][path] = ir.inode
+            return res
 
-    @lru_cache(1024)
+    # @lru_cache(1024)
+    # noinspection PyTypeChecker
     def _inode_name(self, int_inode:int):
-        try:
-            return self.inode_table[int_inode].name
-        except IndexError:
-            raise Error_EIO(int_inode)
+        """
+        If the inode exists, return its current file name. Raises Error_EIO if the inode is not registered.
 
-    @lru_cache(1024)
+        :param int_inode:
+        :return:
+        """
+
+        try:
+            return self.caches["_inode_name"][int_inode]
+        except KeyError:
+            try:
+                n = self.caches["_inode_name"][int_inode] = self.inode_table[int_inode].name
+                return n
+            except (IndexError, AttributeError):
+                raise Error_EIO(int_inode)
+
+    # @lru_cache(1024)
+    # noinspection PyTypeChecker
     def _inode_name_lower(self, inode:int):
-        return self._inode_name(inode).lower()
-
-
-    @lru_cache(256)
-    def pathfor(self, inode:int):
-
+        """Just returns a lower-case version of the stored name, for case-insensitive comparisons"""
         try:
-            ir = self.inode_table[inode]
-        except IndexError:
-            raise Error_EIO(inode)
+            return self.caches["_inode_name_lower"][inode]
+        except KeyError:
+            n = self.caches["_inode_name_lower"][
+                inode] = self._inode_name(inode).lower()
+            return n
 
-        path_parts = []
 
-        while ir > 0:
-            path_parts.append(ir.name)
-            ir = self.inode_table[ir.parent]
+    # @lru_cache(256)
+    # noinspection PyTypeChecker
+    def pathfor(self, inode:int):
+        """
+        Return the absolute path to the current location of the file pointed to by `inode`.
+        """
+        try:
+            return self.caches["pathfor"][inode]
+        except KeyError:
 
-        path_parts.append(self.root.name)
 
-        return self.CIPath(*path_parts[::-1])
+            try:
+                # grab the inode record from the table
+                ir = self.inode_table[inode]
+
+                # means the file that this inode referred to has been deleted
+                if ir is None:
+                    raise Error_EIO(inode)
+            except IndexError:
+                # and raise error if the inode doesn't exists
+                raise Error_EIO(inode)
+
+            path_parts = []
+
+            while ir.inode > 0: # since inode 0 == root
+                path_parts.append(ir.name)
+                ir = self.inode_table[ir.parent]
+
+            # now add the root path
+            path_parts.append(self.root.name)
+
+            # and return a constructed path (requires reverse iteration of path_parts)
+            path = self.caches["pathfor"][
+                inode] = self.CIPath(*path_parts[::-1])
+
+            return path
 
     def storedpath(self, path):
         """
@@ -378,6 +494,9 @@ class ArchiveFS:
 
     @singledispatch_m
     def dir_inodes(self, directory):
+        """
+        Returns the set of inodes for the files contained by `directory`
+        """
         try:
             return self._dii(self.inodeof(directory))
         # could be raised from the exception handler in _dii
@@ -385,13 +504,16 @@ class ArchiveFS:
             # I'd consider this a more specific (or maybe less specific...
             # but certainly easier to understand) version of EIO
             raise Error_ENOENT(directory) from None
+        except Error_ENOTDIR:
+            # reraise with actual path
+            raise Error_ENOTDIR(directory) from None
 
     @dir_inodes.register(int)
     def _dii(self, directory):
         try:
             return self.directories[directory]
         except KeyError:
-            raise Error_ENOTDIR(self.pathfor(directory)) from None
+            raise Error_ENOTDIR(directory) from None
 
 
     def dir_length(self, directory):
@@ -404,27 +526,63 @@ class ArchiveFS:
         # let the singledispatch mechanics take care of the type for directory
         return len(self.dir_inodes(directory))
 
-    def listdir(self, directory):
+    @singledispatch_m
+    def listdir(self, directory, verbose=False):
         """
-        List of names all items in `directory`
+        List of names of all items in `directory`
         :param directory:
+        :param verbose:  if True, each entry in the returned list will be a 3-tuple with signature (str, int, str). The first item in the tuple is a single character "d" or "f", denoting whether the entry is a directory or a file, respectively. The second item is the inode number of the entry, while the third item is the entry's filename.
         :return:
         """
-        return [self._inode_name(i) for i in self.dir_inodes(directory)]
+        # PRINT() << "listdir(" << directory << "):" << self.dir_inodes(directory)
 
-        # return [self.i2p_table[i] for i in self.dir_inodes(directory)]
+        return self._ld(self.inodeof(directory), verbose)
 
-    def iterdir(self, directory):
+    @listdir.register(int)
+    def _ld(self, dirinode, verbose=False):
+
+        if verbose:
+            try:
+                return self.caches["vlistdir"][dirinode]
+            except KeyError:
+                val = self.caches["vlistdir"][dirinode] = [
+                    ("d" if i in self.directories else "f",
+                     i, self._inode_name(i))
+                    for i in self.directories[dirinode]]
+                return val
+        else:
+            try:
+                return self.caches["listdir"][dirinode]
+            except KeyError:
+                val = self.caches["listdir"][dirinode] = [
+                    self._inode_name(i)
+                    for i in self.directories[dirinode]]
+
+                return val
+
+    def iterdir(self, directory, verbose=False):
         """
-        An unsorted iteration
+        Yields, in no particular order, the names of the files and folders found in `directory`.
         :param directory:
+        :param verbose: if True, yield 3-tuples with signature (str, int, str). The first item in the tuple is a single character "d" or "f", denoting whether the item is a directory or a file, respectively. The second item is the inode number of the entry, while the third item is the entry's filename.
         :return:
         """
-        yield from (self._inode_name(i) for i in self.dir_inodes(directory))
+        if verbose:
+            yield from self._iterdir_verbose(directory)
+        else:
+            yield from (self._inode_name(i) for i in self.dir_inodes(directory))
 
-        # yield from (self.i2p_table[i] for i in self.dir_inodes(directory))
 
-    def itertree(self, root="/", include_root=True):
+    def _iterdir_verbose(self, directory):
+
+        for i in self.dir_inodes(directory):
+            inorec = self.inode_table[i]
+            if i in self.directories:
+                yield ("d", i, inorec.name)
+            else:
+                yield ("f", i, inorec.name)
+
+    def itertree(self, root="/", include_root=True, verbose=False):
         """
         Return a generator that recursively yields all paths under the specified directory 'root'. The only requirements for `root` are that it be an existing directory within the filesystem, though the method will not fail if a file-path is passed instead. If `include_root` is True, the rootpath itself will be the first item yielded by the generator; if False, the root will be not be included in the output and iteration will begin with the root's children.
 
@@ -434,45 +592,134 @@ class ArchiveFS:
         :param bool include_root:
         :return:
         """
-        rootpath = PureCIPath(root)
+        rootpath = self.storedpath(PureCIPath(root))
 
-        # if root was actually a file, just yield that file
-        if not self.is_dir(rootpath):
-            if include_root: yield self.storedpath(rootpath)
+        if verbose:
+            yield from self._itertree_verbose(self.inodeof(rootpath), include_root)
+
         else:
+            # if root was actually a file, just yield that file
+            if not self.is_dir(rootpath):
+                if include_root:
+                    yield rootpath.name
+            else:
 
-            def _iter(base):
-                for c in self.iterdir(base):
-                    yield c
-                    if self.is_dir(c):
-                        yield from _iter(c)
+                def _iter(base):
+                    for c in self.iterdir(base):
+                        yield c
+                        if self.is_dir(c):
+                            yield from _iter(c)
 
-            if include_root: yield self.storedpath(rootpath)
+                if include_root:
+                    yield rootpath.name
 
-            yield from _iter(rootpath)
+                yield from _iter(rootpath)
 
-    def itertree2(self, root="/", include_root=True):
+    def itertreepaths(self, root="/", include_root=False, verbose=False):
         """
-        Almost identical to itertree, but yields tuples with signature (int, PureCIPath, str). The first item is the depth (from root) of the yielded path, the second is the path object, and the third is a single character indicating the type of file the path refers to. For now, the only type-codes are:
+        Recursively yield full paths for the directory tree under initial path `root`.
+
+        :param str|PurePath root: starting point of the tree.
+        :param include_root: Whether to yield `root` as the first item.
+        :param verbose: If True, returns additional information: Each item yielded will be a tuple with signature (int, CIPath, str). The first item is the depth (from root) of the yielded path, the second is the path object, and the third is a single character indicating the type of file the path refers to. For now, the only type-codes are:
+
+            * d - Directory
+            * f - File
+        """
+        rootpath = self.storedpath(PureCIPath(root))
+
+        if verbose:
+            yield from self._iterpaths_verbose(rootpath, include_root)
+        else:
+            if not self.is_dir(rootpath):
+                yield rootpath
+
+            else:
+
+                def _iter(base_path, base_node):
+                    for inode in self.dir_inodes(base_node):
+                        # build the item's path from the current path + saved name
+                        childpath = self.CIPath(base_path, self._inode_name(inode))
+                        # yield children as found
+                        yield childpath
+                        # then recurse if needed
+                        if self.is_dir(inode):
+                            yield from _iter(childpath, inode)
+
+                if include_root:
+                    yield rootpath
+
+                yield from _iter(rootpath, self.inodeof(rootpath))
+
+
+    def _iterpaths_verbose(self, rootpath, include_root):
+        """
+        Like itertreepaths, but returns additional information: Each item yielded is a tuple with signature (int, CIPath, str). The first item is the depth (from root) of the yielded path, the second is the path object, and the third is a single character indicating the type of file the path refers to. For now, the only type-codes are:
 
             * d - Directory
             * f - File
 
-        :param root:
+        :param rootpath:
         :param include_root:
         :return:
         """
-        rootpath = PureCIPath(root)
-        # if root was actually a file, just yield that file
+
         if not self.is_dir(rootpath):
-            if include_root: yield (0, rootpath, "f")
+            yield (0, rootpath, "f")
+
+        else:
+            depth=-1
+
+            if include_root:
+                depth+=1
+                yield (0, rootpath, "d")
+
+            def _iter(base_path, base_node):
+                nonlocal depth
+                depth += 1
+                for inode in self.dir_inodes(base_node):
+                    # build the item's path from the current path + saved name
+                    childpath = self.CIPath(base_path,
+                                            self._inode_name(inode))
+
+                    # yield children as found,
+                    # then recurse if needed
+                    if self.is_dir(inode):
+                        yield (depth, childpath, "d")
+                        yield from _iter(childpath, inode)
+                    else:
+                        yield (depth, childpath, "f")
+                depth-=1
+
+            yield from _iter(rootpath, self.inodeof(rootpath))
+
+
+    def _itertree_verbose(self, root_inode, include_root):
+        """
+        Almost identical to itertree, but yields tuples with signature (int, str, str). The first item is the depth (from root) of the yielded item, the second is the file name of the inode, and the third is a single character indicating the type of file the inode refers to. For now, the only type-codes are:
+
+            * d - Directory
+            * f - File
+
+        :param root_inode:
+        :param include_root:
+        :return:
+        """
+        if not self.is_dir(root_inode):
+            if include_root:
+                yield (0, self._inode_name(root_inode), "f")
         else:
 
-            depth=0
-            def _iter(base):
+            depth=-1
+            if include_root:
+                depth+=1
+                yield (0, self._inode_name(root_inode), "d")
+
+
+            def _iter(basenode):
                 nonlocal depth
                 depth+=1
-                for c in self.dir_inodes(base):
+                for c in self.dir_inodes(basenode):
                     if self.is_dir(c):
                         yield (depth, self._inode_name(c), "d")
                         yield from _iter(c)
@@ -480,14 +727,11 @@ class ArchiveFS:
                         yield (depth, self._inode_name(c), "f")
                 depth-=1
 
-            if include_root: yield (0, rootpath, "d")
-
-            yield from _iter(self.inodeof(rootpath))
+            yield from _iter(root_inode)
 
     @singledispatch_m
     def is_dir(self, path):
         """
-        :param path:
         :return: True if `path` is a directory, False if `path` is a regular file
         """
         return self._idi(self.inodeof(path))
@@ -503,6 +747,9 @@ class ArchiveFS:
 
     @singledispatch_m
     def exists(self, path): # should catch str and other path-types
+        """
+        Check that `path` refers to an existing file or folder.
+        """
         try:
             # if it finds it...it's because it was findable
             self.inodeof(path)
@@ -524,7 +771,7 @@ class ArchiveFS:
     def touch(self, path, name=None):
         """
         Create a file.
-        By default, any parents of `path` that do not exist will be created.
+        By default, any parents of `path` that do not exist will be created. If `path` already exists, this function does nothing.
 
         :param name: if given, path is assumed to be the path to the directory that will contain the file named 'name'. If absent or None, `path` itself is considered to be the full path to the new file.
         """
@@ -562,7 +809,6 @@ class ArchiveFS:
         """
 
         if self.exists(path):
-            # if path in self.p2i_table:
             raise Error_EEXIST(path.str)
 
         # new inode numbers are always == 1+current maximum inode.
@@ -594,6 +840,11 @@ class ArchiveFS:
     def _addtodir(self, inode:int, parent_inode:int):
         self.directories[parent_inode].add(inode)
 
+        # un-cache the parent-dir's file list
+        self.del_from_caches(("listdir", "vlistdir"), parent_inode)
+        # self.remove_cached_values("listdir", parent_inode)
+
+
     ##===============================================
     ## File Deletion
     ##===============================================
@@ -604,7 +855,6 @@ class ArchiveFS:
         Use rmdir for directories.
 
         :param str|PurePath path:
-        :return:
         """
         path = PureCIPath(path)
 
@@ -612,6 +862,8 @@ class ArchiveFS:
             raise Error_EISDIR(path)
 
         self._unlink(self.inodeof(path))
+
+        self.remove_cached_values("inodeof", path)
 
     def rmdir(self, dirpath):
         """
@@ -632,7 +884,10 @@ class ArchiveFS:
 
         self._del_dir(dirinode)
 
-    def rmtree(self, directory:int):
+        # finally, remove the cached inodeof() value
+        self.remove_cached_values("inodeof", dirpath)
+
+    def rmtree(self, directory):
         """
         Recursively remove a non-empty directory tree.
         :param str|PurePath directory:
@@ -646,15 +901,31 @@ class ArchiveFS:
 
         # have to do a final removal of the dir from its parent-list
         # (since we skip that step in _del_dir_tree)
-        self.dir_inodes(self.inode_table[dirinode].parent).remove(dirinode)
+        par_inode = self.inode_table[dirinode].parent
+        self.directories[par_inode].remove(dirinode)
+
+        # delete cached listdir() result for its parent
+        # self.remove_cached_values("listdir", par_inode)
+        self.del_from_caches(("listdir", "vlistdir"), par_inode)
+
+
+        # and, since figuring out exactly which paths were deleted
+        # could be an expensive, superflous operation, it's easier
+        # just to clear the entire inodeof() cache
+        self.caches["inodeof"].clear()
+        # self.clearcaches("inodeof")
 
     def _del_dir(self, dirinode:int):
         """
         No checks, just does the job.
         :param int dirinode:
         """
-        # remove it from directory table
+        # remove it from directory table & listdir cache
         del self.directories[dirinode]
+        # self.remove_cached_values("listdir", dirinode)
+        self.del_from_caches(("listdir", "vlistdir"), dirinode)
+
+
 
         # now delete it like any other file
         self._unlink(dirinode)
@@ -662,18 +933,26 @@ class ArchiveFS:
     def _del_dir_tree(self, dirinode:int):
 
         # will raise ENOTDIR if directory is not...a directory.
-        for childnode in self.dir_inodes(dirinode):
+        child_inodes = self.directories[dirinode]
+        for childnode in child_inodes:
             if not self.is_dir(childnode):
                 # don't need to bother removing it from the directory's
                 # node list since we're deleting the directory in just
                 # a second anyway.
                 self.inode_table[childnode] = None
+
             else:
                 self._del_dir_tree(childnode)
+
+        # remove cached values
+        self.del_from_caches(("_inode_name", "pathfor",
+                             "_inode_name_lower"), *child_inodes)
 
         # remove the empty dir when it's all done
         del self.directories[dirinode]
         self.inode_table[dirinode]=None
+        # self.remove_cached_values("listdir", dirinode)
+        self.del_from_caches(("listdir", "vlistdir"), dirinode)
 
 
     def _unlink(self, inode:int):
@@ -686,10 +965,27 @@ class ArchiveFS:
         :return:
         """
         inorec = self.inode_table[inode]
+
         # remove this node from its parent-directory's nodelist
-        self.dir_inodes(inorec.parent).remove(inode)
+        self.directories[inorec.parent].remove(inode)
+
+        # clear it from some of the caches
+        self._cleanup_inode_cache(inorec)
+
         # and null out its entry in the inode table
         self.inode_table[inode] = None
+
+    def _cleanup_inode_cache(self, inode_record):
+        """
+        :param InodeRecord inode_record:
+        """
+        # clear some cache values
+        self.del_from_caches(("_inode_name",
+                             "_inode_name_lower",
+                             "pathfor"), inode_record.inode)
+
+        self.del_from_caches("listdir", "vlistdir", inode_record.parent)
+
 
     ##===============================================
     ## Name/Path Manipulation
@@ -731,7 +1027,7 @@ class ArchiveFS:
             return self._change_name(src, dst.name)
 
         # and if we made it here, we can finally just move src to dst
-        return self._move_to_path(src, dst)
+        return self._move(src, dst)
 
     def rename(self, path, destination, overwrite=False):
         """...
@@ -767,7 +1063,7 @@ class ArchiveFS:
             if dest.parent == src.parent:
                 return self._change_name(src, dest.name)
 
-        return self._move_to_path(src, dest)
+        return self._move(src, dest)
 
     def chname(self, path, new_name, overwrite=False):
         """...
@@ -821,22 +1117,6 @@ class ArchiveFS:
         """
         self.rename(path, destination, True)
 
-    def _change_inode_path(self, inode, new_path):
-        PRINT() << "_change_inode_path(" << inode << ", " << new_path << ")"
-
-        inorec = self.inode_table[inode]
-
-        # remove from old dir
-        self.directories[inorec.parent].remove(inorec)
-
-        # change name and parent
-        inorec.name = new_path.name
-        inorec.parent = self.inodeof(new_path.parent)
-
-        # add to new dir
-        self.directories[inorec.parent].add(inorec)
-
-
     def _move_to_dir(self, path, dest_dir):
         """
         Move file or dir `path` inside directory `dest_dir`
@@ -844,42 +1124,87 @@ class ArchiveFS:
 
         PRINT() << "_move_to_dir(" << path << ", " << dest_dir << ")"
 
-        dest_path = self.storedpath(dest_dir) / path.name # keep same name
+        dest_path = PureCIPath(dest_dir, path.name)
 
         # if someone attempted to move an item inside its own parent, just return
-        if dest_path == path: return True
+        if dest_path == path:
+            return True
 
         return self._move(path, dest_path)
 
-    def _move_to_path(self, src, dest):
-        """
-        inode.path -> new_path
-        """
-        # use storedpath() instead of just dest to preserve existing case
-        PRINT() << "_move_to_path(" << src << ", " << dest << ")"
-
-        return self._move(src, self.storedpath(dest.parent) / dest.name)
-
     def _move(self, from_path, to_path):
         """
-        Perform the final move of `from_path` to destination `to_path`
+        Perform the final move of `from_path` to destination `to_path`. At this point, `to_path` can be assumed not to exist and to have been cleared from all appropriate caches.
         """
 
         PRINT() << "_move(" << from_path << ", " << to_path << ")"
 
-        inode = self.inodeof(from_path)           # get inode from current path value
-        self._change_inode_path(inode, to_path)   # update the inode table
+        inorec = self.inode_table[
+            self.inodeof(from_path) ] # get inode record from current path value
+
+        # remove from old dir
+        self.directories[inorec.parent].remove(inorec.inode)
+        self.del_from_caches("listdir", "vlistdir", inorec.parent)
+
+
+        # change name and parent
+        inorec.name = to_path.name
+        inorec.parent = self.inodeof(to_path.parent)
+
+        # add to new dir
+        self.directories[inorec.parent].add(inorec.inode)
+
+        ## final cleanup of some cache values ##
+
+        # clear listdir results for new parent
+        self.del_from_caches("listdir", "vlistdir", inorec.parent)
+
+        if self.is_dir(inorec.inode):
+            # if we move a directory, a lot of paths may have changed,
+            # so we're just going to clear the entire inodeof() and
+            # pathfor() caches
+            self.clearcaches("inodeof", "pathfor")
+        else:
+            # but if it was just a file, we don't need to be so dramatic
+            self.remove_cached_values("pathfor", inorec.inode)
+            self.remove_cached_values("inodeof", from_path)
+
         return True
+
+    # def _change_inode_path(self, inode, new_path):
+    #     PRINT() << "_change_inode_path(" << inode << ", " << new_path << ")"
+    #
+    #     inorec = self.inode_table[inode]
+    #
+    #     # remove from old dir
+    #     self.directories[inorec.parent].remove(inorec.inode)
+    #
+    #     # change name and parent
+    #     inorec.name = new_path.name
+    #     inorec.parent = self.inodeof(new_path.parent)
+    #
+    #     # add to new dir
+    #     self.directories[inorec.parent].add(inorec.inode)
 
     def _change_name(self, path, new_name):
         """
         Just change the name of the file or directory pointed to by path
-        (Slightly simpler version of _change_inode_path())
+        (simpler version of _move())
 
         :param path:
         :param str new_name:
         """
-        self.inode_table[self.inodeof(path)].name = new_name
+        inorec = self.inode_table[self.inodeof(path)]
+        inorec.name = new_name
+
+        self._cleanup_inode_cache(inorec)
+
+        if self.is_dir(inorec.inode):
+            self.clearcaches("inodeof", "pathfor")
+        else:
+            self.remove_cached_values("pathfor", inorec.inode)
+            self.remove_cached_values("inodeof", path)
+
         return True
 
     def _check_collision(self, target, overwrite):
@@ -891,12 +1216,11 @@ class ArchiveFS:
         :return:
         """
         if self.exists(target):
+            if overwrite:
+                self.rm(target)
+            else:
+                raise Error_EEXIST(target.str)
 
-            if overwrite: self.rm(target)
-
-            else: raise Error_EEXIST(target.str)
-
-    # todo: copy and copytree (maybe...since our 'files' are really just names and contain no data, a 'copy' operation may be unnecessary)
 
     ##===============================================
     ## Misc
@@ -910,7 +1234,7 @@ class ArchiveFS:
         subfs = type(self)()
         from_path = PureCIPath(from_path)
 
-        for p in self.itertree(from_path, False):
+        for p in self.itertreepaths(from_path, False):
             rel_path = p.relative_to(from_path)
             if self.is_dir(p):
                 # re-root
@@ -934,21 +1258,6 @@ class ArchiveFS:
 
         del copy
         return dupefs
-
-        # have to make sure the paths in the inode-table are of the correct type
-        # dupefs.i2p_table = [dupefs.CIPath(p) if p is not None else p for p in self.i2p_table]
-            # copy.deepcopy(self.i2p_table)
-        # for i,p in enumerate(dupefs.i2p_table):
-        #     if p is not None:
-        #         dupefs.p2i_table[p]=i
-
-
-        # for p in self.itertree("/", False):
-        #     if self.is_dir(p):
-        #         dupefs.mkdir(p)
-        #     else:
-        #         dupefs.touch(p)
-
 
 
     def fsck(self, root="/"):
@@ -984,12 +1293,12 @@ def fsck_modfs(modfs, root="/"):
     doc_match = re.compile(r'(read.?me|doc(s|umentation)|info)',
                            re.IGNORECASE)
 
-    for topitem in modfs.iterdir(root):
-        if modfs.is_dir(
-                topitem) and topitem.name.lower() in TopLevelDirs_Bain:
+    for ftype, _, topitem in modfs.iterdir(root, True):
+        if ftype=="d" and topitem.lower() in TopLevelDirs_Bain:
             mod_data["folders"].append(topitem)
 
-        elif topitem.suffix.lower().lstrip(".") in TopLevelSuffixes:
+        elif ftype=="f" and topitem.rsplit(".", 1)[-1].lower() in TopLevelSuffixes:
+        # elif topitem.suffix.lower().lstrip(".") in TopLevelSuffixes:
             mod_data["files"].append(topitem)
 
         elif doc_match.search(topitem):
@@ -1000,9 +1309,9 @@ def fsck_modfs(modfs, root="/"):
     # of the mod and that item is a directory, then check inside that
     # directory for the necessary files.
     if not (mod_data["folders"] and mod_data["files"]):
-        _list = modfs.listdir(root)
-        if len(_list) == 1 and modfs.is_dir(_list[0]):
-            return fsck_modfs(modfs, _list[0])
+        _list = modfs.listdir(root, True)
+        if len(_list) == 1 and _list[0][0]=="d":
+            return fsck_modfs(modfs, PureCIPath(root, _list[0][1]).str)
 
     return len(mod_data["folders"]) + len(
         mod_data["files"]), mod_data, root
@@ -1015,12 +1324,11 @@ def fsck_modfs_quick(modfs, root="/"):
     from skymodman.constants import TopLevelDirs_Bain, \
         TopLevelSuffixes
 
-    for topitem in modfs.iterdir(root):
-        if (modfs.is_dir(topitem)
-            and topitem.name.lower() in TopLevelDirs_Bain) or \
-                (topitem.suffix.lower().lstrip(
-                    ".") in TopLevelSuffixes):
-            return True
+    for ftype, _, topitem in modfs.iterdir(root, True):
+        if (ftype == "d" and topitem.lower()
+                         in TopLevelDirs_Bain) \
+        or (ftype == "f" and topitem.rsplit(".", 1)[-1].lower()
+                         in TopLevelSuffixes): return True
 
     return False
 
