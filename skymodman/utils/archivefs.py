@@ -922,8 +922,8 @@ class ArchiveFS:
                 self._del_dir_tree(childnode)
 
         # remove cached values
-        self.del_from_caches(("_inode_name", "pathfor",
-                             "_inode_name_lower"), *child_inodes)
+        self.del_from_caches(("_inode_name", "pathfor", "_inode_name_lower"),
+                             *child_inodes)
 
         # remove the empty dir when it's all done
         del self.directories[dirinode]
@@ -956,11 +956,10 @@ class ArchiveFS:
         :param InodeRecord inode_record:
         """
         # clear some cache values
-        self.del_from_caches(("_inode_name",
-                             "_inode_name_lower",
-                             "pathfor"), inode_record.inode)
+        self.del_from_caches(("_inode_name", "_inode_name_lower", "pathfor"),
+                             inode_record.inode)
 
-        self.del_from_caches("listdir", "vlistdir", inode_record.parent)
+        self.del_from_caches(("listdir", "vlistdir"), inode_record.parent)
 
 
     ##===============================================
@@ -1120,7 +1119,7 @@ class ArchiveFS:
 
         # remove from old dir
         self.directories[inorec.parent].remove(inorec.inode)
-        self.del_from_caches("listdir", "vlistdir", inorec.parent)
+        self.del_from_caches(("listdir", "vlistdir"), inorec.parent)
 
 
         # change name and parent
@@ -1133,7 +1132,7 @@ class ArchiveFS:
         ## final cleanup of some cache values ##
 
         # clear listdir results for new parent
-        self.del_from_caches("listdir", "vlistdir", inorec.parent)
+        self.del_from_caches(("listdir", "vlistdir"), inorec.parent)
 
         if self.is_dir(inorec.inode):
             # if we move a directory, a lot of paths may have changed,
