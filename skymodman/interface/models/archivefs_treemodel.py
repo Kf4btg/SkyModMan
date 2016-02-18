@@ -144,13 +144,14 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :return:
         """
 
-        if role in {Qt.DisplayRole, Qt.DecorationRole, Qt.CheckStateRole}:
+        if role in {Qt.DisplayRole, Qt.DecorationRole, Qt.CheckStateRole, Qt.EditRole}:
 
             path = self.path4index(index)
 
             return {
                 Qt.DisplayRole:
                     path.name,
+                Qt.EditRole: path.name, # make sure editor keeps name when opened
                 Qt.DecorationRole:
                     (self.FILE_ICON, self.FOLDER_ICON)[path.is_dir],
                 Qt.CheckStateRole:
@@ -268,7 +269,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
         self.endMoveRows()
 
-        self._print_fstree()
+        # self._print_fstree()
         return True
 
     def canDropMimeData(self, data, action, row, col, parent):

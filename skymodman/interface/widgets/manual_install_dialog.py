@@ -67,6 +67,8 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.action_rename.triggered.connect(self.rename)
         self.action_create_directory.triggered.connect(self.create_dir)
 
+        ## connect some more signals
+
 
         # self.mod_structure_view.tree_structure_changed.connect(self.on_tree_change)
 
@@ -85,7 +87,9 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.LOGGER << "unset_toplevel()"
 
     def rename(self, *args):
-        self.LOGGER << "rename()"
+        # self.LOGGER << "rename()"
+        self.mod_structure_view.edit(
+            self.modfsmodel.index4inode(self.rclicked_inode))
 
     def create_dir(self, *args):
         self.LOGGER << "create_dir()"
