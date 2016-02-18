@@ -1,7 +1,7 @@
 # from os.path import splitext
 
 # from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QDialog #, QTreeWidgetItem
+from PyQt5.QtWidgets import QDialog, QMenu  #, QTreeWidgetItem
 
 from skymodman.constants import TopLevelDirs_Bain, TopLevelSuffixes
 from skymodman.interface.designer.uic.archive_structure_ui import Ui_mod_structure_dialog
@@ -46,6 +46,8 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.modfsmodel = ModArchiveTreeModel(mod_fs)
 
         self.mod_structure_view.setModel(self.modfsmodel)
+        self.mod_structure_view.customContextMenuRequested.connect(
+            self.custom_context_menu)
 
 
         # self.mod_structure_view.tree_structure_changed.connect(self.on_tree_change)
@@ -56,6 +58,30 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         # self.mod_structure_view.init_tree(self.structure)
 
         self.mod_structure_view.setToolTip(_tree_tooltip)
+
+    def custom_context_menu(self, position):
+        menu = QMenu(self.mod_structure_view)
+
+
+        has_user_root, clicked_isdir, clicked_not_root = \
+            self.modfsmodel.get_state_for_contextmenu(
+            self.mod_structure_view.indexAt(position))
+
+        if has_user_root:
+            menu.addAction(self.action_unset_top_level_directory)
+
+        if clicked_not_root:
+            if clicked_isdir:
+                menu.addAction(self.action_set_as_top_level_directory)
+            menu.addAction(self.action_rename)
+
+        menu.addAction(self.action_create_directory)
+
+        menu.exec_(self.mod_structure_view.mapToGlobal(position))
+
+
+
+
     #
     # def on_tree_change(self):
     #     self.valid_structure = self.analyze_tree()

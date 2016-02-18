@@ -98,6 +98,9 @@
    </item>
    <item row="0" column="2" rowspan="4">
     <widget class="QTreeView" name="mod_structure_view">
+     <property name="contextMenuPolicy">
+      <enum>Qt::CustomContextMenu</enum>
+     </property>
      <property name="editTriggers">
       <set>QAbstractItemView::EditKeyPressed</set>
      </property>
@@ -116,6 +119,26 @@
     </widget>
    </item>
   </layout>
+  <action name="action_set_as_top_level_directory">
+   <property name="text">
+    <string>&amp;Set as top level directory</string>
+   </property>
+  </action>
+  <action name="action_unset_top_level_directory">
+   <property name="text">
+    <string>&amp;Unset top level directory</string>
+   </property>
+  </action>
+  <action name="action_create_directory">
+   <property name="text">
+    <string>&amp;Create directory</string>
+   </property>
+  </action>
+  <action name="action_rename">
+   <property name="text">
+    <string>&amp;Rename</string>
+   </property>
+  </action>
  </widget>
  <resources/>
  <connections>

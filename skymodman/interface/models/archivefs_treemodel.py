@@ -58,6 +58,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
         self._caches=[self._sorted_dirlist,
                       self._isdir]
 
+        self._right_clicked_path = None
+
     @property
     def root_inode(self):
         return self._currentroot_inode
@@ -65,6 +67,10 @@ class ModArchiveTreeModel(QAbstractItemModel):
     @property
     def root(self):
         return self._currentroot
+
+    @property
+    def has_modified_root(self):
+        return self._currentroot_inode != 0
 
     ##===============================================
     ## Required Qt Abstract Method Overrides
@@ -391,6 +397,28 @@ class ModArchiveTreeModel(QAbstractItemModel):
                   fstat.st_name,
                   {"d":"/", "f":""}[fstat.st_type],
                   sep="")
+
+    ##===============================================
+    ## Modifying Paths/Context Menu Items
+    ##===============================================
+
+    def get_state_for_contextmenu(self, clicked_index):
+        """
+        Rerturns a (bool, bool) tuple: 1st item is whether the user has chosen a new top-level directory; 2nd item is whether the item represented by `clicked_index` is a directory but NOT the root directory.
+        """
+        path = self.path4index(clicked_index)
+
+        self._right_clicked_path = path
+
+        return (
+            # if root is not "/" -> 'unset'
+            self.has_modified_root,
+            # if non-root directory was clicked -> 'set as top'
+            path.is_dir,
+            # if any item other than root was clicked -> 'rename'
+            path != self.root,
+        )
+
 
 
     ##===============================================
