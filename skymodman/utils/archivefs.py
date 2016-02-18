@@ -225,7 +225,10 @@ class CIPath(PureCIPath):
 
         if not flags: return True
 
-        val = super().__lt__(other)
+        # can't use super() here because it fails when self isn't the
+        # same flavor of CIPath that the referenced __lt__ belongs to
+        # (this came up in _FakeCIPath in archivefs_treemodel)
+        val = PureCIPath.__lt__(self, other)
 
         reverse = bool(flags & SortFlags.Descending)
 

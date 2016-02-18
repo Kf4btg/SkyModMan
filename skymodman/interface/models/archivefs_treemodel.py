@@ -259,7 +259,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         self.beginMoveRows(self.index4path(orig_parent),
                            r, r,
                            self.index4path(target_path),
-                           self.future_row(src_path, target_path))
+                           self.future_row_after_move(src_path, target_path))
 
         src_path.move(target_path)
 
@@ -311,6 +311,28 @@ class ModArchiveTreeModel(QAbstractItemModel):
             # up to the super class
         return super().canDropMimeData(data, action, row, col, parent)
 
+    ##===============================================
+    ## Path modification
+    ##===============================================
+
+    def create_new_dir(self, parent, initial_name):
+
+        # newpath = PureCIPath(parent, initial_name)
+
+        new_pos = self.future_row_after_create(initial_name, parent, True)
+        # print(new_pos)
+
+        # beginInsertRows(parent, first, last)
+        pindex = self.index4path(parent)
+        self.beginInsertRows(pindex, new_pos, new_pos)
+
+        self._fs.mkdir(PureCIPath(parent, initial_name))
+        self._invalidate_caches(self._sorted_dirlist)
+
+        self.endInsertRows()
+
+        return self.index(new_pos, 0, pindex)
+
 
     ##===============================================
     ## Utilities
@@ -333,46 +355,81 @@ class ModArchiveTreeModel(QAbstractItemModel):
         Just exists so that we can figure out the comparison below. Implements only the methods necessary for passing the checks in __lt__
         """
 
-        def __new__(cls, *args, original, targetdir, **kwargs):
+        def __new__(cls, *args, targetdir,
+                    original=None, template_type=None,
+                    is_dir=None, accessor=None, fake_inode=-1,
+                    **kwargs):
+
+            from functools import partial
+
             self = cls._from_parts(args, init=False)
 
             self.original = original
             self.sparent = targetdir
 
+            self._fs = accessor
+            self._isdir = is_dir
+            self._fakeinode = fake_inode
+            self._type = template_type
 
-            self.__lt__ = original.__lt__
+            if original is not None:
+                self._lt = original.__lt__
+            else:
+                self._lt = partial(template_type.__lt__, self)
 
             return self
 
         @property
         def inode(self):
-            return self.original.inode
+            if self.original:
+                return self.original.inode
+            return self._fakeinode
 
         @property
         def _accessor(self):
-            return self.original._accessor
+            if self.original:
+                return self.original._accessor
+            return self._fs
 
         @property
         def is_dir(self):
-            return self.original.is_dir
+            if self.original:
+                return self.original.is_dir
+            return self._isdir
 
+        def __lt__(self, other):
+            return self._lt(other)
 
-    def future_row(self, path, newdir):
+    def future_row_after_move(self, path, target_dir):
         """
-        Determine where in the target directory 'newdir' `path` will appear if it is moved there.
+        Determine where in the  directory 'target_dir' `path` will appear if it is moved there.
 
         :param path:
-        :param newdir:
+        :param target_dir:
         :return:
         """
 
-        targetlist = newdir.listdirpaths()
+        targetlist = target_dir.listdirpaths()
 
-        newpath = self._FakeCIPath(newdir, path.name, original=path, targetdir=newdir)
+        newpath = self._FakeCIPath(target_dir, path.name, original=path, targetdir=target_dir)
 
         targetlist.append(newpath)
 
         return sorted(targetlist).index(newpath)
+
+    def future_row_after_create(self, file_name, target_dir, isfolder=True):
+        targetlist = target_dir.listdirpaths()
+
+        newpath = self._FakeCIPath(target_dir, file_name,
+                                   targetdir=target_dir,
+                                   template_type=self._fs.CIPath,
+                                   is_dir=isfolder,
+                                   accessor=self._fs)
+
+        targetlist.append(newpath)
+        return sorted(targetlist).index(newpath)
+
+
 
     @lru_cache(None)
     def _isdir(self, inode):
@@ -406,29 +463,11 @@ class ModArchiveTreeModel(QAbstractItemModel):
         return self._isdir(index.internalId())
     def index_is_root(self, index):
         return self._currentroot_inode == index.internalId()
-
-    ##===============================================
-    ## Modifying Paths/Context Menu Items
-    ##===============================================
-
-    def get_state_for_contextmenu(self, clicked_index):
+    def inode2path(self, inode):
         """
-        Rerturns a (bool, bool) tuple: 1st item is whether the user has chosen a new top-level directory; 2nd item is whether the item represented by `clicked_index` is a directory but NOT the root directory.
+        convenience function meant to be called from an external source.
         """
-        path = self.path4index(clicked_index)
-
-        self._right_clicked_path = path
-
-        return (
-            # if root is not "/" -> 'unset'
-            self.has_modified_root,
-            # if non-root directory was clicked -> 'set as top'
-            path.is_dir,
-            # if any item other than root was clicked -> 'rename'
-            path != self.root,
-        )
-
-
+        return self._fs.pathfor(inode)
 
     ##===============================================
     ## Translation

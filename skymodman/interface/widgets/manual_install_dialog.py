@@ -24,8 +24,7 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
     def __init__(self, mod_fs, *args, **kwargs):
         """
 
-        :param structure_tree: An 'autovivifying dict'--aka a tree as per the implementation in utils.tree--that has been constructed so as to represent the directory structure within a mod archive. Each dict key (other than the root) will be the name of a directory, and files will be listed under the "_files" special key.
-        :param bad_package: If the dialog is being launched from the automated installer due to problems detected with an archive's structure, this flag will be True, and a helpful message should be shown in place of the normal description.
+        :param skymodman.utils.archivefs.ArchiveFS mod_fs: An instance of an ArchiveFS pseudo-filesystem.
 
         :param args: passed to base class constructors
         :param kwargs: passed to base class constructors
@@ -93,11 +92,31 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
     def create_dir(self, *args):
         self.LOGGER << "create_dir()"
+        fsmod = self.modfsmodel
+
+        if fsmod._isdir(self.rclicked_inode):
+            parent = fsmod.inode2path(self.rclicked_inode)
+        else:
+            parent = fsmod.inode2path(self.rclicked_inode).parent
+
+
+        # new_folder = parent / "New Folder"
+        new_name = "New Folder"
+
+        suffix = 1
+        while new_name in parent.listdir():
+            new_name = "New Folder %d" % suffix
+            suffix+=1
+
+        new_index = fsmod.create_new_dir(parent, new_name)
+
+        # and immediately open the name-editor for the new directory
+        self.mod_structure_view.edit(new_index)
+
+
+
 
     def custom_context_menu(self, position):
-        # menu = QMenu(self.mod_structure_view)
-        # menu = self._getrclickmenu()
-
         fsmod = self.modfsmodel
         clicked_index = self.mod_structure_view.indexAt(position)
         self.rclicked_inode = clicked_index.internalId()
@@ -122,24 +141,6 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         # self.action_create_directory
 
         self.rclickmenu.exec_(self.mod_structure_view.mapToGlobal(position))
-
-
-        # has_user_root, clicked_isdir, clicked_not_root = \
-        #     self.modfsmodel.get_state_for_contextmenu(
-        #     )
-
-        # if has_user_root:
-        #     menu.addAction(self.action_unset_top_level_directory)
-        #
-        # if clicked_not_root:
-        #     if clicked_isdir:
-        #         menu.addAction(self.action_set_as_top_level_directory)
-        #     menu.addAction(self.action_rename)
-        #
-        # menu.addAction(self.action_create_directory)
-        #
-        # menu.exec_(self.mod_structure_view.mapToGlobal(position))
-
 
 
     #
