@@ -49,6 +49,24 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.mod_structure_view.customContextMenuRequested.connect(
             self.custom_context_menu)
 
+        # here's the custom menu (actions will be made in/visible as required)
+        self.rclickmenu = QMenu(self.mod_structure_view)
+
+        self.rclickmenu.addActions([self.action_unset_top_level_directory,
+                         self.action_set_as_top_level_directory,
+                         self.action_rename,
+                         self.action_create_directory])
+
+        self.rclicked_inode = None
+
+        ## conect actions
+        self.action_set_as_top_level_directory.triggered.connect(
+            self.set_toplevel)
+        self.action_unset_top_level_directory.triggered.connect(
+            self.unset_toplevel)
+        self.action_rename.triggered.connect(self.rename)
+        self.action_create_directory.triggered.connect(self.create_dir)
+
 
         # self.mod_structure_view.tree_structure_changed.connect(self.on_tree_change)
 
@@ -59,26 +77,64 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
         self.mod_structure_view.setToolTip(_tree_tooltip)
 
+
+    def set_toplevel(self, *args):
+        self.LOGGER << "set_toplevel()"
+
+    def unset_toplevel(self, *args):
+        self.LOGGER << "unset_toplevel()"
+
+    def rename(self, *args):
+        self.LOGGER << "rename()"
+
+    def create_dir(self, *args):
+        self.LOGGER << "create_dir()"
+
     def custom_context_menu(self, position):
-        menu = QMenu(self.mod_structure_view)
+        # menu = QMenu(self.mod_structure_view)
+        # menu = self._getrclickmenu()
+
+        fsmod = self.modfsmodel
+        clicked_index = self.mod_structure_view.indexAt(position)
+        self.rclicked_inode = clicked_index.internalId()
+
+        user_root, isdir, isroot = (fsmod.has_modified_root,
+                                    fsmod.index_is_dir(clicked_index),
+                                    fsmod.index_is_root(clicked_index))
 
 
-        has_user_root, clicked_isdir, clicked_not_root = \
-            self.modfsmodel.get_state_for_contextmenu(
-            self.mod_structure_view.indexAt(position))
+        # adjust visible options
 
-        if has_user_root:
-            menu.addAction(self.action_unset_top_level_directory)
+        # show unset option if user has set custom root
+        self.action_unset_top_level_directory.setVisible(user_root)
 
-        if clicked_not_root:
-            if clicked_isdir:
-                menu.addAction(self.action_set_as_top_level_directory)
-            menu.addAction(self.action_rename)
+        # show set option if user clicked on directory (that is not the root)
+        self.action_set_as_top_level_directory.setVisible(isdir and not isroot)
 
-        menu.addAction(self.action_create_directory)
+        # show rename option if user clicked on anything but root
+        self.action_rename.setVisible(not isroot)
 
-        menu.exec_(self.mod_structure_view.mapToGlobal(position))
+        # always show create-dir option.
+        # self.action_create_directory
 
+        self.rclickmenu.exec_(self.mod_structure_view.mapToGlobal(position))
+
+
+        # has_user_root, clicked_isdir, clicked_not_root = \
+        #     self.modfsmodel.get_state_for_contextmenu(
+        #     )
+
+        # if has_user_root:
+        #     menu.addAction(self.action_unset_top_level_directory)
+        #
+        # if clicked_not_root:
+        #     if clicked_isdir:
+        #         menu.addAction(self.action_set_as_top_level_directory)
+        #     menu.addAction(self.action_rename)
+        #
+        # menu.addAction(self.action_create_directory)
+        #
+        # menu.exec_(self.mod_structure_view.mapToGlobal(position))
 
 
 

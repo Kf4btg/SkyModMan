@@ -377,6 +377,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
     def _isdir(self, inode):
         return self._fs.is_dir(inode)
 
+
+
     def _invalidate_caches(self, *which):
         """
         Clear all or specified lru_caches
@@ -397,6 +399,12 @@ class ModArchiveTreeModel(QAbstractItemModel):
                   fstat.st_name,
                   {"d":"/", "f":""}[fstat.st_type],
                   sep="")
+
+    # just some convenience functions
+    def index_is_dir(self, index):
+        return self._isdir(index.internalId())
+    def index_is_root(self, index):
+        return self._currentroot_inode == index.internalId()
 
     ##===============================================
     ## Modifying Paths/Context Menu Items
