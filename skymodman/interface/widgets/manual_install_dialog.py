@@ -1,6 +1,7 @@
 # from os.path import splitext
 
 # from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QModelIndex
 from PyQt5.QtWidgets import QDialog, QMenu  #, QTreeWidgetItem
 
 from skymodman.constants import TopLevelDirs_Bain, TopLevelSuffixes
@@ -67,7 +68,7 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.action_create_directory.triggered.connect(self.create_dir)
 
         ## connect some more signals
-
+        # self.modfsmodel.root_changed.connect(self.)
 
         # self.mod_structure_view.tree_structure_changed.connect(self.on_tree_change)
 
@@ -78,12 +79,24 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
         self.mod_structure_view.setToolTip(_tree_tooltip)
 
+    def top_index(self):
+        return self.mod_structure_view.rootIndex()
+
+
 
     def set_toplevel(self, *args):
         self.LOGGER << "set_toplevel()"
 
+        self.mod_structure_view.setRootIndex(self.modfsmodel.index4inode(self.rclicked_inode))
+
+        # self.modfsmodel.change_root(self.rclicked_inode)
+
+
     def unset_toplevel(self, *args):
         self.LOGGER << "unset_toplevel()"
+
+        self.mod_structure_view.setRootIndex(QModelIndex())
+
 
     def rename(self, *args):
         # self.LOGGER << "rename()"
@@ -91,8 +104,10 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
             self.modfsmodel.index4inode(self.rclicked_inode))
 
     def create_dir(self, *args):
-        self.LOGGER << "create_dir()"
+        # self.LOGGER << "create_dir()"
         fsmod = self.modfsmodel
+
+        print(self.rclicked_inode)
 
         if fsmod._isdir(self.rclicked_inode):
             parent = fsmod.inode2path(self.rclicked_inode)
@@ -114,16 +129,22 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.mod_structure_view.edit(new_index)
 
 
-
-
     def custom_context_menu(self, position):
         fsmod = self.modfsmodel
         clicked_index = self.mod_structure_view.indexAt(position)
-        self.rclicked_inode = clicked_index.internalId()
 
-        user_root, isdir, isroot = (fsmod.has_modified_root,
+        topidx = self.top_index()
+
+        if clicked_index.isValid():
+            self.rclicked_inode = clicked_index.internalId()
+        else:
+            self.rclicked_inode = topidx.internalId()
+
+
+        user_root, isdir, isroot = (topidx.isValid(),
                                     fsmod.index_is_dir(clicked_index),
-                                    fsmod.index_is_root(clicked_index))
+                                    clicked_index == topidx
+                                    )
 
 
         # adjust visible options

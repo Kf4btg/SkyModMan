@@ -5,7 +5,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeD
 
 from skymodman.utils.archivefs import ArchiveFS, PureCIPath, CIPath
 # from skymodman.utils import archivefs
-from skymodman.utils import withlogger
+from skymodman.utils import withlogger, singledispatch_m
 
 
 
@@ -28,6 +28,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
                  | Qt.ItemIsUserCheckable)
 
     folder_structure_changed = pyqtSignal()
+
+    root_changed = pyqtSignal()
 
     # noinspection PyTypeChecker,PyArgumentList
     def __init__(self, mod_fs, *args, **kwargs):
@@ -135,6 +137,18 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
         return self.createIndex(parent_row, 0, parent.inode)
 
+    def flags(self, index):
+        """
+        Return different values for directories and files
+        :param index:
+        :return:
+        """
+        if not index.isValid():
+            return Qt.ItemIsEnabled | Qt.ItemIsDropEnabled
+
+        if self._isdir(index.internalId()):
+            return self.DIRFLAGS
+        return self.FILEFLAGS
 
     def data(self, index, role=Qt.DisplayRole):
         """
@@ -159,20 +173,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
                         path == self.root or
                         path.inode not in self._unchecked]
             }[role]
-
-
-    def flags(self, index):
-        """
-        Return different values for directories and files
-        :param index:
-        :return:
-        """
-        if not index.isValid():
-            return Qt.ItemIsEnabled | Qt.ItemIsDropEnabled
-
-        if self._isdir(index.internalId()):
-            return self.DIRFLAGS
-        return self.FILEFLAGS
 
     # noinspection PyUnresolvedReferences
     def setData(self, index, value, role=None):
@@ -317,13 +317,10 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
     def create_new_dir(self, parent, initial_name):
 
-        # newpath = PureCIPath(parent, initial_name)
-
         new_pos = self.future_row_after_create(initial_name, parent, True)
-        # print(new_pos)
 
-        # beginInsertRows(parent, first, last)
         pindex = self.index4path(parent)
+        # beginInsertRows(parent, first, last)
         self.beginInsertRows(pindex, new_pos, new_pos)
 
         self._fs.mkdir(PureCIPath(parent, initial_name))
@@ -333,6 +330,14 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
         return self.index(new_pos, 0, pindex)
 
+    @singledispatch_m
+    def change_root(self, new_root):
+        self._change_root_inode(self._fs.inodeof(new_root))
+
+    @change_root.register(int)
+    def _change_root_inode(self, new_root):
+        self._currentroot_inode = new_root
+        self._currentroot = self._fs.pathfor(self._currentroot_inode)
 
     ##===============================================
     ## Utilities
@@ -348,7 +353,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
         """
         # let the fs's sorting handle that.
         return sorted(dirpath.listdirpaths())
-
 
     class _FakeCIPath(PureCIPath):
         """
@@ -429,13 +433,9 @@ class ModArchiveTreeModel(QAbstractItemModel):
         targetlist.append(newpath)
         return sorted(targetlist).index(newpath)
 
-
-
     @lru_cache(None)
     def _isdir(self, inode):
         return self._fs.is_dir(inode)
-
-
 
     def _invalidate_caches(self, *which):
         """
