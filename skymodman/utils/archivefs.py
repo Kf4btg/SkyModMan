@@ -5,7 +5,7 @@ from collections import namedtuple
 
 from skymodman.exceptions import Error
 from skymodman.utils import singledispatch_m
-from skymodman.utils.debug import Printer as PRINT
+# from skymodman.utils.debug import Printer as PRINT
 
 class FSError(Error):
     """ Represents some sort of error in the ArchiveFS """
@@ -321,7 +321,8 @@ class ArchiveFS:
         self.CIPath = get_associated_pathtype(self)
 
         # list of paths, where an item's index in the list corresponds to its inode number.
-        self.inode_table = [] # type: list[InodeRecord]
+        self.inode_table = []
+        """:type: list[InodeRecord|None]"""
 
         # mapping of directory-inodes to set of inodes they contain
         self.directories = dict() # type: dict[int, set[int]]
@@ -337,14 +338,15 @@ class ArchiveFS:
 
         self.sorting=SortFlags.Default
 
-
+        # initialize caches with root information
         self.caches = {
-            "inodeof": dict(),
-            "_inode_name": dict(),
-            "_inode_name_lower": dict(),
-            "pathfor": dict(),
-            "listdir": dict(),
-            "vlistdir": dict(), # verbose version of listdir
+            "inodeof":           {self._rootpath: self.ROOT_INODE},
+            "_inode_name":       {self.ROOT_INODE: "/"},
+            "_inode_name_lower": {self.ROOT_INODE: "/"},
+            "pathfor":           {self.ROOT_INODE: self._rootpath},
+            "listdir":           {self.ROOT_INODE: []},
+            # verbose version of listdir:
+            "vlistdir":          {self.ROOT_INODE: []},
         }
 
     @property
@@ -356,6 +358,10 @@ class ArchiveFS:
         return self._rootpath
 
     def clearcaches(self, *which):
+        """
+        Entirely clear the caches whose names/labels are given by `which`. If no values are provided for `which`, all caches will be cleared.
+        :param which:
+        """
         if not which:
             which = self.caches.keys()
 
@@ -398,7 +404,6 @@ class ArchiveFS:
     ## it to work with instance methods.
     ##=====================================================
 
-    # noinspection PyTypeChecker
     def inodeof(self, ppath):
         """
         Return the inode number of the file represented by `path`.
@@ -420,8 +425,6 @@ class ArchiveFS:
                 self.caches["inodeof"][path] = self.ROOT_INODE
                 return self.ROOT_INODE
 
-            # PRINT() << "parts[]:" << parts
-
             ir=self.root
             for p in parts[1:]:
 
@@ -433,15 +436,14 @@ class ArchiveFS:
                             break
                     else:
                         raise Error_ENOENT(
-                            PureCIPath(*parts[:parts.index(p) + 1])) #from None
+                            PureCIPath(*parts[:parts.index(p) + 1])) from None
                 except Error_EIO:
                     raise Error_ENOENT(
-                        PureCIPath(*parts[:parts.index(p) + 1])) #from None
+                        PureCIPath(*parts[:parts.index(p) + 1])) from None
 
             res = self.caches["inodeof"][path] = ir.inode
             return res
 
-    # noinspection PyTypeChecker
     def _inode_name(self, int_inode:int):
         """
         If the inode exists, return its current file name. Raises Error_EIO if the inode is not registered.
@@ -457,9 +459,8 @@ class ArchiveFS:
                 n = self.caches["_inode_name"][int_inode] = self.inode_table[int_inode].name
                 return n
             except (IndexError, AttributeError):
-                raise Error_EIO(int_inode)
+                raise Error_EIO(int_inode) from None
 
-    # noinspection PyTypeChecker
     def _inode_name_lower(self, inode:int):
         """Just returns a lower-case version of the stored name, for case-insensitive comparisons"""
         try:
@@ -469,8 +470,6 @@ class ArchiveFS:
                 inode] = self._inode_name(inode).lower()
             return n
 
-
-    # noinspection PyTypeChecker
     def pathfor(self, inode:int):
         """
         Return the absolute path to the current location of the file pointed to by `inode`.
@@ -486,10 +485,10 @@ class ArchiveFS:
 
                 # means the file that this inode referred to has been deleted
                 if ir is None:
-                    raise Error_EIO(inode)
+                    raise Error_EIO(inode) from None
             except IndexError:
                 # and raise error if the inode doesn't exists
-                raise Error_EIO(inode)
+                raise Error_EIO(inode) from None
 
             path_parts = []
 
@@ -525,10 +524,10 @@ class ArchiveFS:
         except Error_EIO:
             # I'd consider this a more specific (or maybe less specific...
             # but certainly easier to understand) version of EIO
-            raise Error_ENOENT(directory) #from None
+            raise Error_ENOENT(directory) from None
         except Error_ENOTDIR:
             # reraise with actual path
-            raise Error_ENOTDIR(directory) #from None
+            raise Error_ENOTDIR(directory) from None
 
     @dir_inodes.register(int)
     def _dii(self, directory):
@@ -789,9 +788,6 @@ class ArchiveFS:
     def _ei(self, inode):
         return inode < len(self.inode_table) and self.inode_table[inode] is not None
 
-        # return inode < len(self.i2p_table) and self.i2p_table[inode] is not None
-
-
     ##===============================================
     ## File Creation
     ##===============================================
@@ -841,7 +837,6 @@ class ArchiveFS:
 
         # new inode numbers are always == 1+current maximum inode.
         # since they start at 0, this is == the len of the table
-        # new_inode = len(self.i2p_table)
         new_inode = len(self.inode_table)
 
         # append placeholder in case parent dirs have to be created
@@ -934,12 +929,10 @@ class ArchiveFS:
         # delete cached listdir() result for its parent
         self.del_from_caches(("listdir", "vlistdir"), par_inode)
 
-
         # and, since figuring out exactly which paths were deleted
         # could be an expensive, superflous operation, it's easier
         # just to clear the entire inodeof() cache
         self.caches["inodeof"].clear()
-        # self.clearcaches("inodeof")
 
     def _del_dir(self, dirinode:int):
         """
@@ -1024,7 +1017,7 @@ class ArchiveFS:
         :return: True if all went well
         """
 
-        PRINT() << "move(" << path << ", " << destination << ")"
+        # PRINT() << "move(" << path << ", " << destination << ")"
 
         src = PureCIPath(path)
         dst = PureCIPath(destination)
@@ -1060,7 +1053,7 @@ class ArchiveFS:
         :return:
         """
 
-        PRINT() << "rename(" << path << ", " << destination << ")"
+        # PRINT() << "rename(" << path << ", " << destination << ")"
 
         src = PureCIPath(path)
         dest = PureCIPath(destination)
@@ -1095,7 +1088,7 @@ class ArchiveFS:
         :return:
         """
 
-        PRINT() << "chname(" << path << ", " << new_name << ")"
+        # PRINT() << "chname(" << path << ", " << new_name << ")"
 
         src = PureCIPath(path)
 
@@ -1143,7 +1136,7 @@ class ArchiveFS:
         Move file or dir `path` inside directory `dest_dir`
         """
 
-        PRINT() << "_move_to_dir(" << path << ", " << dest_dir << ")"
+        # PRINT() << "_move_to_dir(" << path << ", " << dest_dir << ")"
 
         dest_path = PureCIPath(dest_dir, path.name)
 
@@ -1158,7 +1151,7 @@ class ArchiveFS:
         Perform the final move of `from_path` to destination `to_path`. At this point, `to_path` can be assumed not to exist and to have been cleared from all appropriate caches.
         """
 
-        PRINT() << "_move(" << from_path << ", " << to_path << ")"
+        # PRINT() << "_move(" << from_path << ", " << to_path << ")"
 
         inorec = self.inode_table[
             self.inodeof(from_path) ] # get inode record from current path value
@@ -1191,21 +1184,6 @@ class ArchiveFS:
             self.remove_cached_values("inodeof", from_path)
 
         return True
-
-    # def _change_inode_path(self, inode, new_path):
-    #     PRINT() << "_change_inode_path(" << inode << ", " << new_path << ")"
-    #
-    #     inorec = self.inode_table[inode]
-    #
-    #     # remove from old dir
-    #     self.directories[inorec.parent].remove(inorec.inode)
-    #
-    #     # change name and parent
-    #     inorec.name = new_path.name
-    #     inorec.parent = self.inodeof(new_path.parent)
-    #
-    #     # add to new dir
-    #     self.directories[inorec.parent].add(inorec.inode)
 
     def _change_name(self, path, new_name):
         """
@@ -1279,7 +1257,6 @@ class ArchiveFS:
 
         del copy
         return dupefs
-
 
     def fsck(self, root="/"):
         return fsck_modfs(self, root)
@@ -1355,26 +1332,26 @@ def fsck_modfs_quick(modfs, root="/"):
     return False
 
 
-def __test1():
-    cip = PureCIPath("test", "rest")
-    CIP = PureCIPath("TEST", "REST")
-    Cip = PureCIPath("Test", "Rest")
-
-    print(cip, CIP, Cip, sep="\n")
-
-    print(cip == CIP)
-    print(Cip == CIP)
-    print(Cip == cip)
-
-    pathlist = [cip, PureCIPath("not", "the", "same")]
-    print(CIP in pathlist)
-
-    pathdict = {Cip: "hello"}
-
-    print (pathdict[cip])
-
-
-
-if __name__ == '__main__':
-    # from skymodman.managers.archive_7z import ArchiveHandler
-    __test1()
+# def __test1():
+#     cip = PureCIPath("test", "rest")
+#     CIP = PureCIPath("TEST", "REST")
+#     Cip = PureCIPath("Test", "Rest")
+#
+#     print(cip, CIP, Cip, sep="\n")
+#
+#     print(cip == CIP)
+#     print(Cip == CIP)
+#     print(Cip == cip)
+#
+#     pathlist = [cip, PureCIPath("not", "the", "same")]
+#     print(CIP in pathlist)
+#
+#     pathdict = {Cip: "hello"}
+#
+#     print (pathdict[cip])
+#
+#
+#
+# if __name__ == '__main__':
+#     # from skymodman.managers.archive_7z import ArchiveHandler
+#     __test1()

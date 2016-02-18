@@ -4,7 +4,7 @@ from PyQt5 import QtGui
 from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData
 
 from skymodman.utils.archivefs import ArchiveFS, PureCIPath, CIPath
-from skymodman.utils import archivefs
+# from skymodman.utils import archivefs
 from skymodman.utils import withlogger
 
 
@@ -27,11 +27,9 @@ class ModArchiveTreeModel(QAbstractItemModel):
                  | Qt.ItemNeverHasChildren
                  | Qt.ItemIsUserCheckable)
 
-
-
-
     folder_structure_changed = pyqtSignal()
 
+    # noinspection PyTypeChecker,PyArgumentList
     def __init__(self, mod_fs, *args, **kwargs):
         """
 
@@ -45,10 +43,11 @@ class ModArchiveTreeModel(QAbstractItemModel):
         self._currentroot_inode = ArchiveFS.ROOT_INODE
         self._currentroot = self._fs.rootpath
 
-        # noinspection PyTypeChecker,PyArgumentList
+        # Have to keep these in the init() so that they're not
+        # garbage collected (which apparently seems to delete them
+        # from the entire application...)
         self.FOLDER_ICON = QtGui.QIcon.fromTheme(
             "folder")  # type: QtGui.QIcon
-        # noinspection PyTypeChecker,PyArgumentList
         self.FILE_ICON = QtGui.QIcon.fromTheme(
             "text-plain")  # type: QtGui.QIcon
 
@@ -121,12 +120,12 @@ class ModArchiveTreeModel(QAbstractItemModel):
         if parent == self.root:
             return QModelIndex()
 
-        try:
-            parent_row = self.row4path(parent)
-        except ValueError:
-            print("child:", self.index2path(child_index))
-            print("parent:", parent)
-            raise
+        # try:
+        parent_row = self.row4path(parent)
+        # except ValueError:
+        #     print("child:", self.index2path(child_index))
+        #     print("parent:", parent)
+        #     raise
 
         return self.createIndex(parent_row, 0, parent.inode)
 
@@ -254,14 +253,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
                            r, r,
                            self.index4path(target_path),
                            self.future_row(src_path, target_path))
-
-        # self.logger.debug(
-        #     "beginmoverows:", ", ".join(
-        #         [orig_parent.str,
-        #          str(r),
-        #          str(r),
-        #          tpath.str,
-        #          str(self.future_row(src_path, tpath))]))
 
         src_path.move(target_path)
 
