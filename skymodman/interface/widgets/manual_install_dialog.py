@@ -110,7 +110,7 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         # self.LOGGER << "create_dir()"
         fsmod = self.modfsmodel
 
-        print(self.rclicked_inode)
+        # print(self.rclicked_inode)
 
         if fsmod._isdir(self.rclicked_inode):
             parent = fsmod.inode2path(self.rclicked_inode)

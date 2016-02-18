@@ -413,26 +413,42 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param target_dir:
         :return:
         """
+        return self._get_insertion_index(
+            PureCIPath(target_dir, path.name),
+            target_dir, path.is_dir)
 
-        targetlist = target_dir.listdirpaths()
-
-        newpath = self._FakeCIPath(target_dir, path.name, original=path, targetdir=target_dir)
-
-        targetlist.append(newpath)
-
-        return sorted(targetlist).index(newpath)
 
     def future_row_after_create(self, file_name, target_dir, isfolder=True):
-        targetlist = target_dir.listdirpaths()
+        """
+         Return the index in target_dir's child list where a file with name `file_name` would be inserted after creation.
+         :param file_name:
+         :param target_dir:
+         :return:
+         """
+        return self._get_insertion_index(
+            PureCIPath(target_dir, file_name),
+            target_dir, isfolder)
 
-        newpath = self._FakeCIPath(target_dir, file_name,
-                                   targetdir=target_dir,
-                                   template_type=self._fs.CIPath,
-                                   is_dir=isfolder,
-                                   accessor=self._fs)
+    def _get_insertion_index(self, path, target_dir, path_is_folder=False):
+        """
+        Return the index in target_dir's child list where `path` would be inserted.
+        :param path:
+        :param target_dir:
+        :return:
+        """
+        i = 0
+        # return first index where either:
+        #    a) path is a folder and the target is not;
+        # or b) path and target are the same type (folder|file) && path < p
+        for i, p in enumerate(self._sorted_dirlist(target_dir)):
+            if path_is_folder == p.is_dir:
+                if path < p: return i
 
-        targetlist.append(newpath)
-        return sorted(targetlist).index(newpath)
+            # we know that only one of them is a folder; if it's path, return i
+            elif path_is_folder: return i
+
+        # if no insertion point found, insert after end
+        return i+1
 
     @lru_cache(None)
     def _isdir(self, inode):

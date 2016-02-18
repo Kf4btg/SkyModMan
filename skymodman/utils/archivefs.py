@@ -823,6 +823,7 @@ class ArchiveFS:
 
         try:
             inode = self._create(path)
+            # print("created directory {}".format(path))
             self.directories[inode] = set()
         except Error_EEXIST:
             if not exist_ok:
