@@ -73,7 +73,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param index:
         :return: Number of filesystem entries contained by the directory pointed to by `index`
         """
-
         return self.path4index(index).dir_length()
 
     def columnCount(self, *args, **kwargs):
@@ -102,8 +101,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
             # not internalPointer()
             return self.createIndex(row, col, child.inode)
         except IndexError:
-            # self.LOGGER << "index({}, {}, {}): IndexError".format(row, col, parent.internalId())
-            self.LOGGER << self._sorted_dirlist(parentpath)
+            self.LOGGER << "index({}, {}, {}): IndexError".format(row, col, parent.internalId())
+            # self.LOGGER << self._sorted_dirlist(parentpath)
             return QModelIndex()
 
         # return QModelIndex()
@@ -118,14 +117,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
         # get the parent path
 
-        # print(child_index)
-        # print(child_index.internalId())
-        # print("---------------------------------")
-
-        # print(child_index.internalId())
-        # child = self.index2path(child_index)
-        # print("child:", child )
-        # print(child.inode)
         parent = self.index2path(child_index).sparent
 
         # if parent is "/" return invalid index
@@ -137,14 +128,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
         except ValueError:
             print("child:", self.index2path(child_index))
             print("parent:", parent)
-            # print("gp:", grandpath)
-            # print("dirlist:",
-            #       self._sorted_dirlist(grandpath))
             raise
 
-        # print("parent(): creating index({0}, {1}, {2.inode}) for {2}".format(parent_row,
-        #                                                            0,
-        #                                                            parent))
         return self.createIndex(parent_row, 0, parent.inode)
 
 
@@ -156,10 +141,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :return:
         """
 
-        if role in (Qt.DisplayRole, Qt.DecorationRole, Qt.CheckStateRole):
+        if role in {Qt.DisplayRole, Qt.DecorationRole, Qt.CheckStateRole}:
 
-            # inode=index.internalId()
-            # path=self._fs.pathfor(inode)
             path = self.path4index(index)
             return {
                 Qt.DisplayRole:
@@ -217,6 +200,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
             self._fs.chname(currpath, value)
             # except Error_EEXIST
 
+            self._invalidate_caches(self._sorted_dirlist)
+
             self.dataChanged.emit(index, index)
             return True
 
@@ -242,7 +227,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
         """
         mimedata = QMimeData()
         mimedata.setText(str(indexes[0].internalId()))
-        # print("dragged mimedata:", mimedata.text())
         return mimedata
 
     def dropMimeData(self, data, action, row, column, parent):
@@ -252,9 +236,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
             # let's check and deal with it later
             self.logger << "drop-parent invalid"
             return False
-
-        # print(self._fs.i2p_table)
-        # print(self._fs.p2i_table)
 
         par_path = self.index2path(parent)
         src_path = self._fs.pathfor(int(data.text()))
@@ -282,19 +263,15 @@ class ModArchiveTreeModel(QAbstractItemModel):
         #          tpath.str,
         #          str(self.future_row(src_path, tpath))]))
 
-        # fs.move(src_path, fs.pathfor(par_inode))
         src_path.move(target_path)
-        # fs.move(src_path, tpath)
-        # self.logger.debug("endmoverows")
+
+        ## need to do this before endmoverows (which calls index()) to
+        ## prevent inconsistent state and possible crash
+        self._invalidate_caches(self._sorted_dirlist)
 
         self.endMoveRows()
 
-        self._invalidate_caches([self._sorted_dirlist])
-
-        # self._print_fstree()
-        # print("..........................")
-        # print(self._fs.i2p_table)
-        # print(self._fs.p2i_table)
+        self._print_fstree()
         return True
 
     def canDropMimeData(self, data, action, row, col, parent):
@@ -312,15 +289,11 @@ class ModArchiveTreeModel(QAbstractItemModel):
         dragged_path = self._fs.pathfor(dragged_inode)
 
         if not parent.isValid():
-            # parinode = self.root_inode
-            # target = self.root_inode
             ## target is root directory, so return True so long as source
             ## was not already a top-level item.
             return dragged_inode not in self._fs.dir_inodes(self.root_inode)
         else:
-            # parpath = parent.internalPointer()
             parpath = self.index2path(parent)
-            # parpath = self._fs.pathfor(parent.internalId())
 
             if row < 0 and parpath.is_file:
                 # dropped directly on parent, and 'parent' is not a directory
@@ -412,12 +385,12 @@ class ModArchiveTreeModel(QAbstractItemModel):
     def _isdir(self, inode):
         return self._fs.is_dir(inode)
 
-    def _invalidate_caches(self, which=None):
+    def _invalidate_caches(self, *which):
         """
         Clear all or specified lru_caches
         :param which: if which is None, then which is actually all. Otherwise, it should be a list of functions that have caches attached
         """
-        if which is None:
+        if not which:
             which = self._caches
 
         for c in which:
@@ -425,10 +398,12 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
     def _print_fstree(self):
         indent="  "
-        for d,p,t in self._fs.itertree(self.root, False, True):
+        for d, fstat in self._fs.itertree(self.root,
+                                          include_root=False,
+                                          verbose=True):
             print(indent*d,
-                  p.name,
-                  {"d":"/", "f":""}[t],
+                  fstat.st_name,
+                  {"d":"/", "f":""}[fstat.st_type],
                   sep="")
 
 
