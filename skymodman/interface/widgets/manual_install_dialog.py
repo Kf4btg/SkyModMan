@@ -104,6 +104,9 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
             self.modfsmodel.index4inode(self.rclicked_inode))
 
     def create_dir(self, *args):
+
+        # fixme: for some reason, the item that gets the editor focus after the directory is created is not always the just-created directory...it also appears that the new folder is not always inserted at the correct sorted-insertion location--however, these two issues do not always overlap...because that would make sense, and we can't have that.
+
         # self.LOGGER << "create_dir()"
         fsmod = self.modfsmodel
 

@@ -5,7 +5,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeD
 
 from skymodman.utils.archivefs import ArchiveFS, PureCIPath, CIPath
 # from skymodman.utils import archivefs
-from skymodman.utils import withlogger, singledispatch_m
+from skymodman.utils import withlogger #, singledispatch_m
 
 
 
@@ -330,14 +330,15 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
         return self.index(new_pos, 0, pindex)
 
-    @singledispatch_m
-    def change_root(self, new_root):
-        self._change_root_inode(self._fs.inodeof(new_root))
-
-    @change_root.register(int)
-    def _change_root_inode(self, new_root):
-        self._currentroot_inode = new_root
-        self._currentroot = self._fs.pathfor(self._currentroot_inode)
+    # XXX: Change-root on the model level is unnecessary? It may be possible to do all we need to do just with setRootIndex() on the Treeview.
+    # @singledispatch_m
+    # def change_root(self, new_root):
+    #     self._change_root_inode(self._fs.inodeof(new_root))
+    #
+    # @change_root.register(int)
+    # def _change_root_inode(self, new_root):
+    #     self._currentroot_inode = new_root
+    #     self._currentroot = self._fs.pathfor(self._currentroot_inode)
 
     ##===============================================
     ## Utilities
