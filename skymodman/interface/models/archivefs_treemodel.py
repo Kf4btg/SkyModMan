@@ -7,10 +7,7 @@ from skymodman.utils.archivefs import ArchiveFS, PureCIPath, CIPath
 from skymodman.utils import archivefs
 from skymodman.utils import withlogger
 
-# noinspection PyTypeChecker,PyArgumentList
-FOLDER_ICON = QtGui.QIcon.fromTheme("folder")
-# noinspection PyTypeChecker,PyArgumentList
-FILE_ICON = QtGui.QIcon.fromTheme("text-x-plain")
+
 
 @withlogger
 class ModArchiveTreeModel(QAbstractItemModel):
@@ -31,6 +28,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
                  | Qt.ItemIsUserCheckable)
 
 
+
+
     folder_structure_changed = pyqtSignal()
 
     def __init__(self, mod_fs, *args, **kwargs):
@@ -46,14 +45,19 @@ class ModArchiveTreeModel(QAbstractItemModel):
         self._currentroot_inode = ArchiveFS.ROOT_INODE
         self._currentroot = self._fs.rootpath
 
+        # noinspection PyTypeChecker,PyArgumentList
+        self.FOLDER_ICON = QtGui.QIcon.fromTheme(
+            "folder")  # type: QtGui.QIcon
+        # noinspection PyTypeChecker,PyArgumentList
+        self.FILE_ICON = QtGui.QIcon.fromTheme(
+            "text-plain")  # type: QtGui.QIcon
+
         # set of unchecked inodes
         self._unchecked=set()
 
         # just tracking any functions with lru_caches
         self._caches=[self._sorted_dirlist,
                       self._isdir]
-
-        # print([(i, p.str) for i,p in enumerate(self._fs.i2p_table)])
 
     @property
     def root_inode(self):
@@ -105,11 +109,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
             # self.LOGGER << self._sorted_dirlist(parentpath)
             return QModelIndex()
 
-        # return QModelIndex()
-
-
-
-
     def parent(self, child_index=QModelIndex()):
 
         if not child_index.isValid():
@@ -143,16 +142,18 @@ class ModArchiveTreeModel(QAbstractItemModel):
         if role in {Qt.DisplayRole, Qt.DecorationRole, Qt.CheckStateRole}:
 
             path = self.path4index(index)
+
             return {
                 Qt.DisplayRole:
                     path.name,
                 Qt.DecorationRole:
-                    (FILE_ICON, FOLDER_ICON)[path.is_dir],
+                    (self.FILE_ICON, self.FOLDER_ICON)[path.is_dir],
                 Qt.CheckStateRole:
                     (Qt.Unchecked, Qt.Checked)[
                         path == self.root or
                         path.inode not in self._unchecked]
             }[role]
+
 
     def flags(self, index):
         """
