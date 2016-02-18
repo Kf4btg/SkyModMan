@@ -116,7 +116,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
             return QModelIndex()
 
         # get the parent path
-
         parent = self.index2path(child_index).sparent
 
         # if parent is "/" return invalid index
@@ -162,7 +161,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :return:
         """
         if not index.isValid():
-            return Qt.ItemIsEnabled
+            return Qt.ItemIsEnabled | Qt.ItemIsDropEnabled
 
         if self._isdir(index.internalId()):
             return self.DIRFLAGS
@@ -232,21 +231,21 @@ class ModArchiveTreeModel(QAbstractItemModel):
     def dropMimeData(self, data, action, row, column, parent):
 
         if not parent.isValid():
-            # dragging to root...maybe?
-            # let's check and deal with it later
-            self.logger << "drop-parent invalid"
-            return False
+            # canDropMimeData should prevent any top-level items
+            # being droppable on root, so--in theory--we can just
+            # accept any drop action on the root level.
+            target_path = self.root
+        else:
+            par_path = self.index2path(parent)
+            if row < 0 and par_path.is_file:
+                # dropped directly on parent, and 'parent' is not a directory
+                target_path = par_path.sparent
+            else:
+                # either dropped directly on parent or before row,col in parent,
+                target_path = par_path
 
-        par_path = self.index2path(parent)
         src_path = self._fs.pathfor(int(data.text()))
         orig_parent = src_path.sparent
-
-        if row < 0 and par_path.is_file:
-            # dropped directly on parent, and 'parent' is not a directory
-            target_path = par_path.sparent
-        else:
-            # either dropped directly on parent or before row,col in parent,
-            target_path = par_path
 
         r = self.row4path(src_path)
         # src_parent, srcFirst, srcLast, destParent, int destChild
@@ -265,7 +264,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
         src_path.move(target_path)
 
-        ## need to do this before endmoverows (which calls index()) to
+        ## need to do this BEFORE endmoverows (which calls index()) to
         ## prevent inconsistent state and possible crash
         self._invalidate_caches(self._sorted_dirlist)
 
@@ -291,7 +290,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
         if not parent.isValid():
             ## target is root directory, so return True so long as source
             ## was not already a top-level item.
-            return dragged_inode not in self._fs.dir_inodes(self.root_inode)
+            return dragged_path not in self.root
+            # return dragged_inode not in self._fs.dir_inodes(self.root_inode)
         else:
             parpath = self.index2path(parent)
 
@@ -304,8 +304,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
                 target = parpath
 
             # can't drop on self or on immediate parent
-            if target == dragged_path or \
-                dragged_inode in self._fs.dir_inodes(target):
+            if target == dragged_path or dragged_path in target:
                 # or on child directory...do I need to check for that one? how?
                 return False
 
@@ -326,12 +325,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param CIPath dirpath:
         :rtype: list[CIPath]
         """
-
-        # cipath = self._fs.CIPath
-
         # let the fs's sorting handle that.
         return sorted(dirpath.listdirpaths())
-        # return [cipath(dirpath, n) for n in sorted(dirpath.listdir())]
 
 
     class _FakeCIPath(PureCIPath):
@@ -372,7 +367,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :return:
         """
 
-        # targetlist = newdir.listdir()
         targetlist = newdir.listdirpaths()
 
         newpath = self._FakeCIPath(newdir, path.name, original=path, targetdir=newdir)
@@ -410,15 +404,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
     ##===============================================
     ## Translation
     ##===============================================
-
-    # def inode4index(self, index) -> int:
-    #     """
-    #     Gets the inode for the path represented by `index`
-    #     :param QModelIndex index:
-    #     :return: inode of the item
-    #     """
-    #     return index.internalId() if index.isValid() else self.root_inode
-
 
     def path4index(self, index) -> CIPath:
         """

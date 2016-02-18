@@ -119,6 +119,28 @@ class CIPath(PureCIPath):
         pp = PureCIPath(self)
         return self._accessor.storedpath(pp.parent)
 
+    def __contains__(self, file):
+        """
+        Assuming that this CIPath object is a directory, return True if `file` is contained within.  If this is not a directory--or `file` isn't a Path object, string, or inode number--an appropriate exception will be raised.
+
+        :param str|CIPath|int file: Must be the inode number of an existing file, or the absolute path (either in string form or object form) to a file.
+        """
+        try:
+            # assuming `file` is another CIPath obj
+            return file.inode in self._accessor.dir_inodes(self)
+        except AttributeError:
+            # "file has no attr 'inode'"
+            try:
+                # assume `file` is actually an inode number (but int() it to be sure)
+                return int(file) in self._accessor.dir_inodes(self)
+            except (ValueError, TypeError):
+                # file wasn't a number, either; could be different type of Path, or a string?
+                return self._accessor.inodeof(file) in self._accessor.dir_inodes(self)
+
+        # and if all of that still failed, then we definitely just need
+        # to let the exception raise.
+
+
     ##===============================================
     ## Directory listing/iteration
     ##===============================================

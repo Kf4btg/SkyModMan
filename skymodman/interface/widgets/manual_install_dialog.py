@@ -88,4 +88,3 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
     #         self.num_to_copy = self.mod_data.count()
     #
     #     super().done(result)
-
