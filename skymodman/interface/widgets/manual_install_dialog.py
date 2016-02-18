@@ -79,23 +79,43 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
         self.mod_structure_view.setToolTip(_tree_tooltip)
 
-    def top_index(self):
+        self.modfsmodel.rowsMoved.connect(self.check_top_level)
+        self.modfsmodel.rowsInserted.connect(self.check_top_level)
+        self.modfsmodel.folder_structure_changed.connect(self.check_top_level)
+
+    @property
+    def fsroot(self) -> QModelIndex:
+        """
+        Return the index of the current visible root
+        """
         return self.mod_structure_view.rootIndex()
 
-
+    @fsroot.setter
+    def fsroot(self, index: QModelIndex):
+        """
+        Set the visible root to the path pointed to by `index`
+        """
+        self.mod_structure_view.setRootIndex(index)
+        self.modfsmodel.root = index
+        self.check_top_level()
+        # self.modfsmodel.change_root(self.rclicked_inode)
 
     def set_toplevel(self, *args):
+        """
+        Set the visible root to the target of the last context-menu-event
+        """
         self.LOGGER << "set_toplevel()"
-
-        self.mod_structure_view.setRootIndex(self.modfsmodel.index4inode(self.rclicked_inode))
-
-        # self.modfsmodel.change_root(self.rclicked_inode)
+        self.fsroot = self.modfsmodel.index4inode(self.rclicked_inode)
 
 
     def unset_toplevel(self, *args):
+        """
+        Reset the visible root to the default root for the fs.
+        :param args:
+        :return:
+        """
         self.LOGGER << "unset_toplevel()"
-
-        self.mod_structure_view.setRootIndex(QModelIndex())
+        self.fsroot = QModelIndex()
 
 
     def rename(self, *args):
@@ -104,39 +124,37 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
             self.modfsmodel.index4inode(self.rclicked_inode))
 
     def create_dir(self, *args):
-
-        # fixme: for some reason, the item that gets the editor focus after the directory is created is not always the just-created directory...it also appears that the new folder is not always inserted at the correct sorted-insertion location--however, these two issues do not always overlap...because that would make sense, and we can't have that.
+        """
+        Create a new directory as a sibling (if the clicked item was a file) or child (if it was a folder) of the target of the last context-menu event, and open its name-editor.
+        :param args:
+        :return:
+        """
 
         # self.LOGGER << "create_dir()"
         fsmod = self.modfsmodel
-
-        # print(self.rclicked_inode)
 
         if fsmod._isdir(self.rclicked_inode):
             parent = fsmod.inode2path(self.rclicked_inode)
         else:
             parent = fsmod.inode2path(self.rclicked_inode).parent
 
-
-        # new_folder = parent / "New Folder"
         new_name = "New Folder"
 
-        suffix = 1
+        suffix = 0
         while new_name in parent.listdir():
-            new_name = "New Folder %d" % suffix
             suffix+=1
+            new_name = "New Folder %d" % suffix
 
         new_index = fsmod.create_new_dir(parent, new_name)
 
-        # and immediately open the name-editor for the new directory
+        #  immediately open the name-editor for the new directory
         self.mod_structure_view.edit(new_index)
 
 
     def custom_context_menu(self, position):
-        fsmod = self.modfsmodel
         clicked_index = self.mod_structure_view.indexAt(position)
 
-        topidx = self.top_index()
+        topidx = self.fsroot # current root node
 
         if clicked_index.isValid():
             self.rclicked_inode = clicked_index.internalId()
@@ -145,12 +163,13 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
 
         user_root, isdir, isroot = (topidx.isValid(),
-                                    fsmod.index_is_dir(clicked_index),
+                                    self.modfsmodel.index_is_dir(clicked_index),
                                     clicked_index == topidx
                                     )
 
 
-        # adjust visible options
+        # adjust visible options #
+        # ---------------------- #
 
         # show unset option if user has set custom root
         self.action_unset_top_level_directory.setVisible(user_root)
@@ -165,6 +184,11 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         # self.action_create_directory
 
         self.rclickmenu.exec_(self.mod_structure_view.mapToGlobal(position))
+
+    def check_top_level(self):
+        isvalid = self.modfsmodel.validate_mod_structure(self.fsroot)
+
+        print(isvalid)
 
 
     #

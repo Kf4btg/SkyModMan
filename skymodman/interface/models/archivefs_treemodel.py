@@ -44,6 +44,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
         self._currentroot_inode = ArchiveFS.ROOT_INODE
         self._currentroot = self._fs.rootpath
+        self._realroot = self._fs.rootpath
 
         # Have to keep these in the init() so that they're not
         # garbage collected (which apparently seems to delete them
@@ -69,6 +70,15 @@ class ModArchiveTreeModel(QAbstractItemModel):
     @property
     def root(self):
         return self._currentroot
+
+    @root.setter
+    def root(self, index):
+        """
+        Set root item to path derived from `index`
+        :param index:
+        """
+        self._currentroot_inode = index.internalId()
+        self._currentroot = self._fs.pathfor(self._currentroot_inode)
 
     @property
     def has_modified_root(self):
@@ -125,7 +135,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         parent = self.index2path(child_index).sparent
 
         # if parent is "/" return invalid index
-        if parent == self.root:
+        if parent == self._realroot:
             return QModelIndex()
 
         # try:
@@ -192,6 +202,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
             # just ignore whatever `value` is
             self._unchecked ^= {index.internalId()}
             self.dataChanged.emit(index, index, [role])
+
             return True
 
         elif role == Qt.EditRole:
@@ -209,6 +220,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
             self._invalidate_caches(self._sorted_dirlist)
 
             self.dataChanged.emit(index, index)
+            self.folder_structure_changed.emit()
             return True
 
         return super().setData(index, value, role)
@@ -241,7 +253,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
             # canDropMimeData should prevent any top-level items
             # being droppable on root, so--in theory--we can just
             # accept any drop action on the root level.
-            target_path = self.root
+            target_path = self._realroot
         else:
             par_path = self.index2path(parent)
             if row < 0 and par_path.is_file:
@@ -287,9 +299,9 @@ class ModArchiveTreeModel(QAbstractItemModel):
         dragged_path = self._fs.pathfor(dragged_inode)
 
         if not parent.isValid():
-            ## target is root directory, so return True so long as source
+            ## target is (the real) root directory, so return True so long as source
             ## was not already a top-level item.
-            return dragged_path not in self.root
+            return dragged_path not in self._realroot
             # return dragged_inode not in self._fs.dir_inodes(self.root_inode)
         else:
             parpath = self.index2path(parent)
@@ -344,6 +356,16 @@ class ModArchiveTreeModel(QAbstractItemModel):
     ## Utilities
     ##===============================================
 
+    def validate_mod_structure(self, root_index):
+        """
+        Check if the directory-tree - as rooted at the path specified by root_index - has valid game_data on its top level.
+        :param root_index:
+        :return:
+        """
+        print(self.path4index(root_index))
+
+        return self._fs.fsck_quick(self.path4index(root_index))
+
     @lru_cache()
     def _sorted_dirlist(self, dirpath):
         """
@@ -354,56 +376,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
         """
         # let the fs's sorting handle that.
         return sorted(dirpath.listdirpaths())
-
-    class _FakeCIPath(PureCIPath):
-        """
-        Just exists so that we can figure out the comparison below. Implements only the methods necessary for passing the checks in __lt__
-        """
-
-        def __new__(cls, *args, targetdir,
-                    original=None, template_type=None,
-                    is_dir=None, accessor=None, fake_inode=-1,
-                    **kwargs):
-
-            from functools import partial
-
-            self = cls._from_parts(args, init=False)
-
-            self.original = original
-            self.sparent = targetdir
-
-            self._fs = accessor
-            self._isdir = is_dir
-            self._fakeinode = fake_inode
-            self._type = template_type
-
-            if original is not None:
-                self._lt = original.__lt__
-            else:
-                self._lt = partial(template_type.__lt__, self)
-
-            return self
-
-        @property
-        def inode(self):
-            if self.original:
-                return self.original.inode
-            return self._fakeinode
-
-        @property
-        def _accessor(self):
-            if self.original:
-                return self.original._accessor
-            return self._fs
-
-        @property
-        def is_dir(self):
-            if self.original:
-                return self.original.is_dir
-            return self._isdir
-
-        def __lt__(self, other):
-            return self._lt(other)
 
     def future_row_after_move(self, path, target_dir):
         """
@@ -417,12 +389,12 @@ class ModArchiveTreeModel(QAbstractItemModel):
             PureCIPath(target_dir, path.name),
             target_dir, path.is_dir)
 
-
-    def future_row_after_create(self, file_name, target_dir, isfolder=True):
+    def future_row_after_create(self, file_name, target_dir, isfolder=False):
         """
          Return the index in target_dir's child list where a file with name `file_name` would be inserted after creation.
          :param file_name:
          :param target_dir:
+         :param isfolder: whether the file to be created will be a folder
          :return:
          """
         return self._get_insertion_index(
@@ -440,6 +412,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         # return first index where either:
         #    a) path is a folder and the target is not;
         # or b) path and target are the same type (folder|file) && path < p
+        # XXX: should we do a binary search here? Or is that unnecessary?
         for i, p in enumerate(self._sorted_dirlist(target_dir)):
             if path_is_folder == p.is_dir:
                 if path < p: return i
@@ -467,7 +440,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
     def _print_fstree(self):
         indent="  "
-        for d, fstat in self._fs.itertree(self.root,
+        for d, fstat in self._fs.itertree(self._realroot,
                                           include_root=False,
                                           verbose=True):
             print(indent*d,
@@ -504,34 +477,78 @@ class ModArchiveTreeModel(QAbstractItemModel):
         """
         Like path4index, but has no check for index.isValid()
         :param index:
-        :return:
         """
         return self._fs.pathfor(index.internalId())
 
     def index4inode(self, inode):
         return QModelIndex() \
-            if inode == self.root_inode \
+            if inode == ArchiveFS.ROOT_INODE \
             else self.createIndex(self.row4inode(inode), 0, inode)
 
     def index4path(self, path):
         return QModelIndex() \
-            if path==self.root \
+            if path == self._realroot \
             else self.createIndex(self.row4path(path), 0, path.inode)
 
     def row4inode(self, inode):
         """
         Return the sorted position in the inode's parent directory where the inode's current path would appear
         :param inode:
-        :return:
         """
         return self.row4path(self._fs.pathfor(inode))
 
     def row4path(self, path):
-        """
-        :param path:
-        :return:
-        """
         return self._sorted_dirlist(
             path.sparent
         ).index(path)
 
+
+# class _FakeCIPath(PureCIPath):
+#     """
+#     Just exists so that we can figure out the comparison below. Implements only the methods necessary for passing the checks in __lt__
+#     """
+#
+#     def __new__(cls, *args, targetdir,
+#                 original=None, template_type=None,
+#                 is_dir=None, accessor=None, fake_inode=-1,
+#                 **kwargs):
+#
+#         from functools import partial
+#
+#         self = cls._from_parts(args, init=False)
+#
+#         self.original = original
+#         self.sparent = targetdir
+#
+#         self._fs = accessor
+#         self._isdir = is_dir
+#         self._fakeinode = fake_inode
+#         self._type = template_type
+#
+#         if original is not None:
+#             self._lt = original.__lt__
+#         else:
+#             self._lt = partial(template_type.__lt__, self)
+#
+#         return self
+#
+#     @property
+#     def inode(self):
+#         if self.original:
+#             return self.original.inode
+#         return self._fakeinode
+#
+#     @property
+#     def _accessor(self):
+#         if self.original:
+#             return self.original._accessor
+#         return self._fs
+#
+#     @property
+#     def is_dir(self):
+#         if self.original:
+#             return self.original.is_dir
+#         return self._isdir
+#
+#     def __lt__(self, other):
+#         return self._lt(other)
