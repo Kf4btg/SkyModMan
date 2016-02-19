@@ -63,7 +63,12 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
         self._right_clicked_path = None
 
-        self.trash = set()
+        # self.trash = set()
+
+        # create a 'Trash' folder to use for deletions
+        self._fs.mkdir("/.trash")
+        self.trash = self._fs.get_path("/.trash")
+        self.trash_info = {}
 
     @property
     def root_inode(self):
@@ -123,8 +128,10 @@ class ModArchiveTreeModel(QAbstractItemModel):
             # using an int for the third argument makes it internalId(),
             # not internalPointer()
             return self.createIndex(row, col, child.inode)
-        except IndexError:
-            self.LOGGER << "index({}, {}, {}): IndexError".format(row, col, parent.internalId())
+        except IndexError as e:
+            print("index({}, {}, {}): IndexError({})".format(row, col, parent.internalId(), e))
+            print(self._sorted_dirlist(parentpath))
+            # self.LOGGER << "index({}, {}, {}): IndexError".format(row, col, parent.internalId())
             # self.LOGGER << self._sorted_dirlist(parentpath)
             return QModelIndex()
 
@@ -342,32 +349,56 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
         self.endInsertRows()
 
-        return self.index(new_pos, 0, pindex)
+        print("getting newdir index")
+
+        idx = self.index(new_pos, 0, pindex)
+
+        print("got newdir index")
+
+        return idx
+        # return self.index(new_pos, 0, pindex)
 
     def delete(self, inode, force=False):
         ## XXX: it may be possible to implement a hidden "Trash" folder and simply move any deleted items inside it; would make for easier undos, as well.
 
-        target = self._fs.pathfor(inode)
+        getting_trashed = self._fs.pathfor(inode)
 
-        record = str(target) + ["", "/"][target.is_dir]
+        # record = str(target) + ["", "/"][target.is_dir]
 
-        if target in {self.root, self._realroot}:
+        if getting_trashed in {self.root, self._realroot}:
             return False
 
-        if target.is_dir:
-            try:
-                target.rmdir()
-            except archivefs.Error_ENOTEMPTY:
-                if force:
-                    self._fs.rmtree(target)
-                else:
-                    raise
-        else:
-            target.rm()
+        r = self.row4path(getting_trashed)
+        # src_parent, srcFirst, srcLast, destParent, int destChild
+        self.beginMoveRows(self.index4path(getting_trashed.parent),
+                           r, r,
+                           self.index4path(self.trash),
+                           self.future_row_after_move(getting_trashed,
+                                                      self.trash))
 
-        self.trash.add(record)
+        self._move_to_trash(getting_trashed)
+        self._invalidate_caches(self._sorted_dirlist)
+
+        self.endMoveRows()
+
         return True
 
+
+    def _move_to_trash(self, path):
+
+        prefix=0
+        gettname = ("{}_"+path.name).format
+        trashname = gettname(prefix)
+
+        tlist = self.trash.ls(conv=str.lower)
+        while trashname.lower() in tlist:
+            prefix+=1
+            trashname = gettname(prefix)
+
+        # record the previous location of `path`
+        self.trash_info[trashname]=path.sparent.str
+
+        path.rename(self.trash / trashname)
 
 
     # XXX: Change-root on the model level is unnecessary? It may be possible to do all we need to do just with setRootIndex() on the Treeview.
@@ -434,7 +465,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param target_dir:
         :return:
         """
-        i = 0
+        i = -1
         # return first index where either:
         #    a) path is a folder and the target is not;
         # or b) path and target are the same type (folder|file) && path < p

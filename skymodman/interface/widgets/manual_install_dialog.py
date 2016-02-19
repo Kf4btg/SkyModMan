@@ -85,6 +85,15 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.modfsmodel.rowsInserted.connect(self.check_top_level)
         self.modfsmodel.folder_structure_changed.connect(self.check_top_level)
 
+
+
+        ## Hide the Trash folder
+        self.mod_structure_view.setRowHidden(
+            self.modfsmodel.row4path(self.modfsmodel.trash),
+            self.mod_structure_view.rootIndex(), # should still be "/" at this point
+            True)
+
+
     @property
     def fsroot(self) -> QModelIndex:
         """
@@ -164,9 +173,9 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
             self.rclicked_inode = topidx.internalId()
 
 
-        user_root, isdir, isroot = (topidx.isValid(),
-                                    self.modfsmodel.index_is_dir(clicked_index),
-                                    clicked_index == topidx
+        user_set_root, clicked_isdir, non_root = (topidx.isValid(),
+                                    self.modfsmodel._isdir(self.rclicked_inode),
+                                    clicked_index.isValid()
                                     )
 
 
@@ -174,13 +183,14 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         # ---------------------- #
 
         # show unset option if user has set custom root
-        self.action_unset_top_level_directory.setVisible(user_root)
+        self.action_unset_top_level_directory.setVisible(user_set_root)
 
         # show set option if user clicked on directory (that is not the root)
-        self.action_set_as_top_level_directory.setVisible(isdir and not isroot)
+        self.action_set_as_top_level_directory.setVisible(clicked_isdir and non_root)
 
-        # show rename option if user clicked on anything but root
-        self.action_rename.setVisible(not isroot)
+        # show rename/delete options if user clicked on anything but root
+        self.action_rename.setVisible(non_root)
+        self.action_delete.setVisible(non_root)
 
         # always show create-dir option.
         # self.action_create_directory
@@ -190,7 +200,7 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
     def check_top_level(self):
         isvalid = self.modfsmodel.validate_mod_structure(self.fsroot)
 
-        print(isvalid)
+        # print(isvalid)
 
     def delete_file(self):
 

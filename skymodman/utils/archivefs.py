@@ -116,7 +116,7 @@ class CIPath(PureCIPath):
     @property
     def sparent(self):
         pp = PureCIPath(self)
-        return self._accessor.storedpath(pp.parent)
+        return self._accessor.get_path(pp.parent)
 
     def __contains__(self, file):
         """
@@ -516,11 +516,9 @@ class ArchiveFS:
 
             return path
 
-    def storedpath(self, path):
+    def get_path(self, path):
         """
-        Return the version of `path` that is built from the inode-table;
-        This basically just ensures that the path case matches that of the
-        stored inode names.
+        If `path` is a string or a path object, return the version of `path` that is built from the inode-table; this mainly just guarantees that the path case matches that of the stored inode names, but can also be useful to ensure that the returned path type is associated with this ArchiveFS instance.
         """
         return self.pathfor(self.inodeof(path))
 
@@ -719,7 +717,7 @@ class ArchiveFS:
             * d - Directory
             * f - File
         """
-        rootpath = self.storedpath(PureCIPath(root))
+        rootpath = self.get_path(PureCIPath(root))
 
         if verbose:
             yield from self._itertree_verbose(rootpath, include_root)
@@ -1094,7 +1092,7 @@ class ArchiveFS:
         if src == dest:
             return True
 
-        if self.is_dir(dest):
+        if self.exists(dest) and self.is_dir(dest):
             try:  # if the directory is empty, this will succeed and
                 # we can just rename the src
                 self.rmdir(dest)
@@ -1193,7 +1191,6 @@ class ArchiveFS:
         self.directories[inorec.parent].remove(inorec.inode)
         self.del_from_caches(("listdir", "vlistdir"), inorec.parent)
 
-
         # change name and parent
         inorec.name = to_path.name
         inorec.parent = self.inodeof(to_path.parent)
@@ -1215,6 +1212,10 @@ class ArchiveFS:
             # but if it was just a file, we don't need to be so dramatic
             self.remove_cached_values("pathfor", inorec.inode)
             self.remove_cached_values("inodeof", from_path)
+
+        # if the item changed names, also clear the name caches
+        if from_path.name != to_path.name:
+            self.del_from_caches(("_inode_name", "_inode_name_lower"), inorec.inode)
 
         return True
 
