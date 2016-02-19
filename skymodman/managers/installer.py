@@ -157,16 +157,15 @@ class InstallManager:
         """
         # create an empty archivefs--just has a root.
         modfs = arcfs.ArchiveFS()
+
+        # add path of each file in the archive; since intermediate
+        # directories are created automatically, there's no need to do
+        # mkdir--although this method DOES mean that, if the archive contains
+        # any empty directories, they will not be present in the fs. Not sure
+        # yet if this is going to be an issue.
         for arc_entry in (await self.archive_contents(dirs=False)):
             # add root anchor to all entries
             modfs.touch("/"+arc_entry)
-
-        # indent="  "
-        # for d,p,t in modfs.itertree2(include_root=False):
-        #     print(indent*d,
-        #           p.name,
-        #           {"d":"/", "f":""}[t],
-        #           sep="")
 
         return modfs
 
@@ -219,7 +218,6 @@ class InstallManager:
                     return self.analyze_structure_tree(subtree)
 
         return len(mod_data["folders"])+len(mod_data["files"]), mod_data
-
 
     async def prepare_fomod(self, xmlfile, extract_dir=None):
         """
@@ -352,9 +350,6 @@ class InstallManager:
                 if self.check_dependencies_pattern(pattern.dependencies):
                     flist.extend(pattern.files)
 
-
-
-
     @property
     def num_files_to_install(self):
         n=0
@@ -370,9 +365,7 @@ class InstallManager:
     def _count_folder_contents(self, folder):
         folder += '/'
 
-        n= len([f for f in self.archive_files+self.archive_dirs if f.startswith(folder)])
-        # print(folder, n)
-        return n
+        return len([f for f in self.archive_files+self.archive_dirs if f.startswith(folder)])
 
     async def install_files(self, dest_dir=None, callback=None):
         """
@@ -380,7 +373,6 @@ class InstallManager:
         :param str dest_dir: path to installation directory for this mod
         :param callback: called with args (name_of_file, total_extracted_so_far) during extraction process to indicate progress
         """
-
 
         if dest_dir is None:
             # dest_dir="/tmp/testinstall"
@@ -401,6 +393,8 @@ class InstallManager:
             progress.append(filename)
             _callback(filename, num_done)
 
+        asyncio.get_event_loop().call_soon_threadsafe(_callback("Starting extraction...", 0))
+
         await self.extract(destination=dest_dir,
                            entries=[f.source for f in flist],
                            # srcdestpairs=[(f.source, f.destination)
@@ -410,7 +404,7 @@ class InstallManager:
         # after unpack, files must be moved to correct destinations as specified by fomod config
         for file_item in flist:
 
-            installed=Path(dest_dir, file_item.source)
+            installed = Path(dest_dir, file_item.source)
             destination = Path(dest_dir, file_item.destination.lower())
 
             if file_item.type == 'file':

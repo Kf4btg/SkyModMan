@@ -59,6 +59,8 @@ class Ui_mod_structure_dialog(object):
         self.action_create_directory.setObjectName("action_create_directory")
         self.action_rename = QtWidgets.QAction(mod_structure_dialog)
         self.action_rename.setObjectName("action_rename")
+        self.action_delete = QtWidgets.QAction(mod_structure_dialog)
+        self.action_delete.setObjectName("action_delete")
 
         self.retranslateUi(mod_structure_dialog)
         self._buttonbox.accepted.connect(mod_structure_dialog.accept)
@@ -73,4 +75,5 @@ class Ui_mod_structure_dialog(object):
         self.action_unset_top_level_directory.setText(_translate("mod_structure_dialog", "&Unset top level directory"))
         self.action_create_directory.setText(_translate("mod_structure_dialog", "&Create directory"))
         self.action_rename.setText(_translate("mod_structure_dialog", "&Rename"))
+        self.action_delete.setText(_translate("mod_structure_dialog", "&Delete"))
 

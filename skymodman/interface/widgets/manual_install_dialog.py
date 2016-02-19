@@ -4,7 +4,7 @@
 from PyQt5.QtCore import QModelIndex
 from PyQt5.QtWidgets import QDialog, QMenu  #, QTreeWidgetItem
 
-from skymodman.constants import TopLevelDirs_Bain, TopLevelSuffixes
+# from skymodman.constants import TopLevelDirs_Bain, TopLevelSuffixes
 from skymodman.interface.designer.uic.archive_structure_ui import Ui_mod_structure_dialog
 from skymodman.interface.models.archivefs_treemodel import ModArchiveTreeModel
 from skymodman.utils import withlogger
@@ -55,6 +55,7 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.rclickmenu.addActions([self.action_unset_top_level_directory,
                          self.action_set_as_top_level_directory,
                          self.action_rename,
+                         self.action_delete,
                          self.action_create_directory])
 
         self.rclicked_inode = None
@@ -66,6 +67,7 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
             self.unset_toplevel)
         self.action_rename.triggered.connect(self.rename)
         self.action_create_directory.triggered.connect(self.create_dir)
+        self.action_delete.triggered.connect(self.delete_file)
 
         ## connect some more signals
         # self.modfsmodel.root_changed.connect(self.)
@@ -98,7 +100,6 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.mod_structure_view.setRootIndex(index)
         self.modfsmodel.root = index
         self.check_top_level()
-        # self.modfsmodel.change_root(self.rclicked_inode)
 
     def set_toplevel(self, *args):
         """
@@ -140,8 +141,9 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
         new_name = "New Folder"
 
+        parent_ls = parent.ls(conv=str.lower)
         suffix = 0
-        while new_name in parent.listdir():
+        while new_name.lower() in parent_ls:
             suffix+=1
             new_name = "New Folder %d" % suffix
 
@@ -189,6 +191,11 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         isvalid = self.modfsmodel.validate_mod_structure(self.fsroot)
 
         print(isvalid)
+
+    def delete_file(self):
+
+        # so, in what myriad ways might this fail?
+        self.modfsmodel.delete(self.rclicked_inode)
 
 
     #

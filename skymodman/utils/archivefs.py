@@ -6,6 +6,8 @@ from collections import namedtuple
 from skymodman.exceptions import Error
 from skymodman.utils import singledispatch_m
 # from skymodman.utils.debug import Printer as PRINT
+from skymodman.constants import TopLevelDirs_Bain, \
+    TopLevelSuffixes
 
 class FSError(Error):
     """ Represents some sort of error in the ArchiveFS """
@@ -72,11 +74,8 @@ class CIPath(PureCIPath):
         return cls._from_parts(args)
 
     def _init(self): # called from __new__
-        # assert type(self).FS is not None, "No Filesystem"
 
         self._accessor = type(self).FS # type: ArchiveFS
-        # self._cache = {}
-        # self._isdir = False
 
     ##===============================================
     ## stats & info
@@ -145,38 +144,47 @@ class CIPath(PureCIPath):
     ## Directory listing/iteration
     ##===============================================
 
-    def listdir(self, verbose=False):
+    def ls(self, verbose=False, conv=None):
         """
         Return an unordered list of the names of files contained by this directory.
 
-        If `verbose` is True, instead return an unordered list of ``cistat`` objects for files within this directory
-        """
-        return self._accessor.listdir(self, verbose)
+        :param verbose: If `verbose` is True, instead return an unordered list of ``cistat`` objects for files within this directory
 
-    def listdirpaths(self):
+        :param conv: If given, `conv` must be a callable that takes a single string (in this case, the filename of a directory entry), performs some conversion, and returns the modified string. The converted filenames will be returned in place of the originals.
+
+        """
+        return self._accessor.ls(self, verbose, conv)
+
+    def listdir(self):
         """
         Return an unordered list of CIPath objects for the files within this directory
         """
-        return [type(self)(self, n)
-                for n in self._accessor.listdir(self)]
+        return self._accessor.listdir(self)
+        # return [type(self)(self, n)
+        #         for n in self._accessor.ls(self)]
 
-    def iterdir(self, verbose=False):
+    def iterls(self, verbose=False):
         """
+        An iterator version of self.ls()
+
         :yield: str | cistat
         """
-        # uses 'listdir' instead of 'iterdir' to take advantage of caching.
-        yield from self._accessor.listdir(self, verbose)
+        # uses 'ls' instead of 'iterls' to take advantage of caching.
+        yield from self._accessor.ls(self, verbose)
 
-    def iterdirpaths(self):
-        yield from self.listdirpaths()
+    def iterdir(self):
+        yield from self._accessor.iterdir(self)
 
-    def itertree(self, verbose=False):
-        yield from self._accessor.itertree(root=self,
+    def lstree(self, verbose=False):
+        """
+        Generator; like a recursive ls(); `verbose` returns cistat objects instead of just names
+        """
+        yield from self._accessor.lstree(root=self,
                                            include_root=False,
                                            verbose=verbose)
 
-    def itertreepaths(self, verbose=False):
-        yield from self._accessor.itertreepaths(str(self),
+    def itertree(self, verbose=False):
+        yield from self._accessor.itertree(str(self),
                                                 include_root=False,
                                                 verbose=verbose)
 
@@ -284,7 +292,7 @@ class InodeRecord:
 
     __slots__ = ("parent", "name", "__inode")
 
-    def __init__(self, name, inode, parent_inode, *args, **kwargs):
+    def __init__(self, name, inode, parent_inode):
         """
 
         :param str name:
@@ -551,19 +559,27 @@ class ArchiveFS:
         return len(self.dir_inodes(directory))
 
     @singledispatch_m
-    def listdir(self, directory, verbose=False):
+    def ls(self, directory, verbose=False, conv=None):
         """
         List of names of all items in `directory`
         :param directory:
-        :param verbose:  if True, each entry in the returned list will be a 3-tuple with signature (str, int, str). The first item in the tuple is a single character "d" or "f", denoting whether the entry is a directory or a file, respectively. The second item is the inode number of the entry, while the third item is the entry's filename.
+        :param verbose:  if True, each entry in the returned list will be a ``cistat`` object. In a ``cistat`` result, the attribute `st_type` is a single character "d" or "f", denoting whether the entry is a directory or a file, respectively. The `st_ino` attribute is the inode number of the entry, while `st_name` is the entry's filename.
+        :param conv: If given, must be a callable that takes a single string (in this case, the filename), performs some conversion, and returns the modified string. The converted filenames will be returned in place of the originals.
         :return:
         """
         # PRINT() << "listdir(" << directory << "):" << self.dir_inodes(directory)
 
-        return self._ld(self.inodeof(directory), verbose)
+        results = self._ls_inode(self.inodeof(directory), verbose)
 
-    @listdir.register(int)
-    def _ld(self, dirinode, verbose=False):
+        if conv is not None:
+            if verbose:
+                return [s._replace(st_name=conv(s.st_name)) for s in results]
+            return [conv(n) for n in results]
+
+        return results
+
+    @ls.register(int)
+    def _ls_inode(self, dirinode, verbose=False):
 
         if verbose:
             try:
@@ -584,7 +600,20 @@ class ArchiveFS:
                     for i in self.directories[dirinode]]
                 return filelist
 
-    def iterdir(self, directory, verbose=False):
+    # XXX: is there a need to cache the results of this function (the list of paths)? All the sub-functions it calls are cached, so it'd be slightly redundant; for now let's just watch how everything performs and see about it later.
+    def listdir(self, directory):
+        """
+        Return list of paths objects for `directory` contents.
+        """
+        return [self.pathfor(i) for i in self.dir_inodes(directory)]
+
+    def iterdir(self, directory):
+        """
+        Yield path objects of `directory` contents
+        """
+        yield from (self.pathfor(i) for i in self.dir_inodes(directory))
+
+    def iterls(self, directory, verbose=False):
         """
         Yield, in no particular order, the names of the files and folders found in `directory`.
 
@@ -593,12 +622,12 @@ class ArchiveFS:
         :return:
         """
         if verbose:
-            yield from self._iterdir_verbose(directory)
+            yield from self._iterls_verbose(directory)
         else:
             yield from (self._inode_name(i) for i in self.dir_inodes(directory))
 
 
-    def _iterdir_verbose(self, directory):
+    def _iterls_verbose(self, directory):
 
         for i in self.dir_inodes(directory):
             if i in self.directories:
@@ -606,7 +635,7 @@ class ArchiveFS:
             else:
                 yield cistat("f", i, self.inode_table[i].name)
 
-    def itertree(self, root="/", include_root=True, verbose=False):
+    def lstree(self, root="/", include_root=True, verbose=False):
         """
         Return a generator that recursively yields all names of files under the specified directory 'root'. The only requirements for `root` are that it be an existing directory within the filesystem, though the method will not fail if a file-path is passed instead (the `root` filename will be the only value yielded in that case, and only if `include_root` is True.)
 
@@ -614,18 +643,18 @@ class ArchiveFS:
 
         Directory entries are visited in a depth-first manner: the name of each entry is returned as soon as it is encountered; then, if the entry is a directory, the contents of the entry will be yielded (recursively), with iteration of the remaining children in the current directory resuming only once the full subtree for the entry has been returned.
 
-        Note that, since there is no context for the filenames (they are just strings, after all, and do not include the leading path), this basically "flattens" the children of `root` into a list of file names. For a bit more information, set `verbose`=True, or use ``itertreepaths()`` instead.
+        Note that, since there is no context for the filenames (they are just strings, after all, and do not include the leading path), this basically "flattens" the children of `root` into a list of file names. For a bit more information, set `verbose`=True, or use ``itertree()`` instead.
 
         :param str|PurePath root: must be absolute
         :param bool include_root:
-        :param bool verbose:
+        :param bool verbose: Return ``cistat`` objects instead of just filenames
         :return:
         """
         rootpath = PureCIPath(root)
         root_inode = self.inodeof(rootpath)
 
         if verbose:
-            yield from self._itertree_verbose(root_inode, include_root)
+            yield from self._lstree_verbose(root_inode, include_root)
 
         else:
             # if root was actually a file, just yield that filename
@@ -645,7 +674,7 @@ class ArchiveFS:
 
                 yield from _iter(root_inode)
 
-    def _itertree_verbose(self, root_inode, include_root):
+    def _lstree_verbose(self, root_inode, include_root):
         """
         Almost identical to itertree, but yields a tuple with signature (int, ``cistat``). The first item is the depth (from root) of the yielded item, the second is a ``cistat`` object describing the file. For the cistat object, the ``st_type`` codes are:
 
@@ -679,7 +708,7 @@ class ArchiveFS:
 
             yield from _iter(root_inode)
 
-    def itertreepaths(self, root="/", include_root=False, verbose=False):
+    def itertree(self, root="/", include_root=False, verbose=False):
         """
         Recursively yield full paths for the directory tree under initial path `root`.
 
@@ -693,7 +722,7 @@ class ArchiveFS:
         rootpath = self.storedpath(PureCIPath(root))
 
         if verbose:
-            yield from self._iterpaths_verbose(rootpath, include_root)
+            yield from self._itertree_verbose(rootpath, include_root)
         else:
             if not self.is_dir(rootpath):
                 yield rootpath
@@ -716,7 +745,7 @@ class ArchiveFS:
                 yield from _iter(rootpath, self.inodeof(rootpath))
 
 
-    def _iterpaths_verbose(self, rootpath, include_root):
+    def _itertree_verbose(self, rootpath, include_root):
         """
         Like itertreepaths, but returns additional information: Each item yielded is a tuple with signature (int, CIPath, str). The first item is the depth (from root) of the yielded path, the second is the path object, and the third is a single character indicating the type of file the path refers to. For now, the only type-codes are:
 
@@ -953,7 +982,7 @@ class ArchiveFS:
     def _del_dir_tree(self, dirinode:int):
 
         # will raise ENOTDIR if directory is not...a directory.
-        child_inodes = self.directories[dirinode]
+        child_inodes = self.dir_inodes(dirinode)
         for childnode in child_inodes:
             if not self.is_dir(childnode):
                 # don't need to bother removing it from the directory's
@@ -1222,7 +1251,7 @@ class ArchiveFS:
             if overwrite:
                 self.rm(target)
             else:
-                raise Error_EEXIST(target.str)
+                raise Error_EEXIST(target)
 
 
     ##===============================================
@@ -1237,7 +1266,7 @@ class ArchiveFS:
         subfs = type(self)()
         from_path = PureCIPath(from_path)
 
-        for p in self.itertreepaths(from_path, False):
+        for p in self.itertree(from_path, include_root=False):
             rel_path = p.relative_to(from_path)
             if self.is_dir(p):
                 # re-root
@@ -1280,8 +1309,6 @@ def fsck_modfs(modfs, root="/"):
 
          where the last item may not be the same as the original root of `modfs`. (It will only be different if the only item in root was a directory that held all the actual data, i.e. should have just been the root directory in the first place.)
     """
-    from skymodman.constants import TopLevelDirs_Bain, \
-        TopLevelSuffixes
     import re
 
     mod_data = {
@@ -1295,7 +1322,7 @@ def fsck_modfs(modfs, root="/"):
     doc_match = re.compile(r'(read.?me|doc(s|umentation)|info)',
                            re.IGNORECASE)
 
-    for fstat in modfs.iterdir(root, True):
+    for fstat in modfs.iterls(root, verbose=True):
         if fstat.st_type=="d" and fstat.st_name.lower() in TopLevelDirs_Bain:
             mod_data["folders"].append(fstat.st_name)
 
@@ -1311,7 +1338,7 @@ def fsck_modfs(modfs, root="/"):
     # of the mod and that item is a directory, then check inside that
     # directory for the necessary files.
     if not (mod_data["folders"] and mod_data["files"]):
-        _list = modfs.listdir(root, True)
+        _list = modfs.ls(root, verbose=True)
         if len(_list) == 1 and _list[0].st_type == "d":
             return fsck_modfs(modfs, PureCIPath(root, _list[0].st_name).str)
 
@@ -1324,10 +1351,9 @@ def fsck_modfs_quick(modfs, root="/"):
     :param ArchiveFS modfs:
     :param root:
     """
-    from skymodman.constants import TopLevelDirs_Bain, \
-        TopLevelSuffixes
 
-    for topinfo in modfs.iterdir(root, True):
+
+    for topinfo in modfs.iterls(root, verbose=True):
         if (topinfo.st_type == "d" and topinfo.st_name.lower()
                          in TopLevelDirs_Bain) \
         or (topinfo.st_type == "f" and topinfo.st_name.rsplit(".", 1)[-1].lower()

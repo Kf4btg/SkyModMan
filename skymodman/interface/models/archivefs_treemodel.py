@@ -4,7 +4,7 @@ from PyQt5 import QtGui
 from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData
 
 from skymodman.utils.archivefs import ArchiveFS, PureCIPath, CIPath
-# from skymodman.utils import archivefs
+from skymodman.utils import archivefs
 from skymodman.utils import withlogger #, singledispatch_m
 
 
@@ -62,6 +62,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
                       self._isdir]
 
         self._right_clicked_path = None
+
+        self.trash = set()
 
     @property
     def root_inode(self):
@@ -342,6 +344,32 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
         return self.index(new_pos, 0, pindex)
 
+    def delete(self, inode, force=False):
+        ## XXX: it may be possible to implement a hidden "Trash" folder and simply move any deleted items inside it; would make for easier undos, as well.
+
+        target = self._fs.pathfor(inode)
+
+        record = str(target) + ["", "/"][target.is_dir]
+
+        if target in {self.root, self._realroot}:
+            return False
+
+        if target.is_dir:
+            try:
+                target.rmdir()
+            except archivefs.Error_ENOTEMPTY:
+                if force:
+                    self._fs.rmtree(target)
+                else:
+                    raise
+        else:
+            target.rm()
+
+        self.trash.add(record)
+        return True
+
+
+
     # XXX: Change-root on the model level is unnecessary? It may be possible to do all we need to do just with setRootIndex() on the Treeview.
     # @singledispatch_m
     # def change_root(self, new_root):
@@ -362,8 +390,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param root_index:
         :return:
         """
-        print(self.path4index(root_index))
-
         return self._fs.fsck_quick(self.path4index(root_index))
 
     @lru_cache()
@@ -375,7 +401,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :rtype: list[CIPath]
         """
         # let the fs's sorting handle that.
-        return sorted(dirpath.listdirpaths())
+        return sorted(dirpath.listdir())
 
     def future_row_after_move(self, path, target_dir):
         """
@@ -440,7 +466,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
     def _print_fstree(self):
         indent="  "
-        for d, fstat in self._fs.itertree(self._realroot,
+        for d, fstat in self._fs.lstree(self._realroot,
                                           include_root=False,
                                           verbose=True):
             print(indent*d,
