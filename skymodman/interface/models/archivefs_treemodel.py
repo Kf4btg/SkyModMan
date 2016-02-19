@@ -9,13 +9,18 @@ from skymodman.utils import withlogger #, singledispatch_m
 
 
 class UndoCmd(QtWidgets.QUndoCommand):
-    def __init__(self, type, *args, **kwargs):
+    def __init__(self, type, *args, call_before_redo=None, call_before_undo=None, call_after_redo=None, call_after_undo=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.type = type
 
+        self.begin_redo = call_before_redo
+        self.begin_undo = call_before_undo
+        self.end_redo = call_after_redo
+        self.end_undo = call_after_undo
+
 class TrashCommand(UndoCmd):
 
-    def __init__(self, path, trash_path, trash_info, *args, **kwargs):
+    def __init__(self, path, trash_path, *args, **kwargs):
         """
 
         :param CIPath path:
@@ -24,21 +29,22 @@ class TrashCommand(UndoCmd):
         """
         super().__init__("trash", "Delete {}".format(path.name), *args, **kwargs)
 
-        # self.path = path
         self.inode = path.inode
         self.orig_name = path.name
-        self.orig_location = path.sparent.str
-        self.trash_name = None
+        self.orig_location = PureCIPath(path.parent)
+        self.pathfor = type(trash_path).FS.pathfor
 
         self.trash = trash_path
-        self.trashinfo = trash_info
+
+        self.end = self.end_redo
 
     @property
-    def path(self):
-        return self.trash.FS.pathfor(self.inode)
+    def path(self) -> CIPath:
+        return self.pathfor(self.inode)
 
     def redo(self):
         ## move to trash
+        self.begin_redo()
         prefix = 0
         gettname = ("{}_" + self.orig_name).format
         trashname = gettname(prefix)
@@ -48,15 +54,15 @@ class TrashCommand(UndoCmd):
             prefix += 1
             trashname = gettname(prefix)
 
-        # record the previous location of `path`
-        # self.trash_info[trashname] = path.sparent.str
-
         self.path.rename(self.trash / trashname)
-        # self.trash_name = trashname
+
+        self.end()
 
     def undo(self):
         # restore to original location
-        self.path.rename(self.orig_location, self.orig_name)
+        self.begin_undo()
+        self.path.rename(self.orig_location / self.orig_name)
+        self.end()
 
 class MoveCommand(UndoCmd):
     """
@@ -65,8 +71,6 @@ class MoveCommand(UndoCmd):
 
     def __init__(self, source_path,
                  target_dir,
-                 call_begin_redo, call_begin_undo,
-                 call_end,
                  *args, **kwargs):
         """
 
@@ -86,9 +90,7 @@ class MoveCommand(UndoCmd):
         ofile = PureCIPath(source_path)
         tdir = PureCIPath(target_dir)
 
-        self.begin_redo = call_begin_redo
-        self.begin_undo = call_begin_undo
-        self.end = call_end
+        self.end=self.end_redo
 
         self.do_redo = partial(self._domove, ofile.parent, tdir)
         self.do_undo = partial(self._domove, tdir, ofile.parent)
@@ -109,7 +111,49 @@ class MoveCommand(UndoCmd):
 
 class RenameCommand(UndoCmd):
     def __init__(self, path, new_name, *args, **kwargs):
-        super().__init__("rename", "Rename", *args, **kwargs)
+        super().__init__("rename", "Rename {}".format(path.name), *args, **kwargs)
+
+        self.end = self.end_redo
+        self.inode = path.inode
+
+        self.old_name = path.name
+        self.new_name = new_name
+
+        self.getpath = type(path).FS.pathfor
+
+    @property
+    def path(self):
+        return self.getpath(self.inode)
+
+    def redo(self):
+        self.path.chname(self.new_name)
+        self.end()
+
+    def undo(self):
+        self.path.chname(self.old_name)
+        self.end()
+
+class InsertDirectoryCommand(UndoCmd):
+    def __init__(self, dir_path, *args, **kwargs):
+        super().__init__("mkdir", "Create Directory", *args, **kwargs)
+
+        self._path = PureCIPath(dir_path)
+
+        self._mkdir = type(dir_path).FS.mkdir
+        self._rmdir = type(dir_path).FS.rmdir
+
+    def redo(self):
+        self.begin_redo()
+        self._mkdir(self._path)
+        self.end_redo()
+
+    def undo(self):
+        self.begin_undo()
+        self._rmdir(self._path)
+        self.end_undo()
+
+
+
 
 
 
@@ -141,7 +185,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
     root_changed = pyqtSignal()
 
     # noinspection PyTypeChecker,PyArgumentList
-    def __init__(self, mod_fs, *args, **kwargs):
+    def __init__(self, mod_fs, undostack, *args, **kwargs):
         """
 
         :param ArchiveFS mod_fs:
@@ -179,9 +223,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         self.trash = self._fs.get_path("/.trash")
         self.trash_info = {}
 
-        self.undostack = QtWidgets.QUndoStack()
-
-
+        self.undostack = undostack
 
 
     @property
@@ -336,14 +378,22 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
             if value == currpath.name: return False
 
+            self.undostack.push(
+                RenameCommand(
+                    currpath, value,
+                    call_after_redo=partial(self._end_rename,
+                                     index.internalId())
+                )
+            )
+
             # try:
-            self._fs.chname(currpath, value)
+            # self._fs.chname(currpath, value)
             # except Error_EEXIST
 
-            self._invalidate_caches(self._sorted_dirlist)
+            # self._invalidate_caches(self._sorted_dirlist)
 
-            self.dataChanged.emit(index, index)
-            self.folder_structure_changed.emit()
+            # self.dataChanged.emit(index, index)
+            # self.folder_structure_changed.emit()
             return True
 
         return super().setData(index, value, role)
@@ -389,21 +439,26 @@ class ModArchiveTreeModel(QAbstractItemModel):
         src_path = self._fs.pathfor(int(data.text()))
         # orig_parent = src_path.sparent
 
-        src_row = self.row4path(src_path)
-        trg_row = self.future_row_after_move(src_path, target_path)
+        self.move_to_dir(src_path, target_path)
 
-        self.undostack.push(
-            MoveCommand(src_path, target_path,
-                        call_begin_redo=partial(
-                            self._begin_move,
-                            src_row, trg_row,
-                            src_path, target_path),
-                        call_begin_undo=partial(
-                            self._begin_move,
-                            trg_row, src_row,
-                            target_path, src_path),
-                        call_end=self._end_move
-                        ))
+        # src_path = self._fs.pathfor(int(data.text()))
+        # orig_parent = src_path.sparent
+
+        # src_row = self.row4path(src_path)
+        # trg_row = self.future_row_after_move(src_path, target_path)
+        #
+        # self.undostack.push(
+        #     MoveCommand(src_path, target_path,
+        #                 call_before_redo=partial(
+        #                     self._begin_move,
+        #                     src_row, trg_row,
+        #                     src_path, target_path),
+        #                 call_before_undo=partial(
+        #                     self._begin_move,
+        #                     trg_row, src_row,
+        #                     target_path, src_path),
+        #                 call_after_redo=self._end_move
+        #                 ))
 
 
         # src_parent, srcFirst, srcLast, destParent, int destChild
@@ -473,73 +528,145 @@ class ModArchiveTreeModel(QAbstractItemModel):
                            trg_row)
 
     def _end_move(self):
+        self._invalidate_caches(self._sorted_dirlist)
         self.endMoveRows()
+
+    def _end_rename(self, changed_inode):
         self._invalidate_caches(self._sorted_dirlist)
 
+        idx = self.index4inode(changed_inode)
+        self.dataChanged.emit(idx, idx)
+        self.folder_structure_changed.emit()
 
-    def create_new_dir(self, parent, initial_name):
-
-        new_pos = self.future_row_after_create(initial_name, parent, True)
-
-        pindex = self.index4path(parent)
+    def _begin_insert(self, parent, row):
         # beginInsertRows(parent, first, last)
-        self.beginInsertRows(pindex, new_pos, new_pos)
+        self.beginInsertRows(self.index4path(parent), row, row)
 
-        self._fs.mkdir(PureCIPath(parent, initial_name))
+    def _end_insert(self):
+        # self._fs.mkdir(PureCIPath(parent, name))
         self._invalidate_caches(self._sorted_dirlist)
-
         self.endInsertRows()
 
-        print("getting newdir index")
+    def _begin_remove(self, parent, row):
+        self.beginRemoveRows(self.index4path(parent), row, row)
 
-        idx = self.index(new_pos, 0, pindex)
+    def _end_remove(self):
+        self._invalidate_caches(self._sorted_dirlist)
+        self.endRemoveRows()
 
-        print("got newdir index")
+    def move_to_dir(self, src_path, target_dir):
 
-        return idx
+        # src_path = self._fs.pathfor(int(data.text()))
+        # orig_parent = src_path.sparent
+
+        src_row = self.row4path(src_path)
+        trg_row = self.future_row_after_move(src_path, target_dir)
+
+        self.undostack.push(
+            MoveCommand(src_path, target_dir,
+                        call_before_redo=partial(
+                            self._begin_move,
+                            src_row, trg_row,
+                            src_path.parent, target_dir),
+                        call_before_undo=partial(
+                            self._begin_move,
+                            trg_row, src_row,
+                            target_dir, src_path.parent),
+                        call_after_redo=self._end_move
+                        ))
+
+    def create_new_dir(self, parent, name):
+        new_pos = self.future_row_after_create(name, parent, True)
+        self.undostack.push(InsertDirectoryCommand(
+            parent / name,
+            call_before_redo=partial(self._begin_insert,
+                                     parent, new_pos),
+            call_before_undo=partial(self._begin_remove,
+                                     parent, new_pos),
+            call_after_redo=self._end_insert,
+            call_after_undo=self._end_remove,
+        ))
+
+
+        # beginInsertRows(parent, first, last)
+        # self.beginInsertRows(pindex, new_pos, new_pos)
+        #
+        # self._fs.mkdir(PureCIPath(parent, name))
+        # self._invalidate_caches(self._sorted_dirlist)
+        #
+        # self.endInsertRows()
+        #
+        # idx = self.index(new_pos, 0, pindex)
+        #
+        # return idx
         # return self.index(new_pos, 0, pindex)
 
     def delete(self, inode, force=False):
-        ## XXX: it may be possible to implement a hidden "Trash" folder and simply move any deleted items inside it; would make for easier undos, as well.
-
+        """
+        Actually "move to trash", but delete is shorter
+        :param inode:
+        :param force:
+        :return:
+        """
+        ## note: this function is largely redundant with move_to_dir()
         getting_trashed = self._fs.pathfor(inode)
-
-        # record = str(target) + ["", "/"][target.is_dir]
-
         if getting_trashed in {self.root, self._realroot}:
             return False
 
-        r = self.row4path(getting_trashed)
+        src_row = self.row4path(getting_trashed)
+        trg_row = self.future_row_after_move(getting_trashed,
+                                             self.trash)
+
+        self.undostack.push(
+            TrashCommand(
+                getting_trashed,
+                self.trash,
+                call_before_redo=partial(
+                    self._begin_move,
+                    src_row, trg_row,
+                    getting_trashed,
+                    self.trash
+                ),
+                call_before_undo=partial(
+                    self._begin_move,
+                    trg_row, src_row,
+                    self.trash,
+                    getting_trashed,
+                ),
+                call_after_redo=self._end_move,
+            )
+        )
+
+
         # src_parent, srcFirst, srcLast, destParent, int destChild
-        self.beginMoveRows(self.index4path(getting_trashed.parent),
-                           r, r,
-                           self.index4path(self.trash),
-                           self.future_row_after_move(getting_trashed,
-                                                      self.trash))
-
-        self._move_to_trash(getting_trashed)
-        self._invalidate_caches(self._sorted_dirlist)
-
-        self.endMoveRows()
+        # self.beginMoveRows(self.index4path(getting_trashed.parent),
+        #                    r, r,
+        #                    self.index4path(self.trash),
+        #                    self.future_row_after_move(getting_trashed,
+        #                                               self.trash))
+        #
+        # self._move_to_trash(getting_trashed)
+        # self._invalidate_caches(self._sorted_dirlist)
+        #
+        # self.endMoveRows()
 
         return True
 
-
-    def _move_to_trash(self, path):
-
-        prefix=0
-        gettname = ("{}_"+path.name).format
-        trashname = gettname(prefix)
-
-        tlist = self.trash.ls(conv=str.lower)
-        while trashname.lower() in tlist:
-            prefix+=1
-            trashname = gettname(prefix)
-
-        # record the previous location of `path`
-        self.trash_info[trashname]=path.sparent.str
-
-        path.rename(self.trash / trashname)
+    # def _move_to_trash(self, path):
+    #
+    #     prefix=0
+    #     gettname = ("{}_"+path.name).format
+    #     trashname = gettname(prefix)
+    #
+    #     tlist = self.trash.ls(conv=str.lower)
+    #     while trashname.lower() in tlist:
+    #         prefix+=1
+    #         trashname = gettname(prefix)
+    #
+    #     # record the previous location of `path`
+    #     self.trash_info[trashname]=path.sparent.str
+    #
+    #     path.rename(self.trash / trashname)
 
 
     # XXX: Change-root on the model level is unnecessary? It may be possible to do all we need to do just with setRootIndex() on the Treeview.
@@ -704,8 +831,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
     ## Undo
     ##===============================================
 
-    def undo(self):
-        pass
 
 
 # class _FakeCIPath(PureCIPath):

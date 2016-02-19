@@ -1,8 +1,11 @@
 # from os.path import splitext
 
 # from PyQt5.QtCore import Qt
-from PyQt5.QtCore import QModelIndex
-from PyQt5.QtWidgets import QDialog, QMenu  #, QTreeWidgetItem
+from PyQt5.QtCore import QModelIndex, Qt
+from PyQt5.QtGui import QKeySequence
+from PyQt5.QtWidgets import QDialog, QMenu, \
+    QInputDialog  #, QTreeWidgetItem
+from PyQt5 import QtWidgets
 
 # from skymodman.constants import TopLevelDirs_Bain, TopLevelSuffixes
 from skymodman.interface.designer.uic.archive_structure_ui import Ui_mod_structure_dialog
@@ -43,7 +46,21 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         # self.valid_structure = True
         # self.data_root = self.structure.root
 
-        self.modfsmodel = ModArchiveTreeModel(mod_fs)
+        self.undostack = QtWidgets.QUndoStack()
+
+        self.undoaction = self.undostack.createUndoAction(self, "Undo")
+        self.undoaction.pyqtConfigure(shortcut=QKeySequence.Undo,
+                                      triggered=self.undo)
+
+        self.redoaction = self.undostack.createRedoAction(self, "Redo")
+        self.redoaction.pyqtConfigure(shortcut=QKeySequence.Redo,
+                                      triggered=self.redo)
+
+        self.undoview = QtWidgets.QUndoView(self.undostack)
+        self.undoview.show()
+        self.undoview.setAttribute(Qt.WA_QuitOnClose, False)
+
+        self.modfsmodel = ModArchiveTreeModel(mod_fs, self.undostack)
 
         self.mod_structure_view.setModel(self.modfsmodel)
         self.mod_structure_view.customContextMenuRequested.connect(
@@ -85,13 +102,13 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.modfsmodel.rowsInserted.connect(self.check_top_level)
         self.modfsmodel.folder_structure_changed.connect(self.check_top_level)
 
-
-
         ## Hide the Trash folder
         self.mod_structure_view.setRowHidden(
             self.modfsmodel.row4path(self.modfsmodel.trash),
             self.mod_structure_view.rootIndex(), # should still be "/" at this point
             True)
+
+
 
 
     @property
@@ -148,18 +165,26 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         else:
             parent = fsmod.inode2path(self.rclicked_inode).parent
 
-        new_name = "New Folder"
+        startname = "New Folder"
 
+        #make sure it's unique
         parent_ls = parent.ls(conv=str.lower)
         suffix = 0
-        while new_name.lower() in parent_ls:
+        while startname.lower() in parent_ls:
             suffix+=1
-            new_name = "New Folder %d" % suffix
+            startname = "New Folder %d" % suffix
 
-        new_index = fsmod.create_new_dir(parent, new_name)
+        new_name = QInputDialog.getText(self, "New Folder",
+                                        "Create new folder in:\n{}".format(parent), text=startname)[0]
+
+        if new_name:
+            fsmod.create_new_dir(parent, new_name)
+
+
+        # new_index = fsmod.create_new_dir(parent, new_name)
 
         #  immediately open the name-editor for the new directory
-        self.mod_structure_view.edit(new_index)
+        # self.mod_structure_view.edit(new_index)
 
 
     def custom_context_menu(self, position):
@@ -206,6 +231,14 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
         # so, in what myriad ways might this fail?
         self.modfsmodel.delete(self.rclicked_inode)
+
+    def undo(self):
+        # self.modfsmodel.undo()
+        self.undostack.undo()
+    def redo(self):
+        # self.modfsmodel.redo()
+        self.undostack.redo()
+
 
 
     #
