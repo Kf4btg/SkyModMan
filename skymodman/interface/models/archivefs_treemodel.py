@@ -1,11 +1,120 @@
-from functools import lru_cache
+from functools import lru_cache, partial
 
-from PyQt5 import QtGui
+from PyQt5 import QtGui, QtWidgets
 from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData
 
 from skymodman.utils.archivefs import ArchiveFS, PureCIPath, CIPath
 from skymodman.utils import archivefs
 from skymodman.utils import withlogger #, singledispatch_m
+
+
+class UndoCmd(QtWidgets.QUndoCommand):
+    def __init__(self, type, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.type = type
+
+class TrashCommand(UndoCmd):
+
+    def __init__(self, path, trash_path, trash_info, *args, **kwargs):
+        """
+
+        :param CIPath path:
+        :param CIPath trash_path:
+        :param dict trash_info:
+        """
+        super().__init__("trash", "Delete {}".format(path.name), *args, **kwargs)
+
+        # self.path = path
+        self.inode = path.inode
+        self.orig_name = path.name
+        self.orig_location = path.sparent.str
+        self.trash_name = None
+
+        self.trash = trash_path
+        self.trashinfo = trash_info
+
+    @property
+    def path(self):
+        return self.trash.FS.pathfor(self.inode)
+
+    def redo(self):
+        ## move to trash
+        prefix = 0
+        gettname = ("{}_" + self.orig_name).format
+        trashname = gettname(prefix)
+
+        tlist = self.trash.ls(conv=str.lower)
+        while trashname.lower() in tlist:
+            prefix += 1
+            trashname = gettname(prefix)
+
+        # record the previous location of `path`
+        # self.trash_info[trashname] = path.sparent.str
+
+        self.path.rename(self.trash / trashname)
+        # self.trash_name = trashname
+
+    def undo(self):
+        # restore to original location
+        self.path.rename(self.orig_location, self.orig_name)
+
+class MoveCommand(UndoCmd):
+    """
+    Command for moving a path `source_path` to a different folder `target_path`.
+    """
+
+    def __init__(self, source_path,
+                 target_dir,
+                 call_begin_redo, call_begin_undo,
+                 call_end,
+                 *args, **kwargs):
+        """
+
+        :param CIPath source_path:
+        :param int src_row:
+        :param PureCIPath target_dir:
+        :param int target_row:
+        :param call_begin:
+        :param call_end:
+        """
+        super().__init__("move", "Move {}".format("folder" if source_path.is_dir else "file"), *args, **kwargs)
+
+        self.mkpath = type(source_path)
+
+        self._name = source_path.name
+
+        ofile = PureCIPath(source_path)
+        tdir = PureCIPath(target_dir)
+
+        self.begin_redo = call_begin_redo
+        self.begin_undo = call_begin_undo
+        self.end = call_end
+
+        self.do_redo = partial(self._domove, ofile.parent, tdir)
+        self.do_undo = partial(self._domove, tdir, ofile.parent)
+
+    def redo(self):
+        self.begin_redo() # emits beginMoveRows
+        self.do_redo()
+        self.end() # emits endMoveRows
+
+    def undo(self):
+        self.begin_undo()
+        self.do_undo()
+        self.end()
+
+    def _domove(self, srcdir, trgdir):
+        src = self.mkpath(srcdir, self._name)
+        src.move(trgdir)
+
+class RenameCommand(UndoCmd):
+    def __init__(self, path, new_name, *args, **kwargs):
+        super().__init__("rename", "Rename", *args, **kwargs)
+
+
+
+
+
 
 
 
@@ -69,6 +178,11 @@ class ModArchiveTreeModel(QAbstractItemModel):
         self._fs.mkdir("/.trash")
         self.trash = self._fs.get_path("/.trash")
         self.trash_info = {}
+
+        self.undostack = QtWidgets.QUndoStack()
+
+
+
 
     @property
     def root_inode(self):
@@ -273,22 +387,38 @@ class ModArchiveTreeModel(QAbstractItemModel):
                 target_path = par_path
 
         src_path = self._fs.pathfor(int(data.text()))
-        orig_parent = src_path.sparent
+        # orig_parent = src_path.sparent
 
-        r = self.row4path(src_path)
+        src_row = self.row4path(src_path)
+        trg_row = self.future_row_after_move(src_path, target_path)
+
+        self.undostack.push(
+            MoveCommand(src_path, target_path,
+                        call_begin_redo=partial(
+                            self._begin_move,
+                            src_row, trg_row,
+                            src_path, target_path),
+                        call_begin_undo=partial(
+                            self._begin_move,
+                            trg_row, src_row,
+                            target_path, src_path),
+                        call_end=self._end_move
+                        ))
+
+
         # src_parent, srcFirst, srcLast, destParent, int destChild
-        self.beginMoveRows(self.index4path(orig_parent),
-                           r, r,
-                           self.index4path(target_path),
-                           self.future_row_after_move(src_path, target_path))
-
-        src_path.move(target_path)
-
-        ## need to do this BEFORE endmoverows (which calls index()) to
-        ## prevent inconsistent state and possible crash
-        self._invalidate_caches(self._sorted_dirlist)
-
-        self.endMoveRows()
+        # self.beginMoveRows(self.index4path(orig_parent),
+        #                    src_row, src_row,
+        #                    self.index4path(target_path),
+        #                    self.future_row_after_move(src_path, target_path))
+        #
+        # src_path.move(target_path)
+        #
+        # ## need to do this BEFORE endmoverows (which calls index()) to
+        # ## prevent inconsistent state and possible crash
+        # self._invalidate_caches(self._sorted_dirlist)
+        #
+        # self.endMoveRows()
 
         # self._print_fstree()
         return True
@@ -335,6 +465,17 @@ class ModArchiveTreeModel(QAbstractItemModel):
     ##===============================================
     ## Path modification
     ##===============================================
+
+    def _begin_move(self, src_row, trg_row, src_path, trg_path):
+        self.beginMoveRows(self.index4path(src_path),
+                           src_row, src_row,
+                           self.index4path(trg_path),
+                           trg_row)
+
+    def _end_move(self):
+        self.endMoveRows()
+        self._invalidate_caches(self._sorted_dirlist)
+
 
     def create_new_dir(self, parent, initial_name):
 
@@ -558,6 +699,13 @@ class ModArchiveTreeModel(QAbstractItemModel):
         return self._sorted_dirlist(
             path.sparent
         ).index(path)
+
+    ##===============================================
+    ## Undo
+    ##===============================================
+
+    def undo(self):
+        pass
 
 
 # class _FakeCIPath(PureCIPath):
