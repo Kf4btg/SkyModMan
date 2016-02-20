@@ -1,14 +1,12 @@
-# from os.path import splitext
-
 # from PyQt5.QtCore import Qt
 from PyQt5.QtCore import QModelIndex, Qt
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import QDialog, QMenu, \
-    QInputDialog  #, QTreeWidgetItem
+    QInputDialog
 from PyQt5 import QtWidgets
 
-# from skymodman.constants import TopLevelDirs_Bain, TopLevelSuffixes
 from skymodman.interface.designer.uic.archive_structure_ui import Ui_mod_structure_dialog
+from skymodman.interface.widgets.overlay_layout import Overlay, OverlayCenter
 from skymodman.interface.models.archivefs_treemodel import ModArchiveTreeModel
 from skymodman.utils import withlogger
 
@@ -40,27 +38,17 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.setupUi(self)
 
         self.structure = mod_fs
-        # self.mod_data = Tree()
         self.num_to_copy = 0
 
-        # self.valid_structure = True
-        # self.data_root = self.structure.root
+        # create undo framework
+        self.undostack, self.action_undo, self.action_redo, self.undoview = self.__setup_undo()
 
-        self.undostack = QtWidgets.QUndoStack()
+        # Create button overlay
+        self.tree_overlay, self.button_overlay = self.__setup_overlay()
 
-        self.undoaction = self.undostack.createUndoAction(self, "Undo")
-        self.undoaction.pyqtConfigure(shortcut=QKeySequence.Undo,
-                                      triggered=self.undo)
-
-        self.redoaction = self.undostack.createRedoAction(self, "Redo")
-        self.redoaction.pyqtConfigure(shortcut=QKeySequence.Redo,
-                                      triggered=self.redo)
-
-        self.undoview = QtWidgets.QUndoView(self.undostack)
-        self.undoview.show()
-        self.undoview.setAttribute(Qt.WA_QuitOnClose, False)
-
-        self.modfsmodel = ModArchiveTreeModel(mod_fs, self.undostack)
+        # initialize tree model from structure, give undostack ref
+        self.modfsmodel = ModArchiveTreeModel(self.structure,
+                                              self.undostack)
 
         self.mod_structure_view.setModel(self.modfsmodel)
         self.mod_structure_view.customContextMenuRequested.connect(
@@ -108,6 +96,40 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
             self.mod_structure_view.rootIndex(), # should still be "/" at this point
             True)
 
+    def __setup_undo(self):
+        undostack = QtWidgets.QUndoStack()
+
+        undoaction = undostack.createUndoAction(self, "Undo")
+        undoaction.pyqtConfigure(shortcut=QKeySequence.Undo,
+                                      triggered=self.undo)
+
+        redoaction = undostack.createRedoAction(self, "Redo")
+        redoaction.pyqtConfigure(shortcut=QKeySequence.Redo,
+                                      triggered=self.redo)
+
+        undoview = QtWidgets.QUndoView(undostack)
+        undoview.show()
+        undoview.setAttribute(Qt.WA_QuitOnClose, False)
+
+        return undostack, undoaction, redoaction, undoview
+
+    def __setup_overlay(self):
+        tree_overlay = OverlayCenter(self.mod_structure_view)
+        btn_overlay = Overlay("top", "right",
+                                   """QToolButton {
+                                        background: transparent;
+                                        border: 1px solid rgba(240, 240, 240, 0.5);
+                                        border-radius: 2px;
+                                    }""")
+        btn_overlay.addWidget(self.btn_undo)
+        btn_overlay.addWidget(self.btn_redo)
+
+        self.btn_undo.clicked.connect(self.action_undo.trigger)
+        self.btn_redo.clicked.connect(self.action_redo.trigger)
+
+        tree_overlay.addLayout(btn_overlay)
+
+        return tree_overlay, btn_overlay
 
 
 

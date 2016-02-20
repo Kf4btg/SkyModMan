@@ -1,7 +1,6 @@
 ## Concept and implementation based off of:
 ## http://stackoverflow.com/questions/23919798/is-there-a-way-to-overlay-multiple-items-on-a-parent-widget-pyside-qt
 
-import sys
 from PyQt5 import QtWidgets, QtCore
 
 
@@ -23,11 +22,14 @@ class OverlayCenter(QtWidgets.QLayout):
         self.addItem(layout)
     # end addLayout
 
-    def __del__(self):
-        """Destructor for garbage collection."""
-        item = self.takeAt(0)
-        while item:
-            item = self.takeAt(0)
+    ## I'm not entirely sure this method is necessary...
+    ## (and it throws an exception when used in a different thread,
+    ## so I'm going to comment it out and see what happens)
+    # def __del__(self):
+    #     """Destructor for garbage collection."""
+    #     item = self.takeAt(0)
+    #     while item:
+    #         item = self.takeAt(0)
     # end Destructor
 
     def addItem(self, item):
@@ -42,18 +44,18 @@ class OverlayCenter(QtWidgets.QLayout):
 
     def itemAt(self, index):
         """Return the item at the given index."""
-        if 0 <= index < len(self.items):
+        try:
             return self.items[index]
-
-        return None
+        except IndexError:
+            return None
     # end itemAt
 
     def takeAt(self, index):
         """Remove and return the item at the given index."""
-        if 0 <= index < len(self.items):
+        try:
             return self.items.pop(index)
-
-        return None
+        except IndexError:
+            return None
     # end takeAt
 
     def setGeometry(self, rect):
@@ -172,4 +174,5 @@ def main():
 # end main
 
 if __name__ == '__main__':
+    import sys
     sys.exit(main())
