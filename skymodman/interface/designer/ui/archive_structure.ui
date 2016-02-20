@@ -118,27 +118,57 @@
      </property>
     </spacer>
    </item>
-   <item row="1" column="0">
-    <widget class="QToolButton" name="btn_undo">
-     <property name="icon">
-      <iconset theme="edit-undo"/>
-     </property>
-    </widget>
-   </item>
    <item row="2" column="0">
-    <widget class="QToolButton" name="btn_redo">
-     <property name="icon">
-      <iconset theme="edit-redo"/>
+    <widget class="QGroupBox" name="undo_btngroup">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Maximum" vsizetype="Preferred">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
      </property>
+     <property name="flat">
+      <bool>true</bool>
+     </property>
+     <layout class="QHBoxLayout" name="horizontalLayout">
+      <property name="spacing">
+       <number>6</number>
+      </property>
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QToolButton" name="btn_undo">
+        <property name="icon">
+         <iconset theme="edit-undo"/>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QToolButton" name="btn_redo">
+        <property name="icon">
+         <iconset theme="edit-redo"/>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </widget>
    </item>
   </layout>
-  <action name="action_set_as_top_level_directory">
+  <action name="action_set_toplevel">
    <property name="text">
     <string>&amp;Set as top level directory</string>
    </property>
   </action>
-  <action name="action_unset_top_level_directory">
+  <action name="action_unset_toplevel">
    <property name="text">
     <string>&amp;Unset top level directory</string>
    </property>

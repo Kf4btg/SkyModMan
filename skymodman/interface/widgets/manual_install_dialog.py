@@ -1,6 +1,6 @@
 # from PyQt5.QtCore import Qt
 from PyQt5.QtCore import QModelIndex, Qt
-from PyQt5.QtGui import QKeySequence
+from PyQt5.QtGui import QKeySequence, QIcon, QPalette
 from PyQt5.QtWidgets import QDialog, QMenu, \
     QInputDialog
 from PyQt5 import QtWidgets
@@ -54,41 +54,22 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.mod_structure_view.customContextMenuRequested.connect(
             self.custom_context_menu)
 
-        # here's the custom menu (actions will be made in/visible as required)
-        self.rclickmenu = QMenu(self.mod_structure_view)
+        # self.mod_structure_view.setStyleSheet("QTreeView::item:hover {background: transparent; color: palette(highlight)} ")
 
-        self.rclickmenu.addActions([self.action_unset_top_level_directory,
-                         self.action_set_as_top_level_directory,
-                         self.action_rename,
-                         self.action_delete,
-                         self.action_create_directory])
 
+        # create custom context menu
+        self.rclickmenu = self.__setup_context_menu()
         self.rclicked_inode = None
 
-        ## conect actions
-        self.action_set_as_top_level_directory.triggered.connect(
-            self.set_toplevel)
-        self.action_unset_top_level_directory.triggered.connect(
-            self.unset_toplevel)
-        self.action_rename.triggered.connect(self.rename)
-        self.action_create_directory.triggered.connect(self.create_dir)
-        self.action_delete.triggered.connect(self.delete_file)
+        ## connect actions
+        self.__setup_actions()
 
         ## connect some more signals
-        # self.modfsmodel.root_changed.connect(self.)
-
-        # self.mod_structure_view.tree_structure_changed.connect(self.on_tree_change)
-
-        # have the tree widget create the visible tree from the
-        # data-tree stored in self.structure; this will trigger
-        # the validation check and update the UI accordingly
-        # self.mod_structure_view.init_tree(self.structure)
-
-        self.mod_structure_view.setToolTip(_tree_tooltip)
-
         self.modfsmodel.rowsMoved.connect(self.check_top_level)
         self.modfsmodel.rowsInserted.connect(self.check_top_level)
         self.modfsmodel.folder_structure_changed.connect(self.check_top_level)
+
+        self.mod_structure_view.setToolTip(_tree_tooltip)
 
         ## Hide the Trash folder
         self.mod_structure_view.setRowHidden(
@@ -101,11 +82,13 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
         undoaction = undostack.createUndoAction(self, "Undo")
         undoaction.pyqtConfigure(shortcut=QKeySequence.Undo,
-                                      triggered=self.undo)
+                                 icon=QIcon.fromTheme("edit-undo"),
+                                 triggered=self.undo)
 
         redoaction = undostack.createRedoAction(self, "Redo")
         redoaction.pyqtConfigure(shortcut=QKeySequence.Redo,
-                                      triggered=self.redo)
+                                 icon=QIcon.fromTheme("edit-redo"),
+                                 triggered=self.redo)
 
         undoview = QtWidgets.QUndoView(undostack)
         undoview.show()
@@ -115,21 +98,67 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
     def __setup_overlay(self):
         tree_overlay = OverlayCenter(self.mod_structure_view)
-        btn_overlay = Overlay("top", "right",
-                                   """QToolButton {
-                                        background: transparent;
-                                        border: 1px solid rgba(240, 240, 240, 0.5);
-                                        border-radius: 2px;
-                                    }""")
-        btn_overlay.addWidget(self.btn_undo)
-        btn_overlay.addWidget(self.btn_redo)
 
-        self.btn_undo.clicked.connect(self.action_undo.trigger)
-        self.btn_redo.clicked.connect(self.action_redo.trigger)
+        pal = QPalette()
+        # textcolor = pal.windowText()
+        # hlcolor = pal.highlight()
+
+        txtcol = pal.color(QPalette.WindowText)
+        txtcol.setAlphaF(0.5)
+
+        hlcol = pal.color(QPalette.Highlight)
+
+        txtstr = "rgba{}".format(str(txtcol.getRgb()))
+        hlstr = "rgba{}".format(str(hlcol.getRgb()))
+
+        hlcol.setAlphaF(0.3)
+        hover_bg = "rgba{}".format(str(hlcol.getRgb()))
+
+        btn_overlay = Overlay("top", "right",
+                                   """
+                                   QGroupBox { background: transparent; }
+                                   QToolButton {
+                                        background: transparent;
+                                        border: 1px solid %s;
+                                        border-radius: 2px;
+                                    }
+                                    QToolButton:hover {
+                                        background: %s;
+                                        border: 1px solid %s;
+                                    }
+                                    """ % (txtstr, hover_bg, hlstr))
+        # btn_overlay.addWidget(self.btn_undo)
+        # btn_overlay.addWidget(self.btn_redo)
+        btn_overlay.addWidget(self.undo_btngroup)
+
+        self.btn_undo.setDefaultAction(self.action_undo)
+        self.btn_redo.setDefaultAction(self.action_redo)
 
         tree_overlay.addLayout(btn_overlay)
 
         return tree_overlay, btn_overlay
+
+    def __setup_context_menu(self):
+        # here's the custom menu (actions will be made in/visible as required)
+        rclickmenu = QMenu(self.mod_structure_view)
+
+        rclickmenu.addActions(
+            [self.action_unset_toplevel,
+             self.action_set_toplevel,
+             self.action_rename,
+             self.action_delete,
+             self.action_create_directory])
+
+        return rclickmenu
+
+    def __setup_actions(self):
+        self.action_set_toplevel.triggered.connect(
+            self.set_toplevel)
+        self.action_unset_toplevel.triggered.connect(
+            self.unset_toplevel)
+        self.action_rename.triggered.connect(self.rename)
+        self.action_create_directory.triggered.connect(self.create_dir)
+        self.action_delete.triggered.connect(self.delete_file)
 
 
 
@@ -230,10 +259,10 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         # ---------------------- #
 
         # show unset option if user has set custom root
-        self.action_unset_top_level_directory.setVisible(user_set_root)
+        self.action_unset_toplevel.setVisible(user_set_root)
 
         # show set option if user clicked on directory (that is not the root)
-        self.action_set_as_top_level_directory.setVisible(clicked_isdir and non_root)
+        self.action_set_toplevel.setVisible(clicked_isdir and non_root)
 
         # show rename/delete options if user clicked on anything but root
         self.action_rename.setVisible(non_root)

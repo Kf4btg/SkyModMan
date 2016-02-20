@@ -624,14 +624,14 @@ class ModArchiveTreeModel(QAbstractItemModel):
                 call_before_redo=partial(
                     self._begin_move,
                     src_row, trg_row,
-                    getting_trashed,
+                    getting_trashed.parent,
                     self.trash
                 ),
                 call_before_undo=partial(
                     self._begin_move,
                     trg_row, src_row,
                     self.trash,
-                    getting_trashed,
+                    getting_trashed.parent,
                 ),
                 call_after_redo=self._end_move,
             )
@@ -651,33 +651,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
         # self.endMoveRows()
 
         return True
-
-    # def _move_to_trash(self, path):
-    #
-    #     prefix=0
-    #     gettname = ("{}_"+path.name).format
-    #     trashname = gettname(prefix)
-    #
-    #     tlist = self.trash.ls(conv=str.lower)
-    #     while trashname.lower() in tlist:
-    #         prefix+=1
-    #         trashname = gettname(prefix)
-    #
-    #     # record the previous location of `path`
-    #     self.trash_info[trashname]=path.sparent.str
-    #
-    #     path.rename(self.trash / trashname)
-
-
-    # XXX: Change-root on the model level is unnecessary? It may be possible to do all we need to do just with setRootIndex() on the Treeview.
-    # @singledispatch_m
-    # def change_root(self, new_root):
-    #     self._change_root_inode(self._fs.inodeof(new_root))
-    #
-    # @change_root.register(int)
-    # def _change_root_inode(self, new_root):
-    #     self._currentroot_inode = new_root
-    #     self._currentroot = self._fs.pathfor(self._currentroot_inode)
 
     ##===============================================
     ## Utilities
@@ -826,59 +799,3 @@ class ModArchiveTreeModel(QAbstractItemModel):
         return self._sorted_dirlist(
             path.sparent
         ).index(path)
-
-    ##===============================================
-    ## Undo
-    ##===============================================
-
-
-
-# class _FakeCIPath(PureCIPath):
-#     """
-#     Just exists so that we can figure out the comparison below. Implements only the methods necessary for passing the checks in __lt__
-#     """
-#
-#     def __new__(cls, *args, targetdir,
-#                 original=None, template_type=None,
-#                 is_dir=None, accessor=None, fake_inode=-1,
-#                 **kwargs):
-#
-#         from functools import partial
-#
-#         self = cls._from_parts(args, init=False)
-#
-#         self.original = original
-#         self.sparent = targetdir
-#
-#         self._fs = accessor
-#         self._isdir = is_dir
-#         self._fakeinode = fake_inode
-#         self._type = template_type
-#
-#         if original is not None:
-#             self._lt = original.__lt__
-#         else:
-#             self._lt = partial(template_type.__lt__, self)
-#
-#         return self
-#
-#     @property
-#     def inode(self):
-#         if self.original:
-#             return self.original.inode
-#         return self._fakeinode
-#
-#     @property
-#     def _accessor(self):
-#         if self.original:
-#             return self.original._accessor
-#         return self._fs
-#
-#     @property
-#     def is_dir(self):
-#         if self.original:
-#             return self.original.is_dir
-#         return self._isdir
-#
-#     def __lt__(self, other):
-#         return self._lt(other)
