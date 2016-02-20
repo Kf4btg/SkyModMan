@@ -23,12 +23,13 @@ class OverlayCenter(QtWidgets.QLayout):
     # end addLayout
 
     ## I'm not entirely sure this method is necessary...
-    ## (and it throws an exception when used in a different thread,
+    ## (and it throws an exception,
     ## so I'm going to comment it out and see what happens)
     # def __del__(self):
     #     """Destructor for garbage collection."""
     #     item = self.takeAt(0)
     #     while item:
+    #         item.deleteLater()
     #         item = self.takeAt(0)
     # end Destructor
 
@@ -57,6 +58,9 @@ class OverlayCenter(QtWidgets.QLayout):
         except IndexError:
             return None
     # end takeAt
+
+    def sizeHint(self):
+        return self.parentWidget().size()
 
     def setGeometry(self, rect):
         """Set the main geometry and the item geometry."""

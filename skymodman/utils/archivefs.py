@@ -163,8 +163,6 @@ class CIPath(PureCIPath):
         Return an unordered list of CIPath objects for the files within this directory
         """
         return self._accessor.listdir(self)
-        # return [type(self)(self, n)
-        #         for n in self._accessor.ls(self)]
 
     def iterls(self, verbose=False):
         """

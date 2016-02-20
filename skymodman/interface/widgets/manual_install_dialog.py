@@ -44,7 +44,8 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.undostack, self.action_undo, self.action_redo, self.undoview = self.__setup_undo()
 
         # Create button overlay
-        self.tree_overlay, self.button_overlay = self.__setup_overlay()
+        # self.main_overlay, self.tree_overlay, self.button_overlay = self.__setup_overlay()
+        self.main_overlay = self.__setup_overlay()
 
         # initialize tree model from structure, give undostack ref
         self.modfsmodel = ModArchiveTreeModel(self.structure,
@@ -98,7 +99,15 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         return undostack, undoaction, redoaction, undoview
 
     def __setup_overlay(self):
-        tree_overlay = OverlayCenter(self.mod_structure_view)
+        # tree_overlay = OverlayCenter(self.mod_structure_view)
+
+        tree_overlay = Overlay(stylesheet="")
+        tree_overlay.addWidget(self.view_switcher)
+
+
+        # print(self.mod_structure_view.geometry())
+        # print(self.stackedWidget.geometry())
+        # self.stackedWidget.setLayout(tree_overlay)
 
         pal = QPalette()
 
@@ -113,28 +122,59 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         hlcol.setAlphaF(0.3)
         hover_bg = "rgba{}".format(str(hlcol.getRgb()))
 
-        btn_overlay = Overlay("top", "right",
-                                   """
-                                   QGroupBox { background: transparent; }
-                                   QToolButton {
-                                        background: transparent;
-                                        border: 1px solid %s;
-                                        border-radius: 2px;
-                                    }
-                                    QToolButton:hover {
-                                        background: %s;
-                                        border: 1px solid %s;
-                                    }
-                                    """ % (border_color, hover_bg, hover_border_color))
+        btn_stylesheet = """QGroupBox {
+                                background: transparent;
+                                padding: 6px;
+                           }
+                           QToolButton {
+                               background: transparent;
+                               border: 1px solid %s;
+                               border-radius: 2px;
+                           }
+                           QToolButton:checked {
+                                background: palette(midlight);
+                            }
+                           QToolButton:hover {
+                               background: %s;
+                               border: 1px solid %s;
+                           }
+                           """ % (
+            border_color, hover_bg, hover_border_color)
 
-        btn_overlay.addWidget(self.undo_btngroup)
+        undo_overlay = Overlay("top", "right", btn_stylesheet)
+
+        undo_overlay.addWidget(self.undo_btngroup)
 
         self.btn_undo.setDefaultAction(self.action_undo)
         self.btn_redo.setDefaultAction(self.action_redo)
 
-        tree_overlay.addLayout(btn_overlay)
+        ## View switching buttons ##
+        chview_btngroup = QtWidgets.QButtonGroup(self.view_switcher)
 
-        return tree_overlay, btn_overlay
+        chview_btngroup.addButton(self.btn_treeview)
+        chview_btngroup.setId(self.btn_treeview, 0)
+
+        chview_btngroup.addButton(self.btn_colview)
+        chview_btngroup.setId(self.btn_colview, 1)
+
+        chview_btngroup.buttonClicked[int].connect(self.view_switcher.setCurrentIndex)
+
+        # and the overlay
+        chview_overlay = Overlay("bottom", "right", btn_stylesheet)
+        chview_overlay.addWidget(self.change_view_btngroup)
+
+
+
+
+        main_overlay = OverlayCenter(self.fsview)
+        main_overlay.addLayout(tree_overlay)
+        main_overlay.addLayout(undo_overlay)
+        main_overlay.addLayout(chview_overlay)
+
+        # main_overlay.addLayout(tree_overlay)
+        # tree_overlay.addLayout(btn_overlay)
+
+        return main_overlay#, tree_overlay#, btn_overlay
 
     def __setup_context_menu(self):
         # here's the custom menu (actions will be made in/visible as required)
@@ -286,6 +326,12 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
     def redo(self):
         # self.modfsmodel.redo()
         self.undostack.redo()
+
+    # def change_view(self, view_id):
+    #
+    #     # todo: make an enum for these ids
+    #     if view_id==0:
+    #
 
 
 
