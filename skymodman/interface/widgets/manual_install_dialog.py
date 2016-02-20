@@ -77,6 +77,7 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
             self.mod_structure_view.rootIndex(), # should still be "/" at this point
             True)
 
+    # noinspection PyArgumentList,PyTypeChecker
     def __setup_undo(self):
         undostack = QtWidgets.QUndoStack()
 
@@ -100,16 +101,14 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         tree_overlay = OverlayCenter(self.mod_structure_view)
 
         pal = QPalette()
-        # textcolor = pal.windowText()
-        # hlcolor = pal.highlight()
 
         txtcol = pal.color(QPalette.WindowText)
         txtcol.setAlphaF(0.5)
 
         hlcol = pal.color(QPalette.Highlight)
 
-        txtstr = "rgba{}".format(str(txtcol.getRgb()))
-        hlstr = "rgba{}".format(str(hlcol.getRgb()))
+        border_color = "rgba{}".format(str(txtcol.getRgb()))
+        hover_border_color = "rgba{}".format(str(hlcol.getRgb()))
 
         hlcol.setAlphaF(0.3)
         hover_bg = "rgba{}".format(str(hlcol.getRgb()))
@@ -126,9 +125,8 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
                                         background: %s;
                                         border: 1px solid %s;
                                     }
-                                    """ % (txtstr, hover_bg, hlstr))
-        # btn_overlay.addWidget(self.btn_undo)
-        # btn_overlay.addWidget(self.btn_redo)
+                                    """ % (border_color, hover_bg, hover_border_color))
+
         btn_overlay.addWidget(self.undo_btngroup)
 
         self.btn_undo.setDefaultAction(self.action_undo)
@@ -159,7 +157,6 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.action_rename.triggered.connect(self.rename)
         self.action_create_directory.triggered.connect(self.create_dir)
         self.action_delete.triggered.connect(self.delete_file)
-
 
 
     @property

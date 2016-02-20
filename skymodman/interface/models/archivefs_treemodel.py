@@ -1,7 +1,8 @@
 from functools import lru_cache, partial
 
 from PyQt5 import QtGui, QtWidgets
-from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData
+from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData, \
+    QPersistentModelIndex
 
 from skymodman.utils.archivefs import ArchiveFS, PureCIPath, CIPath
 from skymodman.utils import archivefs
@@ -126,10 +127,12 @@ class RenameCommand(UndoCmd):
         return self.getpath(self.inode)
 
     def redo(self):
+        self.begin_redo()
         self.path.chname(self.new_name)
         self.end()
 
     def undo(self):
+        self.begin_undo()
         self.path.chname(self.old_name)
         self.end()
 
@@ -153,15 +156,6 @@ class InsertDirectoryCommand(UndoCmd):
         self.end_undo()
 
 
-
-
-
-
-
-
-
-
-
 @withlogger
 class ModArchiveTreeModel(QAbstractItemModel):
 
@@ -182,13 +176,12 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
     folder_structure_changed = pyqtSignal()
 
-    root_changed = pyqtSignal()
-
     # noinspection PyTypeChecker,PyArgumentList
     def __init__(self, mod_fs, undostack, *args, **kwargs):
         """
 
         :param ArchiveFS mod_fs:
+        :param undostack: QUndoStack instance that any actions performed by the model will be pushed to.
         """
         super().__init__(*args, **kwargs)
 
@@ -214,24 +207,15 @@ class ModArchiveTreeModel(QAbstractItemModel):
         self._caches=[self._sorted_dirlist,
                       self._isdir]
 
-        self._right_clicked_path = None
-
-        # self.trash = set()
-
-        # create a 'Trash' folder to use for deletions
+        # create a 'Trash' folder to use for deletions (and easy restorations)
         self._fs.mkdir("/.trash")
         self.trash = self._fs.get_path("/.trash")
-        self.trash_info = {}
 
         self.undostack = undostack
 
-
-    @property
-    def root_inode(self):
-        return self._currentroot_inode
-
     @property
     def root(self):
+        """Return absolute path of the directory that is currently set as the "visible" root of the fs"""
         return self._currentroot
 
     @root.setter
@@ -244,7 +228,12 @@ class ModArchiveTreeModel(QAbstractItemModel):
         self._currentroot = self._fs.pathfor(self._currentroot_inode)
 
     @property
+    def root_inode(self):
+        return self._currentroot_inode
+
+    @property
     def has_modified_root(self):
+        """Returns true if the user has set a new top-level directory"""
         return self._currentroot_inode != 0
 
     ##===============================================
@@ -257,7 +246,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param index:
         :return: Number of filesystem entries contained by the directory pointed to by `index`
         """
-        return self.path4index(index).dir_length()
+        return len(self.path4index(index))
 
     def columnCount(self, *args, **kwargs):
         """
@@ -292,6 +281,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
             return QModelIndex()
 
     def parent(self, child_index=QModelIndex()):
+        """Get the parent QModelIndex for `child_index`"""
 
         if not child_index.isValid():
             return QModelIndex()
@@ -319,6 +309,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :return:
         """
         if not index.isValid():
+            # the root of the tree (all the empty space below the final item)
+            # should be able to accept sub-folders dragged to it
             return Qt.ItemIsEnabled | Qt.ItemIsDropEnabled
 
         if self._isdir(index.internalId()):
@@ -329,8 +321,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         """
 
         :param QModelIndex index:
-        :param role:
-        :return:
+        :param int role:
         """
 
         if role in {Qt.DisplayRole, Qt.DecorationRole, Qt.CheckStateRole, Qt.EditRole}:
@@ -340,7 +331,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
             return {
                 Qt.DisplayRole:
                     path.name,
-                Qt.EditRole: path.name, # make sure editor keeps name when opened
+                Qt.EditRole: path.name, # make sure editor keeps current text when opened
                 Qt.DecorationRole:
                     (self.FILE_ICON, self.FOLDER_ICON)[path.is_dir],
                 Qt.CheckStateRole:
@@ -349,7 +340,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
                         path.inode not in self._unchecked]
             }[role]
 
-    # noinspection PyUnresolvedReferences
     def setData(self, index, value, role=None):
         """
 
@@ -366,6 +356,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
             # toggles the inode's membership in the set;
             # just ignore whatever `value` is
             self._unchecked ^= {index.internalId()}
+            # noinspection PyUnresolvedReferences
             self.dataChanged.emit(index, index, [role])
 
             return True
@@ -375,25 +366,46 @@ class ModArchiveTreeModel(QAbstractItemModel):
             if not value: return False
 
             currpath = self.index2path(index)
+            parent = currpath.parent
 
             if value == currpath.name: return False
+
+            ## Create a `Rename` command and push to undo stack
+            src_row = self.row4path(currpath)
+            trg_row = self.future_row_after_rename(currpath, value)
+
+            call_after_redo = self._end_move
+            # need to figure out which action (redo/undo) will move the item
+            # down in its parent list; target-row must be adjusted for that case
+            if src_row < trg_row: # redo is move-down
+                call_before_redo = partial(self._begin_move,
+                                           src_row, trg_row + 1,
+                                           parent, parent)
+                call_before_undo = partial(self._begin_move,
+                                           trg_row, src_row,
+                                           parent, parent)
+            elif src_row > trg_row: # undo is move down
+                call_before_redo = partial(self._begin_move,
+                                           src_row, trg_row,
+                                           parent, parent)
+                call_before_undo = partial(self._begin_move,
+                                           trg_row, src_row + 1,
+                                           parent, parent)
+            else:
+                # there is no movement; item will have same index in parent
+                # after move as it had before move
+                call_before_redo = call_before_undo = lambda: None
+                # and the end callable() must be different, as well
+                call_after_redo=partial(self._end_rename, index.internalId())
 
             self.undostack.push(
                 RenameCommand(
                     currpath, value,
-                    call_after_redo=partial(self._end_rename,
-                                     index.internalId())
+                    call_before_redo = call_before_redo,
+                    call_before_undo = call_before_undo,
+                    call_after_redo  = call_after_redo
                 )
             )
-
-            # try:
-            # self._fs.chname(currpath, value)
-            # except Error_EEXIST
-
-            # self._invalidate_caches(self._sorted_dirlist)
-
-            # self.dataChanged.emit(index, index)
-            # self.folder_structure_changed.emit()
             return True
 
         return super().setData(index, value, role)
@@ -437,44 +449,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
                 target_path = par_path
 
         src_path = self._fs.pathfor(int(data.text()))
-        # orig_parent = src_path.sparent
 
         self.move_to_dir(src_path, target_path)
-
-        # src_path = self._fs.pathfor(int(data.text()))
-        # orig_parent = src_path.sparent
-
-        # src_row = self.row4path(src_path)
-        # trg_row = self.future_row_after_move(src_path, target_path)
-        #
-        # self.undostack.push(
-        #     MoveCommand(src_path, target_path,
-        #                 call_before_redo=partial(
-        #                     self._begin_move,
-        #                     src_row, trg_row,
-        #                     src_path, target_path),
-        #                 call_before_undo=partial(
-        #                     self._begin_move,
-        #                     trg_row, src_row,
-        #                     target_path, src_path),
-        #                 call_after_redo=self._end_move
-        #                 ))
-
-
-        # src_parent, srcFirst, srcLast, destParent, int destChild
-        # self.beginMoveRows(self.index4path(orig_parent),
-        #                    src_row, src_row,
-        #                    self.index4path(target_path),
-        #                    self.future_row_after_move(src_path, target_path))
-        #
-        # src_path.move(target_path)
-        #
-        # ## need to do this BEFORE endmoverows (which calls index()) to
-        # ## prevent inconsistent state and possible crash
-        # self._invalidate_caches(self._sorted_dirlist)
-        #
-        # self.endMoveRows()
-
         # self._print_fstree()
         return True
 
@@ -521,44 +497,61 @@ class ModArchiveTreeModel(QAbstractItemModel):
     ## Path modification
     ##===============================================
 
-    def _begin_move(self, src_row, trg_row, src_path, trg_path):
-        self.beginMoveRows(self.index4path(src_path),
+    def _begin_move(self, src_row, trg_row, src_parent_path, trg_parent_path):
+        """
+        Call before an operation that moves a path to a new location.
+
+        :param src_row: Original location within its original parent directory
+        :param trg_row: Where it will be placed within the target directory
+        :param src_parent_path: The path's original parent
+        :param trg_parent_path: The target directory of the move
+        """
+        # print("begin move:", src_row, trg_row, src_parent_path, "=>", trg_parent_path)
+        self.beginMoveRows(self.index4path(src_parent_path),
                            src_row, src_row,
-                           self.index4path(trg_path),
+                           self.index4path(trg_parent_path),
                            trg_row)
 
     def _end_move(self):
+        """Call after any move operation."""
         self._invalidate_caches(self._sorted_dirlist)
         self.endMoveRows()
 
     def _end_rename(self, changed_inode):
+        """
+        Only call this when the renaming of an item does not result in a change to its sorted location within the parent directory.
+        :param changed_inode:
+        """
         self._invalidate_caches(self._sorted_dirlist)
 
         idx = self.index4inode(changed_inode)
+
+        # noinspection PyUnresolvedReferences
         self.dataChanged.emit(idx, idx)
         self.folder_structure_changed.emit()
 
     def _begin_insert(self, parent, row):
+        """Call before inserting a new item into directory `parent` at row `row`"""
         # beginInsertRows(parent, first, last)
         self.beginInsertRows(self.index4path(parent), row, row)
 
     def _end_insert(self):
+        """Call after an insertion (new file) operation"""
         # self._fs.mkdir(PureCIPath(parent, name))
         self._invalidate_caches(self._sorted_dirlist)
         self.endInsertRows()
 
     def _begin_remove(self, parent, row):
+        """Call before removing a path from the filesystem; the path to be removed is located at `row` in directory `parent`."""
         self.beginRemoveRows(self.index4path(parent), row, row)
 
     def _end_remove(self):
+        """Call after removing a path from the filesystem."""
         self._invalidate_caches(self._sorted_dirlist)
         self.endRemoveRows()
 
     def move_to_dir(self, src_path, target_dir):
-
-        # src_path = self._fs.pathfor(int(data.text()))
-        # orig_parent = src_path.sparent
-
+        """Move the file located at src_path from its current location to within `target_dir`"""
         src_row = self.row4path(src_path)
         trg_row = self.future_row_after_move(src_path, target_dir)
 
@@ -576,37 +569,27 @@ class ModArchiveTreeModel(QAbstractItemModel):
                         ))
 
     def create_new_dir(self, parent, name):
+        """Create a new directory named `name` inside directory `parent`"""
         new_pos = self.future_row_after_create(name, parent, True)
-        self.undostack.push(InsertDirectoryCommand(
-            parent / name,
-            call_before_redo=partial(self._begin_insert,
-                                     parent, new_pos),
-            call_before_undo=partial(self._begin_remove,
-                                     parent, new_pos),
-            call_after_redo=self._end_insert,
-            call_after_undo=self._end_remove,
-        ))
-
-
-        # beginInsertRows(parent, first, last)
-        # self.beginInsertRows(pindex, new_pos, new_pos)
-        #
-        # self._fs.mkdir(PureCIPath(parent, name))
-        # self._invalidate_caches(self._sorted_dirlist)
-        #
-        # self.endInsertRows()
-        #
-        # idx = self.index(new_pos, 0, pindex)
-        #
-        # return idx
-        # return self.index(new_pos, 0, pindex)
+        self.undostack.push(
+            InsertDirectoryCommand(
+                parent / name,
+                call_before_redo = partial(
+                    self._begin_insert,
+                    parent, new_pos),
+                call_before_undo = partial(
+                    self._begin_remove,
+                    parent, new_pos),
+                call_after_redo = self._end_insert,
+                call_after_undo = self._end_remove,
+            )
+        )
 
     def delete(self, inode, force=False):
         """
         Actually "move to trash", but delete is shorter
         :param inode:
         :param force:
-        :return:
         """
         ## note: this function is largely redundant with move_to_dir()
         getting_trashed = self._fs.pathfor(inode)
@@ -636,20 +619,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
                 call_after_redo=self._end_move,
             )
         )
-
-
-        # src_parent, srcFirst, srcLast, destParent, int destChild
-        # self.beginMoveRows(self.index4path(getting_trashed.parent),
-        #                    r, r,
-        #                    self.index4path(self.trash),
-        #                    self.future_row_after_move(getting_trashed,
-        #                                               self.trash))
-        #
-        # self._move_to_trash(getting_trashed)
-        # self._invalidate_caches(self._sorted_dirlist)
-        #
-        # self.endMoveRows()
-
         return True
 
     ##===============================================
@@ -675,6 +644,20 @@ class ModArchiveTreeModel(QAbstractItemModel):
         # let the fs's sorting handle that.
         return sorted(dirpath.listdir())
 
+    def future_row_after_rename(self, current_path, new_name):
+        """ Determine updated row for current_path after it has been renamed to `new_name`
+        :param current_path:
+        :param new_name:
+        :return:
+        """
+        # get *copy* of file list for current directory, and remove the current path
+        flist = self._sorted_dirlist(current_path.parent).copy()
+        flist.remove(current_path)
+
+        return self._get_insertion_index(current_path.with_name(new_name), None,
+                                         path_is_folder=current_path.is_dir,
+                                         use_list=flist)
+
     def future_row_after_move(self, path, target_dir):
         """
         Determine where in the  directory 'target_dir' `path` will appear if it is moved there.
@@ -699,19 +682,24 @@ class ModArchiveTreeModel(QAbstractItemModel):
             PureCIPath(target_dir, file_name),
             target_dir, isfolder)
 
-    def _get_insertion_index(self, path, target_dir, path_is_folder=False):
+    def _get_insertion_index(self, path, target_dir, path_is_folder=False, use_list=None):
         """
-        Return the index in target_dir's child list where `path` would be inserted.
+        Return the index in `target_dir`'s child list where `path` would be inserted.
         :param path:
         :param target_dir:
-        :return:
+        :param use_list: if provided, will be used instead of `target_dir`'s contents list for determining insertion point.
         """
         i = -1
+        path=PureCIPath(path)
         # return first index where either:
         #    a) path is a folder and the target is not;
         # or b) path and target are the same type (folder|file) && path < p
         # XXX: should we do a binary search here? Or is that unnecessary?
-        for i, p in enumerate(self._sorted_dirlist(target_dir)):
+
+        if use_list is None:
+            use_list = self._sorted_dirlist(target_dir)
+
+        for i, p in enumerate(use_list):
             if path_is_folder == p.is_dir:
                 if path < p: return i
 

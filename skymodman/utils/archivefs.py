@@ -109,6 +109,9 @@ class CIPath(PureCIPath):
     def dir_length(self):
         return self._accessor.dir_length(self)
 
+    def __len__(self):
+        return self._accessor.dir_length(self)
+
     ##===============================================
     ## Stored Data Access
     ##===============================================
