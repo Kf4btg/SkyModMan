@@ -1,11 +1,10 @@
 from functools import lru_cache, partial
 
 from PyQt5 import QtGui, QtWidgets
-from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData, \
-    QPersistentModelIndex
+from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData
 
 from skymodman.utils.archivefs import ArchiveFS, PureCIPath, CIPath
-from skymodman.utils import archivefs
+from skymodman.utils import archivefs, icons
 from skymodman.utils import withlogger #, singledispatch_m
 
 
@@ -177,7 +176,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
     folder_structure_changed = pyqtSignal()
 
     # noinspection PyTypeChecker,PyArgumentList
-    def __init__(self, mod_fs, undostack, *args, **kwargs):
+    def __init__(self, owner, *args, **kwargs):
         """
 
         :param ArchiveFS mod_fs:
@@ -185,8 +184,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
         """
         super().__init__(*args, **kwargs)
 
-        self._fs = mod_fs # type: ArchiveFS
-        self._backupfs = mod_fs.mkdupefs()
+        self._fs = owner.structure # type: ArchiveFS
+        self._backupfs = self._fs.mkdupefs()
 
         self._currentroot_inode = ArchiveFS.ROOT_INODE
         self._currentroot = self._fs.rootpath
@@ -195,10 +194,16 @@ class ModArchiveTreeModel(QAbstractItemModel):
         # Have to keep these in the init() so that they're not
         # garbage collected (which apparently seems to delete them
         # from the entire application...)
-        self.FOLDER_ICON = QtGui.QIcon.fromTheme(
-            "folder")  # type: QtGui.QIcon
-        self.FILE_ICON = QtGui.QIcon.fromTheme(
-            "text-plain")  # type: QtGui.QIcon
+        # color = QtGui.QPalette().color(QtGui.QPalette.WindowText)
+        self.FOLDER_ICON = icons.get("folder")
+        self.FOLDER_OPEN = icons.get("folder-open")
+        self.FILE_ICON = icons.get("file")
+
+
+        # self.FOLDER_ICON = QtGui.QIcon.fromTheme(
+        #     "folder")  # type: QtGui.QIcon
+        # self.FILE_ICON = QtGui.QIcon.fromTheme(
+        #     "text-plain")  # type: QtGui.QIcon
 
         # set of unchecked inodes
         self._unchecked=set()
@@ -211,7 +216,9 @@ class ModArchiveTreeModel(QAbstractItemModel):
         self._fs.mkdir("/.trash")
         self.trash = self._fs.get_path("/.trash")
 
-        self.undostack = undostack
+        self.undostack = owner.undostack
+
+        self._owner = owner
 
     @property
     def root(self):
@@ -338,7 +345,10 @@ class ModArchiveTreeModel(QAbstractItemModel):
                     path.name,
                 Qt.EditRole: path.name, # make sure editor keeps current text when opened
                 Qt.DecorationRole:
-                    (self.FILE_ICON, self.FOLDER_ICON)[path.is_dir],
+                    self.FILE_ICON if path.is_file else (
+                        self.FOLDER_ICON,
+                        self.FOLDER_OPEN)[self._owner.is_expanded(index)],
+                    # (self.FILE_ICON, self.FOLDER_ICON)[path.is_dir],
                 Qt.CheckStateRole:
                     (Qt.Unchecked, Qt.Checked)[
                         path == self.root or

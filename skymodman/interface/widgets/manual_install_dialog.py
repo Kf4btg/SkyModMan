@@ -48,8 +48,7 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.main_overlay = self.__setup_overlay()
 
         # initialize tree model from structure, give undostack ref
-        self.modfsmodel = ModArchiveTreeModel(self.structure,
-                                              self.undostack)
+        self.modfsmodel = ModArchiveTreeModel(self)
 
         self.mod_structure_view.setModel(self.modfsmodel)
         self.mod_structure_view.customContextMenuRequested.connect(
@@ -334,6 +333,10 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
     def redo(self):
         # self.modfsmodel.redo()
         self.undostack.redo()
+
+
+    def is_expanded(self, index):
+        return self.mod_structure_view.isExpanded(index)
 
     # def change_view(self, view_id):
     #
