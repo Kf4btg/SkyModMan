@@ -200,7 +200,7 @@
         <number>0</number>
        </property>
        <item row="0" column="0">
-        <widget class="QColumnView" name="mod_structure_column_view">
+        <widget class="MyColumnView" name="mod_structure_column_view">
          <property name="editTriggers">
           <set>QAbstractItemView::EditKeyPressed</set>
          </property>
@@ -246,7 +246,8 @@
       <item>
        <widget class="QToolButton" name="btn_treeview">
         <property name="icon">
-         <iconset theme="view-list-tree"/>
+         <iconset theme="view-list-tree">
+          <normaloff>.</normaloff>.</iconset>
         </property>
         <property name="checkable">
          <bool>true</bool>
@@ -259,7 +260,8 @@
       <item>
        <widget class="QToolButton" name="btn_colview">
         <property name="icon">
-         <iconset theme="view-column"/>
+         <iconset theme="view-column">
+          <normaloff>.</normaloff>.</iconset>
         </property>
         <property name="checkable">
          <bool>true</bool>
@@ -297,7 +299,8 @@
   </action>
   <action name="action_view_tree">
    <property name="icon">
-    <iconset theme="view-list-tree"/>
+    <iconset theme="view-list-tree">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
     <string>Tree View</string>
@@ -305,13 +308,21 @@
   </action>
   <action name="action_view_columns">
    <property name="icon">
-    <iconset theme="view-column"/>
+    <iconset theme="view-column">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
     <string>Column View</string>
    </property>
   </action>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>MyColumnView</class>
+   <extends>QColumnView</extends>
+   <header>skymodman.interface.widgets.mytreewidget</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections>
   <connection>

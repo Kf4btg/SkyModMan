@@ -9,7 +9,7 @@ from PyQt5.QtCore import (Qt,
                           QPropertyAnimation,
                           # QStandardPaths,
                           )
-from PyQt5.QtGui import QGuiApplication, QKeySequence
+from PyQt5.QtGui import QGuiApplication, QKeySequence #, QFontDatabase
 from PyQt5.QtWidgets import (QApplication,
                              QMainWindow,
                              QDialogButtonBox,
@@ -63,6 +63,17 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.LOGGER.info("Initializing ModManager Window")
         ModManagerWindow._this = self
 
+        ## Interestingly, using the icon font as a font works just fine;
+        ## One can do things like:
+        ##    >>> btn_colview.setIcon(QIcon()) # just unsets current icon
+        ##    >>> btn_colview.setText("\uf0db")
+        ## and
+        ##    >>> btn_colview.setStyleSheet("QToolButton {font-family: FontAwesome;}")
+        ## to get the 'icon' for that character to show on the button.
+        ## This reduces dependencies, but the qtawesome bindings do make configuring
+        ## and tweaking the icon much easier, as well as allowing for stacking and
+        ## animation, if desired.
+        # _id = QFontDatabase.addApplicationFont("skymodman/thirdparty/qtawesome/fonts/fontawesome-webfont.ttf")
         # verify basic setup
         self.check_setup()
 

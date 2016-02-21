@@ -8,7 +8,7 @@ from PyQt5 import QtWidgets
 from skymodman.interface.designer.uic.archive_structure_ui import Ui_mod_structure_dialog
 from skymodman.interface.widgets.overlay_layout import Overlay, OverlayCenter
 from skymodman.interface.models.archivefs_treemodel import ModArchiveTreeModel
-from skymodman.utils import withlogger
+from skymodman.utils import withlogger, icons
 
 # from skymodman.utils.tree import Tree
 
@@ -54,14 +54,17 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.mod_structure_view.customContextMenuRequested.connect(
             self.custom_context_menu)
 
+        self.mod_structure_column_view.owner = self
+
         self.mod_structure_column_view.setModel(self.modfsmodel)
         self.mod_structure_column_view.customContextMenuRequested.connect(
             self.custom_context_menu)
 
+
         # QIcon.fromTheme("arrow-right")
         # QIcon().
-        print(QIcon().themeSearchPaths())
-        print(QIcon().themeName())
+        # print(QIcon().themeSearchPaths())
+        # print(QIcon().themeName())
 
         # self.mod_structure_column_view.setStyleSheet("""
         #     QColumnView::left-arrow
@@ -69,6 +72,14 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         # """)
 
         # self.mod_structure_view.setStyleSheet("QTreeView::item:hover {background: transparent; color: palette(highlight)} ")
+        self.mod_structure_column_view.setResizeGripsVisible(False)
+        # self.mod_structure_column_view.setStyleSheet(
+        #     """
+        #     QColumnView, QSizeGrip {
+        #         image: none;
+        #     }
+        #     """
+        # )
 
 
         # create custom context menu
@@ -97,19 +108,21 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
         undoaction = undostack.createUndoAction(self, "Undo")
         undoaction.pyqtConfigure(shortcut=QKeySequence.Undo,
-                                 icon=QIcon.fromTheme("edit-undo"),
+                                 icon=icons.get("undo", scale_factor=0.85, offset=(0, 0.1)),
+                                 # icon=QIcon.fromTheme("edit-undo"),
                                  triggered=self.undo)
 
         redoaction = undostack.createRedoAction(self, "Redo")
         redoaction.pyqtConfigure(shortcut=QKeySequence.Redo,
-                                 icon=QIcon.fromTheme("edit-redo"),
+                                 icon=icons.get("redo", scale_factor=0.85, offset=(0, 0.1)),
+                                 # icon=QIcon.fromTheme("edit-redo"),
                                  triggered=self.redo)
 
-        undoview = QtWidgets.QUndoView(undostack)
-        undoview.show()
-        undoview.setAttribute(Qt.WA_QuitOnClose, False)
+        # undoview = QtWidgets.QUndoView(undostack)
+        # undoview.show()
+        # undoview.setAttribute(Qt.WA_QuitOnClose, False)
 
-        return undostack, undoaction, redoaction, undoview
+        return undostack, undoaction, redoaction, None# undoview
 
     def __setup_overlay(self):
         tree_overlay = Overlay()
@@ -167,6 +180,9 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
         chview_btngroup.addButton(self.btn_colview)
         chview_btngroup.setId(self.btn_colview, 1)
+
+        self.btn_treeview.setIcon(icons.get("view-tree"))
+        self.btn_colview.setIcon(icons.get("view-column"))
 
         chview_btngroup.buttonClicked[int].connect(self.view_switcher.setCurrentIndex)
 
@@ -378,3 +394,5 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
     #         self.num_to_copy = self.mod_data.count()
     #
     #     super().done(result)
+
+

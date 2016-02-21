@@ -1,9 +1,177 @@
-from PyQt5.QtWidgets import QTreeWidget, QTreeWidgetItem, QAction, QMenu
+from PyQt5.QtWidgets import QTreeWidget, QTreeWidgetItem, QAction, QMenu, QColumnView, \
+    QAbstractItemView, QListView
 from PyQt5.QtCore import pyqtSignal, pyqtProperty, Qt
-from PyQt5.QtGui import QBrush, QIcon
+from PyQt5.QtGui import QBrush, QIcon, QResizeEvent
+
 
 from skymodman.utils import withlogger
 from copy import deepcopy
+
+
+@withlogger
+class ResizingListView(QListView):
+
+    columnWidthsChanged = pyqtSignal()
+
+    def __init__(self, columnview, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self._owner = columnview
+
+        self._defer_resize()
+
+    def setRootIndex(self, index):
+        super().setRootIndex(index)
+
+        self._deferResize()
+
+    def _defer_resize(self):
+        ## There were a few places where I might have been able to hack in a call
+        # to "setColumnWidths" or resizeToContents--making it happen as a side-effect of
+        # some incidental function--but since hacks are, tautalogically, hacky, I think
+        # it's probably best to avoid them. And side-effects are pretty universally agreed
+        # to be a Generally Bad Idea. The problem is that the only time the columnview
+        # communicates with the child list views (without a direct user action) is while
+        # they're being created...which is also the only time where we CAN't call
+        # setColumnWidths()...Thus the chicken and egg problem. So this is a work-around
+        # (which is slightly different from a hack...) to offload the signal call to a
+        # thread which will then call the proper resize method the next time the event
+        # loop comes around--a slice of time that will hopefully be unnoticeable to the user.
+
+        if self.sizeHintForColumn > 0:
+            self.columnWidthsChanged.connect(self._do_deferred_resize, Qt.QueuedConnection)
+            self.columnWidthsChanged.emit()
+
+    def _do_deferred_resize(self):
+        self.resizeToContents()
+
+    def resizeToContents(self):
+        width = self.sizeHintForColumn(0)
+
+        if width<=0: # Qt is confused, nevermind
+            return
+
+        # icon padding
+        width+=16
+
+        column = 0
+        index = self.rootIndex()
+        # model = self.model()
+        # find out how deep we've gotten into the view
+        while index.isValid():
+            column+=1
+            index = index.parent()
+
+        # get list of current column widths
+        widths = self._owner.columnWidths()
+        if not widths:
+            # could happen...somehow
+            widths = [self.minimumWidth()]
+
+        # if the list isn't long enough, extend it with the final
+        # value in the list until it is
+        while len(widths) <= column:
+            widths.append(widths[-1])
+
+        if widths[column] == width:
+            return
+
+        # and now update the index for this column
+        widths[column] = width
+
+        # notify columnview
+        self._owner.setColumnWidths(widths)
+
+
+@withlogger
+class MyColumnView(QColumnView):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self._reflow = lambda s: None
+        # i think 50 columns deep ought to be about enough...
+        self.setColumnWidths([120]*50)
+
+        self._reflow = lambda s: self.resizeEvent(QResizeEvent(s,s))
+
+        self._update_column_widths=None
+
+        self._owner = None
+        self._model = None
+        """:type: skymodman.interface.models.archivefs_treemodel.ModArchiveTreeModel"""
+
+    @property
+    def owner(self):
+        return self._owner
+
+    @owner.setter
+    def owner(self, value):
+        self._owner = value
+
+    @property
+    def fsmodel(self):
+        """:rtype: skymodman.interface.models.archivefs_treemodel.ModArchiveTreeModel"""
+
+        if self._model is None:
+            self._model = self.model()
+        return self._model
+
+    def setColumnWidths(self, widths):
+        # print("setcolumnwidths")
+        super().setColumnWidths(widths)
+
+        # force a reflow of the columns
+        self._reflow(self.size())
+
+    def createColumn(self, index):
+        """
+        Override to replace the regular QListView columns with ResizingListView
+
+        :param index:
+        :return:
+        """
+
+        view = ResizingListView(self)
+        view.setModel(self._model)
+        view.setRootIndex(index)
+        self.initializeColumn(view)
+
+        view.setMinimumWidth(120)
+
+        view.setContextMenuPolicy(Qt.CustomContextMenu)
+        # view.customContextMenuRequested.connect(
+        #     partial(self._on_context_menu, view))
+
+        # We must hold a reference to this somewhere so that it isn't
+        # garbage collected on us. ??? (True?)
+        # self.view = view
+
+        return view
+
+
+
+    # def currentChanged(self, current, previous):
+    #     print("current changed")
+    #
+    #     if not current.isValid() or self.fsmodel.path4index(current).is_dir:
+    #         super().currentChanged(current, previous)
+    #     else:
+    #         # skip the column-switching code, but be sure to call the BASE-base impl
+    #         QAbstractItemView.currentChanged(self, current, previous)
+
+    def scrollTo(self, current, *args):
+        """
+        This prevents the
+        :param current:
+        :param args:
+        :return:
+        """
+        # print("scrollto")
+        if self.fsmodel._isdir(current.internalId()):
+            super().scrollTo(current, *args)
+
+
 
 @withlogger
 class MyTreeWidget(QTreeWidget):
