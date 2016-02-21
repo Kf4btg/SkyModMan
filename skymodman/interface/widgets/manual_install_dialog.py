@@ -54,9 +54,9 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.mod_structure_view.customContextMenuRequested.connect(
             self.custom_context_menu)
 
-        self.mod_structure_column_view.owner = self
 
         self.mod_structure_column_view.setModel(self.modfsmodel)
+        self.mod_structure_column_view.owner = self
         self.mod_structure_column_view.customContextMenuRequested.connect(
             self.custom_context_menu)
 
