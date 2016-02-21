@@ -246,7 +246,12 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param index:
         :return: Number of filesystem entries contained by the directory pointed to by `index`
         """
-        return len(self.path4index(index))
+        try:
+            return len(self.path4index(index))
+        except archivefs.Error_ENOTDIR:
+            # I feel like this shouldn't happen since all file-items have
+            # the flag Qt.ItemNeverHasChildren...but it happens, anyway
+            return 0
 
     def columnCount(self, *args, **kwargs):
         """

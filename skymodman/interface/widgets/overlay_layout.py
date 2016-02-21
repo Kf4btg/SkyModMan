@@ -114,16 +114,17 @@ class Overlay(QtWidgets.QBoxLayout):
         #     self.setDirection(QtWidgets.QBoxLayout.LeftToRight)
         #     self.setAlignment(QtCore.Qt.AlignBottom | QtCore.Qt.AlignHCenter)
 
-        if stylesheet is None:
-            self.css = "QWidget {background-color: rgba(0,0,0,0.5); color: white}"
-        else:
-            self.css = stylesheet
+        self.css = stylesheet
+
+            # self.css = "QWidget {background-color: rgba(0,0,0,0.5); color: white}"
+        # else:
     # end Constructor
 
     def addWidget(self, widget):
         super().addWidget(widget)
 
-        widget.setStyleSheet(self.css)
+        if self.css is not None:
+            widget.setStyleSheet(self.css)
     # end addWidget
 # end class Overlay
 

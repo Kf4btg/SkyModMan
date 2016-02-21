@@ -200,7 +200,20 @@
         <number>0</number>
        </property>
        <item row="0" column="0">
-        <widget class="QColumnView" name="mod_structure_column_view"/>
+        <widget class="QColumnView" name="mod_structure_column_view">
+         <property name="editTriggers">
+          <set>QAbstractItemView::EditKeyPressed</set>
+         </property>
+         <property name="dragEnabled">
+          <bool>true</bool>
+         </property>
+         <property name="dragDropMode">
+          <enum>QAbstractItemView::InternalMove</enum>
+         </property>
+         <property name="selectionMode">
+          <enum>QAbstractItemView::SingleSelection</enum>
+         </property>
+        </widget>
        </item>
       </layout>
      </widget>

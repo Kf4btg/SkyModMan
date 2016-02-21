@@ -55,6 +55,20 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.mod_structure_view.customContextMenuRequested.connect(
             self.custom_context_menu)
 
+        self.mod_structure_column_view.setModel(self.modfsmodel)
+        self.mod_structure_column_view.customContextMenuRequested.connect(
+            self.custom_context_menu)
+
+        # QIcon.fromTheme("arrow-right")
+        # QIcon().
+        print(QIcon().themeSearchPaths())
+        print(QIcon().themeName())
+
+        # self.mod_structure_column_view.setStyleSheet("""
+        #     QColumnView::left-arrow
+        #
+        # """)
+
         # self.mod_structure_view.setStyleSheet("QTreeView::item:hover {background: transparent; color: palette(highlight)} ")
 
 
@@ -99,26 +113,24 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         return undostack, undoaction, redoaction, undoview
 
     def __setup_overlay(self):
-        # tree_overlay = OverlayCenter(self.mod_structure_view)
-
-        tree_overlay = Overlay(stylesheet="")
+        tree_overlay = Overlay()
         tree_overlay.addWidget(self.view_switcher)
 
-
-        # print(self.mod_structure_view.geometry())
-        # print(self.stackedWidget.geometry())
-        # self.stackedWidget.setLayout(tree_overlay)
-
+        ## set up stylesheet for buttons ##
         pal = QPalette()
 
+        # get main text and highlight colors from palette
         txtcol = pal.color(QPalette.WindowText)
         txtcol.setAlphaF(0.5)
 
-        hlcol = pal.color(QPalette.Highlight)
 
+        # normal border is main text color @ 50% opacity
         border_color = "rgba{}".format(str(txtcol.getRgb()))
-        hover_border_color = "rgba{}".format(str(hlcol.getRgb()))
+        # hovered border is palette highlight color
+        # hover_border_color = "rgba{}".format(str(hlcol.getRgb()))
 
+        # hovered btn-bg is highlight color @ 30% opacity
+        hlcol = pal.color(QPalette.Highlight)
         hlcol.setAlphaF(0.3)
         hover_bg = "rgba{}".format(str(hlcol.getRgb()))
 
@@ -136,11 +148,11 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
                             }
                            QToolButton:hover {
                                background: %s;
-                               border: 1px solid %s;
+                               border: 1px solid palette(highlight);
                            }
-                           """ % (
-            border_color, hover_bg, hover_border_color)
+                           """ % (border_color, hover_bg)
 
+        ## create overlay for undo/redo buttons ##
         undo_overlay = Overlay("top", "right", btn_stylesheet)
 
         undo_overlay.addWidget(self.undo_btngroup)
@@ -163,16 +175,11 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         chview_overlay = Overlay("bottom", "right", btn_stylesheet)
         chview_overlay.addWidget(self.change_view_btngroup)
 
-
-
-
+        ## create and populate main overlay ##
         main_overlay = OverlayCenter(self.fsview)
         main_overlay.addLayout(tree_overlay)
         main_overlay.addLayout(undo_overlay)
         main_overlay.addLayout(chview_overlay)
-
-        # main_overlay.addLayout(tree_overlay)
-        # tree_overlay.addLayout(btn_overlay)
 
         return main_overlay#, tree_overlay#, btn_overlay
 
@@ -212,6 +219,7 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         Set the visible root to the path pointed to by `index`
         """
         self.mod_structure_view.setRootIndex(index)
+        self.mod_structure_column_view.setRootIndex(index)
         self.modfsmodel.root = index
         self.check_top_level()
 
