@@ -802,3 +802,10 @@ class ModArchiveTreeModel(QAbstractItemModel):
         return self._sorted_dirlist(
             path.sparent
         ).index(path)
+
+    ## Convenience functions for using strings
+    def index4strpath(self, path):
+        return self.index4path(self._fs.get_path(path))
+
+    def row4strpath(self, path):
+        return self.row4path(self._fs.get_path(path))

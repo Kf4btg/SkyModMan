@@ -90,7 +90,7 @@ class Ui_mod_structure_dialog(object):
         self.gridLayout_3 = QtWidgets.QGridLayout(self.page_col_view)
         self.gridLayout_3.setContentsMargins(0, 0, 0, 0)
         self.gridLayout_3.setObjectName("gridLayout_3")
-        self.mod_structure_column_view = MyColumnView(self.page_col_view)
+        self.mod_structure_column_view = ResizingColumnView(self.page_col_view)
         self.mod_structure_column_view.setEditTriggers(QtWidgets.QAbstractItemView.EditKeyPressed)
         self.mod_structure_column_view.setDragEnabled(True)
         self.mod_structure_column_view.setDragDropMode(QtWidgets.QAbstractItemView.InternalMove)
@@ -160,4 +160,4 @@ class Ui_mod_structure_dialog(object):
         self.action_view_tree.setText(_translate("mod_structure_dialog", "Tree View"))
         self.action_view_columns.setText(_translate("mod_structure_dialog", "Column View"))
 
-from skymodman.interface.widgets.mytreewidget import MyColumnView
+from skymodman.interface.widgets.archivefs_columnview import ResizingColumnView

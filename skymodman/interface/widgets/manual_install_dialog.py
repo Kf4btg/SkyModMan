@@ -37,6 +37,8 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
         self.setupUi(self)
 
+        self.resize(1200, self.height())
+
         self.structure = mod_fs
         self.num_to_copy = 0
 

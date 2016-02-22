@@ -200,7 +200,7 @@
         <number>0</number>
        </property>
        <item row="0" column="0">
-        <widget class="MyColumnView" name="mod_structure_column_view">
+        <widget class="ResizingColumnView" name="mod_structure_column_view">
          <property name="editTriggers">
           <set>QAbstractItemView::EditKeyPressed</set>
          </property>
@@ -318,9 +318,9 @@
  </widget>
  <customwidgets>
   <customwidget>
-   <class>MyColumnView</class>
+   <class>ResizingColumnView</class>
    <extends>QColumnView</extends>
-   <header>skymodman.interface.widgets.mytreewidget</header>
+   <header>skymodman.interface.widgets.archivefs_columnview</header>
   </customwidget>
  </customwidgets>
  <resources/>

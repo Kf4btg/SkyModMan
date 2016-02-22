@@ -1130,11 +1130,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     # noinspection PyTypeChecker,PyArgumentList
     def install_mod_archive(self, manual=False):
         # todo: default to home folder or something instead of current dir
-        filename=QFileDialog.getOpenFileName(
-            self, "Select Mod Archive",
-            QDir.currentPath() + "/res",
-            "Archives [zip, 7z, rar] (*.zip *.7z *.rar);;All Files(*)")[0]
+        # filename=QFileDialog.getOpenFileName(
+        #     self, "Select Mod Archive",
+        #     QDir.currentPath() + "/res",
+        #     "Archives [zip, 7z, rar] (*.zip *.7z *.rar);;All Files(*)")[0]
 
+        # short-circuit for testing
+        filename='res/7ztest.7z'
         if filename:
             self.installui = InstallerUI() # helper class
             if manual:
