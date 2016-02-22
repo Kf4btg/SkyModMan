@@ -59,7 +59,9 @@ class ResizingListView(QtWidgets.QListView):
         index = self.rootIndex()
 
         # find out how deep we've gotten into the view
-        while index.isValid():
+        # while index.isValid():
+        visible_root = self._owner.rootIndex()
+        while index != visible_root:
             column+=1
             index = index.parent()
         self.column = column
@@ -107,6 +109,11 @@ class ResizingColumnView(QtWidgets.QColumnView):
 
     def isIndexHidden(self, index):
         return index.internalId() == self._hiddeninode
+
+    def setRootIndex(self, index):
+        self.views.clear()
+        self._widths=[120]*10
+        super().setRootIndex(index)
 
     @property
     def owner(self):
