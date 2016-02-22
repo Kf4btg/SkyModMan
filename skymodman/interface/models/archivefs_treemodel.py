@@ -392,19 +392,14 @@ class ModArchiveTreeModel(QAbstractItemModel):
             call_after_redo = self._end_move
             # need to figure out which action (redo/undo) will move the item
             # down in its parent list; target-row must be adjusted for that case
-            if src_row < trg_row: # redo is move-down
-                call_before_redo = partial(self._begin_move,
-                                           src_row, trg_row + 1,
+            if src_row != trg_row:
+                redo_md = src_row < trg_row
+                call_before_redo = partial(self._begin_move,  # 1 if redo is move-down
+                                           src_row, trg_row + redo_md,
                                            parent, parent)
-                call_before_undo = partial(self._begin_move,
-                                           trg_row, src_row,
-                                           parent, parent)
-            elif src_row > trg_row: # undo is move down
-                call_before_redo = partial(self._begin_move,
-                                           src_row, trg_row,
-                                           parent, parent)
-                call_before_undo = partial(self._begin_move,
-                                           trg_row, src_row + 1,
+
+                call_before_undo = partial(self._begin_move, # 1 if undo is move down
+                                           trg_row, src_row + (not redo_md),
                                            parent, parent)
             else:
                 # there is no movement; item will have same index in parent
