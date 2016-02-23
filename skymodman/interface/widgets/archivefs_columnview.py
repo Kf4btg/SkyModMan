@@ -278,6 +278,9 @@ class ResizingColumnView(QtWidgets.QColumnView):
     #             self._printinfo(cc, depth+1)
 
 class ColumnStyle(QProxyStyle):
+    """
+    Replaces the horrible right-arrow indicator in the column view with something a little nicer.
+    """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -286,8 +289,6 @@ class ColumnStyle(QProxyStyle):
         self.ENABLED = type(self.r_arrow).Normal
         self.DISABLED = type(self.r_arrow).Disabled
         self.ON = type(self.r_arrow).On
-
-
 
     def drawPrimitive(self, element, option, painter, widget=None):
 

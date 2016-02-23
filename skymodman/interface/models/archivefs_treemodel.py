@@ -495,8 +495,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
                 target = parpath
 
             # can't drop on self or on immediate parent
-            if target == dragged_path or dragged_path in target:
-                # or on child directory...do I need to check for that one? how?
+            if target == dragged_path or dragged_path in target or dragged_path in target.parents:
                 return False
 
         # now that we've gone through all that, leave the rest of the decision
