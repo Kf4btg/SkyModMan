@@ -1,10 +1,11 @@
 from functools import partial
 
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import pyqtSignal, Qt
+from PyQt5.QtCore import pyqtSignal, Qt, pyqtProperty
 from PyQt5.QtGui import QResizeEvent
+from PyQt5.QtWidgets import QScrollBar, QStyle, QProxyStyle
 
-from skymodman.utils import withlogger
+from skymodman.utils import withlogger, icons
 
 
 class ResizingListView(QtWidgets.QListView):
@@ -19,14 +20,21 @@ class ResizingListView(QtWidgets.QListView):
         self._width = 120
         self.connection_made=False
         self.setMinimumWidth(120)
+        # self.setDefaultDropAction(Qt.MoveAction)
+        # self.setAcceptDrops(True)
+        # self.setDragEnabled(True)
 
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(
             self._on_context_menu)
+        # self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        # self.setVerticalScrollBar(QScrollBar())
+        # self.verticalScrollBar().setVisible(False)
 
         # self.setObjectName("resizinglistview")
 
         self._defer_resize()
+
 
     def setRootIndex(self, index):
         super().setRootIndex(index)
@@ -113,10 +121,34 @@ class ResizingColumnView(QtWidgets.QColumnView):
 
         self.views = {} # just a place to for them to hide from the GC
         self._widths = [120]*10
+        # self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
+        self.setStyle(ColumnStyle(self.style()))
 
+        # set a style to show a divider between two columns
+        # (we hide the vertical scroll bar due to being way fugly).
+        # for some reason, just setting border-right didn't do anything;
+        # but setting a whole border and turning the others off does work, so...
+        self.setStyleSheet(
+            """QColumnView QAbstractItemView {
+                border: 2px solid palette(dark);
+                border-left: none;
+                border-top: none;
+                border-bottom: none;
+            }
+            """)
 
         self._hiddeninode = -1
+        self._icon = icons.get("c_right")
+
+    @pyqtProperty(str)
+    def arrowicon(self):
+        return self._icon
+
+    @arrowicon.setter
+    def arrowicon(self, value):
+        self._icon = icons.get(value)
+
 
     def isIndexHidden(self, index):
         return index.internalId() == self._hiddeninode
@@ -186,6 +218,13 @@ class ResizingColumnView(QtWidgets.QColumnView):
 
         return view
 
+    def initializeColumn(self, column):
+        super().initializeColumn(column)
+
+        # just need to make a few tweaks to the default setup
+        column.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        column.setMinimumWidth(120)
+
     def show_context_menu(self, view, index, global_pos):
         # just send the event on up
         self.owner.show_context_menu(view, index, global_pos)
@@ -237,3 +276,27 @@ class ResizingColumnView(QtWidgets.QColumnView):
     #         for cc in c.children():
     #             print(i*depth, "---------sub-child:------")
     #             self._printinfo(cc, depth+1)
+
+class ColumnStyle(QProxyStyle):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.r_arrow = icons.get("c_right", scale_factor=0.5)
+        self.ENABLED = type(self.r_arrow).Normal
+        self.DISABLED = type(self.r_arrow).Disabled
+        self.ON = type(self.r_arrow).On
+
+
+
+    def drawPrimitive(self, element, option, painter, widget=None):
+
+        if element == QStyle.PE_IndicatorColumnViewArrow:
+            selected = bool(option.state & self.State_Selected)
+
+            self.r_arrow.paint(painter, option.rect,
+                               mode=(self.DISABLED, self.ENABLED)[selected],
+                               state = self.ON)
+        else:
+            super().drawPrimitive(element, option, painter, widget)
+

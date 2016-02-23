@@ -104,6 +104,9 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
             self.mod_structure_view.rootIndex(), # should still be "/" at this point
             True)
 
+        # show colview by default while we're testing it
+        self.btn_colview.click()
+
     # noinspection PyArgumentList,PyTypeChecker
     def __setup_undo(self):
         undostack = QtWidgets.QUndoStack()

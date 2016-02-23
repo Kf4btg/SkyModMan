@@ -27,8 +27,14 @@ _icon_defs = {
     "view-tree": [("fa.tree", ), {}],
     # "view-tree": [("fa.site-map", ), {}],
 
-    "c_left": [("fa.caret-left", ), {}],
-    "c_right": [("fa.caret-right", ), {}],
+    "c_left": [("ei.caret-left", ), {}],
+    "c_right": [("ei.caret-right", ), {}],
+
+    "right": [("fa.angle-right", ), {}],
+    "left": [("fa.angle-left", ), {}],
+
+    "chev_right": [("fa.chevron-right", ), {}],
+    "chev_left": [("fa.chevron-left", ), {}],
 
     "move-up": [("fa.angle-up", ), {}],
     "move-down": [("fa.angle-down", ), {}],
