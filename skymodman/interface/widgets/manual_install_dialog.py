@@ -59,8 +59,9 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
         self.mod_structure_column_view.setModel(self.modfsmodel)
         self.mod_structure_column_view.owner = self
-        self.mod_structure_column_view.customContextMenuRequested.connect(
-            self.custom_context_menu)
+        # self.mod_structure_column_view.customContextMenuRequested.connect(
+        #     self.custom_context_menu)
+        self.mod_structure_column_view.setResizeGripsVisible(False)
 
 
         # QIcon.fromTheme("arrow-right")
@@ -74,7 +75,6 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         # """)
 
         # self.mod_structure_view.setStyleSheet("QTreeView::item:hover {background: transparent; color: palette(highlight)} ")
-        self.mod_structure_column_view.setResizeGripsVisible(False)
         # self.mod_structure_column_view.setStyleSheet(
         #     """
         #     QColumnView, QSizeGrip {
@@ -223,6 +223,19 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.action_delete.triggered.connect(self.delete_file)
 
 
+    def get_rclickmenu(self, for_view):
+        # here's the custom menu (actions will be made in/visible as required)
+        rclickmenu = QMenu(for_view)
+
+        rclickmenu.addActions(
+            [self.action_unset_toplevel,
+             self.action_set_toplevel,
+             self.action_rename,
+             self.action_delete,
+             self.action_create_directory])
+
+        return rclickmenu
+
     @property
     def fsroot(self) -> QModelIndex:
         """
@@ -299,6 +312,38 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         #  immediately open the name-editor for the new directory
         # self.mod_structure_view.edit(new_index)
 
+    def show_context_menu(self, view, index, global_pos):
+        topidx = self.fsroot # current root node
+
+        if index.isValid():
+            self.rclicked_inode = index.internalId()
+        else:
+            self.rclicked_inode = topidx.internalId()
+
+        user_set_root, clicked_isdir, non_root = (topidx.isValid(),
+                                                  self.modfsmodel._isdir(
+                                                      self.rclicked_inode),
+                                                  index.isValid()
+                                                  )
+
+        # adjust visible options #
+        # ---------------------- #
+
+        # show unset option if user has set custom root
+        self.action_unset_toplevel.setVisible(user_set_root)
+
+        # show set option if user clicked on directory (that is not the root)
+        self.action_set_toplevel.setVisible(clicked_isdir and non_root)
+
+        # show rename/delete options if user clicked on anything but root
+        self.action_rename.setVisible(non_root)
+        self.action_delete.setVisible(non_root)
+
+        # always show create-dir option.
+        # self.action_create_directory
+        self.get_rclickmenu(view).exec_(global_pos)
+
+        # self.rclickmenu.exec_(global_pos)
 
     def custom_context_menu(self, position):
         clicked_index = self.mod_structure_view.indexAt(position)

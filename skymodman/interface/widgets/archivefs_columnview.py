@@ -1,3 +1,5 @@
+from functools import partial
+
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import pyqtSignal, Qt
 from PyQt5.QtGui import QResizeEvent
@@ -17,6 +19,10 @@ class ResizingListView(QtWidgets.QListView):
         self._width = 120
         self.connection_made=False
         self.setMinimumWidth(120)
+
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(
+            self._on_context_menu)
 
         # self.setObjectName("resizinglistview")
 
@@ -49,6 +55,9 @@ class ResizingListView(QtWidgets.QListView):
 
             # emit for execution on next event-loop
             self._columnWidthsChanged.emit()
+
+    def _on_context_menu(self, point):
+        self._owner.show_context_menu(self, self.indexAt(point), self.mapToGlobal(point))
 
     def _do_deferred_resize(self):
         """handler for _defer_resize event"""
@@ -104,6 +113,8 @@ class ResizingColumnView(QtWidgets.QColumnView):
 
         self.views = {} # just a place to for them to hide from the GC
         self._widths = [120]*10
+
+
 
         self._hiddeninode = -1
 
@@ -169,16 +180,15 @@ class ResizingColumnView(QtWidgets.QColumnView):
         view.setRootIndex(index)
         self.initializeColumn(view)
 
-        # print("setting ctxt menu policy")
-        view.setContextMenuPolicy(Qt.CustomContextMenu)
-        # view.customContextMenuRequested.connect(
-        #     partial(self._on_context_menu, view))
-
         # We must hold a reference to this somewhere so that it isn't
         # garbage collected on us.
         self.views[view.column] = view
 
         return view
+
+    def show_context_menu(self, view, index, global_pos):
+        # just send the event on up
+        self.owner.show_context_menu(view, index, global_pos)
 
     def scrollTo(self, current, *args):
         """
