@@ -112,6 +112,9 @@ class ResizingListView(QtWidgets.QListView):
 @withlogger
 class ResizingColumnView(QtWidgets.QColumnView):
 
+    # todo: while dragging, if one hovers over the 2px border btwn columns, this apparently counts as targeting the root (invalid) index; dropping the item in this case will move it to the root folder. Not a big issue, but not exactly expected behaviour, either.
+
+    # fixme: another problem with dragging: moving a folder into another folder in the same parent folder as the original folder (uhhh....you know what i mean?) doesn't update the 'child' columns correctly; until a click or two is made on different items, one will still see the contents of the moved folder as if that folder were still selected in the current column.
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
