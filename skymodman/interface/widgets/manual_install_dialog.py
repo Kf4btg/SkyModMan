@@ -63,27 +63,6 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         #     self.custom_context_menu)
         self.mod_structure_column_view.setResizeGripsVisible(False)
 
-
-        # QIcon.fromTheme("arrow-right")
-        # QIcon().
-        # print(QIcon().themeSearchPaths())
-        # print(QIcon().themeName())
-
-        # self.mod_structure_column_view.setStyleSheet("""
-        #     QColumnView::left-arrow
-        #
-        # """)
-
-        # self.mod_structure_view.setStyleSheet("QTreeView::item:hover {background: transparent; color: palette(highlight)} ")
-        # self.mod_structure_column_view.setStyleSheet(
-        #     """
-        #     QColumnView, QSizeGrip {
-        #         image: none;
-        #     }
-        #     """
-        # )
-
-
         # create custom context menu
         self.rclickmenu = self.__setup_context_menu()
         self.rclicked_inode = None
@@ -96,13 +75,18 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.modfsmodel.rowsInserted.connect(self.check_top_level)
         self.modfsmodel.folder_structure_changed.connect(self.check_top_level)
 
+
         self.mod_structure_view.setToolTip(_tree_tooltip)
+        self.mod_structure_column_view.setToolTip(_tree_tooltip)
 
         ## Hide the Trash folder
         self.mod_structure_view.setRowHidden(
             self.modfsmodel.row4path(self.modfsmodel.trash),
             self.mod_structure_view.rootIndex(), # should still be "/" at this point
             True)
+
+        # todo: this helps to keep the two view in sync, but doesn't quite get it all right
+        self.mod_structure_column_view.setSelectionModel(self.mod_structure_view.selectionModel())
 
         # show colview by default while we're testing it
         self.btn_colview.click()
