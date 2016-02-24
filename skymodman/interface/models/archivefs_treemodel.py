@@ -347,6 +347,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
                 Qt.DecorationRole:
                     self.FILE_ICON if path.is_file else (
                         self.FOLDER_ICON,
+                        # self.FOLDER_OPEN)[self.],
                         self.FOLDER_OPEN)[self._owner.is_expanded(index)],
                     # (self.FILE_ICON, self.FOLDER_ICON)[path.is_dir],
                 Qt.CheckStateRole:

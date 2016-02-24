@@ -1,5 +1,5 @@
 # from PyQt5.QtCore import Qt
-from PyQt5.QtCore import QModelIndex, Qt
+from PyQt5.QtCore import QModelIndex, Qt, pyqtSlot
 from PyQt5.QtGui import QKeySequence, QIcon, QPalette
 from PyQt5.QtWidgets import QDialog, QMenu, \
     QInputDialog
@@ -9,8 +9,6 @@ from skymodman.interface.designer.uic.archive_structure_ui import Ui_mod_structu
 from skymodman.interface.widgets.overlay_layout import Overlay, OverlayCenter
 from skymodman.interface.models.archivefs_treemodel import ModArchiveTreeModel
 from skymodman.utils import withlogger, icons
-
-# from skymodman.utils.tree import Tree
 
 _description = """Arrange the directory structure of the archive shown to the right into the proper structure for installation, then click "OK" to install the mod."""
 
@@ -56,11 +54,11 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.mod_structure_view.customContextMenuRequested.connect(
             self.custom_context_menu)
 
+        # set default for active_view
+        self._active_view = self.mod_structure_view
 
         self.mod_structure_column_view.setModel(self.modfsmodel)
         self.mod_structure_column_view.owner = self
-        # self.mod_structure_column_view.customContextMenuRequested.connect(
-        #     self.custom_context_menu)
         self.mod_structure_column_view.setResizeGripsVisible(False)
 
         # create custom context menu
@@ -85,7 +83,6 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
             self.mod_structure_view.rootIndex(), # should still be "/" at this point
             True)
 
-        # todo: this helps to keep the two view in sync, but doesn't quite get it all right
         self.mod_structure_column_view.setSelectionModel(self.mod_structure_view.selectionModel())
 
         # show colview by default while we're testing it
@@ -123,7 +120,6 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         # get main text and highlight colors from palette
         txtcol = pal.color(QPalette.WindowText)
         txtcol.setAlphaF(0.5)
-
 
         # normal border is main text color @ 50% opacity
         border_color = "rgba{}".format(str(txtcol.getRgb()))
@@ -173,7 +169,7 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.btn_treeview.setIcon(icons.get("view-tree"))
         self.btn_colview.setIcon(icons.get("view-column"))
 
-        chview_btngroup.buttonClicked[int].connect(self.view_switcher.setCurrentIndex)
+        chview_btngroup.buttonClicked[int].connect(self.change_view)
 
         # and the overlay
         chview_overlay = Overlay("bottom", "right", btn_stylesheet)
@@ -293,12 +289,6 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         if new_name:
             fsmod.create_new_dir(parent, new_name)
 
-
-        # new_index = fsmod.create_new_dir(parent, new_name)
-
-        #  immediately open the name-editor for the new directory
-        # self.mod_structure_view.edit(new_index)
-
     def show_context_menu(self, view, index, global_pos):
         topidx = self.fsroot # current root node
 
@@ -330,8 +320,6 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         # self.action_create_directory
         self.get_rclickmenu(view).exec_(global_pos)
 
-        # self.rclickmenu.exec_(global_pos)
-
     def custom_context_menu(self, position):
         clicked_index = self.mod_structure_view.indexAt(position)
 
@@ -342,12 +330,10 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         else:
             self.rclicked_inode = topidx.internalId()
 
-
         user_set_root, clicked_isdir, non_root = (topidx.isValid(),
                                     self.modfsmodel._isdir(self.rclicked_inode),
                                     clicked_index.isValid()
                                     )
-
 
         # adjust visible options #
         # ---------------------- #
@@ -367,34 +353,30 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
         self.rclickmenu.exec_(self.mod_structure_view.mapToGlobal(position))
 
-    def check_top_level(self):
+    def check_top_level(self, *args):
+    # def check_top_level(self, parent=None, first=-1, last=-1, dest=None, dest_row=-1):
+
         isvalid = self.modfsmodel.validate_mod_structure(self.fsroot)
 
         # print(isvalid)
 
     def delete_file(self):
-
         # so, in what myriad ways might this fail?
         self.modfsmodel.delete(self.rclicked_inode)
 
     def undo(self):
-        # self.modfsmodel.undo()
         self.undostack.undo()
     def redo(self):
-        # self.modfsmodel.redo()
         self.undostack.redo()
 
+    @pyqtSlot(int)
+    def change_view(self, widget_index):
+        self.view_switcher.setCurrentIndex(widget_index)
+        self._active_view = (self.mod_structure_view,
+                             self.mod_structure_column_view)[widget_index]
 
     def is_expanded(self, index):
-        return self.mod_structure_view.isExpanded(index)
-
-    # def change_view(self, view_id):
-    #
-    #     # todo: make an enum for these ids
-    #     if view_id==0:
-    #
-
-
+        return self._active_view.isExpanded(index)
 
     #
     # def on_tree_change(self):

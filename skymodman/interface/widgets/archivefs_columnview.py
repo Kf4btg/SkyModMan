@@ -1,9 +1,7 @@
-from functools import partial
-
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import pyqtSignal, Qt, pyqtProperty
+from PyQt5.QtCore import pyqtSignal, Qt
 from PyQt5.QtGui import QResizeEvent
-from PyQt5.QtWidgets import QScrollBar, QStyle, QProxyStyle
+from PyQt5.QtWidgets import QStyle, QProxyStyle
 
 from skymodman.utils import withlogger, icons
 
@@ -14,27 +12,16 @@ class ResizingListView(QtWidgets.QListView):
 
     def __init__(self, columnview, *args, **kwargs):
         super().__init__(columnview, *args, **kwargs)
-
         self._owner = columnview
         self.column = -1
         self._width = 120
         self.connection_made=False
-        self.setMinimumWidth(120)
-        # self.setDefaultDropAction(Qt.MoveAction)
-        # self.setAcceptDrops(True)
-        # self.setDragEnabled(True)
 
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(
             self._on_context_menu)
-        # self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        # self.setVerticalScrollBar(QScrollBar())
-        # self.verticalScrollBar().setVisible(False)
-
-        # self.setObjectName("resizinglistview")
 
         self._defer_resize()
-
 
     def setRootIndex(self, index):
         super().setRootIndex(index)
@@ -76,7 +63,6 @@ class ResizingListView(QtWidgets.QListView):
         index = self.rootIndex()
 
         # find out how deep we've gotten into the view
-        # while index.isValid():
         visible_root = self._owner.rootIndex()
         while index != visible_root:
             column+=1
@@ -123,13 +109,13 @@ class ResizingColumnView(QtWidgets.QColumnView):
         """:type: skymodman.interface.models.archivefs_treemodel.ModArchiveTreeModel"""
 
         self.views = {} # just a place to for them to hide from the GC
+        self._viewlist = self.views.values()
         self._widths = [120]*10
-        # self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
         self.setStyle(ColumnStyle(self.style()))
 
         # set a style to show a divider between two columns
-        # (we hide the vertical scroll bar due to being way fugly).
+        # (we hide the vertical scroll bar due to it being way fugly).
         # for some reason, just setting border-right didn't do anything;
         # but setting a whole border and turning the others off does work, so...
         self.setStyleSheet(
@@ -144,14 +130,7 @@ class ResizingColumnView(QtWidgets.QColumnView):
         self._hiddeninode = -1
         self._icon = icons.get("c_right")
 
-    @pyqtProperty(str)
-    def arrowicon(self):
-        return self._icon
-
-    @arrowicon.setter
-    def arrowicon(self, value):
-        self._icon = icons.get(value)
-
+        self._expanded_inodes = set()
 
     def isIndexHidden(self, index):
         return index.internalId() == self._hiddeninode
@@ -161,6 +140,27 @@ class ResizingColumnView(QtWidgets.QColumnView):
         self._widths=[120]*10
         super().setRootIndex(index)
 
+    def currentChanged(self, current, previous):
+        """
+        mark 'current' and any directories in its parent hierarchy as 'opened'.
+        :param current:
+        :param previous:
+        """
+        old_inodes=self._expanded_inodes
+        self._expanded_inodes = set()
+
+        index=current
+        root = self.rootIndex()
+        while index != root:
+            self._expanded_inodes.add(index.internalId())
+            index=index.parent()
+
+        super().currentChanged(current, previous)
+
+        # make sure non-opened folders have their icon updated
+        for oi in old_inodes:
+            self.update(self._model.index4inode(oi))
+
     @property
     def owner(self):
         return self._owner
@@ -168,6 +168,9 @@ class ResizingColumnView(QtWidgets.QColumnView):
     @owner.setter
     def owner(self, value):
         self._owner = value
+
+    def isExpanded(self, index):
+        return index.internalId() in self._expanded_inodes
 
     def setModel(self, model):
         super().setModel(model)
@@ -203,13 +206,6 @@ class ResizingColumnView(QtWidgets.QColumnView):
 
         :param QModelIndex index: the root index (diretory) whose contents will be shown in this column
         """
-        # for c in self.children():
-        #     try:
-        #         self._printinfo(c)
-        #         # printattrs(c)
-        #     except Exception as e:
-        #         print(e)
-
         view = ResizingListView(self)
         view.setModel(self._model)
         view.setRootIndex(index)
@@ -254,31 +250,6 @@ class ResizingColumnView(QtWidgets.QColumnView):
             column.setFixedWidth(0)
 
         super().scrollTo(current, *args)
-
-    # def _printinfo(self, c, depth=0, i="  "):
-    #     print()
-    #     try:
-    #         print(i*depth, 1, type(c))
-    #         print(i*depth, 2, str(c))
-    #         print(i*depth, 3, c.objectName())
-    #         # print(4, c.accessibleName())
-    #         # print(5, c.accessibleDescription())
-    #         print(i*depth, 6, c.x(), c.y())
-    #         # print(7, c.winId())
-    #         # print(i*depth, 8, c.size())
-    #         print(i*depth, 8, "w", c.width(), ", h", c.height())
-    #         print(i*depth, 9, "min:", c.minimumSize())
-    #         print(i*depth, "a", c.geometry())
-    #         # print(i*depth, "b", c.dynamicPropertyNames())
-    #         # print(i*depth, "c", c.backgroundRole(), c.foregroundRole())
-    #         print(i*depth, "d   ", c.children())
-    #     except Exception as e:
-    #         print(i*depth, e)
-    #
-    #     if c.children():
-    #         for cc in c.children():
-    #             print(i*depth, "---------sub-child:------")
-    #             self._printinfo(cc, depth+1)
 
 class ColumnStyle(QProxyStyle):
     """
