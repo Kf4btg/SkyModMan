@@ -74,6 +74,9 @@ _icon_defs = {
     "radio-checked": [("fa.circle",), {}],
 
     "steam": [("fa.steam",), {}],
+
+    "status-ok": [("fa.check",), {"color": "green"}],
+    "status-bad": [("fa.times",), {"color": "red"}],
 }
 
 _default_opts = {"color": QtGui.QPalette().color(QtGui.QPalette.WindowText)}

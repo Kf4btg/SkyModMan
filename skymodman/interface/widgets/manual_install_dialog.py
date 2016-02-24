@@ -86,6 +86,12 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
             self.mod_structure_view.rootIndex(), # should still be "/" at this point
             True)
 
+
+        self._icon_ok = icons.get("status-ok")
+        self._icon_notok = icons.get("status-bad")
+
+        self.check_top_level()
+
         # self.mod_structure_column_view.setSelectionModel(self.mod_structure_view.selectionModel())
 
         # show colview by default while we're testing it
@@ -358,10 +364,15 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
         self.rclickmenu.exec_(self.mod_structure_view.mapToGlobal(position))
 
-    def check_top_level(self, *args):
     # def check_top_level(self, parent=None, first=-1, last=-1, dest=None, dest_row=-1):
+    def check_top_level(self, *args):
 
         isvalid = self.modfsmodel.validate_mod_structure(self.fsroot)
+        if isvalid:
+            self.lbl_structure_icon.setPixmap(self._icon_ok.pixmap(22, 22))
+        else:
+            self.lbl_structure_icon.setPixmap(
+                self._icon_notok.pixmap(22, 22))
 
         # print(isvalid)
 

@@ -286,7 +286,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
             # not internalPointer()
             return self.createIndex(row, col, child.inode)
         except IndexError as e:
-            print("index({}, {}, {}): IndexError({})".format(row, col, parent.internalId(), e))
+            print("index({}, {}, {}({})): IndexError({})".format(row, col, parentpath, parent.internalId(), e))
             print(self._sorted_dirlist(parentpath))
             # self.LOGGER << "index({}, {}, {}): IndexError".format(row, col, parent.internalId())
             # self.LOGGER << self._sorted_dirlist(parentpath)
@@ -443,7 +443,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         mimedata.setText(str(indexes[0].internalId()))
         return mimedata
 
-    def dropMimeData(self, data, action, row, column, parent):
+    def dropMimeData(self, mimedata, action, row, column, parent):
 
         if not parent.isValid():
             # canDropMimeData should prevent any top-level items
@@ -459,16 +459,16 @@ class ModArchiveTreeModel(QAbstractItemModel):
                 # either dropped directly on parent or before row,col in parent,
                 target_path = par_path
 
-        src_path = self._fs.pathfor(int(data.text()))
+        src_path = self._fs.pathfor(int(mimedata.text()))
 
         self.move_to_dir(src_path, target_path)
         # self._print_fstree()
         return True
 
-    def canDropMimeData(self, data, action, row, col, parent):
+    def canDropMimeData(self, mimedata, action, row, col, parent):
         """
 
-        :param QMimeData data:
+        :param QMimeData mimedata:
         :param Qt.DropAction action:
         :param int row:
         :param int col:
@@ -476,18 +476,23 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :return:
         """
 
-        dragged_inode = int(data.text())
+        # print("canDropMimeData({}, {}, {}, {}, {})".format(mimedata, action, row, col, parent.internalId()))
+
+        dragged_inode = int(mimedata.text())
         dragged_path = self._fs.pathfor(dragged_inode)
 
         if not parent.isValid():
+            # print("parent invalid")
             ## target is (the real) root directory, so return True so long as source
             ## was not already a top-level item.
             return dragged_path not in self._realroot
             # return dragged_inode not in self._fs.dir_inodes(self.root_inode)
         else:
+            # print("parent valid")
             parpath = self.index2path(parent)
 
             if row < 0 and parpath.is_file:
+                # print("row < 0 & {} is_file".format(parpath))
                 # dropped directly on parent, and 'parent' is not a directory
                 target = parpath.sparent
             else:
@@ -495,13 +500,19 @@ class ModArchiveTreeModel(QAbstractItemModel):
                 # doesn't really matter, we just need to add to parent's list
                 target = parpath
 
+            # print("dragged =", dragged_path)
+            # print("target =", target)
+
             # can't drop on self or on immediate parent
             if target == dragged_path or dragged_path in target or dragged_path in target.parents:
+                # print("returning false")
                 return False
 
+        return True
+        # print("calling super()")
         # now that we've gone through all that, leave the rest of the decision
             # up to the super class
-        return super().canDropMimeData(data, action, row, col, parent)
+        # return super().canDropMimeData(mimedata, action, row, col, parent)
 
     ##===============================================
     ## Path modification
@@ -699,6 +710,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param target_dir:
         :param use_list: if provided, will be used instead of `target_dir`'s contents list for determining insertion point.
         """
+        # print("_get_insertion_index({}, {}, {}, {})".format(path, target_dir, path_is_folder, use_list))
+
         i = -1
         path=PureCIPath(path)
         # return first index where either:
@@ -777,11 +790,13 @@ class ModArchiveTreeModel(QAbstractItemModel):
         return self._fs.pathfor(index.internalId())
 
     def index4inode(self, inode):
+        # print("index4inode({})".format(inode))
         return QModelIndex() \
             if inode == ArchiveFS.ROOT_INODE \
             else self.createIndex(self.row4inode(inode), 0, inode)
 
     def index4path(self, path):
+        # print("index4path({})".format(path))
         return QModelIndex() \
             if path == self._realroot \
             else self.createIndex(self.row4path(path), 0, path.inode)
@@ -794,6 +809,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         return self.row4path(self._fs.pathfor(inode))
 
     def row4path(self, path):
+        # print("row4path({})".format(path))
         return self._sorted_dirlist(
             path.sparent
         ).index(path)
