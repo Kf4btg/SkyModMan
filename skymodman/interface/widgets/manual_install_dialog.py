@@ -1,8 +1,7 @@
 # from PyQt5.QtCore import Qt
-from PyQt5.QtCore import QModelIndex, Qt, pyqtSlot
-from PyQt5.QtGui import QKeySequence, QIcon, QPalette
-from PyQt5.QtWidgets import QDialog, QMenu, \
-    QInputDialog
+from PyQt5.QtCore import QModelIndex#, Qt, pyqtSlot
+from PyQt5.QtGui import QKeySequence, QPalette
+from PyQt5.QtWidgets import QDialog, QMenu, QInputDialog
 from PyQt5 import QtWidgets
 
 from skymodman.interface.designer.uic.archive_structure_ui import Ui_mod_structure_dialog
@@ -18,6 +17,8 @@ _tree_tooltip = """Drag files and folders to rearrange.
 Uncheck items to exclude them from installation.
 Right click to set top-level directory or create a new folder."""
 
+
+# noinspection PyUnusedLocal
 @withlogger
 class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
@@ -35,7 +36,7 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
         self.setupUi(self)
 
-        self.resize(1200, self.height())
+        # self.resize(1200, self.height())
 
         self.structure = mod_fs
         self.num_to_copy = 0
@@ -57,9 +58,9 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         # set default for active_view
         self._active_view = self.mod_structure_view
 
-        self.mod_structure_column_view.setModel(self.modfsmodel)
-        self.mod_structure_column_view.owner = self
-        self.mod_structure_column_view.setResizeGripsVisible(False)
+        # self.mod_structure_column_view.setModel(self.modfsmodel)
+        # self.mod_structure_column_view.owner = self
+        # self.mod_structure_column_view.setResizeGripsVisible(False)
 
         # create custom context menu
         self.rclickmenu = self.__setup_context_menu()
@@ -69,13 +70,15 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.__setup_actions()
 
         ## connect some more signals
+        # noinspection PyUnresolvedReferences
         self.modfsmodel.rowsMoved.connect(self.check_top_level)
+        # noinspection PyUnresolvedReferences
         self.modfsmodel.rowsInserted.connect(self.check_top_level)
         self.modfsmodel.folder_structure_changed.connect(self.check_top_level)
 
 
         self.mod_structure_view.setToolTip(_tree_tooltip)
-        self.mod_structure_column_view.setToolTip(_tree_tooltip)
+        # self.mod_structure_column_view.setToolTip(_tree_tooltip)
 
         ## Hide the Trash folder
         self.mod_structure_view.setRowHidden(
@@ -83,10 +86,10 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
             self.mod_structure_view.rootIndex(), # should still be "/" at this point
             True)
 
-        self.mod_structure_column_view.setSelectionModel(self.mod_structure_view.selectionModel())
+        # self.mod_structure_column_view.setSelectionModel(self.mod_structure_view.selectionModel())
 
         # show colview by default while we're testing it
-        self.btn_colview.click()
+        # self.btn_colview.click()
 
     # noinspection PyArgumentList,PyTypeChecker
     def __setup_undo(self):
@@ -158,28 +161,29 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.btn_redo.setDefaultAction(self.action_redo)
 
         ## View switching buttons ##
-        chview_btngroup = QtWidgets.QButtonGroup(self.view_switcher)
+        # chview_btngroup = QtWidgets.QButtonGroup(self.view_switcher)
+        self.change_view_btngroup.setVisible(False)
 
-        chview_btngroup.addButton(self.btn_treeview)
-        chview_btngroup.setId(self.btn_treeview, 0)
+        # chview_btngroup.addButton(self.btn_treeview)
+        # chview_btngroup.setId(self.btn_treeview, 0)
+        #
+        # chview_btngroup.addButton(self.btn_colview)
+        # chview_btngroup.setId(self.btn_colview, 1)
 
-        chview_btngroup.addButton(self.btn_colview)
-        chview_btngroup.setId(self.btn_colview, 1)
+        # self.btn_treeview.setIcon(icons.get("view-tree"))
+        # self.btn_colview.setIcon(icons.get("view-column"))
 
-        self.btn_treeview.setIcon(icons.get("view-tree"))
-        self.btn_colview.setIcon(icons.get("view-column"))
-
-        chview_btngroup.buttonClicked[int].connect(self.change_view)
+        # chview_btngroup.buttonClicked[int].connect(self.change_view)
 
         # and the overlay
-        chview_overlay = Overlay("bottom", "right", btn_stylesheet)
-        chview_overlay.addWidget(self.change_view_btngroup)
+        # chview_overlay = Overlay("bottom", "right", btn_stylesheet)
+        # chview_overlay.addWidget(self.change_view_btngroup)
 
         ## create and populate main overlay ##
         main_overlay = OverlayCenter(self.fsview)
         main_overlay.addLayout(tree_overlay)
         main_overlay.addLayout(undo_overlay)
-        main_overlay.addLayout(chview_overlay)
+        # main_overlay.addLayout(chview_overlay)
 
         return main_overlay#, tree_overlay#, btn_overlay
 
@@ -232,7 +236,7 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         Set the visible root to the path pointed to by `index`
         """
         self.mod_structure_view.setRootIndex(index)
-        self.mod_structure_column_view.setRootIndex(index)
+        # self.mod_structure_column_view.setRootIndex(index)
         self.modfsmodel.root = index
         self.check_top_level()
 
@@ -283,6 +287,7 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
             suffix+=1
             startname = "New Folder %d" % suffix
 
+        # noinspection PyArgumentList,PyTypeChecker
         new_name = QInputDialog.getText(self, "New Folder",
                                         "Create new folder in:\n{}".format(parent), text=startname)[0]
 
@@ -369,11 +374,11 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
     def redo(self):
         self.undostack.redo()
 
-    @pyqtSlot(int)
-    def change_view(self, widget_index):
-        self.view_switcher.setCurrentIndex(widget_index)
-        self._active_view = (self.mod_structure_view,
-                             self.mod_structure_column_view)[widget_index]
+    # @pyqtSlot(int)
+    # def change_view(self, widget_index):
+    #     self.view_switcher.setCurrentIndex(widget_index)
+    #     self._active_view = (self.mod_structure_view,
+    #                          self.mod_structure_column_view)[widget_index]
 
     def is_expanded(self, index):
         return self._active_view.isExpanded(index)

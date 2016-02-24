@@ -1,5 +1,6 @@
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import pyqtSignal, Qt
+from PyQt5.QtCore import pyqtSignal, Qt, QModelIndex, \
+    QItemSelectionModel
 from PyQt5.QtGui import QResizeEvent
 from PyQt5.QtWidgets import QStyle, QProxyStyle
 
@@ -22,6 +23,8 @@ class ResizingListView(QtWidgets.QListView):
             self._on_context_menu)
 
         self._defer_resize()
+
+        self._pressed = None
 
     def setRootIndex(self, index):
         super().setRootIndex(index)
@@ -94,6 +97,30 @@ class ResizingListView(QtWidgets.QListView):
         # cheating a bit)
         self._owner.updateWidths(column, width)
 
+    # def mousePressEvent(self, event):
+    #
+    #
+    #
+    #     print("mousePressEvent, col", self.column)
+    #     if self.hasFocus():
+    #         print("focused")
+    #         index = self.indexAt(event.pos())
+    #         self._pressed = index
+    #         self._pressevent = event
+    #         self.selectionModel().select(index, QItemSelectionModel.ClearAndSelect)
+    #     else:
+    #         super().mousePressEvent(event)
+    #
+    #
+    # def mouseReleaseEvent(self, event):
+    #     print("mouseReleaseEvent, col", self.column)
+    #     if self._pressed is not None:
+    #         super().mousePressEvent(self._pressevent)
+    #         self._pressed = self._pressevent = None
+    #
+    #     super().mouseReleaseEvent(event)
+
+
 
 @withlogger
 class ResizingColumnView(QtWidgets.QColumnView):
@@ -109,7 +136,7 @@ class ResizingColumnView(QtWidgets.QColumnView):
         """:type: skymodman.interface.models.archivefs_treemodel.ModArchiveTreeModel"""
 
         self.views = {} # just a place to for them to hide from the GC
-        self._viewlist = self.views.values()
+        # self._viewlist = self.views.values()
         self._widths = [120]*10
 
         self.setStyle(ColumnStyle(self.style()))
@@ -131,6 +158,7 @@ class ResizingColumnView(QtWidgets.QColumnView):
         self._icon = icons.get("c_right")
 
         self._expanded_inodes = set()
+
 
     def isIndexHidden(self, index):
         return index.internalId() == self._hiddeninode
@@ -173,9 +201,16 @@ class ResizingColumnView(QtWidgets.QColumnView):
         return index.internalId() in self._expanded_inodes
 
     def setModel(self, model):
+        """
+
+        :param skymodman.interface.models.archivefs_treemodel.ModArchiveTreeModel model:
+        :return:
+        """
         super().setModel(model)
         self._model = model
         self._hiddeninode = self._model.trash.inode
+
+        self._model.rowsMoved.connect(self.on_rows_moved)
 
     def reflow(self):
         """Force column view to update"""
@@ -204,7 +239,7 @@ class ResizingColumnView(QtWidgets.QColumnView):
         """
         Override to replace the regular QListView columns with ResizingListView
 
-        :param QModelIndex index: the root index (diretory) whose contents will be shown in this column
+        :param QModelIndex index: the root index (directory) whose contents will be shown in this column
         """
         view = ResizingListView(self)
         view.setModel(self._model)
@@ -250,6 +285,21 @@ class ResizingColumnView(QtWidgets.QColumnView):
             column.setFixedWidth(0)
 
         super().scrollTo(current, *args)
+
+    def on_rows_moved(self, parent_index, start, end, dest_index, destrow):
+        """
+        When a directory is moved inside of a sibling directory, change the focused item to that sibling (the new parent directory). Otherwise, focus the previous parent of the moved-directory.
+        :param parent_index:
+        :param start:
+        :param end:
+        :param dest_index:
+        :param destrow:
+        """
+        # fixme: clicking on an item should NOT immediately select it; this interferes with dragging. An item should only be selected on mouse release.
+        if dest_index.parent() == parent_index:
+            self.setCurrentIndex(dest_index)
+        else:
+            self.setCurrentIndex(parent_index)
 
 class ColumnStyle(QProxyStyle):
     """
