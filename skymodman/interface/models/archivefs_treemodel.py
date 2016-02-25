@@ -111,10 +111,14 @@ class MoveCommand(UndoCmd):
 
     def _domove(self, srcdir, trgdir):
         src = self.mkpath(srcdir, self._name)
-        src.move(trgdir)
+        try:
+            src.move(trgdir)
+        except Error_EEXIST:
+            self._on_collision(src, self.mkpath(trgdir, self._name))
 
-    def _on_collision(self):
+    def _on_collision(self, src, target):
         pass
+
 
 
 class RenameCommand(UndoCmd):

@@ -7,7 +7,7 @@ from skymodman.exceptions import Error
 from skymodman.utils import singledispatch_m
 # from skymodman.utils.debug import Printer as PRINT
 from skymodman.constants import TopLevelDirs_Bain, \
-    TopLevelSuffixes
+    TopLevelSuffixes, OverwriteMode
 
 class FSError(Error):
     """ Represents some sort of error in the ArchiveFS """
@@ -213,13 +213,13 @@ class CIPath(PureCIPath):
     ## path/name manipulation
     ##===============================================
 
-    def move(self, destination, overwrite=False):
+    def move(self, destination, overwrite=OverwriteMode.PROMPT):
         self._accessor.move(self, destination, overwrite)
 
-    def rename(self, destination, overwrite=False):
+    def rename(self, destination, overwrite=OverwriteMode.PROMPT):
         self._accessor.rename(self, destination, overwrite)
 
-    def chname(self, new_name, overwrite=False):
+    def chname(self, new_name, overwrite=OverwriteMode.PROMPT):
         self._accessor.chname(self, new_name, overwrite)
 
     def replace(self, destination):
@@ -966,7 +966,7 @@ class ArchiveFS:
         # just to clear the entire inodeof() cache
         self.caches["inodeof"].clear()
 
-    def _del_dir(self, dirinode:int):
+    def _del_dir(self, dirinode):
         """
         No checks, just does the job.
         :param int dirinode:
@@ -1002,13 +1002,13 @@ class ArchiveFS:
         self.del_from_caches(("listdir", "vlistdir"), dirinode)
 
 
-    def _unlink(self, inode:int):
+    def _unlink(self, inode):
         """
         Instead of deleting the inode from the inode table,
         (thus changing the length of the list and messing up all our inodes),
         this replaces the index in the table with ``None``. Also removes
         the inode from its parent's list of child-inodes
-        :param inode:
+        :param int inode:
         :return:
         """
         inorec = self.inode_table[inode]
@@ -1037,7 +1037,7 @@ class ArchiveFS:
     ## Name/Path Manipulation
     ##===============================================
 
-    def move(self, path, destination, overwrite=False):
+    def move(self, path, destination, overwrite=OverwriteMode.PROMPT):
         """...
         Move the file or directory pointed to by `path` to `destination`.
 
@@ -1054,36 +1054,46 @@ class ArchiveFS:
         src = PureCIPath(path)
         dst = PureCIPath(destination)
 
-
         # if someone attempted to move an item to itself, just return
         if src == dst: return True
 
         # if the destination is an existing directory, move the source inside of it.
         if self.is_dir(dst):
-            return self._move_to_dir(src, dst, overwrite)
+            # return self._move_to_dir(src, dst, overwrite)
 
-        # now we know dst is either a file or a non-existing path
-        # so if it's a file, either delete it or raise an error
-        self._check_collision(dst, overwrite)
+            dst = PureCIPath(dst, src.name)
 
-        # and now we can be sure it doesn't exist! Muahahahaha...ha....oh
+            # if someone attempted to move an item inside its own parent, just return
+            if dst == path:
+                return True
 
-        # if destination path is in the same folder as the source,
-        # this is just a name change
-        if dst.parent == src.parent:
-            return self._change_name(src, dst.name)
+        # and now this is a rename operation
+        return self._dorename(src, dst, overwrite)
 
-        # and if we made it here, we can finally just move src to dst
-        return self._move(src, dst)
+        #
+        # self._check_collision(dest_path, overwrite)
+        # # now we know dst is either a file or a non-existing path
+        # # so if it's a file, either delete it or raise an error
+        # self._check_collision(dst, overwrite)
+        #
+        # # and now we can be sure it doesn't exist! Muahahahaha...ha....oh
+        #
+        # # if destination path is in the same folder as the source,
+        # # this is just a name change
+        # if dst.parent == src.parent:
+        #     return self._change_name(src, dst.name)
+        #
+        # # and if we made it here, we can finally just move src to dst
+        # return self._move(src, dst)
 
-    def rename(self, path, destination, overwrite=False):
+    def rename(self, path, destination, overwrite=OverwriteMode.PROMPT):
         """...
         Functions much like ``move``; the main difference is that, if the destination is a directory, instead of moving path inside that directory, an attempt will be made to overwrite it; if the destination directory is empty, this attempt will always succeed. If it is a file or non-empty directory, success depends on the value of `overwrite`.
 
         :param path: path being renamed
         :param destination: target path
         :param overwrite: If True, then an existing target will be unconditionally replaced--this means that, if the target is a non-empty directory, all contents of that directory tree will be removed.
-        :return:
+        :return: True if the operation was successful; False if the operation could not be completed for some reason but the error was suppressed (most likely this means `overwrite`==``OverwriteMode.IGNORE``)
         """
 
         # PRINT() << "rename(" << path << ", " << destination << ")"
@@ -1094,25 +1104,38 @@ class ArchiveFS:
         if src == dest:
             return True
 
+        return self._dorename(src, dest, overwrite)
+
+    def _dorename(self, src, dest, overwrite):
+
         if self.exists(dest) and self.is_dir(dest):
             try:  # if the directory is empty, this will succeed and
                 # we can just rename the src
                 self.rmdir(dest)
             except Error_ENOTEMPTY:
-                if overwrite:
+                if overwrite & OverwriteMode.MERGE:
+                    return self._merge_dirs(src, dest, overwrite)
+                elif overwrite == OverwriteMode.REPLACE:
                     self.rmtree(dest)
+                elif overwrite == OverwriteMode.IGNORE:
+                    return False
                 else:
                     raise
 
         else:  # file
-            self._check_collision(dest, overwrite)
+            try:
+                self._check_collision(dest, overwrite)
+            except Error_EEXIST:
+                if overwrite & OverwriteMode.IGNORE:
+                    return False
+                raise
 
             if dest.parent == src.parent:
                 return self._change_name(src, dest.name)
 
         return self._move(src, dest)
 
-    def chname(self, path, new_name, overwrite=False):
+    def chname(self, path, new_name, overwrite=OverwriteMode.PROMPT):
         """...
         A simplified rename that just changes the file name (final path component) of `path` to `new_name`
 
@@ -1143,7 +1166,12 @@ class ArchiveFS:
                     raise e
             # dest is file:
             else:
-                self._check_collision(dest, overwrite)
+                try:
+                    self._check_collision(dest, overwrite)
+                except Error_EEXIST:
+                    if overwrite & OverwriteMode.IGNORE:
+                        return False
+                    raise
 
         # at this point, we should be able to guarantee that either
         #   a) dest does not exist (or has been removed), or
@@ -1162,7 +1190,7 @@ class ArchiveFS:
         :param destination: If exists, will be unconditionally replaced; if it is a directory all its contents will be removed
         :return:
         """
-        self.rename(path, destination, True)
+        self.rename(path, destination, OverwriteMode.REPLACE)
 
     def _move_to_dir(self, path, dest_dir, overwrite):
         """
@@ -1261,10 +1289,23 @@ class ArchiveFS:
         :return:
         """
         if self.exists(target):
-            if overwrite:
+            if overwrite & OverwriteMode.REPLACE:
                 self.rm(target)
             else:
                 raise Error_EEXIST(target)
+
+    # todo: there needs to be some way to prompt the user during the merge operation about further collisions and then continue where it left off. Turning this method into some sort of generator and yielding on EEXIST errors might be a way to do that.
+    def _merge_dirs(self, dir1, dir2, overwrite=OverwriteMode.MERGE):
+        for child in self.iterdir(dir1):
+            self._dorename(child, PureCIPath(dir2, child.relative_to(dir1)), overwrite)
+        #after all children moved, remove source dir
+        try:
+            self.rmdir(dir1)
+        except Error_ENOTEMPTY:
+            if overwrite & OverwriteMode.IGNORE:
+                return False
+            raise
+        return True
 
 
     ##===============================================

@@ -45,6 +45,38 @@ class INIKey(str, Enum):
     VFSMOUNT    = "virtualfsmountpoint" # mount point for "virtual" skyrim install
 
 
+class OverwriteMode(Enum):
+    """
+    PROMPT essentially means allow the error to be raised.
+    It can then be caught and handled by the caller.
+    """
+    PROMPT = 0
+    IGNORE = 1
+    REPLACE = 2
+    MERGE = 4
+
+    MERGE_IGNORE_EXISTING_FILES = MERGE|IGNORE
+    MERGE_REPLACE_EXISTING_FILES = MERGE|REPLACE
+
+    def __and__(self, other):
+        try:
+            return OverwriteMode(self.value & other.value)
+        except ValueError:
+            return OverwriteMode.PROMPT
+        except AttributeError:
+            return NotImplemented
+
+    def __or__(self, other):
+        try:
+            return OverwriteMode(self.value | other.value)
+        except ValueError:
+            return OverwriteMode.PROMPT
+        except AttributeError:
+            return NotImplemented
+
+    def __bool__(self):
+        return self.value != 0
+
 
 
 # defines the names and order of fields in the database

@@ -14,17 +14,7 @@
    <string>Dialog</string>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <item row="4" column="2">
-    <widget class="QDialogButtonBox" name="btnbox">
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-     <property name="standardButtons">
-      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
-     </property>
-    </widget>
-   </item>
-   <item row="2" column="0" colspan="3">
+   <item row="2" column="0" colspan="4">
     <layout class="QHBoxLayout" name="_nameeditlayout">
      <property name="bottomMargin">
       <number>24</number>
@@ -66,7 +56,17 @@
      </item>
     </layout>
    </item>
-   <item row="0" column="0" colspan="3">
+   <item row="4" column="3">
+    <widget class="QDialogButtonBox" name="btnbox">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="0" colspan="4">
     <widget class="QLabel" name="label">
      <property name="styleSheet">
       <string notr="true">QLabel {padding: 0 10px 0px 0px; }</string>
@@ -86,6 +86,16 @@
     <widget class="QPushButton" name="btn_overwrite">
      <property name="text">
       <string>Overwrite</string>
+     </property>
+     <property name="autoDefault">
+      <bool>false</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="2">
+    <widget class="QPushButton" name="btn_merge">
+     <property name="text">
+      <string>Merge</string>
      </property>
      <property name="autoDefault">
       <bool>false</bool>
