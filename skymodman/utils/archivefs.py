@@ -1054,12 +1054,13 @@ class ArchiveFS:
         src = PureCIPath(path)
         dst = PureCIPath(destination)
 
+
         # if someone attempted to move an item to itself, just return
         if src == dst: return True
 
         # if the destination is an existing directory, move the source inside of it.
         if self.is_dir(dst):
-            return self._move_to_dir(src, dst)
+            return self._move_to_dir(src, dst, overwrite)
 
         # now we know dst is either a file or a non-existing path
         # so if it's a file, either delete it or raise an error
@@ -1163,7 +1164,7 @@ class ArchiveFS:
         """
         self.rename(path, destination, True)
 
-    def _move_to_dir(self, path, dest_dir):
+    def _move_to_dir(self, path, dest_dir, overwrite):
         """
         Move file or dir `path` inside directory `dest_dir`
         """
@@ -1171,6 +1172,8 @@ class ArchiveFS:
         # PRINT() << "_move_to_dir(" << path << ", " << dest_dir << ")"
 
         dest_path = PureCIPath(dest_dir, path.name)
+
+        self._check_collision(dest_path, overwrite)
 
         # if someone attempted to move an item inside its own parent, just return
         if dest_path == path:
@@ -1184,6 +1187,12 @@ class ArchiveFS:
         """
 
         # PRINT() << "_move(" << from_path << ", " << to_path << ")"
+
+
+        print("s:", from_path)
+        print("d:", to_path)
+
+        print(self.listdir(to_path.parent))
 
         inorec = self.inode_table[
             self.inodeof(from_path) ] # get inode record from current path value
@@ -1217,6 +1226,8 @@ class ArchiveFS:
         # if the item changed names, also clear the name caches
         if from_path.name != to_path.name:
             self.del_from_caches(("_inode_name", "_inode_name_lower"), inorec.inode)
+
+        print(self.listdir(to_path.parent))
 
         return True
 

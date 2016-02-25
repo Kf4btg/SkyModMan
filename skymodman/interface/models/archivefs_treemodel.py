@@ -3,9 +3,10 @@ from functools import lru_cache, partial
 from PyQt5 import QtGui, QtWidgets
 from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData
 
-from skymodman.utils.archivefs import ArchiveFS, PureCIPath, CIPath
+from skymodman.utils.archivefs import ArchiveFS, PureCIPath, CIPath, Error_EEXIST
 from skymodman.utils import archivefs, icons
 from skymodman.utils import withlogger #, singledispatch_m
+from skymodman.interface.widgets.file_exists_dialog import FileExistsDialog
 
 
 class UndoCmd(QtWidgets.QUndoCommand):
@@ -97,8 +98,11 @@ class MoveCommand(UndoCmd):
 
     def redo(self):
         self.begin_redo() # emits beginMoveRows
-        self.do_redo()
-        self.end() # emits endMoveRows
+        try:
+            self.do_redo()
+        except Error_EEXIST:
+            self._on_collision()
+            self.end() # emits endMoveRows
 
     def undo(self):
         self.begin_undo()
@@ -108,6 +112,10 @@ class MoveCommand(UndoCmd):
     def _domove(self, srcdir, trgdir):
         src = self.mkpath(srcdir, self._name)
         src.move(trgdir)
+
+    def _on_collision(self):
+        pass
+
 
 class RenameCommand(UndoCmd):
     def __init__(self, path, new_name, *args, **kwargs):
