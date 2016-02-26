@@ -5,7 +5,7 @@ from collections import namedtuple
 
 from skymodman.exceptions import Error
 from skymodman.utils import singledispatch_m
-# from skymodman.utils.debug import Printer as PRINT
+from skymodman.utils.debug import Printer as PRINT
 from skymodman.constants import TopLevelDirs_Bain, \
     TopLevelSuffixes, OverwriteMode
 
@@ -1107,6 +1107,8 @@ class ArchiveFS:
         return self._dorename(src, dest, overwrite)
 
     def _dorename(self, src, dest, overwrite):
+        # PRINT() << "_dorename(" << src << ", " << dest << ")"
+
 
         if self.exists(dest) and self.is_dir(dest):
             try:  # if the directory is empty, this will succeed and
@@ -1114,18 +1116,25 @@ class ArchiveFS:
                 self.rmdir(dest)
             except Error_ENOTEMPTY:
                 if overwrite & OverwriteMode.MERGE:
+                    PRINT() << "merging"
                     return self._merge_dirs(src, dest, overwrite)
                 elif overwrite == OverwriteMode.REPLACE:
+                    PRINT() << "replacing"
                     self.rmtree(dest)
                 elif overwrite == OverwriteMode.IGNORE:
+                    PRINT() << "ignoring"
                     return False
                 else:
+                    PRINT() << "raising"
                     raise
 
         else:  # file
             try:
+                PRINT() << "checking collision"
                 self._check_collision(dest, overwrite)
             except Error_EEXIST:
+                PRINT() << "collided"
+
                 if overwrite & OverwriteMode.IGNORE:
                     return False
                 raise
@@ -1217,10 +1226,10 @@ class ArchiveFS:
         # PRINT() << "_move(" << from_path << ", " << to_path << ")"
 
 
-        print("s:", from_path)
-        print("d:", to_path)
+        # print("s:", from_path)
+        # print("d:", to_path)
 
-        print(self.listdir(to_path.parent))
+        # print(self.listdir(to_path.parent))
 
         inorec = self.inode_table[
             self.inodeof(from_path) ] # get inode record from current path value
@@ -1255,7 +1264,7 @@ class ArchiveFS:
         if from_path.name != to_path.name:
             self.del_from_caches(("_inode_name", "_inode_name_lower"), inorec.inode)
 
-        print(self.listdir(to_path.parent))
+        # print(self.listdir(to_path.parent))
 
         return True
 
@@ -1267,6 +1276,9 @@ class ArchiveFS:
         :param path:
         :param str new_name:
         """
+        # PRINT() << "_change_name(" << path << ", " << new_name << ")"
+
+
         inorec = self.inode_table[self.inodeof(path)]
         inorec.name = new_name
 
@@ -1288,6 +1300,9 @@ class ArchiveFS:
         :param overwrite:
         :return:
         """
+        # PRINT() << "_check_collision(" << target << ", " << overwrite << ")"
+
+
         if self.exists(target):
             if overwrite & OverwriteMode.REPLACE:
                 self.rm(target)
@@ -1296,6 +1311,8 @@ class ArchiveFS:
 
     # todo: there needs to be some way to prompt the user during the merge operation about further collisions and then continue where it left off. Turning this method into some sort of generator and yielding on EEXIST errors might be a way to do that.
     def _merge_dirs(self, dir1, dir2, overwrite=OverwriteMode.MERGE):
+        # PRINT() << "_merge_dirs(" << dir1 << ", " << dir2 << ")"
+
         for child in self.iterdir(dir1):
             self._dorename(child, PureCIPath(dir2, child.relative_to(dir1)), overwrite)
         #after all children moved, remove source dir
@@ -1306,6 +1323,21 @@ class ArchiveFS:
                 return False
             raise
         return True
+
+    def merge(self, srcdir, destdir, overwrite=OverwriteMode.MERGE):
+        # PRINT() << "merge(" << srcdir << ", " << destdir << ")"
+
+
+        src_dst_pairs = [(sc, destdir / sc.relative_to(srcdir)) for sc in self.itertree(srcdir)]
+
+        # [print(p) for p in src_dst_pairs]
+
+        return True
+
+        # for child in self.iterdir(srcdir):
+        #     if not self.is_dir(child):
+        #         try:
+        #             self._dorename(child, destdir / child.name)
 
 
     ##===============================================

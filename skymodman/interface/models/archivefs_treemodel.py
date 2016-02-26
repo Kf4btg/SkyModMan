@@ -3,7 +3,8 @@ from functools import lru_cache, partial
 from PyQt5 import QtGui, QtWidgets
 from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData
 
-from skymodman.utils.archivefs import ArchiveFS, PureCIPath, CIPath, Error_EEXIST
+from skymodman.constants import OverwriteMode
+from skymodman.utils.archivefs import ArchiveFS, PureCIPath, CIPath, Error_EEXIST, Error_ENOTEMPTY
 from skymodman.utils import archivefs, icons
 from skymodman.utils import withlogger #, singledispatch_m
 from skymodman.interface.widgets.file_exists_dialog import FileExistsDialog
@@ -71,7 +72,7 @@ class MoveCommand(UndoCmd):
     """
 
     def __init__(self, source_path,
-                 target_dir,
+                 target_path, overwrite=OverwriteMode.PROMPT,
                  *args, **kwargs):
         """
 
@@ -84,40 +85,55 @@ class MoveCommand(UndoCmd):
         """
         super().__init__("move", "Move {}".format("folder" if source_path.is_dir else "file"), *args, **kwargs)
 
-        self.mkpath = type(source_path)
+        print("MoveCommand(", source_path,",", target_path, ")")
 
-        self._name = source_path.name
+        # self.mkpath = type(source_path)
 
-        ofile = PureCIPath(source_path)
-        tdir = PureCIPath(target_dir)
+        # self._name = source_path.name
+
+        # ofile = PureCIPath(source_path)
+        self.ow = overwrite
+
+        # tdir = PureCIPath(target_dir)
 
         self.end=self.end_redo
 
-        self.do_redo = partial(self._domove, ofile.parent, tdir)
-        self.do_undo = partial(self._domove, tdir, ofile.parent)
+        self.do_redo = partial(self._domove, source_path, target_path)
+        self.do_undo = partial(self._domove, target_path, source_path)
 
     def redo(self):
         self.begin_redo() # emits beginMoveRows
-        try:
-            self.do_redo()
-        except Error_EEXIST:
-            self._on_collision()
-            self.end() # emits endMoveRows
+        self.do_redo()
+        self.end() # emits endMoveRows
 
     def undo(self):
         self.begin_undo()
         self.do_undo()
         self.end()
 
-    def _domove(self, srcdir, trgdir):
-        src = self.mkpath(srcdir, self._name)
-        try:
-            src.move(trgdir)
-        except Error_EEXIST:
-            self._on_collision(src, self.mkpath(trgdir, self._name))
+    def _domove(self, src: CIPath, dest):
+        src.rename(dest, self.ow)
+        # print("_domove", srcdir, trgdir, sep=", ")
+        # src = self.mkpath(srcdir, self._name)
+        # except (Error_EEXIST, Error_ENOTEMPTY):
+        #     self._on_collision(src, self.mkpath(trgdir, self._name))
+        # except Error_ENOTEMPTY:
+            # self._prompt_merge(src, self.mkpath(trgdir, self._name))
 
-    def _on_collision(self, src, target):
-        pass
+    # def _on_collision(self, src, target):
+    #     d = FileExistsDialog(target, src.is_dir)
+    #     if d.exec_():
+    #         name = d.new_name
+    #         ow = d.overwrite
+    #
+    #
+    #     # print("collision", src, target, sep=", ")
+    #     src.replace(target)
+    #     # self.mkpath.FS.merge(src, target)
+    #
+    # def _prompt_merge(self, src, target):
+    #     self.mkpath.FS.merge(src, target)
+
 
 
 
@@ -228,7 +244,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         self._fs.mkdir("/.trash")
         self.trash = self._fs.get_path("/.trash")
 
-        self.undostack = owner.undostack
+        self.undostack = owner.undostack # type: QtWidgets.QUndoStack
 
         self._owner = owner
 
@@ -407,6 +423,9 @@ class ModArchiveTreeModel(QAbstractItemModel):
             # down in its parent list; target-row must be adjusted for that case
             if src_row != trg_row:
                 redo_md = src_row < trg_row
+
+                print(src_row, "<", trg_row, "=", redo_md)
+
                 call_before_redo = partial(self._begin_move,  # 1 if redo is move-down
                                            src_row, trg_row + redo_md,
                                            parent, parent)
@@ -539,7 +558,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param src_parent_path: The path's original parent
         :param trg_parent_path: The target directory of the move
         """
-        # print("begin move:", src_row, trg_row, src_parent_path, "=>", trg_parent_path)
+        print("begin move:", src_row, trg_row, src_parent_path, "=>", trg_parent_path)
         self.beginMoveRows(self.index4path(src_parent_path),
                            src_row, src_row,
                            self.index4path(trg_parent_path),
@@ -585,21 +604,131 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
     def move_to_dir(self, src_path, target_dir):
         """Move the file located at src_path from its current location to within `target_dir`"""
+
+
+        trg_path = PureCIPath(target_dir, src_path.name)
+
+        self._prepare_move(src_path, trg_path)
+
+
+
+    def _prepare_move(self, src_path, dest_path, merging=False, use_mode=OverwriteMode.PROMPT):
+        """
+        Catch a potential name conflict here and begin merge macro if necessary.
+        :param src_path:
+        :param dest_path:
+        """
+
+        if self._fs.exists(dest_path):
+            dest_path = self._fs.get_path(dest_path) # get the CIPath version
+
+            if use_mode:
+                if dest_path.is_dir and src_path.is_dir:
+                    pass
+                elif dest_path.is_dir:
+                    # fixme: still have to show rename dialog in this case!
+                    pass
+                else:
+                    if use_mode & OverwriteMode.REPLACE:
+                        self._replace(src_path, dest_path)
+                    elif use_mode & OverwriteMode.IGNORE:
+                        return None
+
+
+            do_op = {
+                #do nothing on IGNORE
+                OverwriteMode.IGNORE: lambda d: None,
+                # merge on MERGE (should only be possible to get MERGE when both src and dest are dirs)
+                OverwriteMode.MERGE: lambda d: self._begin_merge(src_path, d),
+                OverwriteMode.REPLACE: lambda d: self._replace(src_path, d),
+                OverwriteMode.PROMPT: lambda d: self._move_item(src_path, d)
+            }
+
+            dlg = FileExistsDialog(dest_path, src_path.is_dir, in_merge_op=merging)
+            if dlg.exec_():
+                new_dest = dlg.new_dest # could be same as old dest
+                # try:
+                do_op[dlg.overwrite](new_dest)
+                if merging and dlg.apply_to_all:
+                    return dlg.overwrite
+
+                # except KeyError:
+                    # fixme: this isn't going to work....
+                    #     self._move_item(src_path, new_dest)
+                    #     self._move_and_apply_all(src_path, new_dest, dlg.overwrite)
+                        # self._move_item(src_path, new_dest, dlg.overwrite)
+                    # else:
+                        # means either rename button was used and there's no longer a
+                        # conflict, or overwrite was clicked and the target will be
+                        # removed
+                    # self._move_item(src_path, new_dest)
+        else:
+            self._move_item(src_path, dest_path)
+
+    def _move_item(self, src_path, dest_path, ovwrt = OverwriteMode.PROMPT):
         src_row = self.row4path(src_path)
-        trg_row = self.future_row_after_move(src_path, target_dir)
+        trg_row = self.future_row_after_move(src_path, dest_path.parent)
 
         self.undostack.push(
-            MoveCommand(src_path, target_dir,
+            MoveCommand(src_path, dest_path,
                         call_before_redo=partial(
                             self._begin_move,
                             src_row, trg_row,
-                            src_path.parent, target_dir),
+                            src_path.parent, dest_path.parent),
                         call_before_undo=partial(
                             self._begin_move,
                             trg_row, src_row,
-                            target_dir, src_path.parent),
-                        call_after_redo=self._end_move
+                            dest_path.parent, src_path.parent),
+                        call_after_redo=self._end_move,
+                        overwrite=ovwrt
                         ))
+
+    def _replace(self, src, dest):
+        """
+        Combines a Delete and a Move Command into a single undo action (macro)
+        :param src: path to eventually move to destination.
+        :param dest: path to be removed and replaced.
+        """
+
+        self.undostack.beginMacro("Replace {}".format(dest.name))
+
+        self.delete(self._fs.inodeof(dest))
+
+        self._move_item(src, dest)
+
+        self.undostack.endMacro()
+
+    def _begin_merge(self, src, dst):
+        # todo: perform as many move, merge, & replace operations as necessary
+        # within the macro to fully merge the directories. IF any further conflicts
+        # arise during the process, keep prompting the user for each one unless
+        # they check the 'apply to all' box in the conflict-dialog. If the user
+        # cancels the operation during the run, only the files moved before that
+        # point will be included in the macro.
+        self.undostack.beginMacro("Merge directories")
+
+        src_dst_pairs = [(sc, dst / sc.relative_to(src)) for sc
+                         in self._fs.itertree(src)]
+
+        mode = OverwriteMode.PROMPT
+        dirs2delete = list() # list of (hopefully) emptied dirs to remove
+        for ps, pd in src_dst_pairs:
+            if self._fs.exists(pd) and pd.is_dir and ps.is_dir:
+                # skip the matching dirs; their contents are coming up in the list
+                # and will be handled appropriately
+                dirs2delete.append(ps)
+                continue
+            stickymode = self._prepare_move(ps, pd, True, mode)
+            if stickymode is not None:
+                mode=stickymode
+
+        # any non-empty directories will be left in place
+        for d2d in dirs2delete:
+            if not len(d2d):
+                self.delete(d2d.inode)
+
+        self.undostack.endMacro()
+
 
     def create_new_dir(self, parent, name):
         """Create a new directory named `name` inside directory `parent`"""
