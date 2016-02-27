@@ -87,7 +87,7 @@ class MoveCommand(UndoCmd):
 
         print("MoveCommand(", source_path,",", target_path, ")")
 
-        # self.mkpath = type(source_path)
+        self.getpath = type(source_path).FS.get_path
 
         # self._name = source_path.name
 
@@ -98,8 +98,12 @@ class MoveCommand(UndoCmd):
 
         self.end=self.end_redo
 
-        self.do_redo = partial(self._domove, source_path, target_path)
-        self.do_undo = partial(self._domove, target_path, source_path)
+        self.do_redo = partial(self._domove,
+                               str(source_path),
+                               str(target_path))
+        self.do_undo = partial(self._domove,
+                               str(target_path),
+                               str(source_path))
 
     def redo(self):
         self.begin_redo() # emits beginMoveRows
@@ -111,8 +115,8 @@ class MoveCommand(UndoCmd):
         self.do_undo()
         self.end()
 
-    def _domove(self, src: CIPath, dest):
-        src.rename(dest, self.ow)
+    def _domove(self, src, dest):
+        self.getpath(src).rename(dest, self.ow)
         # print("_domove", srcdir, trgdir, sep=", ")
         # src = self.mkpath(srcdir, self._name)
         # except (Error_EEXIST, Error_ENOTEMPTY):
@@ -744,6 +748,9 @@ class ModArchiveTreeModel(QAbstractItemModel):
         for d2d in dirs2delete[::-1]:
             if d2d.is_empty:
                 self.delete(d2d.inode)
+
+        if src.is_empty:
+            self.delete(src.inode)
 
         self.undostack.endMacro()
 
