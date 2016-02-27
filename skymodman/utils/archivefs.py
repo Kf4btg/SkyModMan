@@ -112,6 +112,16 @@ class CIPath(PureCIPath):
     def __len__(self):
         return self._accessor.dir_length(self)
 
+    @property
+    def has_children(self):
+        if self.is_dir:
+            return self._accessor.dir_length(self) > 0
+        return False
+
+    @property
+    def is_empty(self):
+        return not self.has_children
+
     ##===============================================
     ## Stored Data Access
     ##===============================================

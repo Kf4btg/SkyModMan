@@ -4,9 +4,9 @@ from PyQt5 import QtGui, QtWidgets
 from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData
 
 from skymodman.constants import OverwriteMode
-from skymodman.utils.archivefs import ArchiveFS, PureCIPath, CIPath, Error_EEXIST, Error_ENOTEMPTY
-from skymodman.utils import archivefs, icons
-from skymodman.utils import withlogger #, singledispatch_m
+from skymodman import exceptions
+from skymodman.utils.archivefs import ArchiveFS, PureCIPath, CIPath
+from skymodman.utils import archivefs, icons, withlogger
 from skymodman.interface.widgets.file_exists_dialog import FileExistsDialog
 
 
@@ -610,64 +610,69 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
         self._prepare_move(src_path, trg_path)
 
+    do_op = {
+        # do nothing on IGNORE
+        OverwriteMode.IGNORE:  lambda s, ss, d: None,
+        # merge on MERGE (should only be possible to get MERGE when both src and dest are dirs)
+        OverwriteMode.MERGE:   lambda self, s, d: self._begin_merge(s, d),
+        OverwriteMode.REPLACE: lambda self, s, d: self._replace(s, d),
+        OverwriteMode.PROMPT:  lambda self, s, d: self._move_item(s, d)
+    }
 
-
-    def _prepare_move(self, src_path, dest_path, merging=False, use_mode=OverwriteMode.PROMPT):
+    def _prepare_move(self, src_path, dest_path,
+                      merging=False, use_mode=OverwriteMode.PROMPT):
         """
         Catch a potential name conflict here and begin merge macro if necessary.
         :param src_path:
         :param dest_path:
         """
+        print("_prepare_move:", src_path, dest_path, merging, use_mode)
 
         if self._fs.exists(dest_path):
             dest_path = self._fs.get_path(dest_path) # get the CIPath version
 
-            if use_mode:
+            if merging:
                 if dest_path.is_dir and src_path.is_dir:
-                    pass
-                elif dest_path.is_dir:
-                    # fixme: still have to show rename dialog in this case!
-                    pass
+                    # skip matching dirs while merging; their contents are
+                    # coming up in the list and will be handled appropriately
+                    raise exceptions.MergeSkipDir
+                elif dest_path.has_children and not src_path.is_dir:
+                    # trying to overwrite non-empty dir with file--no can do
+                    dlg = FileExistsDialog(dest_path, False,
+                                           in_merge_op=merging)
+                    if dlg.exec_():
+                        # rename should be only option
+                        assert dlg.overwrite == OverwriteMode.PROMPT
+                        self._move_item(src_path, dlg.new_dest)
+                    else:
+                        raise exceptions.CancelMerge
+
                 else:
+                    # dest is file/empty dir, src is whatever
                     if use_mode & OverwriteMode.REPLACE:
                         self._replace(src_path, dest_path)
                     elif use_mode & OverwriteMode.IGNORE:
                         return None
 
 
-            do_op = {
-                #do nothing on IGNORE
-                OverwriteMode.IGNORE: lambda d: None,
-                # merge on MERGE (should only be possible to get MERGE when both src and dest are dirs)
-                OverwriteMode.MERGE: lambda d: self._begin_merge(src_path, d),
-                OverwriteMode.REPLACE: lambda d: self._replace(src_path, d),
-                OverwriteMode.PROMPT: lambda d: self._move_item(src_path, d)
-            }
 
             dlg = FileExistsDialog(dest_path, src_path.is_dir, in_merge_op=merging)
             if dlg.exec_():
                 new_dest = dlg.new_dest # could be same as old dest
-                # try:
-                do_op[dlg.overwrite](new_dest)
+                self.do_op[dlg.overwrite](self, src_path, new_dest)
                 if merging and dlg.apply_to_all:
                     return dlg.overwrite
-
-                # except KeyError:
-                    # fixme: this isn't going to work....
-                    #     self._move_item(src_path, new_dest)
-                    #     self._move_and_apply_all(src_path, new_dest, dlg.overwrite)
-                        # self._move_item(src_path, new_dest, dlg.overwrite)
-                    # else:
-                        # means either rename button was used and there's no longer a
-                        # conflict, or overwrite was clicked and the target will be
-                        # removed
-                    # self._move_item(src_path, new_dest)
         else:
             self._move_item(src_path, dest_path)
 
+        # redundant...but explicit.
+        return None
+
     def _move_item(self, src_path, dest_path, ovwrt = OverwriteMode.PROMPT):
+        print("_move_item:", src_path, dest_path, ovwrt)
         src_row = self.row4path(src_path)
-        trg_row = self.future_row_after_move(src_path, dest_path.parent)
+        trg_row = self.future_row_after_move(src_path,
+                                             self._fs.get_path(dest_path.parent))
 
         self.undostack.push(
             MoveCommand(src_path, dest_path,
@@ -705,6 +710,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
         # they check the 'apply to all' box in the conflict-dialog. If the user
         # cancels the operation during the run, only the files moved before that
         # point will be included in the macro.
+
+        print("_begin_merge:", src, dst)
         self.undostack.beginMacro("Merge directories")
 
         src_dst_pairs = [(sc, dst / sc.relative_to(src)) for sc
@@ -713,18 +720,29 @@ class ModArchiveTreeModel(QAbstractItemModel):
         mode = OverwriteMode.PROMPT
         dirs2delete = list() # list of (hopefully) emptied dirs to remove
         for ps, pd in src_dst_pairs:
-            if self._fs.exists(pd) and pd.is_dir and ps.is_dir:
+            if not ps.exists():
+                # this might happen if a directory is moved in full before its
+                # contents are encountered in the list
+                continue
+            # if self._fs.exists(pd) and pd.is_dir and ps.is_dir:
                 # skip the matching dirs; their contents are coming up in the list
                 # and will be handled appropriately
+                # dirs2delete.append(ps)
+                # continue
+            try:
+                stickymode = self._prepare_move(ps, pd, True, mode)
+
+                if stickymode is not None:
+                    mode = stickymode
+            except exceptions.CancelMerge:
+                break
+            except exceptions.MergeSkipDir:
                 dirs2delete.append(ps)
-                continue
-            stickymode = self._prepare_move(ps, pd, True, mode)
-            if stickymode is not None:
-                mode=stickymode
+
 
         # any non-empty directories will be left in place
-        for d2d in dirs2delete:
-            if not len(d2d):
+        for d2d in dirs2delete[::-1]:
+            if d2d.is_empty:
                 self.delete(d2d.inode)
 
         self.undostack.endMacro()
@@ -804,7 +822,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :rtype: list[CIPath]
         """
         # let the fs's sorting handle that.
-        return sorted(dirpath.listdir())
+        # use _fs instead of path.listdir() incase dirpath is PureCIPath
+        return sorted(self._fs.listdir(dirpath))
 
     def future_row_after_rename(self, current_path, new_name):
         """ Determine updated row for current_path after it has been renamed to `new_name`
@@ -940,7 +959,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         # print("index4path({})".format(path))
         return QModelIndex() \
             if path == self._realroot \
-            else self.createIndex(self.row4path(path), 0, path.inode)
+            else self.createIndex(self.row4path(path), 0, self._fs.inodeof(path))
 
     def row4inode(self, inode):
         """
@@ -952,7 +971,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
     def row4path(self, path):
         # print("row4path({})".format(path))
         return self._sorted_dirlist(
-            path.sparent
+            path.parent
         ).index(path)
 
     ## Convenience functions for using strings

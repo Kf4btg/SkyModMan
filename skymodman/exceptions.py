@@ -69,3 +69,14 @@ class ArchiverError(Error):
 #------------------------------
 class FomodError(Error):
     pass
+
+#------------------------------
+class CancelMerge(Error):
+    """
+    Raised when the user manually cancels a directory-merge operation.
+    """
+
+class MergeSkipDir(Error):
+    """
+    Raised when a conflicting sub-directory is encountered during a directory-merge operation. Indicates to caller that the given directory is being ignored and only its contents will be moved.
+    """
