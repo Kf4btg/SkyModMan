@@ -414,44 +414,46 @@ class ModArchiveTreeModel(QAbstractItemModel):
             if not value: return False
 
             currpath = self.index2path(index)
-            parent = currpath.parent
+            # parent = currpath.parent
 
             if value == currpath.name: return False
 
+            self._change_name(currpath, value)
+
             ## Create a `Rename` command and push to undo stack
-            src_row = self.row4path(currpath)
-            trg_row = self.future_row_after_rename(currpath, value)
-
-            call_after_redo = self._end_move
-            # need to figure out which action (redo/undo) will move the item
-            # down in its parent list; target-row must be adjusted for that case
-            if src_row != trg_row:
-                redo_md = src_row < trg_row
-
-                print(src_row, "<", trg_row, "=", redo_md)
-
-                call_before_redo = partial(self._begin_move,  # 1 if redo is move-down
-                                           src_row, trg_row + redo_md,
-                                           parent, parent)
-
-                call_before_undo = partial(self._begin_move, # 1 if undo is move down
-                                           trg_row, src_row + (not redo_md),
-                                           parent, parent)
-            else:
-                # there is no movement; item will have same index in parent
-                # after move as it had before move
-                call_before_redo = call_before_undo = lambda: None
-                # and the end callable() must be different, as well
-                call_after_redo=partial(self._end_rename, index.internalId())
-
-            self.undostack.push(
-                RenameCommand(
-                    currpath, value,
-                    call_before_redo = call_before_redo,
-                    call_before_undo = call_before_undo,
-                    call_after_redo  = call_after_redo
-                )
-            )
+            # src_row = self.row4path(currpath)
+            # trg_row = self.future_row_after_rename(currpath, value)
+            #
+            # call_after_redo = self._end_move
+            # # need to figure out which action (redo/undo) will move the item
+            # # down in its parent list; target-row must be adjusted for that case
+            # if src_row != trg_row:
+            #     redo_md = src_row < trg_row
+            #
+            #     print(src_row, "<", trg_row, "=", redo_md)
+            #
+            #     call_before_redo = partial(self._begin_move,  # 1 if redo is move-down
+            #                                src_row, trg_row + redo_md,
+            #                                parent, parent)
+            #
+            #     call_before_undo = partial(self._begin_move, # 1 if undo is move down
+            #                                trg_row, src_row + (not redo_md),
+            #                                parent, parent)
+            # else:
+            #     # there is no movement; item will have same index in parent
+            #     # after move as it had before move
+            #     call_before_redo = call_before_undo = lambda: None
+            #     # and the end callable() must be different, as well
+            #     call_after_redo=partial(self._end_rename, index.internalId())
+            #
+            # self.undostack.push(
+            #     RenameCommand(
+            #         currpath, value,
+            #         call_before_redo = call_before_redo,
+            #         call_before_undo = call_before_undo,
+            #         call_after_redo  = call_after_redo
+            #     )
+            # )
             return True
 
         return super().setData(index, value, role)
@@ -753,6 +755,76 @@ class ModArchiveTreeModel(QAbstractItemModel):
             self.delete(src.inode)
 
         self.undostack.endMacro()
+
+    def _change_name(self, path, new_name):
+        """
+
+        :param CIPath path:
+        """
+        ## Create a `Rename` command and push to undo stack
+
+        dest=path.with_name(new_name)
+
+        if self._fs.exists(dest) and not path==dest:
+            dlg = FileExistsDialog(dest, path.is_dir)
+            if dlg.exec_():
+                new_dest = dlg.new_dest  # could be same as old dest
+
+                for case in [lambda om: om & dlg.overwrite]:
+                    if case(OverwriteMode.IGNORE):
+                        return
+                    if case(OverwriteMode.REPLACE):
+                        return self._replace(path, new_dest)
+
+                    if case(OverwriteMode.MERGE):
+                        return self._begin_merge(path, new_dest)
+
+
+                return self._dorename(path, new_dest.name)
+        else:
+            return self._dorename(path, new_name)
+
+
+
+    def _dorename(self, path, new_name):
+        src_row = self.row4path(path)
+        trg_row = self.future_row_after_rename(path, new_name)
+
+        parent = path.parent
+
+        call_after_redo = self._end_move
+        # need to figure out which action (redo/undo) will move the item
+        # down in its parent list; target-row must be adjusted for that case
+        if src_row != trg_row:
+            redo_md = src_row < trg_row
+
+            print(src_row, "<", trg_row, "=", redo_md)
+
+            call_before_redo = partial(self._begin_move, src_row,
+                                       # +1 if redo is move-down
+                                       trg_row + redo_md,
+                                       parent, parent)
+
+            call_before_undo = partial(self._begin_move, trg_row,
+                                       # +1 if undo is move down
+                                       src_row + (not redo_md),
+                                       parent, parent)
+        else:
+            # there is no movement; item will have same index in parent
+            # after move as it had before
+            call_before_redo = call_before_undo = lambda: None
+            # and the end callable() must be different, as well
+            call_after_redo = partial(self._end_rename,
+                                      path.inode)
+
+        self.undostack.push(
+            RenameCommand(
+                path, new_name,
+                call_before_redo=call_before_redo,
+                call_before_undo=call_before_undo,
+                call_after_redo=call_after_redo
+            )
+        )
 
 
     def create_new_dir(self, parent, name):
