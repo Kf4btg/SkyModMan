@@ -356,9 +356,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
                 Qt.DecorationRole:
                     self.FILE_ICON if path.is_file else (
                         self.FOLDER_ICON,
-                        # self.FOLDER_OPEN)[self.],
                         self.FOLDER_OPEN)[self._owner.is_expanded(index)],
-                    # (self.FILE_ICON, self.FOLDER_ICON)[path.is_dir],
                 Qt.CheckStateRole:
                     (Qt.Unchecked, Qt.Checked)[
                         path == self.root or
@@ -397,40 +395,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
             self._change_name(currpath, value)
 
-            ## Create a `Rename` command and push to undo stack
-            # src_row = self.row4path(currpath)
-            # trg_row = self.future_row_after_rename(currpath, value)
-            #
-            # call_after_redo = self._end_move
-            # # need to figure out which action (redo/undo) will move the item
-            # # down in its parent list; target-row must be adjusted for that case
-            # if src_row != trg_row:
-            #     redo_md = src_row < trg_row
-            #
-            #     print(src_row, "<", trg_row, "=", redo_md)
-            #
-            #     call_before_redo = partial(self._begin_move,  # 1 if redo is move-down
-            #                                src_row, trg_row + redo_md,
-            #                                parent, parent)
-            #
-            #     call_before_undo = partial(self._begin_move, # 1 if undo is move down
-            #                                trg_row, src_row + (not redo_md),
-            #                                parent, parent)
-            # else:
-            #     # there is no movement; item will have same index in parent
-            #     # after move as it had before move
-            #     call_before_redo = call_before_undo = lambda: None
-            #     # and the end callable() must be different, as well
-            #     call_after_redo=partial(self._end_rename, index.internalId())
-            #
-            # self.undostack.push(
-            #     RenameCommand(
-            #         currpath, value,
-            #         call_before_redo = call_before_redo,
-            #         call_before_undo = call_before_undo,
-            #         call_after_redo  = call_after_redo
-            #     )
-            # )
             return True
 
         return super().setData(index, value, role)
@@ -496,17 +460,13 @@ class ModArchiveTreeModel(QAbstractItemModel):
         dragged_path = self._fs.pathfor(dragged_inode)
 
         if not parent.isValid():
-            # print("parent invalid")
             ## target is (the real) root directory, so return True so long as source
             ## was not already a top-level item.
             return dragged_path not in self._realroot
-            # return dragged_inode not in self._fs.dir_inodes(self.root_inode)
         else:
-            # print("parent valid")
             parpath = self.index2path(parent)
 
             if row < 0 and parpath.is_file:
-                # print("row < 0 & {} is_file".format(parpath))
                 # dropped directly on parent, and 'parent' is not a directory
                 target = parpath.sparent
             else:
@@ -514,12 +474,10 @@ class ModArchiveTreeModel(QAbstractItemModel):
                 # doesn't really matter, we just need to add to parent's list
                 target = parpath
 
-            # print("dragged =", dragged_path)
-            # print("target =", target)
-
             # can't drop on self or on immediate parent
-            if target == dragged_path or dragged_path in target or dragged_path in target.parents:
-                # print("returning false")
+            if (target == dragged_path
+                or dragged_path in target # check 4 parent
+                or dragged_path in target.parents): # check 4 children
                 return False
 
         return True
@@ -616,7 +574,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
                 if dest_path.is_dir and src_path.is_dir:
                     # skip matching dirs while merging; their contents are
                     # coming up in the list and will be handled appropriately
-                    # print("raise MergeSkip")
                     raise exceptions.MergeSkipDir
                 elif dest_path.has_children and not src_path.is_dir:
                     print("dest_path.has_children and not src_path.is_dir")
@@ -643,7 +600,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
                     return None
 
             # if we're not merging, or we are merging and overwrite==PROMPT
-
             dlg = FileExistsDialog(dest_path, src_path.is_dir, in_merge_op=merging)
             if dlg.exec_():
                 new_dest = dlg.new_dest # could be same as old dest
@@ -775,8 +731,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
         # down in its parent list; target-row must be adjusted for that case
         if src_row != trg_row:
             redo_md = src_row < trg_row
-
-            # print(src_row, "<", trg_row, "=", redo_md)
 
             call_before_redo = partial(self._begin_move, src_row,
                                        # +1 if redo is move-down
@@ -995,7 +949,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param QModelIndex index:
         :return: path to the item
         """
-        # return index.internalPointer() if index.isValid() else self.root
         return self._fs.pathfor(index.internalId()
                                 ) if index.isValid() else self.root
 

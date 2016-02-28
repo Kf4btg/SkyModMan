@@ -1069,8 +1069,6 @@ class ArchiveFS:
 
         # if the destination is an existing directory, move the source inside of it.
         if self.is_dir(dst):
-            # return self._move_to_dir(src, dst, overwrite)
-
             dst = PureCIPath(dst, src.name)
 
             # if someone attempted to move an item inside its own parent, just return
@@ -1079,22 +1077,6 @@ class ArchiveFS:
 
         # and now this is a rename operation
         return self._dorename(src, dst, overwrite)
-
-        #
-        # self._check_collision(dest_path, overwrite)
-        # # now we know dst is either a file or a non-existing path
-        # # so if it's a file, either delete it or raise an error
-        # self._check_collision(dst, overwrite)
-        #
-        # # and now we can be sure it doesn't exist! Muahahahaha...ha....oh
-        #
-        # # if destination path is in the same folder as the source,
-        # # this is just a name change
-        # if dst.parent == src.parent:
-        #     return self._change_name(src, dst.name)
-        #
-        # # and if we made it here, we can finally just move src to dst
-        # return self._move(src, dst)
 
     def rename(self, path, destination, overwrite=OverwriteMode.PROMPT):
         """...
@@ -1125,22 +1107,18 @@ class ArchiveFS:
                 # we can just rename the src
                 self.rmdir(dest)
             except Error_ENOTEMPTY:
-                if overwrite & OverwriteMode.MERGE:
-                    PRINT() << "merging"
-                    return self._merge_dirs(src, dest, overwrite)
-                elif overwrite == OverwriteMode.REPLACE:
-                    PRINT() << "replacing"
+                # if overwrite & OverwriteMode.MERGE:
+                    # PRINT() << "merging"
+                    # return self._merge_dirs(src, dest, overwrite)
+                if overwrite & OverwriteMode.REPLACE:
                     self.rmtree(dest)
-                elif overwrite == OverwriteMode.IGNORE:
-                    PRINT() << "ignoring"
+                elif overwrite & OverwriteMode.IGNORE:
                     return False
                 else:
-                    PRINT() << "raising"
                     raise
 
         else:  # file
             try:
-                # PRINT() << "checking collision"
                 self._check_collision(dest, overwrite)
             except Error_EEXIST:
                 PRINT() << "collided"
@@ -1235,12 +1213,6 @@ class ArchiveFS:
 
         # PRINT() << "_move(" << from_path << ", " << to_path << ")"
 
-
-        # print("s:", from_path)
-        # print("d:", to_path)
-
-        # print(self.listdir(to_path.parent))
-
         inorec = self.inode_table[
             self.inodeof(from_path) ] # get inode record from current path value
 
@@ -1273,8 +1245,6 @@ class ArchiveFS:
         # if the item changed names, also clear the name caches
         if from_path.name != to_path.name:
             self.del_from_caches(("_inode_name", "_inode_name_lower"), inorec.inode)
-
-        # print(self.listdir(to_path.parent))
 
         return True
 
@@ -1312,37 +1282,36 @@ class ArchiveFS:
         """
         # PRINT() << "_check_collision(" << target << ", " << overwrite << ")"
 
-
         if self.exists(target):
             if overwrite & OverwriteMode.REPLACE:
                 self.rm(target)
             else:
                 raise Error_EEXIST(target)
 
-    # todo: there needs to be some way to prompt the user during the merge operation about further collisions and then continue where it left off. Turning this method into some sort of generator and yielding on EEXIST errors might be a way to do that.
-    def _merge_dirs(self, dir1, dir2, overwrite=OverwriteMode.MERGE):
-        # PRINT() << "_merge_dirs(" << dir1 << ", " << dir2 << ")"
+    # thoughts: there needs to be some way to prompt the user during the merge operation about further collisions and then continue where it left off. Turning this method into some sort of generator and yielding on EEXIST errors might be a way to do that.
+    # def _merge_dirs(self, dir1, dir2, overwrite=OverwriteMode.MERGE):
+    #     # PRINT() << "_merge_dirs(" << dir1 << ", " << dir2 << ")"
+    #
+    #     for child in self.iterdir(dir1):
+    #         self._dorename(child, PureCIPath(dir2, child.relative_to(dir1)), overwrite)
+    #     #after all children moved, remove source dir
+    #     try:
+    #         self.rmdir(dir1)
+    #     except Error_ENOTEMPTY:
+    #         if overwrite & OverwriteMode.IGNORE:
+    #             return False
+    #         raise
+    #     return True
 
-        for child in self.iterdir(dir1):
-            self._dorename(child, PureCIPath(dir2, child.relative_to(dir1)), overwrite)
-        #after all children moved, remove source dir
-        try:
-            self.rmdir(dir1)
-        except Error_ENOTEMPTY:
-            if overwrite & OverwriteMode.IGNORE:
-                return False
-            raise
-        return True
-
-    def merge(self, srcdir, destdir, overwrite=OverwriteMode.MERGE):
-        # PRINT() << "merge(" << srcdir << ", " << destdir << ")"
-
-
-        src_dst_pairs = [(sc, destdir / sc.relative_to(srcdir)) for sc in self.itertree(srcdir)]
-
-        # [print(p) for p in src_dst_pairs]
-
-        return True
+    # def merge(self, srcdir, destdir, overwrite=OverwriteMode.MERGE):
+    #     # PRINT() << "merge(" << srcdir << ", " << destdir << ")"
+    #
+    #
+    #     src_dst_pairs = [(sc, destdir / sc.relative_to(srcdir)) for sc in self.itertree(srcdir)]
+    #
+    #     # [print(p) for p in src_dst_pairs]
+    #
+    #     return True
 
         # for child in self.iterdir(srcdir):
         #     if not self.is_dir(child):
