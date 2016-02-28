@@ -85,7 +85,7 @@ class MoveCommand(UndoCmd):
         """
         super().__init__("move", "Move {}".format("folder" if source_path.is_dir else "file"), *args, **kwargs)
 
-        print("MoveCommand(", source_path,",", target_path, ")")
+        # print("MoveCommand(", source_path,",", target_path, ")")
 
         self.getpath = type(source_path).FS.get_path
 
@@ -117,29 +117,6 @@ class MoveCommand(UndoCmd):
 
     def _domove(self, src, dest):
         self.getpath(src).rename(dest, self.ow)
-        # print("_domove", srcdir, trgdir, sep=", ")
-        # src = self.mkpath(srcdir, self._name)
-        # except (Error_EEXIST, Error_ENOTEMPTY):
-        #     self._on_collision(src, self.mkpath(trgdir, self._name))
-        # except Error_ENOTEMPTY:
-            # self._prompt_merge(src, self.mkpath(trgdir, self._name))
-
-    # def _on_collision(self, src, target):
-    #     d = FileExistsDialog(target, src.is_dir)
-    #     if d.exec_():
-    #         name = d.new_name
-    #         ow = d.overwrite
-    #
-    #
-    #     # print("collision", src, target, sep=", ")
-    #     src.replace(target)
-    #     # self.mkpath.FS.merge(src, target)
-    #
-    # def _prompt_merge(self, src, target):
-    #     self.mkpath.FS.merge(src, target)
-
-
-
 
 class RenameCommand(UndoCmd):
     def __init__(self, path, new_name, *args, **kwargs):
@@ -564,7 +541,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param src_parent_path: The path's original parent
         :param trg_parent_path: The target directory of the move
         """
-        print("begin move:", src_row, trg_row, src_parent_path, "=>", trg_parent_path)
+        # print("begin move:", src_row, trg_row, src_parent_path, "=>", trg_parent_path)
         self.beginMoveRows(self.index4path(src_parent_path),
                            src_row, src_row,
                            self.index4path(trg_parent_path),
@@ -610,8 +587,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
     def move_to_dir(self, src_path, target_dir):
         """Move the file located at src_path from its current location to within `target_dir`"""
-
-
         trg_path = PureCIPath(target_dir, src_path.name)
 
         self._prepare_move(src_path, trg_path)
@@ -632,7 +607,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param src_path:
         :param dest_path:
         """
-        print("_prepare_move:", src_path, dest_path, merging, use_mode)
+        # print(">>>", "_prepare_move:", src_path, dest_path, merging, use_mode)
 
         if self._fs.exists(dest_path):
             dest_path = self._fs.get_path(dest_path) # get the CIPath version
@@ -641,8 +616,10 @@ class ModArchiveTreeModel(QAbstractItemModel):
                 if dest_path.is_dir and src_path.is_dir:
                     # skip matching dirs while merging; their contents are
                     # coming up in the list and will be handled appropriately
+                    # print("raise MergeSkip")
                     raise exceptions.MergeSkipDir
                 elif dest_path.has_children and not src_path.is_dir:
+                    print("dest_path.has_children and not src_path.is_dir")
                     # trying to overwrite non-empty dir with file--no can do
                     dlg = FileExistsDialog(dest_path, False,
                                            in_merge_op=merging)
@@ -652,15 +629,20 @@ class ModArchiveTreeModel(QAbstractItemModel):
                         self._move_item(src_path, dlg.new_dest)
                     else:
                         raise exceptions.CancelMerge
+                    return None
 
-                else:
-                    # dest is file/empty dir, src is whatever
+                elif use_mode:
+                    # dest is file/empty dir, src is whatever,
+                    # use mode is something besides PROMPT
                     if use_mode & OverwriteMode.REPLACE:
+                        # print("use mode & REPLACE")
                         self._replace(src_path, dest_path)
-                    elif use_mode & OverwriteMode.IGNORE:
-                        return None
+                    # elif use_mode & OverwriteMode.IGNORE:
+                    #     print("use_mode & IGNORE")
 
+                    return None
 
+            # if we're not merging, or we are merging and overwrite==PROMPT
 
             dlg = FileExistsDialog(dest_path, src_path.is_dir, in_merge_op=merging)
             if dlg.exec_():
@@ -669,13 +651,14 @@ class ModArchiveTreeModel(QAbstractItemModel):
                 if merging and dlg.apply_to_all:
                     return dlg.overwrite
         else:
+            # dest doesn't exist, this is a basic move
             self._move_item(src_path, dest_path)
 
         # redundant...but explicit.
         return None
 
     def _move_item(self, src_path, dest_path, ovwrt = OverwriteMode.PROMPT):
-        print("_move_item:", src_path, dest_path, ovwrt)
+        # print(">>>", "_move_item:", src_path, dest_path, ovwrt)
         src_row = self.row4path(src_path)
         trg_row = self.future_row_after_move(src_path,
                                              self._fs.get_path(dest_path.parent))
@@ -717,7 +700,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         # cancels the operation during the run, only the files moved before that
         # point will be included in the macro.
 
-        print("_begin_merge:", src, dst)
+        # print(">>>", "_begin_merge:", src, dst)
         self.undostack.beginMacro("Merge directories")
 
         src_dst_pairs = [(sc, dst / sc.relative_to(src)) for sc
@@ -730,13 +713,10 @@ class ModArchiveTreeModel(QAbstractItemModel):
                 # this might happen if a directory is moved in full before its
                 # contents are encountered in the list
                 continue
-            # if self._fs.exists(pd) and pd.is_dir and ps.is_dir:
-                # skip the matching dirs; their contents are coming up in the list
-                # and will be handled appropriately
-                # dirs2delete.append(ps)
-                # continue
             try:
+                # print(" - Mode:", mode)
                 stickymode = self._prepare_move(ps, pd, True, mode)
+                # print(" - new mode?", stickymode)
 
                 if stickymode is not None:
                     mode = stickymode
@@ -744,7 +724,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
                 break
             except exceptions.MergeSkipDir:
                 dirs2delete.append(ps)
-
 
         # any non-empty directories will be left in place
         for d2d in dirs2delete[::-1]:
@@ -761,8 +740,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
         :param CIPath path:
         """
-        ## Create a `Rename` command and push to undo stack
-
+        # print(">>>", "_change_name:", path, new_name)
         dest=path.with_name(new_name)
 
         if self._fs.exists(dest) and not path==dest:
@@ -779,14 +757,14 @@ class ModArchiveTreeModel(QAbstractItemModel):
                     if case(OverwriteMode.MERGE):
                         return self._begin_merge(path, new_dest)
 
-
                 return self._dorename(path, new_dest.name)
         else:
             return self._dorename(path, new_name)
 
-
-
     def _dorename(self, path, new_name):
+        """Create a `Rename` command and push to undo stack"""
+        # print(">>>", "_dorename:", path, new_name)
+
         src_row = self.row4path(path)
         trg_row = self.future_row_after_rename(path, new_name)
 
@@ -798,7 +776,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         if src_row != trg_row:
             redo_md = src_row < trg_row
 
-            print(src_row, "<", trg_row, "=", redo_md)
+            # print(src_row, "<", trg_row, "=", redo_md)
 
             call_before_redo = partial(self._begin_move, src_row,
                                        # +1 if redo is move-down
@@ -826,7 +804,6 @@ class ModArchiveTreeModel(QAbstractItemModel):
             )
         )
 
-
     def create_new_dir(self, parent, name):
         """Create a new directory named `name` inside directory `parent`"""
         new_pos = self.future_row_after_create(name, parent, True)
@@ -850,6 +827,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param inode:
         :param force:
         """
+        # print(">>>", "delete:", inode, force)
         ## note: this function is largely redundant with move_to_dir()
         getting_trashed = self._fs.pathfor(inode)
         if getting_trashed in {self.root, self._realroot}:

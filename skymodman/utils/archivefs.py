@@ -1140,7 +1140,7 @@ class ArchiveFS:
 
         else:  # file
             try:
-                PRINT() << "checking collision"
+                # PRINT() << "checking collision"
                 self._check_collision(dest, overwrite)
             except Error_EEXIST:
                 PRINT() << "collided"
