@@ -74,6 +74,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         ## and tweaking the icon much easier, as well as allowing for stacking and
         ## animation, if desired.
         # _id = QFontDatabase.addApplicationFont("skymodman/thirdparty/qtawesome/fonts/fontawesome-webfont.ttf")
+        
         # verify basic setup
         self.check_setup()
 

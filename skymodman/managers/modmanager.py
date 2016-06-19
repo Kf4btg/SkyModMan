@@ -144,10 +144,15 @@ def load_active_profile_data():
     _dataman.loadAllModFiles(_configman.paths.dir_mods)
     # let's also add the files from the base Skyrim Data folder to the db
 
-    for f in _configman.paths.dir_skyrim.iterdir():
-        if f.name.lower() == "data":
-            _dataman.add_files_from_dir('Skyrim', str(f))
-            break
+    sky_dir = _configman.paths.dir_skyrim
+
+    if sky_dir is None:
+        _logger << "The main Skyrim folder could not be found. That's going to be a problem."
+    else:
+        for f in sky_dir.iterdir():
+            if f.name.lower() == "data":
+                _dataman.add_files_from_dir('Skyrim', str(f))
+                break
 
     # [print(*r) for r in _dataman._con.execute("select * from modfiles where directory='Skyrim'")]
 

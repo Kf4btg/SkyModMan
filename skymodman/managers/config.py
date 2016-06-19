@@ -2,6 +2,7 @@ import configparser
 import os
 from pathlib import Path
 from copy import deepcopy
+from collections import defaultdict
 
 import appdirs
 
@@ -14,11 +15,11 @@ from skymodman.constants import (EnvVars, INIKey, INISection)
 __myname = "skymodman"
 
 # bind these values locally, since we need the actual string more often than not here
-_S_GENERAL = INISection.GENERAL.value
-_K_LASTPRO = INIKey.LASTPROFILE.value
-_K_MODDIR  = INIKey.MODDIR.value
-_K_VFSMNT  = INIKey.VFSMOUNT.value
-_K_SKYDIR  = INIKey.SKYRIMDIR.value
+_SECTION_GENERAL = INISection.GENERAL.value
+_KEY_LASTPRO = INIKey.LASTPROFILE.value
+_KEY_MODDIR  = INIKey.MODDIR.value
+_KEY_VFSMNT  = INIKey.VFSMOUNT.value
+_KEY_SKYDIR  = INIKey.SKYRIMDIR.value
 
 class ConfigPaths:
     __slots__=["file_main", "dir_config", "dir_data", "dir_profiles", "dir_mods", "dir_vfs", "dir_skyrim"]
@@ -54,11 +55,11 @@ class ConfigManager:
     __APPNAME = "skymodman"
 
     __DEFAULT_CONFIG={
-        _S_GENERAL: {
-            _K_SKYDIR: "",
-            _K_MODDIR: appdirs.user_data_dir(__APPNAME) +"/mods",
-            _K_VFSMNT: appdirs.user_data_dir(__APPNAME) +"/skyrimfs",
-            _K_LASTPRO: __DEFAULT_PROFILE
+        _SECTION_GENERAL: {
+            _KEY_SKYDIR: "",
+            _KEY_MODDIR: appdirs.user_data_dir(__APPNAME) +"/mods",
+            _KEY_VFSMNT: appdirs.user_data_dir(__APPNAME) +"/skyrimfs",
+            _KEY_LASTPRO: __DEFAULT_PROFILE
         }
     }
 
@@ -70,6 +71,9 @@ class ConfigManager:
 
         # keep a dictionary that is effectively an in-memory version of the main config file
         self.currentValues = deepcopy(ConfigManager.__DEFAULT_CONFIG)
+
+        # track errors encountered while loading paths
+        self.path_errors=defaultdict(list)
 
         self.ensureDefaultSetup()
 
@@ -114,29 +118,78 @@ class ConfigManager:
         # first, the skyrim installation, mod storage, vfs mount
 
         for evar, paths_attr, inikey in (
-                (EnvVars.SKYDIR, 'dir_skyrim', _K_SKYDIR),
-                (EnvVars.MOD_DIR, 'dir_mods', _K_MODDIR),
-                (EnvVars.VFS_MOUNT, 'dir_vfs', _K_VFSMNT),
+                (EnvVars.SKYDIR, 'dir_skyrim', _KEY_SKYDIR),
+                (EnvVars.MOD_DIR, 'dir_mods', _KEY_MODDIR),
+                (EnvVars.VFS_MOUNT, 'dir_vfs', _KEY_VFSMNT),
         ):
+            p=None #type: Path
+
+            # first, check if the user has specified an environment variable
             envval = os.getenv(evar)
-            if checkPath(envval):
-                setattr(self.paths, paths_attr,
-                    Path(envval))
-            else:
+            if envval:
+                if checkPath(envval):
+                    p=Path(envval)
+                else:
+                    self.path_errors[paths_attr].append(envval)
+
+            # if they didn't or it didn't exist, pull the config value
+            if p is None:
                 try:
-                    p = Path(config[_S_GENERAL][inikey])
-                except KeyError:
-                    # if key wasn't in config file for some reason,
-                    # check that we have a default value (skydir, for example, does not (i.e. the default val is ""))
-                    default = ConfigManager.__DEFAULT_CONFIG[_S_GENERAL][inikey]
-                    if default:
-                        p = Path(default)
+                    config_val = config[_SECTION_GENERAL][inikey]
+
+                    if checkPath(config_val):
+                        p = Path(config_val)
                     else:
-                        p=None
-                finally:
-                    setattr(self.paths, paths_attr, p)
+                        self.path_errors[paths_attr].append(config_val)
+
+                except KeyError:
+                    self.path_errors[paths_attr].append("config key '"+inikey+"' not found")
+
+
+            if p is None:
+                # if key wasn't in config file for some reason,
+                # check that we have a default value (skydir, for example,
+                # does not (i.e. the default val is ""))
+                def_path = ConfigManager.__DEFAULT_CONFIG[_SECTION_GENERAL][
+                    inikey]
+
+                # if we have a default and it exists, use that.
+                # otherwise log the error
+                # noinspection PyTypeChecker
+                if checkPath(def_path):
+                    p = Path(def_path)
+                else:
+                    # noinspection PyTypeChecker
+                    self.path_errors[paths_attr].append("default: "+def_path)
+
+            if p is not None:
+                setattr(self.paths, paths_attr, p)
+
+            # if checkPath(envval):
+            #     setattr(self.paths, paths_attr,
+            #         Path(envval))
+            # else:
+            #     try:
+            #         p = Path(config[_SECTION_GENERAL][inikey])
+            #     except KeyError:
+            #         # if key wasn't in config file for some reason,
+            #         # check that we have a default value (skydir, for example, does not (i.e. the default val is ""))
+            #         def_path = ConfigManager.__DEFAULT_CONFIG[_SECTION_GENERAL][inikey] # type: str
+            #         # if we have a default and it exists, use that.
+            #         # otherwise log the error
+            #         if checkPath(def_path):
+            #             p = Path(def_path)
+            #         else:
+            #             p=None
+            #     finally:
+            #         setattr(self.paths, paths_attr, p)
             # update config-file mirror
-            self.currentValues[_S_GENERAL][inikey] = self[paths_attr]
+            self.currentValues[_SECTION_GENERAL][inikey] = self[paths_attr]
+
+        if self.path_errors:
+            for att, errlist in self.path_errors.items():
+                for err in errlist:
+                    self.LOGGER << "Path error ["+ att + "]: " + err
 
 
         ######################################################################
@@ -155,9 +208,9 @@ class ConfigManager:
 
         # if it wasn't set above, get the value from config file
         if not self._lastprofile:
-            self._lastprofile = config[_S_GENERAL][_K_LASTPRO]
+            self._lastprofile = config[_SECTION_GENERAL][_KEY_LASTPRO]
 
-        self.currentValues[_S_GENERAL][_K_LASTPRO] = self._lastprofile
+        self.currentValues[_SECTION_GENERAL][_KEY_LASTPRO] = self._lastprofile
 
         ######################################################################
         #  check env for vfs mount
@@ -169,7 +222,7 @@ class ConfigManager:
         # if checkPath(env_vfs) and os.path.ismount(env_vfs):
         #     self.paths.dir_vfs = Path(env_vfs)
         # else:
-        #     self.paths.dir_vfs = Path(config[_S_GENERAL][_K_VFSMNT])
+        #     self.paths.dir_vfs = Path(config[_SECTION_GENERAL][_KEY_VFSMNT])
 
 
     def ensureDefaultSetup(self):
@@ -259,7 +312,7 @@ class ConfigManager:
             config.write(configfile)
 
 
-    def updateConfig(self, value, key, section=_S_GENERAL):
+    def updateConfig(self, value, key, section=_SECTION_GENERAL):
         """
         Update saved configuration file
 
@@ -279,10 +332,10 @@ class ConfigManager:
         config.read(str(self.paths.file_main))
 
         # validate new value
-        if key in [_K_MODDIR, _K_VFSMNT, _K_SKYDIR]:
+        if key in [_KEY_MODDIR, _KEY_VFSMNT, _KEY_SKYDIR]:
             p=Path(value)
 
-        elif key == _K_LASTPRO:
+        elif key == _KEY_LASTPRO:
             p = self.paths.dir_profiles / value
         else:
             raise exceptions.InvalidConfigKeyError(key)
@@ -290,13 +343,13 @@ class ConfigManager:
         if checkPath(str(p)):
 
             for case in [key.__eq__]:
-                if case(_K_MODDIR):
+                if case(_KEY_MODDIR):
                     self.paths.dir_mods = p
-                elif case(_K_VFSMNT):
+                elif case(_KEY_VFSMNT):
                     self.paths.dir_vfs = p
-                elif case(_K_SKYDIR):
+                elif case(_KEY_SKYDIR):
                     self.paths.dir_skyrim = p
-                elif case(_K_LASTPRO):
+                elif case(_KEY_LASTPRO):
                     self._lastprofile = value
 
             else: # should always run since we didn't use 'break' above

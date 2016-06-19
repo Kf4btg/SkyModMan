@@ -14,13 +14,12 @@ def checkPath(path, exp_user=False):
     the path exists on the filesystem.
 
     :param str path:
-    :param exp_user: expand ~ in path string
-    :return:
+    :param bool exp_user: expand ~ in path string
     """
-    if exp_user:
-        return path and _exists(_expand(path))
-    return path and _exists(path)
 
+    if path:
+        return _exists(_expand(path)) if exp_user else _exists(path)
+    return False
 
 @contextmanager
 def change_dir(dir_):
