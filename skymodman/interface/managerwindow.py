@@ -93,9 +93,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self._setup_table,
             self._setup_file_tree,
             self._setup_actions,
-            self._connect_buttons,
-            self._connect_local_signals,
-            self._attach_slots,
+            self._setup_button_connections,
+            self._setup_local_signals_connections,
+            self._setup_slot_connections,
         ]
 
         ## Notifier object for the above 'setup...' slots to
@@ -105,7 +105,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.SetupDone = Notifier(len(setupSlots), self.update_UI)
 
         # connect the windowinit signal to the setup slots, and pass
-        # them the notifier so they know who to call (...the 'Busters, of course)
+        # them the notifier so they know who to call
         for s in setupSlots:
             self.windowInitialized.connect(partial(s, self.SetupDone))
 
@@ -136,7 +136,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     # <editor-fold desc="setup">
 
     def _setup_toolbar(self, notify_done):
-        """We've got a few things to add to the toolbar"""
+        """We've got a few things to add to the toolbar:
+
+        * Profile Selector
+        * Add/remove profile buttons
+        * change mod-order buttons (up/down/top/bottom)
+        """
 
         # Profile selector and add/remove buttons
         self.file_toolBar.addSeparator()
@@ -161,7 +166,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         ## This is for testing the progress indicator::
         # show_busybar_action = QAction("busy",self)
-        # show_busybar_action.triggered.connect(self.show_sb_progress)
+        # show_busybar_action.triggered.connect(self.show_statusbar_progress)
         # self.file_toolBar.addAction(show_busybar_action)
 
         notify_done()
@@ -191,49 +196,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         notify_done()
 
-    def show_sb_progress(self, text="Working:", minimum=0, maximum=0, show_bar_text=False):
-        """
-        Set up and display the small progress bar on the bottom right of the window
-        (in the status bar). If `minimum` == `maximum` == 0, the bar will be in
-        indeterminate ('busy') mode: this is useful for indicating to the user
-        that *something* is going on on the background during activities that may
-        take a moment or two to complete, so the user need not worry
-        that their last command had no effect.
-
-        :param text: Text that will be shown to the left of the progress bar
-        :param minimum: Minumum value for the bar
-        :param maximum: Maximum value for the bar
-        :param show_bar_text: Whether to show the bar's text (% done by default)
-        """
-        self.sb_progress_label.setText(text)
-        self.sb_progress_bar.reset()
-        self.sb_progress_bar.setRange(minimum, maximum)
-        self.sb_progress_bar.setTextVisible(show_bar_text)
-
-        self.sb_progress_label.setVisible(True)
-        self.sb_progress_bar.setVisible(True)
-
-    def update_sb_progress(self, value, labeltext=None):
-        """
-        Set the status-progress-bar's value to `value`. If provided,
-        also change the label to `labeltext`; otherwise leave the
-        label as is. This method can be used as a callback.
-
-        :param value:
-        :param labeltext:
-        :return:
-        """
-        self.sb_progress_bar.setValue(value)
-        if labeltext is not None:
-            self.sb_progress_label.setText(labeltext)
-
-    def hide_sb_progress(self):
-        """
-        Make the statusbar-progress go away.
-        """
-        self.sb_progress_bar.setVisible(False)
-        self.sb_progress_label.setVisible(False)
-
     def _setup_table(self, notify_done):
         """
         This is where we finally tell the manager to load all the actual data for the profile.
@@ -242,7 +204,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         Manager.load_active_profile_data()
         self.mod_table.setModel(
-                ModTable_TreeModel(parent=self.mod_table))
+            ModTable_TreeModel(parent=self.mod_table))
 
         self.models[M.mod_table] = self.mod_table.model()
 
@@ -250,12 +212,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # setup the animation to show/hide the search bar
         self.animate_show_search = QPropertyAnimation(
-                self.modtable_search_box, b"maximumWidth")
+            self.modtable_search_box, b"maximumWidth")
         self.animate_show_search.setDuration(300)
         self.modtable_search_box.setMaximumWidth(0)
 
         self.modtable_search_box.textChanged.connect(
-                self._clear_searchbox_style)
+            self._clear_searchbox_style)
 
         def on_search_box_return():
             self._search_text = self.modtable_search_box.text()
@@ -272,14 +234,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.filters_dropdown.setVisible(False)
 
         notify_done()
-
-    def _reset_table(self):
-        """
-        Called when a new profile is loaded or some other major change occurs
-        """
-        self.mod_table.loadData()
-        self.modtable_search_box.clear() # might be good enough
-        # self._show_search_box(ensure_state=0)
 
     def _setup_profile_selector(self, notify_done):
         """
@@ -313,10 +267,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         ## Mods List
         ##################################
 
-        #setup filter proxy for active mods list
+        # setup filter proxy for active mods list
         mod_filter = self.filters[
             F.mod_list] = ActiveModsListFilter(
-                self.filetree_modlist)
+            self.filetree_modlist)
 
         mod_filter.setSourceModel(self.models[M.mod_table])
         mod_filter.setFilterCaseSensitivity(Qt.CaseInsensitive)
@@ -325,7 +279,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         mod_filter.setFilterKeyColumn(Column.NAME.value)
 
         # load and apply saved setting for 'activeonly' toggle
-        self.__setup_modlist_filter_state(mod_filter)
+        self.__init_modlist_filter_state(mod_filter)
 
         # finally, set the filter as the model for the modlist
         self.filetree_modlist.setModel(mod_filter)
@@ -333,7 +287,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.filetree_modlist.setModelColumn(Column.NAME.value)
 
         self._filetreesplitter.setSizes(
-                [1, 500])  # just make the left one smaller ok?
+            [1, 500])  # just make the left one smaller ok?
 
         ##################################
         ## File Viewer
@@ -341,12 +295,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         ## model for tree view of files
         fileviewer_model = self.models[
             M.file_viewer] = ModFileTreeModel(
-                parent=self.filetree_fileviewer)
+            parent=self.filetree_fileviewer)
 
         ## filter
         fileviewer_filter = self.filters[
             F.file_viewer] = FileViewerTreeFilter(
-                                self.filetree_fileviewer)
+            self.filetree_fileviewer)
 
         fileviewer_filter.setSourceModel(fileviewer_model)
         fileviewer_filter.setFilterCaseSensitivity(Qt.CaseInsensitive)
@@ -355,16 +309,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.filetree_fileviewer.setModel(fileviewer_filter)
 
         ## resize 'name' column to be larger at first than 'path' column
-        self.filetree_fileviewer.header().resizeSection(0,400)
+        self.filetree_fileviewer.header().resizeSection(0, 400)
         # todo: remember user column resizes
         # self.models[M.file_viewer].rootPathChanged.connect(self.on_filetree_fileviewer_rootpathchanged)
 
         ## show new files when mod selection in list
         self.filetree_modlist.selectionModel().currentChanged.connect(
-                lambda c, p: self.viewer_show_file_tree(
-                        mod_filter.mapToSource(c),
-                        mod_filter.mapToSource(p)))
-
+            lambda c, p: self.viewer_show_file_tree(
+                mod_filter.mapToSource(c),
+                mod_filter.mapToSource(p)))
 
         ## have escape key unfocus the filter boxes
         for f in [self.filetree_modfilter, self.filetree_filefilter]:
@@ -373,9 +326,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # let setup know we're done here
         notify_done()
 
-    def __setup_modlist_filter_state(self, filter_):
+    def __init_modlist_filter_state(self, filter_):
         activeonly = Manager.get_profile_setting('File Viewer',
-                                                     'activeonly')
+                                                 'activeonly')
         filter_.onlyShowActive = activeonly
 
         # apply setting to box
@@ -384,18 +337,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # and setup label text for first display
         self.update_modlist_label(activeonly)
-
-    def _reset_file_tree(self):
-        # clear the filter boxes
-        self.filetree_modfilter.clear()
-        self.filetree_filefilter.clear()
-
-        # clear the file tree view
-        self.models[M.file_viewer].setRootPath(None)
-
-        # update the label and checkbox on the modlist
-        self.__setup_modlist_filter_state(
-                self.filters[F.mod_list])
 
     def _setup_actions(self, notify_done):
         """Connect all the actions to their appropriate slots/whatevers
@@ -448,12 +389,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.action_rename_profile.triggered.connect(
             self.on_rename_profile_action)
 
-        #--------------------------------------------------
+        # --------------------------------------------------
 
         # action_preferences
         self.action_preferences.triggered.connect(
             self.edit_preferences)
-
 
         # action_quit
         self.action_quit.setShortcut(QKeySequence.Quit)
@@ -504,28 +444,28 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # action_save_changes
         self.action_save_changes.setShortcut(
-                QKeySequence.Save)
+            QKeySequence.Save)
         self.action_save_changes.triggered.connect(
-                self.on_save_command)
+            self.on_save_command)
 
         self.action_revert_changes.triggered.connect(
-                self.on_revert_command)
+            self.on_revert_command)
 
-        #--------------------------------------------------
+        # --------------------------------------------------
 
         # action_move_mod_up
         # action_move_mod_down
         self.action_move_mod_up.triggered.connect(
-                partial(self.moveMods.emit, -1))
+            partial(self.moveMods.emit, -1))
         self.action_move_mod_down.triggered.connect(
-                partial(self.moveMods.emit, 1))
+            partial(self.moveMods.emit, 1))
 
         # action_move_mod_to_top
         # action_move_mod_to_bottom
         self.action_move_mod_to_top.triggered.connect(
-                self.moveModsToTop.emit)
+            self.moveModsToTop.emit)
         self.action_move_mod_to_bottom.triggered.connect(
-                self.moveModsToBottom.emit)
+            self.moveModsToBottom.emit)
 
         # --------------------------------------------------
 
@@ -539,40 +479,42 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # find prev
         self.action_find_previous.setShortcut(QKeySequence.FindPrevious)
         self.action_find_previous.triggered.connect(
-                partial(self.on_table_search, -1))
+            partial(self.on_table_search, -1))
 
         notify_done()
 
-    def _connect_buttons(self, notify_done):
+    def _setup_button_connections(self, notify_done):
         """ Make the buttons do stuff
         """
         # use a dialog-button-box for save/cancel;
         # have to specify by standard button type
         btn_apply = self.save_cancel_btnbox.button(
-                QDialogButtonBox.Apply)
+            QDialogButtonBox.Apply)
         btn_reset = self.save_cancel_btnbox.button(
-                QDialogButtonBox.Reset)
+            QDialogButtonBox.Reset)
 
         btn_apply.clicked.connect(
-                self.action_save_changes.trigger)
+            self.action_save_changes.trigger)
 
         # enabled/disable the save/cancel buttons based
         # on the status of the save-changes action
-        self.action_save_changes.changed.connect(lambda: self.save_cancel_btnbox.setEnabled(self.action_save_changes.isEnabled()))
+        self.action_save_changes.changed.connect(
+            lambda: self.save_cancel_btnbox.setEnabled(
+                self.action_save_changes.isEnabled()))
 
         # connect reset button to the revert action
         btn_reset.clicked.connect(
-                self.action_revert_changes.trigger)
+            self.action_revert_changes.trigger)
 
         # using released since 'clicked' sends an extra
         # bool argument (which means nothing in this context
         # but messes up the callback)
         self.modtable_search_button.released.connect(
-                self._show_search_box)
+            self._show_search_box)
 
         notify_done()
 
-    def _connect_local_signals(self, notify_done):
+    def _setup_local_signals_connections(self, notify_done):
         """
         SIGNALS:
 
@@ -591,24 +533,24 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         for slot in [self.enable_profile_delete,
                      self._reset_table,
-                    self._reset_file_tree,
-                    self._visible_components_for_tab,
-            self._enabled_actions_for_tab,
+                     self._reset_file_tree,
+                     self._visible_components_for_tab,
+                     self._enabled_actions_for_tab,
                      ]:
             self.newProfileLoaded.connect(slot)
 
         # connect the move up/down signal to the appropriate slot on view
         self.moveMods.connect(
-                self.mod_table.onMoveModsAction)
+            self.mod_table.onMoveModsAction)
         # same for the move to top/button signals
         self.moveModsToBottom.connect(
-                self.mod_table.onMoveModsToBottomAction)
+            self.mod_table.onMoveModsToBottomAction)
         self.moveModsToTop.connect(
-                self.mod_table.onMoveModsToTopAction)
+            self.mod_table.onMoveModsToTopAction)
 
         notify_done()
 
-    def _attach_slots(self, notify_done):
+    def _setup_slot_connections(self, notify_done):
         """
         SLOTS:
 
@@ -634,15 +576,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # ensure the UI is properly updated when the tab changes
         self.manager_tabs.currentChanged.connect(
-                self.on_tab_changed)
+            self.on_tab_changed)
 
         # when new profile is selected
         self.profile_selector.currentIndexChanged.connect(
-                self.on_profile_select)
+            self.on_profile_select)
 
         # connect the undo event handler
         self.models[M.mod_table].undoevent.connect(
-                self.on_undo_redo_event)
+            self.on_undo_redo_event)
 
         ##===================================
         ## Mod Table Tab
@@ -653,14 +595,14 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # the save/cancel btns
         self.models[M.mod_table
         ].tablehaschanges.connect(
-                self.on_table_unsaved_change)
+            self.on_table_unsaved_change)
 
         # depending on selection in table, the movement actions will be enabled
         # or disabled
         self.mod_table.enableModActions.connect(
-                self.on_make_or_clear_mod_selection)
+            self.on_make_or_clear_mod_selection)
         self.mod_table.canMoveItems.connect(
-                self._enable_mod_move_actions)
+            self._enable_mod_move_actions)
 
         ##===================================
         ## File Tree Tab
@@ -669,25 +611,97 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # connect the checkbox directly to the filter property
         self.filetree_activeonlytoggle.toggled[
             'bool'].connect(
-                self.on_modlist_activeonly_toggle)
+            self.on_modlist_activeonly_toggle)
 
         # connect proxy to textchanged of filter box on listview
         self.filetree_modfilter.textChanged.connect(
-                self.on_modlist_filterbox_textchanged)
+            self.on_modlist_filterbox_textchanged)
 
         ## same for file tree
         self.filetree_filefilter.textChanged.connect(
-                self.on_fileviewer_filter_textchanged)
-                # self.filters[F.file_viewer].setFilterWildcard)
+            self.on_fileviewer_filter_textchanged)
+        # self.filters[F.file_viewer].setFilterWildcard)
 
         # left the selectionModel() changed connection in the _setup function;
         # it's just easier to handle it there
 
-        self.models[M.file_viewer].hasUnsavedChanges.connect(self.on_table_unsaved_change)
+        self.models[M.file_viewer].hasUnsavedChanges.connect(
+            self.on_table_unsaved_change)
 
         notify_done()
 
     # </editor-fold>
+
+
+    def show_statusbar_progress(self, text="Working:", minimum=0, maximum=0, show_bar_text=False):
+        """
+        Set up and display the small progress bar on the bottom right of the window
+        (in the status bar). If `minimum` == `maximum` == 0, the bar will be in
+        indeterminate ('busy') mode: this is useful for indicating to the user
+        that *something* is going on on the background during activities that may
+        take a moment or two to complete, so the user need not worry
+        that their last command had no effect.
+
+        :param text: Text that will be shown to the left of the progress bar
+        :param minimum: Minumum value for the bar
+        :param maximum: Maximum value for the bar
+        :param show_bar_text: Whether to show the bar's text (% done by default)
+        """
+        self.sb_progress_label.setText(text)
+        self.sb_progress_bar.reset()
+        self.sb_progress_bar.setRange(minimum, maximum)
+        self.sb_progress_bar.setTextVisible(show_bar_text)
+
+        self.sb_progress_label.setVisible(True)
+        self.sb_progress_bar.setVisible(True)
+
+    def update_statusbar_progress(self, value, labeltext=None):
+        """
+        Set the status-progress-bar's value to `value`. If provided,
+        also change the label to `labeltext`; otherwise leave the
+        label as is. This method can be used as a callback.
+
+        :param value:
+        :param labeltext:
+        :return:
+        """
+        self.sb_progress_bar.setValue(value)
+        if labeltext is not None:
+            self.sb_progress_label.setText(labeltext)
+
+    def hide_statusbar_progress(self):
+        """
+        Make the statusbar-progress go away.
+        """
+        self.sb_progress_bar.setVisible(False)
+        self.sb_progress_label.setVisible(False)
+
+
+
+    def _reset_table(self):
+        """
+        Called when a new profile is loaded or some other major change occurs
+        """
+        self.mod_table.loadData()
+        self.modtable_search_box.clear() # might be good enough
+        # self._show_search_box(ensure_state=0)
+
+
+
+    def _reset_file_tree(self):
+        # clear the filter boxes
+        self.filetree_modfilter.clear()
+        self.filetree_filefilter.clear()
+
+        # clear the file tree view
+        self.models[M.file_viewer].setRootPath(None)
+
+        # update the label and checkbox on the modlist
+        self.__init_modlist_filter_state(
+                self.filters[F.mod_list])
+
+
+
 
     ##===============================================
     ## UI Helper Functions
@@ -1141,18 +1155,18 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         if filename:
             self.installui = InstallerUI() # helper class
             if manual:
-                self.show_sb_progress("Loading archive:")
+                self.show_statusbar_progress("Loading archive:")
 
                 self.task = asyncio.get_event_loop().create_task(
                     self.installui.do_manual_install(filename,
-                                              self.hide_sb_progress))
+                                                     self.hide_statusbar_progress))
 
             else:
                 # show busy indicator while installer loads
-                self.show_sb_progress("Preparing installer:")
+                self.show_statusbar_progress("Preparing installer:")
 
                 self.task = asyncio.get_event_loop().create_task(
-                    self.installui.do_install(filename, self.hide_sb_progress))
+                    self.installui.do_install(filename, self.hide_statusbar_progress))
 
                 # todo: add callback to show the new mod if install succeeded
                 # self.task.add_done_callback(self.on_new_mod())

@@ -33,7 +33,8 @@ class Profile:
     }
 
 
-    def __init__(self, profiles_dir, name="default", copy_profile=None, create_on_enoent=True):
+    def __init__(self, profiles_dir, name="default",
+                 copy_profile=None, create_on_enoent=True):
         """
 
         :param Path profiles_dir:
@@ -51,8 +52,8 @@ class Profile:
                 # create the directory if it doesn't exist
                 self.folder.mkdir()
 
-                # since we're creating a new profile, check to see we're cloning
-                # an already existing one
+                # since we're creating a new profile, check to see if
+                # we're cloning an already existing one
                 if copy_profile is not None:
                     import shutil
                     for fpath in (copy_profile.folder / fname for fname in ProfileFiles):
@@ -75,8 +76,8 @@ class Profile:
                     with f.open('w') as ini:
                         c.write(ini)
 
-        # we don't worry about the json files, but we need to load in the values from the
-        # ini file and store it.
+        # we don't worry about the json files, but we need to load in
+        # the values from the ini file and store it.
         self._config = self.load_profile_settings()
         # self.LOGGER << "Loaded profile-specific settings: {}".format(self.settings)
 
@@ -127,23 +128,21 @@ class Profile:
 
         new_dir = self.folder.with_name(new_name) #type: Path
 
-        # if the folder exists or if it matches (case-insensitively) one of the other profile
-        # dirs, raise exception
+        ## if the folder exists or if it matches (case-insensitively)
+        ##  one of the other profile dirs, raise exception
         if new_dir.exists() or \
             new_name.lower() in [f.name.lower() for f in self.folder.parent.iterdir()]:
             raise exceptions.ProfileExistsError(new_name)
 
-        # rename the directory (doesn't affect path obj)
+        ## rename the directory (doesn't affect path obj)
         self.folder.rename(new_dir)
 
-        try:
-            assert new_dir.exists()
-            assert not self.folder.exists()
-        except AssertionError:
+        ## verify that rename happened successfully
+        if not new_dir.exists() or self.folder.exists():
             raise exceptions.ProfileError(self.name,
-                                          "Error while renaming profile '{name}' to '{new_name}'".format(new_name=new_name))
+                                          "Error while renaming profile '{name}' to '{new_name}'".format(name=self.name, new_name=new_name))
 
-        # update reference
+        ## update reference
         self.folder = new_dir
         self.name = new_name
 
@@ -211,10 +210,10 @@ class ProfileManager:
     Manages loading and saving user profiles
     """
 
-    # maintain a cache of previously loaded profiles; if one is requested that has already been
-    # created, simply return that profile from the cache.
-    # TODO: since all profiles are loaded by the profile selector at app start, we'll need to make sure
-    # that this doesn't take too much memory (the Profile objects are pretty small) or take too long to start
+    # maintain a cache of previously loaded profiles; if one is
+    # requested that has already been created, simply return that
+    # profile from the cache.
+    # TODO: since all profiles are loaded by the profile selector at app start, we'll need to make sure that this doesn't take too much memory (the Profile objects are pretty small) or take too long to start
     # __cache = {} # type: Dict[str, Profile]
 
     # only hold the 5 most recently loaded profiles (this session)
@@ -228,7 +227,7 @@ class ProfileManager:
         super().__init__()
 
         self._profiles_dir = directory
-        self._current_profile = None
+        self._current_profile = None # type: Profile
 
         # make sure directory exists
         if not self._profiles_dir.exists():
@@ -272,8 +271,9 @@ class ProfileManager:
         to retrieve the Profile object for the profile named 'my_profile'
         (loading it from disk if not cached).
 
-        Unlike the default behavior of 'loadProfile', this will NOT create a new profile if one by the given
-        name can't be found. A ProfileDoesNotExistError will be raised instead.
+        Unlike the default behavior of 'loadProfile', this will NOT
+        create a new profile if one by the given name can't be found.
+        A ProfileDoesNotExistError will be raised instead.
 
         :param profilename: name of the profile to load
         :return: Profile object
@@ -283,7 +283,7 @@ class ProfileManager:
 
 
 
-    def loadProfile(self, profilename, copy_from = None, create=True):
+    def loadProfile(self, profilename, copy_from = None, create=True) -> Profile:
         """
 
         :param str profilename:
@@ -422,9 +422,6 @@ class ProfileManager:
         self._profile_names.append(profile.name)
 
         self.__cache.append(profile.name, profile)
-
-
-
 
 
 
