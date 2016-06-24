@@ -102,6 +102,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         ## call when they've completed their setup process.
         ## After the final call, the UI will updated and
         ## presented to the user
+        # TODO: turn the "notify_done" param and call into a decorator
         self.SetupDone = Notifier(len(setupSlots), self.update_UI)
 
         # connect the windowinit signal to the setup slots, and pass
@@ -151,8 +152,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # Action Group for the mod-movement buttons.
         # this just makes it easier to enable/disable them all at once
         self.file_toolBar.addSeparator()
+        # mmag => "Mod Movement Action Group"
         mmag = self.mod_movement_group = QActionGroup(self)
 
+        # mact => "Movement ACTion"
         macts = [self.action_move_mod_to_top,
                  self.action_move_mod_up,
                  self.action_move_mod_down,
@@ -177,7 +180,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         progress or activity of long-running processes.
 
         :param notify_done:
-        :return:
         """
 
         # putting the bar and label together into a container
@@ -534,8 +536,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         for slot in [self.enable_profile_delete,
                      self._reset_table,
                      self._reset_file_tree,
-                     self._visible_components_for_tab,
-                     self._enabled_actions_for_tab,
+                     self._update_visible_components,
+                     self._update_enabled_actions,
                      ]:
             self.newProfileLoaded.connect(slot)
 
@@ -632,6 +634,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     # </editor-fold>
 
+    ##=============================================
+    ## Statusbar operations
+    ##=============================================
 
     def show_statusbar_progress(self, text="Working:", minimum=0, maximum=0, show_bar_text=False):
         """
@@ -676,7 +681,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.sb_progress_bar.setVisible(False)
         self.sb_progress_label.setVisible(False)
 
-
+    ##=============================================
+    ## Reset UI components
+    ##=============================================
 
     def _reset_table(self):
         """
@@ -709,7 +716,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def check_setup(self):
         """
-        Make sure that every absolutely required piece of config information is available before everything gets fully loaded. So far, this means:
+        Make sure that every absolutely required piece of config
+        information is available before everything gets fully loaded.
+        So far, this means:
                 * Skyrim-installation directory
         """
 
@@ -724,16 +733,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     # def update_UI(self, *args):
     def update_UI(self):
+        self._update_visible_components(self.current_tab)
 
-        self._visible_components_for_tab()
-
-    def _visible_components_for_tab(self):
+    def _update_visible_components(self, tab):
         """
         Some manager components should be hidden on certain tabs
-
-        :return:
         """
-        tab=self.current_tab
+        # tab=self.current_tab
 
         all_components = [
             self.save_cancel_btnbox,      # 0
@@ -750,13 +756,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         for comp, isvis in zip(all_components, visible[tab]):
             comp.setVisible(isvis)
 
-    def _enabled_actions_for_tab(self):
+
+    def _update_enabled_actions(self, tab):
         """
         Some manager actions should be disabled on certain tabs
-
-        :return:
         """
-        tab=self.current_tab
+        # tab=self.current_tab
 
         all_components = [
             self.mod_movement_group,     # 0
@@ -857,7 +862,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     # noinspection PyUnusedLocal
     def viewer_show_file_tree(self, indexCur, indexPre):
         """
-        When the currently selected item changes in the modlist, change the fileviewer to show the files from the new mod's folder.
+        When the currently selected item changes in the modlist, change
+        the fileviewer to show the files from the new mod's folder.
 
         :param QModelIndex indexCur: Currently selected index
         :param QModelIndex indexPre: Previously selected index
@@ -872,11 +878,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def table_prompt_if_unsaved(self):
         """
-        Check for unsaved changes to the mods list and show a prompt if any are found.
-        Clicking yes will save the changes and mark the table clean, while clicking no will
-        simply disable the apply/revert buttons as IF the table were clean. This is because
-        this is intended to be used right before an action like loading a new profile
-        (thus forcing a full table reset) or quitting the app.
+        Check for unsaved changes to the mods list and show a prompt if
+        any are found. Clicking yes will save the changes and mark the
+        table clean, while clicking no will simply disable the apply/
+        revert buttons as IF the table were clean. This is because
+        this is intended to be used right before an action like loading
+        a new profile (thus forcing a full table reset) or quitting the
+        app.
         """
         # check for unsaved changes to the mod-list
         if self.mod_table.model().isDirty:
@@ -908,17 +916,24 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.action_delete_profile.setToolTip('Remove Profile')
             self.action_rename_profile.setEnabled(True)
 
+    ##=============================================
+    ## Event Handlers/Slots
+    ##=============================================
+
     # <editor-fold desc="EventHandlers">
 
     def on_tab_changed(self, newindex):
         self.current_tab = TAB(newindex)
-        self._visible_components_for_tab()
-        self._enabled_actions_for_tab()
+        self._update_visible_components(self.current_tab)
+        self._update_enabled_actions(self.current_tab)
 
     @pyqtSlot('int')
     def on_profile_select(self, index):
         """
-        When a new profile is chosen from the dropdown list, load all the appropriate data for that profile and replace the current data with it. Also show a message about unsaved changes to the current profile.
+        When a new profile is chosen from the dropdown list, load all
+        the appropriate data for that profile and replace the current
+        data with it. Also show a message about unsaved changes to the
+        current profile.
         :param index:
         """
         if index < 0:
