@@ -233,65 +233,99 @@ class ConfigManager:
 
         ## set up paths ##
 
-        paths = self.paths
+        self._check_default_dirs(self.paths)
 
-        paths.dir_config = Path(appdirs.user_config_dir(self.__APPNAME))
+        ## check that main config file exists ##
+        self._check_main_config(self.paths)
 
-        paths.file_main = paths.dir_config / "{}.ini".format(self.__APPNAME)
+        ## Load settings from main config file ##
+        self.loadConfig()
+
+        ## check that mods directory exists
+        self._check_for_mods_dir(self.paths)
+
+        ## check that folder for MRU profile exists
+        self._check_for_lastprofile_dir(self.paths)
+
+    def _check_default_dirs(self, config_paths):
+        """
+
+        :type config_paths: ConfigPaths
+        """
+
+        config_paths.dir_config = Path(appdirs.user_config_dir(self.__APPNAME))
+
+        config_paths.dir_profiles = config_paths.dir_config / ConfigManager.__PROFILES_DIRNAME
 
         ## check for config dir ##
-        if not paths.dir_config.exists():
+        if not config_paths.dir_config.exists():
             self.LOGGER.warning("Configuration directory not found.")
-            self.LOGGER.info("Creating configuration directory at: {}".format(paths.dir_config))
+            self.LOGGER.info(
+                "Creating configuration directory at: {}".format(
+                    config_paths.dir_config))
 
-            paths.dir_config.mkdir(parents=True)
+            config_paths.dir_config.mkdir(parents=True)
 
         ## check for profiles dir ##
+        if not config_paths.dir_profiles.exists():
+            self.LOGGER.info(
+                "Creating profiles directory at: {}".format(
+                    config_paths.dir_profiles))
 
-        paths.dir_profiles = paths.dir_config / ConfigManager.__PROFILES_DIRNAME
+            config_paths.dir_profiles.mkdir(parents=True)
 
-        if not paths.dir_profiles.exists():
-            self.LOGGER.info("Creating profiles directory at: {}".format(paths.dir_profiles))
-
-            paths.dir_profiles.mkdir(parents=True)
-
-            default_prof = paths.dir_profiles / ConfigManager.__DEFAULT_PROFILE
+            default_prof = config_paths.dir_profiles / ConfigManager.__DEFAULT_PROFILE
 
             self.LOGGER.info("Creating directory for default profile.")
             default_prof.mkdir()
 
+    def _check_main_config(self, config_paths):
+        """
+        Ensure main configuration file exists, creating if necessary
+
+        :param config_paths:
+        """
+
+        config_paths.file_main = config_paths.dir_config / "{}.ini".format(
+            self.__APPNAME)
 
         ## check that main config file exists ##
-        if not paths.file_main.exists():
+        if not config_paths.file_main.exists():
             self.LOGGER.info("Creating default configuration file.")
             # create it w/ default values if it doesn't
             self.create_default_config()
 
-        ## Load configuration from file ##
-        self.loadConfig()
-
-
-        #check for data dir, mods dir
+    def _check_for_mods_dir(self, paths):
         ## TODO: maybe we shouldn't create the mod directory by default?
         if not paths.dir_mods.exists():
             # for now, only create if the location in the config is same as the default
             if str(paths.dir_mods) == \
-                appdirs.user_data_dir(self.__APPNAME) + "/mods":
+                            appdirs.user_data_dir(
+                                self.__APPNAME) + "/mods":
 
-                self.LOGGER.info("Creating new mods directory at: {}".format(paths.dir_mods))
+                self.LOGGER.info(
+                    "Creating new mods directory at: {}".format(
+                        paths.dir_mods))
 
                 paths.dir_mods.mkdir(parents=True)
             else:
                 self.LOGGER.error("Configured mods directory not found")
 
-        # ensure that 'lastprofile' exists in profiles dir, or fallback to default
+    def _check_for_lastprofile_dir(self, paths):
+        """
+        See if the directory for the most recently-loaded profile exists;
+        if not, set "default" as the MRU profile
+
+        :param paths:
+        """
+
         lpdir = paths.dir_profiles / self._lastprofile
         if not lpdir.exists():
-
-            self.LOGGER.error("Directory for last-loaded profile '{}' could not be found! Falling back to default.".format(self._lastprofile))
+            self.LOGGER.error(
+                "Directory for last-loaded profile '{}' could not be found! Falling back to default.".format(
+                    self._lastprofile))
 
             self._lastprofile = self.__DEFAULT_PROFILE
-
 
     def create_default_config(self):
         """
