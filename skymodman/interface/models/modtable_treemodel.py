@@ -560,7 +560,8 @@ class ModTable_TreeModel(QAbstractItemModel):
 
     def loadData(self):
         """
-        Load fresh data and reset everything. Called when first loaded and when something major changes, like the active profile.
+        Load fresh data and reset everything. Called when first loaded
+        and when something major changes, like the active profile.
         """
         self.beginResetModel()
         self._modifications.clear()

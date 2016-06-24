@@ -204,13 +204,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         :param notify_done:
         """
-        Manager.load_active_profile_data()
+        # Manager.load_active_profile_data()
         self.mod_table.setModel(
             ModTable_TreeModel(parent=self.mod_table))
 
         self.models[M.mod_table] = self.mod_table.model()
 
-        self.mod_table.loadData()
+        # self.mod_table.loadData()
 
         # setup the animation to show/hide the search bar
         self.animate_show_search = QPropertyAnimation(
@@ -241,29 +241,38 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         Initialize the dropdown list for selecting profiles with the names of the profiles found on disk
         """
+        """
+        Create and assign the model to be used by the profile selector
+        combo box.
+        """
         model = ProfileListModel()
 
-        start_idx = 0
-        for name, profile in Manager.get_profiles(
-                names_only=False):
-            model.insertRows(data=profile)
-            if name == Manager.active_profile().name:
-                self.logger << "Setting {} as chosen profile".format(
-                    name)
-                start_idx = model.rowCount() - 1
+        # populate list later
 
-                # see if we should enable the remove-profile button
-                self.enable_profile_delete(name)
+        #
+        # start_idx = 0
+        # for name, profile in Manager.get_profiles(
+        #         names_only=False):
+        #     model.insertRows(data=profile)
+        #     if name == Manager.active_profile().name:
+        #         self.logger << "Setting {} as chosen profile".format(
+        #             name)
+        #         start_idx = model.rowCount() - 1
+        #
+        #         # see if we should enable the remove-profile button
+        #         self.enable_profile_delete(name)
 
         self.profile_selector.setModel(model)
-        self.profile_selector.setCurrentIndex(start_idx)
+        # self.profile_selector.setCurrentIndex(start_idx)
 
         # let setup know we're done here
         notify_done()
 
     def _setup_file_tree(self, notify_done):
         """
-        Create and populate the list of mod-folders shown on the filetree tab, as well as prepare the fileviewer pane to show files when a mod is selected
+        Create and populate the list of mod-folders shown on the
+        filetree tab, as well as prepare the fileviewer pane to show
+        files when a mod is selected
         """
         ##################################
         ## Mods List
@@ -331,6 +340,16 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     def __init_modlist_filter_state(self, filter_):
         activeonly = Manager.get_profile_setting('File Viewer',
                                                  'activeonly')
+
+        if activeonly is None:
+            # if no profile loaded, set it unchecked and disable it
+            activeonly=False
+            self.filetree_activeonlytoggle.setEnabled(False)
+        else:
+            self.filetree_activeonlytoggle.setEnabled(True)
+
+        # if activeonly is not None:
+        # self.filetree_activeonlytoggle.setEnabled(True)
         filter_.onlyShowActive = activeonly
 
         # apply setting to box
@@ -339,6 +358,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # and setup label text for first display
         self.update_modlist_label(activeonly)
+        # else:
+        #     # if no profile loaded, set it unchecked and disable it
+        #     self.filetree_activeonlytoggle.setCheckState(Qt.Unchecked)
+        #     filter_.onlyShowActive = False
+        #
+        #     self.update_modlist_label(False)
+        #     self.filetree_activeonlytoggle.setEnabled(False)
 
     def _setup_actions(self, notify_done):
         """Connect all the actions to their appropriate slots/whatevers
@@ -730,6 +756,28 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 self.safe_quit()
 
 
+    def populate_profile_selector(self):
+        """
+        Pull the names of existing profiles from the main Manager
+        and insert them into the Profile Selector model.
+        Set the most recently loaded profile as current.
+        """
+
+        model = self.profile_selector.model()
+
+        start_idx = 0
+        for name, profile in Manager.get_profiles(
+                names_only=False):
+            model.insertRows(data=profile)
+            if name == Manager.active_profile().name:
+                self.logger << "Setting {} as chosen profile".format(
+                    name)
+                start_idx = model.rowCount() - 1
+
+                # see if we should enable the remove-profile button
+                self.enable_profile_delete(name)
+
+        self.profile_selector.setCurrentIndex(start_idx)
 
     # def update_UI(self, *args):
     def update_UI(self):
@@ -1129,18 +1177,18 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.modtable_search_box.setStyleSheet('')
             self.status_bar.clearMessage()
 
-    def _on_search_box_return(self):
-        """
-        Hit return in the search box; update the saved search text and search
-        """
-        self._search_text = self.modtable_search_box.text()
-
-        e = bool(self._search_text)
-
-        self.action_find_next.setEnabled(e)
-        self.action_find_previous.setEnabled(e)
-
-        self.on_table_search()
+    # def _on_search_box_return(self):
+    #     """
+    #     Hit return in the search box; update the saved search text and search
+    #     """
+    #     self._search_text = self.modtable_search_box.text()
+    #
+    #     e = bool(self._search_text)
+    #
+    #     self.action_find_next.setEnabled(e)
+    #     self.action_find_previous.setEnabled(e)
+    #
+    #     self.on_table_search()
 
     def _clear_searchbox_style(self):
         if self.modtable_search_box.styleSheet():

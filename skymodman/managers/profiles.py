@@ -245,7 +245,8 @@ class ProfileManager:
         if len(self._profile_names) == 0:
             self.LOGGER.warning("No profiles found. Creating default profile.")
             self._profile_names.append("default")
-            self._current_profile = self.loadProfile("default")
+            # self._current_profile = self.loadProfile("default")
+            self.loadProfile("default")
 
     ################
     ## Properties ##
@@ -253,8 +254,8 @@ class ProfileManager:
 
     @property
     def active_profile(self):
-        if self._current_profile is None:
-            self._current_profile = self.loadProfile("default")
+        # if self._current_profile is None:
+        #     self._current_profile = self.loadProfile("default")
         return self._current_profile
 
     @property

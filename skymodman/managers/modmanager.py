@@ -25,6 +25,8 @@ mods_with_conflicting_files = None  # type collections.defaultdict[list]
 _logger = None
 __enabled_mods = None
 
+_database_initialized=False
+
 def init():
     global _logger, _dataman, _profileman, _configman #_installman,
     global conf, profiles, db
@@ -36,7 +38,7 @@ def init():
     # must be created after config manager
     _profileman = profiles = ProfileManager(_configman.paths.dir_profiles)
     # set the most-recently loaded profile as active.
-    _profileman.setActiveProfile(_configman.lastprofile)
+    # _profileman.setActiveProfile(_configman.lastprofile)
 
     # Prepare the database, but do not load any information
     # until it is requested.
@@ -71,8 +73,15 @@ def set_active_profile(profile):
     _profileman.setActiveProfile(profile)
     _configman.updateConfig(profile, "lastprofile")
 
+    global _database_initialized
+
     # have to reinitialize the database
-    _dataman.reinit()
+    if _database_initialized:
+        _dataman.reinit()
+    else:
+        _database_initialized=True
+        # well, it will be in just a second
+
     load_active_profile_data()
 
 def get_profiles(names_only = True):
@@ -239,7 +248,10 @@ def get_profile_setting(section, name):
     :param str name: Name of the setting
     :return: current value of the setting
     """
-    return active_profile().Config[section][name]
+    ap = active_profile()
+    if ap is not None:
+        return ap.Config[section][name]
+    return None
 
 def set_profile_setting(section, name, value):
     """
