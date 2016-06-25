@@ -74,9 +74,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         ## and tweaking the icon much easier, as well as allowing for stacking and
         ## animation, if desired.
         # _id = QFontDatabase.addApplicationFont("skymodman/thirdparty/qtawesome/fonts/fontawesome-webfont.ttf")
-        
+
         # verify basic setup
-        self.check_setup()
+        # self.check_setup()
 
         # for cancelling asyncio actions
         self.task = None
@@ -114,6 +114,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.setupUi(self)
 
         self._currtab = TAB.MODTABLE
+
+        self.profile_name = None # type: str
+
         # make sure the correct initial pages are showing
         self.manager_tabs.setCurrentIndex(self._currtab.value)
 
@@ -143,6 +146,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         * Add/remove profile buttons
         * change mod-order buttons (up/down/top/bottom)
         """
+        self.LOGGER.debug("_setup_toolbar")
 
         # Profile selector and add/remove buttons
         self.file_toolBar.addSeparator()
@@ -181,6 +185,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         :param notify_done:
         """
+        self.LOGGER.debug("_setup_statusbar")
+
 
         # putting the bar and label together into a container
         # widget caused the 'busy' animation not to play...
@@ -204,6 +210,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         :param notify_done:
         """
+        self.LOGGER.debug("_setup_table")
+
         # Manager.load_active_profile_data()
         self.mod_table.setModel(
             ModTable_TreeModel(parent=self.mod_table))
@@ -245,6 +253,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         Create and assign the model to be used by the profile selector
         combo box.
         """
+        self.LOGGER.debug("_setup_profile_selector")
+
+
         model = ProfileListModel()
 
         # populate list later
@@ -260,12 +271,17 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         #         start_idx = model.rowCount() - 1
         #
         #         # see if we should enable the remove-profile button
-        #         self.enable_profile_delete(name)
+        #         self.check_enable_profile_delete(name)
 
         self.profile_selector.setModel(model)
-        # self.profile_selector.setCurrentIndex(start_idx)
 
+        # self.profile_selector.setCurrentIndex(start_idx)
+        # start with no selection
+        # self.profile_selector.setCurrentIndex(-1)
         # let setup know we're done here
+
+        self.populate_profile_selector()
+
         notify_done()
 
     def _setup_file_tree(self, notify_done):
@@ -274,6 +290,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         filetree tab, as well as prepare the fileviewer pane to show
         files when a mod is selected
         """
+
+        self.LOGGER.debug("_setup_file_tree")
+
+
         ##################################
         ## Mods List
         ##################################
@@ -405,6 +425,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             * action_find_previous
         """
 
+        self.LOGGER.debug("_setup_actions")
+
+
         # action_new_profile
         self.action_new_profile.triggered.connect(
             self.on_new_profile_action)
@@ -514,6 +537,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     def _setup_button_connections(self, notify_done):
         """ Make the buttons do stuff
         """
+        self.LOGGER.debug("_setup_buttons")
+
         # use a dialog-button-box for save/cancel;
         # have to specify by standard button type
         btn_apply = self.save_cancel_btnbox.button(
@@ -558,14 +583,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         moveModsToBottom
 
         """
+        self.LOGGER.debug("_setup_signals")
 
-        for slot in [self.enable_profile_delete,
-                     self._reset_table,
-                     self._reset_file_tree,
-                     self._update_visible_components,
-                     self._update_enabled_actions,
-                     ]:
-            self.newProfileLoaded.connect(slot)
+        self.newProfileLoaded.connect(self.on_profile_load)
 
         # connect the move up/down signal to the appropriate slot on view
         self.moveMods.connect(
@@ -597,6 +617,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.on_make_or_clear_mod_selection
         self.on_undo_redo_event
         """
+        self.LOGGER.debug("_setup_slots")
+
 
         ##===================================
         ## General/Main Window
@@ -731,7 +753,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # update the label and checkbox on the modlist
         self.__init_modlist_filter_state(
-                self.filters[F.mod_list])
+            self.filters[F.mod_list])
 
 
 
@@ -756,7 +778,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 self.safe_quit()
 
 
-    def populate_profile_selector(self):
+    def populate_profile_selector(self, start_idx = -1):
         """
         Pull the names of existing profiles from the main Manager
         and insert them into the Profile Selector model.
@@ -764,26 +786,31 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
 
         model = self.profile_selector.model()
+        curr_profile = Manager.active_profile()
 
-        start_idx = 0
-        for name, profile in Manager.get_profiles(
-                names_only=False):
+        for name, profile in Manager.get_profiles(names_only=False):
             model.insertRows(data=profile)
-            if name == Manager.active_profile().name:
+            if curr_profile is not None and name == curr_profile.name:
                 self.logger << "Setting {} as chosen profile".format(
                     name)
                 start_idx = model.rowCount() - 1
 
-                # see if we should enable the remove-profile button
-                self.enable_profile_delete(name)
+                # self.check_enable_profile_delete(name)
+
 
         self.profile_selector.setCurrentIndex(start_idx)
 
+        # if start_idx == -1:
+        # see if we should enable the remove-profile button
+        self.check_enable_profile_delete()
+
+
+
     # def update_UI(self, *args):
     def update_UI(self):
-        self._update_visible_components(self.current_tab)
+        self._update_visible_components()
 
-    def _update_visible_components(self, tab):
+    def _update_visible_components(self):
         """
         Some manager components should be hidden on certain tabs
         """
@@ -796,16 +823,17 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.modtable_search_box,     # 3
         ]
 
+        # selector defining the visible components for each tab
         visible = {
             TAB.MODTABLE:  [1, 0, 1, 1],
             TAB.FILETREE:  [1, 0, 0, 0],
         }
 
-        for comp, isvis in zip(all_components, visible[tab]):
+        for comp, isvis in zip(all_components, visible[self.current_tab]):
             comp.setVisible(isvis)
 
 
-    def _update_enabled_actions(self, tab):
+    def _update_enabled_actions(self):
         """
         Some manager actions should be disabled on certain tabs
         """
@@ -828,13 +856,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # component to its appropriate enabled state
         s = [False]*len(all_components)
 
-        if tab == TAB.MODTABLE:
+        if self.current_tab == TAB.MODTABLE:
             tmodel = self.models[M.mod_table]
             s[0] = s[1] = s[8] = self.mod_table.selectionModel().hasSelection()
             s[2] = s[3] = tmodel.isDirty
             s[4],  s[5] = tmodel.canundo, tmodel.canredo
             s[6] = s[7] = bool(self._search_text)
-        elif tab == TAB.FILETREE:
+        elif self.current_tab == TAB.FILETREE:
             s[2] = s[3] = self.models[M.file_viewer].has_unsaved_changes
 
 
@@ -899,9 +927,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         else:
             text = "All Installed Mods ({shown}/{total})"
         self.filetree_listlabel.setText(
-                text.format(
-                        shown=self.filters[F.mod_list].rowCount(),
-                        total=self.models[M.mod_list].rowCount()))
+            text.format(
+                shown=self.filters[F.mod_list].rowCount(),
+                total=self.models[M.mod_list].rowCount()))
 
     # todo: change window title (or something) to reflect current folder
     # def on_filetree_fileviewer_rootpathchanged(self, newpath):
@@ -935,7 +963,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         app.
         """
         # check for unsaved changes to the mod-list
-        if self.mod_table.model().isDirty:
+        if Manager.active_profile() is not None and self.mod_table.model().isDirty:
             ok = QMessageBox(QMessageBox.Warning, 'Unsaved Changes',
                              'Your mod install-order has unsaved changes. '
                              'Would you like to save them before continuing?',
@@ -948,16 +976,23 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 # just disable the buttons
                 self.on_table_unsaved_change(False)
 
-    def enable_profile_delete(self, profile_name):
+    def check_enable_profile_delete(self):
         """
-        If the profile name is anything other than the default profile
-        (likely 'default') enable the remove and rename actions
-        :param profile_name:
+        enable the remove and rename actions unless there is no profile
+        loaded or the profile name matches that of the default profile
+        (likely 'default')
         """
-        if profile_name.lower() == 'default':
+
+        if self.profile_name is None:
+            self.action_delete_profile.setEnabled(False)
+            self.action_delete_profile.setToolTip('Remove Profile')
+            self.action_rename_profile.setEnabled(False)
+
+
+        elif self.profile_name.lower() == 'default':
             self.action_delete_profile.setEnabled(False)
             self.action_delete_profile.setToolTip(
-                    'Cannot Remove Default Profile')
+                'Cannot Remove Default Profile')
             self.action_rename_profile.setEnabled(False)
         else:
             self.action_delete_profile.setEnabled(True)
@@ -989,41 +1024,58 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.LOGGER.error("No profile chosen?!")
         else:
             new_profile = self.profile_selector.currentData(
-                    Qt.UserRole).name
-            if new_profile == Manager.active_profile().name:
-                # somehow selected the same profile; do nothing
-                return
-
-            # check for unsaved changes to the mod-list
-            self.table_prompt_if_unsaved()
+                Qt.UserRole).name
+            if Manager.active_profile() is not None:
+                if new_profile == Manager.active_profile().name:
+                    # somehow selected the same profile; do nothing
+                    return
+                # check for unsaved changes to the mod-list
+                self.table_prompt_if_unsaved()
 
             self.LOGGER.info(
-                    "Activating profile '{}'".format(new_profile))
+                "Activating profile '{}'".format(new_profile))
 
             Manager.set_active_profile(new_profile)
 
             self.logger << "Resetting views for new profile"
             self.newProfileLoaded.emit(new_profile)
 
+    def on_profile_load(self, profile_name):
+        """
+        Call with the name of the selected profile from the profile-
+        selector combobox. Update the proper parts of the UI for the
+        new information.
+
+        :param str profile_name:
+        """
+        self.profile_name = profile_name
+
+        self.check_enable_profile_delete()
+
+        self._reset_table() # this also loads the new data
+        self._reset_file_tree()
+        self._update_visible_components()
+        self._update_enabled_actions()
+
     def on_new_profile_action(self):
         """
         When the 'add profile' button is clicked, create and show a small dialog for the user to choose a name for the new profile.
         """
         popup = NewProfileDialog(
-                combobox_model=self.profile_selector.model())
+            combobox_model=self.profile_selector.model())
 
         # display popup, wait for close and check signal
         if popup.exec_() == popup.Accepted:
             # add new profile if they clicked ok
             new_profile = Manager.new_profile(popup.final_name,
-                                                  popup.copy_from)
+                                              popup.copy_from)
 
             self.profile_selector.model().addProfile(new_profile)
 
             # set new profile as active and load data
             self.profile_selector.setCurrentIndex(
-                    self.profile_selector.findText(new_profile.name,
-                                                   Qt.MatchFixedString))
+                self.profile_selector.findText(new_profile.name,
+                                               Qt.MatchFixedString))
 
     def on_remove_profile_action(self):
         """
@@ -1039,9 +1091,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                    'that installed mods will not be affected. This '
                    'cannot be undone. Do you wish to continue?'):
             Manager.delete_profile(
-                    self.profile_selector.currentData())
+                self.profile_selector.currentData())
             self.profile_selector.removeItem(
-                    self.profile_selector.currentIndex())
+                self.profile_selector.currentIndex())
 
     def on_rename_profile_action(self):
 
@@ -1072,7 +1124,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                       self.action_save_changes,
                       self.action_revert_changes]:
             widgy.setEnabled(
-                    unsaved_changes_present)
+                unsaved_changes_present)
 
     def on_modlist_activeonly_toggle(self, checked):
         # self.LOGGER << "ActiveOnly toggled->{}".format(checked)
@@ -1133,19 +1185,20 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         tab is active.
         :return:
         """
-        tab = self.manager_tabs.currentIndex()
+        # tab = self.manager_tabs.currentIndex()
+        # tab = self.current_tab
 
-        if tab == TAB.MODTABLE:
+        if self.current_tab== TAB.MODTABLE:
             self.mod_table.saveChanges()
-        elif tab == TAB.FILETREE:
+        elif self.current_tab == TAB.FILETREE:
             self.models[M.file_viewer].save()
 
     def on_revert_command(self):
-        tab = self.manager_tabs.currentIndex()
+        # tab = self.manager_tabs.currentIndex()
 
-        if tab == TAB.MODTABLE:
+        if self.current_tab == TAB.MODTABLE:
             self.mod_table.revertChanges()
-        elif tab == TAB.FILETREE:
+        elif self.current_tab == TAB.FILETREE:
             self.models[M.file_viewer].revert()
 
     def on_table_search(self, direction=1):
@@ -1163,12 +1216,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                     # this means we DID find the text, but it was the same
                     # row that we started on
                     self.modtable_search_box.setStyleSheet(
-                            'QLineEdit { color: gray }')
+                        'QLineEdit { color: gray }')
                     self.status_bar.showMessage("No more results found")
                 else:
                     # found was False
                     self.modtable_search_box.setStyleSheet(
-                                'QLineEdit { color: tomato }')
+                        'QLineEdit { color: tomato }')
                     self.status_bar.showMessage("No results found")
                 return
 
@@ -1258,9 +1311,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         # noinspection PyTypeChecker
         moddir = QFileDialog.getExistingDirectory(
-                self,
-                "Choose Directory Containing Installed Mods",
-                Manager.conf['dir_mods'])
+            self,
+            "Choose Directory Containing Installed Mods",
+            Manager.conf['dir_mods'])
 
         # update config with new path
         if checkPath(moddir):
