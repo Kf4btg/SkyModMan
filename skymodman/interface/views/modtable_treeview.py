@@ -36,9 +36,9 @@ class ModTable_TreeView(QTreeView):
 
     def setModel(self, model):
         super().setModel(model)
-        self._model = model
         # keep a local reference to the selection model
         self._selection_model = self.selectionModel()
+        self._model = model
         # called from model's shiftrows() method
         self._model.notifyViewRowsMoved.connect(self.selectionChanged)
         # only show error col if there are errors
@@ -104,7 +104,7 @@ class ModTable_TreeView(QTreeView):
             # self.LOGGER << "selection changed"
 
             # enable/disable the button box
-            if self._selection_model.hasSelection():
+            if self.selectionModel().hasSelection():
 
                 self.enableModActions.emit(True)
                 self._selection_moved()   # check for disable up/down buttons
