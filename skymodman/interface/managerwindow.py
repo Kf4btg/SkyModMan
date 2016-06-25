@@ -1007,8 +1007,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def on_tab_changed(self, newindex):
         self.current_tab = TAB(newindex)
-        self._update_visible_components(self.current_tab)
-        self._update_enabled_actions(self.current_tab)
+        self._update_visible_components()
+        # FIXEDME: when no profile is loaded, switching tabs causes the "Reset"/"Apply" buttons to become active. Clicking these causes a segmentation fault.
+        # TODO: might have fixed this by adding a check into model.isDirty to see if the modifications deque actually contains any items. However, now the app is crashing when timeundo hits its timeout; these issues may or may not be related
+        self._update_enabled_actions()
 
     @pyqtSlot('int')
     def on_profile_select(self, index):

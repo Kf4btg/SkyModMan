@@ -136,7 +136,7 @@ class ModTable_TreeModel(QAbstractItemModel):
 
     @property
     def isDirty(self) -> bool:
-        return stack().haschanged()
+        return bool(self._modifications) and stack().haschanged()
 
     def __getitem__(self, row):
         """
@@ -191,6 +191,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
         stack().redo()
 
+    # FIXME: this crashes when the timedundo hits its timeout
     def _undo_event(self, action=None):
         """
         Passed to the undo stack as ``undocallback``, so that we can notify the UI of the new text
