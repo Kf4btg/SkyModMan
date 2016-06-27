@@ -164,13 +164,22 @@ class ModTable_TreeModel(QAbstractItemModel):
     ##===============================================
     @property
     def stack(self):
+        """A reference to the undo stack"""
         return stack()
+
     @property
     def undotext(self):
-        return stack().undotext()
+        """Text describing the topmost event on the undo stack"""
+        # if undotext() is None, return an empty string
+        # to prevent crash in the Qt Signal
+        return stack().undotext() or ''
     @property
     def redotext(self):
-        return stack().redotext()
+        """Text describing the topmost event on the redo stack"""
+        # if undotext() is None, return an empty string
+        # to prevent crash in the Qt Signal
+        return stack().redotext() or ''
+
     @property
     def canundo(self):
         return stack().canundo()
@@ -191,7 +200,6 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
         stack().redo()
 
-    # FIXME: this crashes when the timedundo hits its timeout
     def _undo_event(self, action=None):
         """
         Passed to the undo stack as ``undocallback``, so that we can notify the UI of the new text
@@ -199,7 +207,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
         if action is None:  # Reset
             self.tablehaschanges.emit(False)
-            self.undoevent.emit(None, None)
+            self.undoevent.emit('', '')
         else:
             self._check_dirty_status()
             self.undoevent.emit(self.undotext,

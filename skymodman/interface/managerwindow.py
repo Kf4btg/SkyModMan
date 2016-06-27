@@ -1168,7 +1168,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.filetree_fileviewer.expandAll()
 
     def on_undo_redo_event(self, undo_text, redo_text):
-        """Update the undo/redo text to reflect the passed text.  If an argument is passed as ``None``, that button will instead be disabled."""
+        """Update the undo/redo text to reflect the passed text.  If an argument is passed as ``None`` or an empty string, that button will instead be disabled."""
         # self.LOGGER << "Undoevent({}, {})".format(undo_text, redo_text)
 
         for action, text, default_text in [
