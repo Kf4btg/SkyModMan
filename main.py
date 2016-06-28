@@ -47,21 +47,27 @@ if __name__ == '__main__':
         #initialize the main ModManager
         modmanager.init()
 
-        w = ModManagerWindow()
+        w = ModManagerWindow(app)
         # noinspection PyArgumentList
         # w.resize(QGuiApplication.primaryScreen().availableSize()*3/5)
-        w.resize(QGuiApplication.primaryScreen().availableSize()*5/7)
+        # w.resize(QGuiApplication.primaryScreen().availableSize()*5/7)
         w.show()
 
         try:
             with loop:
                 loop.run_forever()
-        except:
-            skylog.stop_listener()
+        # except:
+            # skylog.stop_listener()
+            # modmanager.db.shutdown()
+            # raise
+        finally:
             modmanager.db.shutdown()
-            raise
+            skylog.stop_listener()
 
-        # ret = None
+
+
+
+            # ret = None
         # try:
         #     ret = app.exec_()
         # except:

@@ -7,6 +7,8 @@ from PyQt5.QtCore import (Qt,
                           QModelIndex,
                           QDir,
                           QPropertyAnimation,
+                          QSettings,
+                          QSize, QPoint
                           # QStandardPaths,
                           )
 from PyQt5.QtGui import QGuiApplication, QKeySequence #, QFontDatabase
@@ -54,12 +56,14 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     moveModsToBottom    = pyqtSignal()
 
     # noinspection PyUnresolvedReferences
-    def __init__(self, **kwargs):
+    def __init__(self, app, **kwargs):
         """
-
+        :param QApplication app: a local reference to the main application
         :param kwargs: anything to pass on the the base class constructors
         """
         super().__init__(**kwargs)
+
+        self.app = app
         self.LOGGER.info("Initializing ModManager Window")
         ModManagerWindow._this = self
 
@@ -125,6 +129,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # Let sub-widgets know the main window is initialized
         self.windowInitialized.emit()
 
+        self.read_settings()
+
     @property
     def current_tab(self):
         return self._currtab
@@ -132,6 +138,36 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     @current_tab.setter
     def current_tab(self, tabnum):
         self._currtab = TAB(tabnum)
+
+    ##=============================================
+    ## Application-wide settings management
+    ##=============================================
+
+    def read_settings(self):
+        settings = QSettings("Kf4btg", "SkyModMan")
+
+        settings.beginGroup("ManagerWindow")
+        s_size = settings.value("size")
+        if s_size is None:
+            self.resize(
+                self.app.primaryScreen().availableSize() * 5 / 7)
+        else:
+            # toSize() is not necessary as pyQt does the conversion automagically.
+            # self.resize(s_size.toSize())
+            self.resize(s_size)
+
+        s_pos = settings.value("pos")
+        if s_pos is not None:
+            self.move(s_pos)
+
+
+    def write_settings(self):
+        settings = QSettings("Kf4btg", "SkyModMan")
+
+        settings.beginGroup("ManagerWindow")
+        settings.setValue("size", self.size())
+        settings.setValue("pos", self.pos())
+        settings.endGroup()
 
     ##===============================================
     ## Setup UI Functionality (called once on first load)
@@ -448,7 +484,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # action_quit
         self.action_quit.setShortcut(QKeySequence.Quit)
-        self.action_quit.triggered.connect(self.safe_quit)
+        # self.action_quit.triggered.connect(self.safe_quit)
+        # self.action_quit.triggered.connect(self.app.quit)
+        # connect quit action to close event
+        self.action_quit.triggered.connect(self.close)
 
         # --------------------------------------------------
 
@@ -952,7 +991,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.models[M.file_viewer].setRootPath(str(p))
 
-    def table_prompt_if_unsaved(self):
+    def table_prompt_if_unsaved(self) -> bool:
         """
         Check for unsaved changes to the mods list and show a prompt if
         any are found. Clicking yes will save the changes and mark the
@@ -967,14 +1006,21 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             ok = QMessageBox(QMessageBox.Warning, 'Unsaved Changes',
                              'Your mod install-order has unsaved changes. '
                              'Would you like to save them before continuing?',
-                             QMessageBox.No | QMessageBox.Yes).exec_()
+                             QMessageBox.No | QMessageBox.Yes | QMessageBox.Cancel).exec_()
 
             if ok == QMessageBox.Yes:
                 self.table_save_mod_list()
-            else:
+            elif ok == QMessageBox.No:
                 # don't bother reverting, mods list is getting reset;
                 # just disable the buttons
                 self.on_table_unsaved_change(False)
+            else:
+                # if the user cancelled, return False to indicate not to continue with
+                # whatever operation initiated this prompt
+                return False
+        # if clean or user clicked yes/no, return true to indicate that the calling operation
+        # may contine as normal
+        return True
 
     def check_enable_profile_delete(self):
         """
@@ -1027,20 +1073,21 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         else:
             new_profile = self.profile_selector.currentData(
                 Qt.UserRole).name
-            if Manager.active_profile() is not None:
-                if new_profile == Manager.active_profile().name:
-                    # somehow selected the same profile; do nothing
-                    return
-                # check for unsaved changes to the mod-list
-                self.table_prompt_if_unsaved()
 
-            self.LOGGER.info(
-                "Activating profile '{}'".format(new_profile))
+            # if no active profile, just load the selected
+            if Manager.active_profile() is None or (
+                    # if somehow selected the same profile, do nothing
+                    new_profile != Manager.active_profile().name and
+                    # check for unsaved changes to the mod-list
+                    self.table_prompt_if_unsaved()
+                ):
+                self.LOGGER.info("Activating profile '{}'".format(new_profile))
 
-            Manager.set_active_profile(new_profile)
+                Manager.set_active_profile(new_profile)
 
-            self.logger << "Resetting views for new profile"
-            self.newProfileLoaded.emit(new_profile)
+                self.logger << "Resetting views for new profile"
+
+                self.newProfileLoaded.emit(new_profile)
 
     def on_profile_load(self, profile_name):
         """
@@ -1340,14 +1387,24 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         else:
             self.safe_quit()
 
-    def safe_quit(self):
-        """
-        Show a prompt if there are any unsaved changes, then close the program.
-        """
-        self.table_prompt_if_unsaved()
-        Manager.db.shutdown()
+    def closeEvent(self, event):
+        if self.table_prompt_if_unsaved():
+            self.write_settings()
+            # Manager.db.shutdown()
+            event.accept()
 
-        quit_app()
+        else:
+            event.ignore()
+
+
+    # def safe_quit(self):
+    #     """
+    #     Show a prompt if there are any unsaved changes, then close the program.
+    #     """
+    #     self.table_prompt_if_unsaved()
+    #     Manager.db.shutdown()
+    #
+    #     quit_app()
 
 
 
@@ -1358,16 +1415,16 @@ def quit_app():
 
 
 # <editor-fold desc="__main__">
-if __name__ == '__main__':
-    import sys
-
-    app = QApplication(sys.argv)
-    Manager.init()
-
-    w = ModManagerWindow()
-    # noinspection PyArgumentList
-    w.resize(QGuiApplication.primaryScreen().availableSize() * 3 / 5)
-    w.show()
-
-    sys.exit(app.exec_())
+# if __name__ == '__main__':
+#     import sys
+#
+#     app = QApplication(sys.argv)
+#     Manager.init()
+#
+#     w = ModManagerWindow()
+#     # noinspection PyArgumentList
+#     w.resize(QGuiApplication.primaryScreen().availableSize() * 3 / 5)
+#     w.show()
+#
+#     sys.exit(app.exec_())
 # </editor-fold>

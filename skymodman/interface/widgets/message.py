@@ -37,18 +37,18 @@ _yes_response = [QMessageBox.Ok, QMessageBox.Open, QMessageBox.Save, QMessageBox
 
 _no_response = [QMessageBox.No, QMessageBox.Cancel, QMessageBox.Close, QMessageBox.Abort, QMessageBox.Discard, QMessageBox.Reset]
 
-def message(icon='question', title='', text='Are you sure?', info_text=None, buttons=('yes', 'no'), default_button = 'none', parent=None, min_width:int=500):
+def message(icon='question', title='', text="What's that you say?", info_text=None, buttons=('yes', 'no'), default_button = 'none', parent=None, min_width=500):
     """
     Helper for constructing and gettting replies from QMessageBoxes. Most arguments take strings (buttons an iterable of strings). Rather than return the response code from the QMessageBox, this method filters almost all the codes down to either 'positive' or 'negative' response and return True or False accordingly. If, somehow, the response does not fall in one of these categories, then the code will be returned instead.
 
     :param parent: QWidget parent
-    :param min_width: minimum width of the created box
-    :param icon:
-    :param title:
-    :param text:
-    :param info_text:
+    :param int min_width: minimum width of the created box
+    :param str icon:
+    :param str title:
+    :param str text:
+    :param str info_text:
     :param buttons:
-    :param default_button:
+    :param str default_button:
     :return: True or False
     """
     # defaults
