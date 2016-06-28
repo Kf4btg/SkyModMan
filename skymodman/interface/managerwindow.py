@@ -125,7 +125,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # Let sub-widgets know the main window is initialized
         self.windowInitialized.emit()
 
+        # default values for global preferences
+        self.preferences = {
+            "restore_window_size": True,
+            "restore_window_pos": True,
+            "load_last_profile": True
+        }
+
         self.read_settings()
+
 
     @property
     def current_tab(self):
@@ -144,17 +152,22 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         settings.beginGroup("ManagerWindow")
 
+        # load boolean prefs
+        self.preferences["restore_window_size"] = settings.value("restore_window_size", True)
+        self.preferences["restore_window_pos"] = settings.value("restore_window_pos", True)
+        self.preferences["load_last_profile"] = settings.value("load_last_profile", True)
+
         s_size = settings.value("size")
-        if s_size is None:
+        if self.preferences["restore_window_size"] and s_size is not None:
+            # toSize() is not necessary as pyQt does the conversion automagically.
+            self.resize(s_size)
+            # self.resize(s_size.toSize())
+        else:
             # noinspection PyArgumentList
             self.resize(QGuiApplication.primaryScreen().availableSize() * 5 / 7)
-        else:
-            # toSize() is not necessary as pyQt does the conversion automagically.
-            # self.resize(s_size.toSize())
-            self.resize(s_size)
 
         s_pos = settings.value("pos")
-        if s_pos is not None:
+        if self.preferences["restore_window_pos"] and s_pos is not None:
             self.move(s_pos)
 
 
@@ -162,6 +175,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         settings = QSettings("Kf4btg", "SkyModMan")
 
         settings.beginGroup("ManagerWindow")
+
+        settings.setValue("restore_window_size", self.preferences["restore_window_size"])
+        settings.setValue("restore_window_pos", self.preferences["restore_window_pos"])
+        settings.setValue("load_last_profile", self.preferences["load_last_profile"])
+
         settings.setValue("size", self.size())
         settings.setValue("pos", self.pos())
         settings.endGroup()
