@@ -132,8 +132,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             "load_last_profile": True
         }
 
+        # read in prefs and other settings
         self.read_settings()
 
+        # if "load_last_profile" is true, then the last profile will
+        # be...um...loaded.
+        if self.preferences["load_last_profile"]:
+            self.load_profile_by_name(Manager.conf.lastprofile)
 
     @property
     def current_tab(self):
@@ -300,22 +305,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         Initialize the dropdown list for selecting profiles with the names of the profiles found on disk
         """
-        """
-        Create and assign the model to be used by the profile selector
-        combo box.
-        """
         self.LOGGER.debug("_setup_profile_selector")
-
 
         model = ProfileListModel()
 
-        # populate list later
-
-        #
-        # start_idx = 0
-        # for name, profile in Manager.get_profiles(
-        #         names_only=False):
-        #     model.insertRows(data=profile)
+        for name, profile in Manager.get_profiles(
+                names_only=False):
+            model.insertRows(data=profile)
         #     if name == Manager.active_profile().name:
         #         self.logger << "Setting {} as chosen profile".format(
         #             name)
@@ -326,13 +322,18 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.profile_selector.setModel(model)
 
-        # self.profile_selector.setCurrentIndex(start_idx)
+        # self.populate_profile_selector()
+
         # start with no selection
-        # self.profile_selector.setCurrentIndex(-1)
+        self.profile_selector.setCurrentIndex(-1)
+        # call this to make sure the delete button is inactive
+        self.check_enable_profile_delete()
+
+        # can't activate this signal until after the selector is populated
+        self.profile_selector.currentIndexChanged.connect(
+            self.on_profile_select)
+
         # let setup know we're done here
-
-        self.populate_profile_selector()
-
         notify_done()
 
     def _setup_file_tree(self, notify_done):
@@ -682,8 +683,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.on_tab_changed)
 
         # when new profile is selected
-        self.profile_selector.currentIndexChanged.connect(
-            self.on_profile_select)
+        # self.profile_selector.currentIndexChanged.connect(
+        #     self.on_profile_select)
 
         # connect the undo event handler
         self.models[M.mod_table].undoevent.connect(
@@ -827,37 +828,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         if not Manager.conf["dir_skyrim"]:
             if message("information", "Select Skyrim Installation", 'Before the manager runs, please take a moment to specify the folder where Skyrim itself is installed. Click "OK" to show the folder selection dialog.', buttons=('ok', 'cancel'), default_button='ok'):
                 self.select_skyrim_dir()
-            else:
-                self.safe_quit()
-
-
-    def populate_profile_selector(self, start_idx = -1):
-        """
-        Pull the names of existing profiles from the main Manager
-        and insert them into the Profile Selector model.
-        Set the most recently loaded profile as current.
-        """
-
-        model = self.profile_selector.model()
-        curr_profile = Manager.active_profile()
-
-        for name, profile in Manager.get_profiles(names_only=False):
-            model.insertRows(data=profile)
-            if curr_profile is not None and name == curr_profile.name:
-                self.logger << "Setting {} as chosen profile".format(
-                    name)
-                start_idx = model.rowCount() - 1
-
-                # self.check_enable_profile_delete(name)
-
-
-        self.profile_selector.setCurrentIndex(start_idx)
-
-        # if start_idx == -1:
-        # see if we should enable the remove-profile button
-        self.check_enable_profile_delete()
-
-
+            # else:
+            #     self.safe_quit()
 
     # def update_UI(self, *args):
     def update_UI(self):
@@ -1059,6 +1031,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.action_delete_profile.setToolTip('Remove Profile')
             self.action_rename_profile.setEnabled(True)
 
+    def load_profile_by_name(self, name):
+
+        # set new profile as active and load data
+        self.profile_selector.setCurrentIndex(
+            self.profile_selector.findText(name,
+                                           Qt.MatchFixedString))
+
     ##=============================================
     ## Event Handlers/Slots
     ##=============================================
@@ -1068,8 +1047,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     def on_tab_changed(self, newindex):
         self.current_tab = TAB(newindex)
         self._update_visible_components()
-        # FIXEDME: when no profile is loaded, switching tabs causes the "Reset"/"Apply" buttons to become active. Clicking these causes a segmentation fault.
-        # TODO: might have fixed this by adding a check into model.isDirty to see if the modifications deque actually contains any items. However, now the app is crashing when timeundo hits its timeout; these issues may or may not be related
         self._update_enabled_actions()
 
     @pyqtSlot('int')
@@ -1136,9 +1113,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.profile_selector.model().addProfile(new_profile)
 
             # set new profile as active and load data
-            self.profile_selector.setCurrentIndex(
-                self.profile_selector.findText(new_profile.name,
-                                               Qt.MatchFixedString))
+            self.load_profile_by_name(new_profile.name)
+
+            # self.profile_selector.setCurrentIndex(
+            #     self.profile_selector.findText(new_profile.name,
+            #                                    Qt.MatchFixedString))
 
     def on_remove_profile_action(self):
         """

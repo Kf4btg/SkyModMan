@@ -86,11 +86,11 @@ class ProfileListModel(QAbstractListModel):
         self.endRemoveRows()
         return True
 
-if __name__ == '__main__':
-    from skymodman.managers.profiles import Profile
-    import skymodman.skylog as log
-
-    model = ProfileListModel()
-    model.removeRows(12)
-
-    log.stop_listener()
+# if __name__ == '__main__':
+#     from skymodman.managers.profiles import Profile
+#     import skymodman.skylog as log
+#
+#     model = ProfileListModel()
+#     model.removeRows(12)
+#
+#     log.stop_listener()
