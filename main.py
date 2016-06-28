@@ -36,7 +36,7 @@ if __name__ == '__main__':
 
     if USE_QT_GUI:
         from PyQt5.QtWidgets import QApplication
-        from PyQt5.QtGui import QGuiApplication
+        # from PyQt5.QtGui import QGuiApplication
         from skymodman.interface.managerwindow import ModManagerWindow
         import quamash
 
@@ -47,37 +47,15 @@ if __name__ == '__main__':
         #initialize the main ModManager
         modmanager.init()
 
-        w = ModManagerWindow(app)
-        # noinspection PyArgumentList
-        # w.resize(QGuiApplication.primaryScreen().availableSize()*3/5)
-        # w.resize(QGuiApplication.primaryScreen().availableSize()*5/7)
+        w = ModManagerWindow()
         w.show()
 
         try:
             with loop:
                 loop.run_forever()
-        # except:
-            # skylog.stop_listener()
-            # modmanager.db.shutdown()
-            # raise
         finally:
             modmanager.db.shutdown()
             skylog.stop_listener()
-
-
-
-
-            # ret = None
-        # try:
-        #     ret = app.exec_()
-        # except:
-        #     skylog.stop_listener()
-        #     modmanager.db.shutdown()
-        #     raise
-        # finally:
-        #     if ret is not None:
-        #         sys.exit(ret)
-
     else:
         main()
 

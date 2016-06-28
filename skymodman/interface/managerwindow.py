@@ -5,22 +5,20 @@ from PyQt5.QtCore import (Qt,
                           pyqtSignal,
                           pyqtSlot,
                           QModelIndex,
-                          QDir,
+                          # QDir,
                           QPropertyAnimation,
                           QSettings,
-                          QSize, QPoint
                           # QStandardPaths,
                           )
 from PyQt5.QtGui import QGuiApplication, QKeySequence #, QFontDatabase
-from PyQt5.QtWidgets import (QApplication,
-                             QMainWindow,
+from PyQt5.QtWidgets import (QMainWindow,
                              QDialogButtonBox,
                              QMessageBox,
                              QFileDialog, QInputDialog,
                              QAction, QAbstractButton,  # QHeaderView,
                              QActionGroup, QProgressBar, QLabel)
 
-from skymodman import skylog, exceptions
+from skymodman import exceptions
 from skymodman.managers import modmanager as Manager
 from skymodman.constants import (Tab as TAB,
                                  INIKey,
@@ -56,14 +54,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     moveModsToBottom    = pyqtSignal()
 
     # noinspection PyUnresolvedReferences
-    def __init__(self, app, **kwargs):
+    def __init__(self, **kwargs):
         """
-        :param QApplication app: a local reference to the main application
         :param kwargs: anything to pass on the the base class constructors
         """
         super().__init__(**kwargs)
 
-        self.app = app
         self.LOGGER.info("Initializing ModManager Window")
         ModManagerWindow._this = self
 
@@ -147,10 +143,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         settings = QSettings("Kf4btg", "SkyModMan")
 
         settings.beginGroup("ManagerWindow")
+
         s_size = settings.value("size")
         if s_size is None:
-            self.resize(
-                self.app.primaryScreen().availableSize() * 5 / 7)
+            # noinspection PyArgumentList
+            self.resize(QGuiApplication.primaryScreen().availableSize() * 5 / 7)
         else:
             # toSize() is not necessary as pyQt does the conversion automagically.
             # self.resize(s_size.toSize())
@@ -485,7 +482,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # action_quit
         self.action_quit.setShortcut(QKeySequence.Quit)
         # self.action_quit.triggered.connect(self.safe_quit)
-        # self.action_quit.triggered.connect(self.app.quit)
         # connect quit action to close event
         self.action_quit.triggered.connect(self.close)
 
@@ -1395,23 +1391,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         else:
             event.ignore()
-
-
-    # def safe_quit(self):
-    #     """
-    #     Show a prompt if there are any unsaved changes, then close the program.
-    #     """
-    #     self.table_prompt_if_unsaved()
-    #     Manager.db.shutdown()
-    #
-    #     quit_app()
-
-
-
-# noinspection PyArgumentList
-def quit_app():
-    skylog.stop_listener()
-    QApplication.quit()
 
 
 # <editor-fold desc="__main__">
