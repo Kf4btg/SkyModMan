@@ -896,6 +896,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def update_button_from_action(self, action, button):
         """
+        Synchronize a button's state with that of a given QAction
 
         :param QAction action:
         :param QAbstractButton button:
@@ -906,6 +907,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         button.setVisible(action.isVisible())
 
     def _enable_mod_move_actions(self, enable_moveup, enable_movedown):
+        """
+        Enable or disable the mod-movement actions
+
+        :param bool enable_moveup: whether to enable the move-up/move-to-top actions
+        :param bool enable_movedown: whether to enable the move-down/move-to-bottom actions
+        """
         for action in [self.action_move_mod_to_bottom,
                        self.action_move_mod_down]:
             action.setEnabled(enable_movedown)
@@ -947,6 +954,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.modtable_search_box.clear()
 
     def update_modlist_label(self, inactive_hidden):
+        """
+        Change the label beside the "hide inactive mods" check box to reflect its current state.
+
+        :param inactive_hidden:
+        """
         if inactive_hidden:
             text = "Active Mods ({shown}/{total})"
         else:
@@ -977,7 +989,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.models[M.file_viewer].setRootPath(str(p))
 
-    def table_prompt_if_unsaved(self) -> bool:
+    def table_prompt_if_unsaved(self):
         """
         Check for unsaved changes to the mods list and show a prompt if
         any are found. Clicking yes will save the changes and mark the
@@ -995,18 +1007,21 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                              QMessageBox.No | QMessageBox.Yes | QMessageBox.Cancel).exec_()
 
             if ok == QMessageBox.Yes:
-                self.table_save_mod_list()
-            elif ok == QMessageBox.No:
-                # don't bother reverting, mods list is getting reset;
-                # just disable the buttons
-                self.on_table_unsaved_change(False)
-            else:
-                # if the user cancelled, return False to indicate not to continue with
-                # whatever operation initiated this prompt
-                return False
+                self.mod_table.saveChanges()
+            return ok
+
+            # elif ok == QMessageBox.No:
+            #     # don't bother reverting, mods list is getting reset;
+            #     # just disable the buttons
+            #     self.on_table_unsaved_change(False)
+            # else:
+            #     # if the user cancelled, return False to indicate not to continue with
+            #     # whatever operation initiated this prompt
+            #     return False
         # if clean or user clicked yes/no, return true to indicate that the calling operation
         # may contine as normal
-        return True
+        return None
+        # return True
 
     def check_enable_profile_delete(self):
         """
@@ -1045,6 +1060,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     # <editor-fold desc="EventHandlers">
 
     def on_tab_changed(self, newindex):
+        """
+        When the user switches tabs, make sure the proper GUI components are visible and active
+
+        :param newindex:
+        """
         self.current_tab = TAB(newindex)
         self._update_visible_components()
         self._update_enabled_actions()
@@ -1056,6 +1076,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         the appropriate data for that profile and replace the current
         data with it. Also show a message about unsaved changes to the
         current profile.
+
         :param index:
         """
         if index < 0:
@@ -1068,17 +1089,29 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             # if no active profile, just load the selected
             if Manager.active_profile() is None or (
                     # if somehow selected the same profile, do nothing
-                    new_profile != Manager.active_profile().name and
+                    new_profile != Manager.active_profile().name
                     # check for unsaved changes to the mod-list
-                    self.table_prompt_if_unsaved()
                 ):
-                self.LOGGER.info("Activating profile '{}'".format(new_profile))
+                reply = self.table_prompt_if_unsaved()
 
-                Manager.set_active_profile(new_profile)
+                # only continue to change profile if user does NOT click cancel
+                # (or if there are no changes to save)
+                # FIXME: clicking cancel needs to set the profile-selector back to the "current" profile
+                if reply != QMessageBox.Cancel:
 
-                self.logger << "Resetting views for new profile"
+                    # No => "Don't save changes, drop them"
+                    if reply == QMessageBox.No:
+                        # don't bother reverting, mods list is getting reset;
+                        # just disable the buttons
+                        self.on_table_unsaved_change(False)
 
-                self.newProfileLoaded.emit(new_profile)
+                    self.LOGGER.info("Activating profile '{}'".format(new_profile))
+
+                    Manager.set_active_profile(new_profile)
+
+                    self.logger << "Resetting views for new profile"
+
+                    self.newProfileLoaded.emit(new_profile)
 
     def on_profile_load(self, profile_name):
         """
@@ -1121,7 +1154,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def on_remove_profile_action(self):
         """
-        Show a warning about irreversibly deleting the profile.
+        Show a warning about irreversibly deleting the profile, then, if the user accept the warning, proceed to delete the profile from disk and remove its entry from the profile selector.
         """
         profile = Manager.active_profile()
 
@@ -1138,6 +1171,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 self.profile_selector.currentIndex())
 
     def on_rename_profile_action(self):
+        """
+        Query the user for a new name, then ask the mod-manager backend to rename the profile folder.
+        """
 
         newname = QInputDialog.getText(self, "Rename Profile", "New name")[0]
 
@@ -1160,6 +1196,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             a.setEnabled(has_selection)
 
     def on_table_unsaved_change(self, unsaved_changes_present):
+        """
+        When a change is made to the table, enable or disable certain actions depending on whether the table's current state matches the last savepoint or not.
+
+        :param unsaved_changes_present:
+        """
         # self.LOGGER << "table status: {}".format("dirty" if unsaved_changes_present else "clean")
 
         for widgy in [self.save_cancel_btnbox,
@@ -1169,6 +1210,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 unsaved_changes_present)
 
     def on_modlist_activeonly_toggle(self, checked):
+        """
+        Toggle showing/hiding inactive mods in the Mods list on the file-tree tab
+        :param checked: state of the checkbox
+        """
         # self.LOGGER << "ActiveOnly toggled->{}".format(checked)
 
         self.filters[F.mod_list].setOnlyShowActive(checked)
@@ -1176,8 +1221,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         Manager.set_profile_setting('File Viewer', 'activeonly', checked)
 
     def on_modlist_filterbox_textchanged(self, text):
-        # Updates the proxy filtering, and notifies the label
-        # to change its 'mods shown' count.
+        """
+        Updates the proxy filtering, and notifies the label
+        to change its 'mods shown' count.
+        :param text:
+        """
+
         filt = self.filters[F.mod_list]
         filt.setFilterWildcard(text)
         self.update_modlist_label(filt.onlyShowActive)
@@ -1189,6 +1238,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         filter on the file viewer which uses them to make sure that matching
         files are shown in the tree regardless of whether their parent
         directories match the filter or not.
+
         :param str text:
         """
         # don't bother querying db for empty string,
@@ -1227,17 +1277,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         tab is active.
         :return:
         """
-        # tab = self.manager_tabs.currentIndex()
-        # tab = self.current_tab
-
         if self.current_tab== TAB.MODTABLE:
             self.mod_table.saveChanges()
         elif self.current_tab == TAB.FILETREE:
             self.models[M.file_viewer].save()
 
     def on_revert_command(self):
-        # tab = self.manager_tabs.currentIndex()
-
+        """
+        Undo all changes made to the table since the last savepoint
+        """
         if self.current_tab == TAB.MODTABLE:
             self.mod_table.revertChanges()
         elif self.current_tab == TAB.FILETREE:
@@ -1272,19 +1320,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.modtable_search_box.setStyleSheet('')
             self.status_bar.clearMessage()
 
-    # def _on_search_box_return(self):
-    #     """
-    #     Hit return in the search box; update the saved search text and search
-    #     """
-    #     self._search_text = self.modtable_search_box.text()
-    #
-    #     e = bool(self._search_text)
-    #
-    #     self.action_find_next.setEnabled(e)
-    #     self.action_find_previous.setEnabled(e)
-    #
-    #     self.on_table_search()
-
     def _clear_searchbox_style(self):
         if self.modtable_search_box.styleSheet():
             self.modtable_search_box.setStyleSheet('')
@@ -1297,11 +1332,23 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     ##===============================================
 
     def edit_preferences(self):
+        """
+        Show a dialog allowing the user to change some application-wide preferences
+        """
         # todo
         message(text="Preferences?")
 
     # noinspection PyTypeChecker,PyArgumentList
     def install_mod_archive(self, manual=False):
+        """
+        Install a mod from an archive.
+
+        :param bool manual: If false, attempt to use
+        the guided FOMOD installer if a fomod config is found, otherwise
+        simply unpack the archive. If true, show the file-system view of
+        the archive and allow the user to choose which parts to install.
+
+        """
         # todo: default to home folder or something instead of current dir
         # filename=QFileDialog.getOpenFileName(
         #     self, "Select Mod Archive",
@@ -1331,9 +1378,16 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
 
     def manual_install(self):
+        """
+        Activate a non-guided install
+        :return:
+        """
         self.install_mod_archive(manual=True)
 
     def reinstall_mod(self):
+        """
+        Repeat the installation process for the given mod
+        """
         # todo: implement re-running the installer
         row = self.mod_table.currentIndex().row()
         if row > -1:
@@ -1341,6 +1395,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.LOGGER << "Here's where we'd reinstall this mod."
 
     def uninstall_mod(self):
+        """
+        Remove the selected mod from the virtual installation directory
+        """
         # todo: implement removing the mod
         row = self.mod_table.currentIndex().row()
         if row > -1:
@@ -1368,6 +1425,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 self.mod_table.model().reloadErrorsOnly()
 
     def select_skyrim_dir(self):
+        """
+        Show file selection dialog for user to select the directory
+        where Skyrim is installed
+        """
         skydir = QFileDialog.getExistingDirectory(
             self,
             "Select Skyrim Installation")
@@ -1381,13 +1442,18 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.safe_quit()
 
     def closeEvent(self, event):
-        if self.table_prompt_if_unsaved():
-            self.write_settings()
-            # Manager.db.shutdown()
-            event.accept()
+        """
+        Override close event to check for unsaved changes and to save settings to disk
+        :param event:
+        """
 
-        else:
+        # only ignore the close event if the user clicks cancel
+        # on the confirm window
+        if self.table_prompt_if_unsaved() == QMessageBox.Cancel:
             event.ignore()
+        else:
+            self.write_settings()
+            event.accept()
 
 
 # <editor-fold desc="__main__">
