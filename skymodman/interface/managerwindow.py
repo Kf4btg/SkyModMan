@@ -1086,12 +1086,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             new_profile = self.profile_selector.currentData(
                 Qt.UserRole).name
 
-            # if no active profile, just load the selected
-            if Manager.active_profile() is None or (
-                    # if somehow selected the same profile, do nothing
-                    new_profile != Manager.active_profile().name
-                    # check for unsaved changes to the mod-list
-                ):
+            # if no active profile, just load the selected one.
+            # if somehow selected the same profile, do nothing
+            if Manager.active_profile() is None or \
+                            new_profile != Manager.active_profile().name:
+                # check for unsaved changes to the mod-list
                 reply = self.table_prompt_if_unsaved()
 
                 # only continue to change profile if user does NOT click cancel
