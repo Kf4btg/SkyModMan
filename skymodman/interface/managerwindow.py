@@ -116,6 +116,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self._currtab = TAB.MODTABLE
 
         self.profile_name = None # type: str
+        # track currently selected profile by index as well
+        self.profile_selector_index = -1
 
         # make sure the correct initial pages are showing
         self.manager_tabs.setCurrentIndex(self._currtab.value)
@@ -998,6 +1000,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         this is intended to be used right before an action like loading
         a new profile (thus forcing a full table reset) or quitting the
         app.
+
+        :return: the value of the button the user clicked (QMessageBox.[Yes/No/Cancel]),
+        or None if the message box was not shown
         """
         # check for unsaved changes to the mod-list
         if Manager.active_profile() is not None and self.mod_table.model().isDirty:
@@ -1009,19 +1014,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             if ok == QMessageBox.Yes:
                 self.mod_table.saveChanges()
             return ok
-
-            # elif ok == QMessageBox.No:
-            #     # don't bother reverting, mods list is getting reset;
-            #     # just disable the buttons
-            #     self.on_table_unsaved_change(False)
-            # else:
-            #     # if the user cancelled, return False to indicate not to continue with
-            #     # whatever operation initiated this prompt
-            #     return False
-        # if clean or user clicked yes/no, return true to indicate that the calling operation
+        # if clean, return None to indicate that the calling operation
         # may contine as normal
         return None
-        # return True
 
     def check_enable_profile_delete(self):
         """
@@ -1047,8 +1042,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.action_rename_profile.setEnabled(True)
 
     def load_profile_by_name(self, name):
-
-        # set new profile as active and load data
+        """
+        Have the profile selector show and activate the profile with the given name
+        :param name:
+        """
+        # set new profile as active and load data;
+        # search the selector's model for a name that matches the arg
         self.profile_selector.setCurrentIndex(
             self.profile_selector.findText(name,
                                            Qt.MatchFixedString))
@@ -1079,6 +1078,16 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         :param index:
         """
+
+        old_index = self.profile_selector_index
+
+        if index == old_index:
+            # ignore this; it just means that the user clicked cancel
+            # in the "save changes" dialog and we're resetting the
+            # displayed profile name.
+            self.LOGGER.debug("Resetting profile name")
+            return
+
         if index < 0:
             # we have a problem...
             self.LOGGER.error("No profile chosen?!")
@@ -1095,9 +1104,18 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
                 # only continue to change profile if user does NOT click cancel
                 # (or if there are no changes to save)
-                # FIXME: clicking cancel needs to set the profile-selector back to the "current" profile
-                if reply != QMessageBox.Cancel:
-
+                if reply == QMessageBox.Cancel:
+                    # reset the text in the profile selector;
+                    # this SHOULDn't enter an infinite loop because,
+                    # since we haven't yet changed self.profile_selector_index,
+                    # now 'index' will be the same as 'old_index' at the top
+                    # of this function and nothing else in the program will change
+                    # (just the name shown in the profile selector)
+                    self.profile_selector.setCurrentIndex(old_index)
+                # if reply != QMessageBox.Cancel:
+                else:
+                    # update our variable which tracks the current index
+                    self.profile_selector_index = index
                     # No => "Don't save changes, drop them"
                     if reply == QMessageBox.No:
                         # don't bother reverting, mods list is getting reset;
