@@ -155,19 +155,23 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     ##=============================================
 
     def read_settings(self):
-        settings = QSettings("Kf4btg", "SkyModMan")
+        settings = QSettings("skymodman", "skymodman")
 
         settings.beginGroup("ManagerWindow")
 
         # load boolean prefs
-        self.preferences["restore_window_size"] = settings.value("restore_window_size", True)
-        self.preferences["restore_window_pos"] = settings.value("restore_window_pos", True)
-        self.preferences["load_last_profile"] = settings.value("load_last_profile", True)
+        self.preferences["restore_window_size"] = settings.value(
+            "restore_window_size", True)
+        self.preferences["restore_window_pos"] = settings.value(
+            "restore_window_pos", True)
+        self.preferences["load_last_profile"] = settings.value(
+            "load_last_profile", True)
 
         s_size = settings.value("size")
         if self.preferences["restore_window_size"] and s_size is not None:
-            # toSize() is not necessary as pyQt does the conversion automagically.
             self.resize(s_size)
+            # toSize() is not necessary as pyQt does the conversion to
+            # QSize automagically.
             # self.resize(s_size.toSize())
         else:
             # noinspection PyArgumentList
@@ -179,7 +183,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
 
     def write_settings(self):
-        settings = QSettings("Kf4btg", "SkyModMan")
+        settings = QSettings("skymodman", "skymodman")
 
         settings.beginGroup("ManagerWindow")
 
@@ -619,10 +623,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # bool argument (which means nothing in this context
         # but messes up the callback)
         self.modtable_search_button.released.connect(
-            self._show_search_box)
+            self.toggle_search_box)
 
         notify_done()
 
+    # inspector complains about alleged lack of "connect" function
+    # noinspection PyUnresolvedReferences
     def _setup_local_signals_connections(self, notify_done):
         """
         SIGNALS:
@@ -739,6 +745,320 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     # </editor-fold>
 
     ##=============================================
+    ## Event Handlers/Slots
+    ##=============================================
+
+    # <editor-fold desc="EventHandlers">
+
+    @pyqtSlot(int)
+    def on_tab_changed(self, newindex):
+        """
+        When the user switches tabs, make sure the proper GUI components are visible and active
+
+        :param int newindex:
+        """
+        self.current_tab = TAB(newindex)
+        self._update_visible_components()
+        self._update_enabled_actions()
+
+    @pyqtSlot(int)
+    def on_profile_select(self, index):
+        """
+        When a new profile is chosen from the dropdown list, load all
+        the appropriate data for that profile and replace the current
+        data with it. Also show a message about unsaved changes to the
+        current profile.
+
+        :param index:
+        """
+
+        old_index = self.profile_selector_index
+
+        if index == old_index:
+            # ignore this; it just means that the user clicked cancel
+            # in the "save changes" dialog and we're resetting the
+            # displayed profile name.
+            self.LOGGER.debug("Resetting profile name")
+            return
+
+        if index < 0:
+            # we have a problem...
+            self.LOGGER.error("No profile chosen?!")
+        else:
+            new_profile = self.profile_selector.currentData(
+                Qt.UserRole).name
+
+            # if no active profile, just load the selected one.
+            # if somehow selected the same profile, do nothing
+            if Manager.active_profile() is None or \
+                            new_profile != Manager.active_profile().name:
+                # check for unsaved changes to the mod-list
+                reply = self.table_prompt_if_unsaved()
+
+                # only continue to change profile if user does NOT click cancel
+                # (or if there are no changes to save)
+                if reply == QMessageBox.Cancel:
+                    # reset the text in the profile selector;
+                    # this SHOULDn't enter an infinite loop because,
+                    # since we haven't yet changed self.profile_selector_index,
+                    # now 'index' will be the same as 'old_index' at the top
+                    # of this function and nothing else in the program will change
+                    # (just the name shown in the profile selector)
+                    self.profile_selector.setCurrentIndex(old_index)
+                # if reply != QMessageBox.Cancel:
+                else:
+                    # update our variable which tracks the current index
+                    self.profile_selector_index = index
+                    # No => "Don't save changes, drop them"
+                    if reply == QMessageBox.No:
+                        # don't bother reverting, mods list is getting reset;
+                        # just disable the buttons
+                        self.on_table_unsaved_change(False)
+
+                    self.LOGGER.info(
+                        "Activating profile '{}'".format(
+                            new_profile))
+
+                    Manager.set_active_profile(new_profile)
+
+                    self.logger << "Resetting views for new profile"
+
+                    self.newProfileLoaded.emit(new_profile)
+
+    @pyqtSlot('QString')
+    def on_profile_load(self, profile_name):
+        """
+        Call with the name of the selected profile from the profile-
+        selector combobox. Update the proper parts of the UI for the
+        new information.
+
+        :param str profile_name:
+        """
+        self.profile_name = profile_name
+
+        self.check_enable_profile_delete()
+
+        self._reset_table()  # this also loads the new data
+        self._reset_file_tree()
+        self._update_visible_components()
+        self._update_enabled_actions()
+
+    @pyqtSlot()
+    def on_new_profile_action(self):
+        """
+        When the 'add profile' button is clicked, create and show a small dialog for the user to choose a name for the new profile.
+        """
+        popup = NewProfileDialog(
+            combobox_model=self.profile_selector.model())
+
+        # display popup, wait for close and check signal
+        if popup.exec_() == popup.Accepted:
+            # add new profile if they clicked ok
+            new_profile = Manager.new_profile(popup.final_name,
+                                              popup.copy_from)
+
+            self.profile_selector.model().addProfile(new_profile)
+
+            # set new profile as active and load data
+            self.load_profile_by_name(new_profile.name)
+
+            # self.profile_selector.setCurrentIndex(
+            #     self.profile_selector.findText(new_profile.name,
+            #                                    Qt.MatchFixedString))
+
+    @pyqtSlot()
+    def on_remove_profile_action(self):
+        """
+        Show a warning about irreversibly deleting the profile, then, if the user accept the warning, proceed to delete the profile from disk and remove its entry from the profile selector.
+        """
+        profile = Manager.active_profile()
+
+        if message('warning', 'Confirm Delete Profile',
+                   'Delete "' + profile.name + '"?',
+                   'Choosing "Yes" below will remove this profile '
+                   'and all saved information within it, including '
+                   'customized load-orders, ini-edits, etc. Note '
+                   'that installed mods will not be affected. This '
+                   'cannot be undone. Do you wish to continue?'):
+            Manager.delete_profile(
+                self.profile_selector.currentData())
+            self.profile_selector.removeItem(
+                self.profile_selector.currentIndex())
+
+    @pyqtSlot()
+    def on_rename_profile_action(self):
+        """
+        Query the user for a new name, then ask the mod-manager backend to rename the profile folder.
+        """
+
+        newname = \
+        QInputDialog.getText(self, "Rename Profile", "New name")[0]
+
+        if newname:
+            try:
+                Manager.rename_profile(newname)
+            except exceptions.ProfileError as pe:
+                message('critical', "Error During Rename Operation",
+                        text=str(pe), buttons='ok')
+
+    @pyqtSlot(bool)
+    def on_make_or_clear_mod_selection(self, has_selection):
+        """
+        Enable or disable buttons and actions that rely on having a selection in the mod table.
+        """
+        # self.LOGGER << "modtable selection->{}".format(has_selection)
+        for a in (self.mod_movement_group,
+                  self.action_uninstall_mod,
+                  self.action_reinstall_mod,
+                  self.action_toggle_mod):
+            a.setEnabled(has_selection)
+
+    @pyqtSlot(bool)
+    def on_table_unsaved_change(self, unsaved_changes_present):
+        """
+        When a change is made to the table, enable or disable certain actions depending on whether the table's current state matches the last savepoint or not.
+
+        :param unsaved_changes_present:
+        """
+        # self.LOGGER << "table status: {}".format("dirty" if unsaved_changes_present else "clean")
+
+        for widgy in [self.save_cancel_btnbox,
+                      self.action_save_changes,
+                      self.action_revert_changes]:
+            widgy.setEnabled(
+                unsaved_changes_present)
+
+    @pyqtSlot(bool)
+    def on_modlist_activeonly_toggle(self, checked):
+        """
+        Toggle showing/hiding inactive mods in the Mods list on the file-tree tab
+        :param checked: state of the checkbox
+        """
+        # self.LOGGER << "ActiveOnly toggled->{}".format(checked)
+
+        self.filters[F.mod_list].setOnlyShowActive(checked)
+        self.update_modlist_label(checked)
+        Manager.set_profile_setting('File Viewer', 'activeonly',
+                                    checked)
+
+    @pyqtSlot('QString')
+    def on_modlist_filterbox_textchanged(self, text):
+        """
+        Updates the proxy filtering, and notifies the label
+        to change its 'mods shown' count.
+        :param text:
+        """
+
+        filt = self.filters[F.mod_list]
+        filt.setFilterWildcard(text)
+        self.update_modlist_label(filt.onlyShowActive)
+
+    @pyqtSlot('QString')
+    def on_fileviewer_filter_textchanged(self, text):
+        """
+        Query the modfiles table in the db for files matching the filter
+        string given by `text`. The resulting matches are fed to the proxy
+        filter on the file viewer which uses them to make sure that matching
+        files are shown in the tree regardless of whether their parent
+        directories match the filter or not.
+
+        :param str text:
+        """
+        # don't bother querying db for empty string,
+        # the filter will ignore the matched files anyway
+        if not text:
+            self.filters[F.file_viewer].setFilterWildcard(text)
+        else:
+            db = Manager.db._con
+
+            sqlexpr = r'%' + text.replace('?', '_').replace('*',
+                                                            r'%') + r'%'
+
+            matches = [r[0] for r in db.execute(
+                "SELECT filepath FROM modfiles WHERE directory=? AND filepath LIKE ?",
+                (self.models[M.file_viewer].modname, sqlexpr))]
+
+            self.filters[F.file_viewer].setMatchingFiles(matches)
+
+            self.filters[F.file_viewer].setFilterWildcard(text)
+            self.filetree_fileviewer.expandAll()
+
+    @pyqtSlot(str, str)
+    def on_undo_redo_event(self, undo_text, redo_text):
+        """Update the undo/redo text to reflect the passed text.  If an argument is passed as ``None`` or an empty string, that button will instead be disabled."""
+        # self.LOGGER << "Undoevent({}, {})".format(undo_text, redo_text)
+
+        for action, text, default_text in [
+            (self.action_undo, undo_text, "Undo"),
+            (self.action_redo, redo_text, "Redo")]:
+            if text:
+                action.setText(text)
+                action.setEnabled(True)
+            else:
+                action.setText(default_text)
+                action.setEnabled(False)
+
+    @pyqtSlot()
+    def on_save_command(self):
+        """
+        Save command does different things depending on which
+        tab is active.
+        :return:
+        """
+        if self.current_tab == TAB.MODTABLE:
+            self.mod_table.saveChanges()
+        elif self.current_tab == TAB.FILETREE:
+            self.models[M.file_viewer].save()
+
+    @pyqtSlot()
+    def on_revert_command(self):
+        """
+        Undo all changes made to the table since the last savepoint
+        """
+        if self.current_tab == TAB.MODTABLE:
+            self.mod_table.revertChanges()
+        elif self.current_tab == TAB.FILETREE:
+            self.models[M.file_viewer].revert()
+
+    def on_table_search(self, direction=1):
+        """
+        Tell the view to search for 'text'; depending on success, we
+        will change the appearance of the search text and the status
+        bar message
+        """
+
+        if self._search_text:
+            found = self.mod_table.search(self._search_text,
+                                          direction)
+
+            if not found:
+                if found is None:
+                    # this means we DID find the text, but it was the same
+                    # row that we started on
+                    self.modtable_search_box.setStyleSheet(
+                        'QLineEdit { color: gray }')
+                    self.status_bar.showMessage(
+                        "No more results found")
+                else:
+                    # found was False
+                    self.modtable_search_box.setStyleSheet(
+                        'QLineEdit { color: tomato }')
+                    self.status_bar.showMessage("No results found")
+                return
+
+        # text was found or was '': reset style sheet if one is present
+        if self.modtable_search_box.styleSheet():
+            self.modtable_search_box.setStyleSheet('')
+            self.status_bar.clearMessage()
+
+    def _clear_searchbox_style(self):
+        if self.modtable_search_box.styleSheet():
+            self.modtable_search_box.setStyleSheet('')
+            self.status_bar.clearMessage()
+
+    # </editor-fold>
+
+    ##=============================================
     ## Statusbar operations
     ##=============================================
 
@@ -795,7 +1115,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         self.mod_table.loadData()
         self.modtable_search_box.clear() # might be good enough
-        # self._show_search_box(ensure_state=0)
+        # self.toggle_search_box(ensure_state=0)
 
 
 
@@ -923,26 +1243,18 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                        self.action_move_mod_up]:
             action.setEnabled(enable_moveup)
 
-    def _show_search_box(self, ensure_state=None):
+    def toggle_search_box(self):
         """
-        If `ensure_state` is None, expand or collapse the search box
-        depending on its current state. Otherwise, only change the
-        state of the search box if it differs from `ensure_state.`
-
-        :param int ensure_state: states are 0 (Hidden) or 1 (Shown)
+        Show or hide the search box based on its current state.
         """
-
-        an = self.animate_show_search
-        # if ensure_state is not None and ensure_state in [0,1]:
-        #     if ensure_state==1:
-        #         if self.modtable_search_box.width() > 0: return
-        #     elif self.modtable_search_box.width() == 0 :return
-        #
-        #     state=ensure_state
-        # else:
-        #     state = 0 if self.modtable_search_box.width() > 0 else 1
+        # 0=hidden, 1=shown
         state = 0 if self.modtable_search_box.width() > 0 else 1
 
+        # ref to QAnimationProperty
+        an = self.animate_show_search
+
+        # animate expansion from 0px -> 300px width when showing;
+        # animate collapse from 300->0 when hiding
         an.setStartValue([300,0][state])
         an.setEndValue([0,300][state])
         an.start()
@@ -1052,308 +1364,61 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.profile_selector.findText(name,
                                            Qt.MatchFixedString))
 
-    ##=============================================
-    ## Event Handlers/Slots
-    ##=============================================
+    ###=============================================
+    ## Actions
+    ## ---------------------------------------------
+    ## stuff the user can do; available as slots for
+    ## signals to connect to
+    ###=============================================
 
-    # <editor-fold desc="EventHandlers">
+    #<editor-fold desc="actions">
 
-    def on_tab_changed(self, newindex):
-        """
-        When the user switches tabs, make sure the proper GUI components are visible and active
-
-        :param newindex:
-        """
-        self.current_tab = TAB(newindex)
-        self._update_visible_components()
-        self._update_enabled_actions()
-
-    @pyqtSlot('int')
-    def on_profile_select(self, index):
-        """
-        When a new profile is chosen from the dropdown list, load all
-        the appropriate data for that profile and replace the current
-        data with it. Also show a message about unsaved changes to the
-        current profile.
-
-        :param index:
-        """
-
-        old_index = self.profile_selector_index
-
-        if index == old_index:
-            # ignore this; it just means that the user clicked cancel
-            # in the "save changes" dialog and we're resetting the
-            # displayed profile name.
-            self.LOGGER.debug("Resetting profile name")
-            return
-
-        if index < 0:
-            # we have a problem...
-            self.LOGGER.error("No profile chosen?!")
-        else:
-            new_profile = self.profile_selector.currentData(
-                Qt.UserRole).name
-
-            # if no active profile, just load the selected one.
-            # if somehow selected the same profile, do nothing
-            if Manager.active_profile() is None or \
-                            new_profile != Manager.active_profile().name:
-                # check for unsaved changes to the mod-list
-                reply = self.table_prompt_if_unsaved()
-
-                # only continue to change profile if user does NOT click cancel
-                # (or if there are no changes to save)
-                if reply == QMessageBox.Cancel:
-                    # reset the text in the profile selector;
-                    # this SHOULDn't enter an infinite loop because,
-                    # since we haven't yet changed self.profile_selector_index,
-                    # now 'index' will be the same as 'old_index' at the top
-                    # of this function and nothing else in the program will change
-                    # (just the name shown in the profile selector)
-                    self.profile_selector.setCurrentIndex(old_index)
-                # if reply != QMessageBox.Cancel:
-                else:
-                    # update our variable which tracks the current index
-                    self.profile_selector_index = index
-                    # No => "Don't save changes, drop them"
-                    if reply == QMessageBox.No:
-                        # don't bother reverting, mods list is getting reset;
-                        # just disable the buttons
-                        self.on_table_unsaved_change(False)
-
-                    self.LOGGER.info("Activating profile '{}'".format(new_profile))
-
-                    Manager.set_active_profile(new_profile)
-
-                    self.logger << "Resetting views for new profile"
-
-                    self.newProfileLoaded.emit(new_profile)
-
-    def on_profile_load(self, profile_name):
-        """
-        Call with the name of the selected profile from the profile-
-        selector combobox. Update the proper parts of the UI for the
-        new information.
-
-        :param str profile_name:
-        """
-        self.profile_name = profile_name
-
-        self.check_enable_profile_delete()
-
-        self._reset_table() # this also loads the new data
-        self._reset_file_tree()
-        self._update_visible_components()
-        self._update_enabled_actions()
-
-    def on_new_profile_action(self):
-        """
-        When the 'add profile' button is clicked, create and show a small dialog for the user to choose a name for the new profile.
-        """
-        popup = NewProfileDialog(
-            combobox_model=self.profile_selector.model())
-
-        # display popup, wait for close and check signal
-        if popup.exec_() == popup.Accepted:
-            # add new profile if they clicked ok
-            new_profile = Manager.new_profile(popup.final_name,
-                                              popup.copy_from)
-
-            self.profile_selector.model().addProfile(new_profile)
-
-            # set new profile as active and load data
-            self.load_profile_by_name(new_profile.name)
-
-            # self.profile_selector.setCurrentIndex(
-            #     self.profile_selector.findText(new_profile.name,
-            #                                    Qt.MatchFixedString))
-
-    def on_remove_profile_action(self):
-        """
-        Show a warning about irreversibly deleting the profile, then, if the user accept the warning, proceed to delete the profile from disk and remove its entry from the profile selector.
-        """
-        profile = Manager.active_profile()
-
-        if message('warning', 'Confirm Delete Profile',
-                   'Delete "' + profile.name + '"?',
-                   'Choosing "Yes" below will remove this profile '
-                   'and all saved information within it, including '
-                   'customized load-orders, ini-edits, etc. Note '
-                   'that installed mods will not be affected. This '
-                   'cannot be undone. Do you wish to continue?'):
-            Manager.delete_profile(
-                self.profile_selector.currentData())
-            self.profile_selector.removeItem(
-                self.profile_selector.currentIndex())
-
-    def on_rename_profile_action(self):
-        """
-        Query the user for a new name, then ask the mod-manager backend to rename the profile folder.
-        """
-
-        newname = QInputDialog.getText(self, "Rename Profile", "New name")[0]
-
-        if newname:
-            try:
-                Manager.rename_profile(newname)
-            except exceptions.ProfileError as pe:
-                message('critical', "Error During Rename Operation", text=str(pe), buttons='ok')
-
-
-    def on_make_or_clear_mod_selection(self, has_selection):
-        """
-        Enable or disable buttons and actions that rely on having a selection in the mod table.
-        """
-        # self.LOGGER << "modtable selection->{}".format(has_selection)
-        for a in (self.mod_movement_group,
-                  self.action_uninstall_mod,
-                  self.action_reinstall_mod,
-                  self.action_toggle_mod):
-            a.setEnabled(has_selection)
-
-    def on_table_unsaved_change(self, unsaved_changes_present):
-        """
-        When a change is made to the table, enable or disable certain actions depending on whether the table's current state matches the last savepoint or not.
-
-        :param unsaved_changes_present:
-        """
-        # self.LOGGER << "table status: {}".format("dirty" if unsaved_changes_present else "clean")
-
-        for widgy in [self.save_cancel_btnbox,
-                      self.action_save_changes,
-                      self.action_revert_changes]:
-            widgy.setEnabled(
-                unsaved_changes_present)
-
-    def on_modlist_activeonly_toggle(self, checked):
-        """
-        Toggle showing/hiding inactive mods in the Mods list on the file-tree tab
-        :param checked: state of the checkbox
-        """
-        # self.LOGGER << "ActiveOnly toggled->{}".format(checked)
-
-        self.filters[F.mod_list].setOnlyShowActive(checked)
-        self.update_modlist_label(checked)
-        Manager.set_profile_setting('File Viewer', 'activeonly', checked)
-
-    def on_modlist_filterbox_textchanged(self, text):
-        """
-        Updates the proxy filtering, and notifies the label
-        to change its 'mods shown' count.
-        :param text:
-        """
-
-        filt = self.filters[F.mod_list]
-        filt.setFilterWildcard(text)
-        self.update_modlist_label(filt.onlyShowActive)
-
-    def on_fileviewer_filter_textchanged(self, text):
-        """
-        Query the modfiles table in the db for files matching the filter
-        string given by `text`. The resulting matches are fed to the proxy
-        filter on the file viewer which uses them to make sure that matching
-        files are shown in the tree regardless of whether their parent
-        directories match the filter or not.
-
-        :param str text:
-        """
-        # don't bother querying db for empty string,
-        # the filter will ignore the matched files anyway
-        if not text:
-            self.filters[F.file_viewer].setFilterWildcard(text)
-        else:
-            db = Manager.db._con
-
-            sqlexpr = r'%'+text.replace('?','_').replace('*',r'%')+r'%'
-
-            matches = [r[0] for r in db.execute("SELECT filepath FROM modfiles WHERE directory=? AND filepath LIKE ?", (self.models[M.file_viewer].modname, sqlexpr))]
-
-            self.filters[F.file_viewer].setMatchingFiles(matches)
-
-            self.filters[F.file_viewer].setFilterWildcard(text)
-            self.filetree_fileviewer.expandAll()
-
-    def on_undo_redo_event(self, undo_text, redo_text):
-        """Update the undo/redo text to reflect the passed text.  If an argument is passed as ``None`` or an empty string, that button will instead be disabled."""
-        # self.LOGGER << "Undoevent({}, {})".format(undo_text, redo_text)
-
-        for action, text, default_text in [
-            (self.action_undo, undo_text, "Undo"),
-            (self.action_redo, redo_text, "Redo")]:
-            if text:
-                action.setText(text)
-                action.setEnabled(True)
-            else:
-                action.setText(default_text)
-                action.setEnabled(False)
-
-    def on_save_command(self):
-        """
-        Save command does different things depending on which
-        tab is active.
-        :return:
-        """
-        if self.current_tab== TAB.MODTABLE:
-            self.mod_table.saveChanges()
-        elif self.current_tab == TAB.FILETREE:
-            self.models[M.file_viewer].save()
-
-    def on_revert_command(self):
-        """
-        Undo all changes made to the table since the last savepoint
-        """
-        if self.current_tab == TAB.MODTABLE:
-            self.mod_table.revertChanges()
-        elif self.current_tab == TAB.FILETREE:
-            self.models[M.file_viewer].revert()
-
-    def on_table_search(self, direction=1):
-        """
-        Tell the view to search for 'text'; depending on success, we
-        will change the appearance of the search text and the status
-        bar message
-        """
-
-        if self._search_text:
-            found = self.mod_table.search(self._search_text, direction)
-
-            if not found:
-                if found is None:
-                    # this means we DID find the text, but it was the same
-                    # row that we started on
-                    self.modtable_search_box.setStyleSheet(
-                        'QLineEdit { color: gray }')
-                    self.status_bar.showMessage("No more results found")
-                else:
-                    # found was False
-                    self.modtable_search_box.setStyleSheet(
-                        'QLineEdit { color: tomato }')
-                    self.status_bar.showMessage("No results found")
-                return
-
-        # text was found or was '': reset style sheet if one is present
-        if self.modtable_search_box.styleSheet():
-            self.modtable_search_box.setStyleSheet('')
-            self.status_bar.clearMessage()
-
-    def _clear_searchbox_style(self):
-        if self.modtable_search_box.styleSheet():
-            self.modtable_search_box.setStyleSheet('')
-            self.status_bar.clearMessage()
-
-    # </editor-fold>
-
-    ##===============================================
-    ## Action Handlers
-    ##===============================================
-
+    @pyqtSlot()
     def edit_preferences(self):
         """
         Show a dialog allowing the user to change some application-wide preferences
         """
         # todo
         message(text="Preferences?")
+
+    @pyqtSlot()
+    def choose_mod_folder(self):
+        """
+        Show dialog allowing user to choose a mod folder.
+        """
+        # noinspection PyTypeChecker
+        moddir = QFileDialog.getExistingDirectory(
+            self,
+            "Choose Directory Containing Installed Mods",
+            Manager.conf['dir_mods'])
+
+        # update config with new path
+        if checkPath(moddir):
+            Manager.conf.updateConfig(moddir,
+                                      INIKey.MODDIR,
+                                      INISection.GENERAL)
+
+            # reverify and reload the mods.
+            if not Manager.validate_mod_installs():
+                self.mod_table.model().reloadErrorsOnly()
+
+    @pyqtSlot()
+    def select_skyrim_dir(self):
+        """
+        Show file selection dialog for user to select the directory
+        where Skyrim is installed
+        """
+        skydir = QFileDialog.getExistingDirectory(
+            self,
+            "Select Skyrim Installation")
+
+        # update config with new path
+        if checkPath(skydir):
+            Manager.conf.updateConfig(skydir,
+                                      INIKey.SKYRIMDIR,
+                                      INISection.GENERAL)
+        else:
+            self.safe_quit()
 
     # noinspection PyTypeChecker,PyArgumentList
     def install_mod_archive(self, manual=False):
@@ -1397,7 +1462,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     def manual_install(self):
         """
         Activate a non-guided install
-        :return:
         """
         self.install_mod_archive(manual=True)
 
@@ -1421,42 +1485,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             mod = self.models[M.mod_table][row]
             self.LOGGER << "Here's where we'd uninstall this mod."
 
-    def choose_mod_folder(self):
-        """
-        Show dialog allowing user to choose a mod folder.
-        """
-        # noinspection PyTypeChecker
-        moddir = QFileDialog.getExistingDirectory(
-            self,
-            "Choose Directory Containing Installed Mods",
-            Manager.conf['dir_mods'])
+    #</editor-fold>
 
-        # update config with new path
-        if checkPath(moddir):
-            Manager.conf.updateConfig(moddir,
-                                      INIKey.MODDIR,
-                                      INISection.GENERAL)
-
-            # reverify and reload the mods.
-            if not Manager.validate_mod_installs():
-                self.mod_table.model().reloadErrorsOnly()
-
-    def select_skyrim_dir(self):
-        """
-        Show file selection dialog for user to select the directory
-        where Skyrim is installed
-        """
-        skydir = QFileDialog.getExistingDirectory(
-            self,
-            "Select Skyrim Installation")
-
-        # update config with new path
-        if checkPath(skydir):
-            Manager.conf.updateConfig(skydir,
-                                      INIKey.SKYRIMDIR,
-                                      INISection.GENERAL)
-        else:
-            self.safe_quit()
+    ##=============================================
+    ## Qt Overrides
+    ##=============================================
 
     def closeEvent(self, event):
         """
