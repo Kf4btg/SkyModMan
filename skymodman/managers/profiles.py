@@ -29,6 +29,11 @@ class Profile:
     __default_settings = {
         "File Viewer": {
             "activeonly": True,
+        },
+        "Directory Overrides": {
+            "skyrim": "",
+            "mods": "",
+            "vfs": "",
         }
     }
 

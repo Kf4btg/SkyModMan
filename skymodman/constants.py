@@ -34,15 +34,46 @@ class EnvVars(str, Enum):
 # labels for the sections and settings in the main INI config file.
 # making these strEnums because I tire of typing .value over and over...
 class INISection(str, Enum):
-    """Only one section at the moment"""
+    """
+    Configuration Headings in the various INI files.
+
+    DEFAULT and GENERAL are the same thing.
+
+    OVERRIDES is actually in the individual profile config files,
+    and contains values that override the default directory settings
+    """
+    NONE = ""
+
+    # main INI
     DEFAULT = "General"
     GENERAL = DEFAULT
+    DIRECTORIES = "Directories"
+
+    # profile INIs
+    OVERRIDES = "Directory Overrides"
+    FILEVIEWER = "File Viewer"
+
+
 
 class INIKey(str, Enum):
-    SKYRIMDIR   = "skyriminstalldir"    # location of base skyrim install
+
+    ## main INI
     LASTPROFILE = "lastprofile"         # name of last loaded profile
-    MODDIR      = "modsdirectory"       # location of mod storage
-    VFSMOUNT    = "virtualfsmountpoint" # mount point for "virtual" skyrim install
+
+    ## main and profile INIs
+    ## these have their own section now, so we can probably be more concise
+    # SKYRIMDIR   = "skyriminstalldir"    # location of base skyrim install
+    SKYRIMDIR   = "skyrim"    # location of base skyrim install
+
+    # MODDIR      = "modsdirectory"       # location of mod storage
+    MODDIR      = "mods"       # location of mod storage
+
+    # VFSMOUNT    = "virtualfsmountpoint" # mount point for "virtual" skyrim install
+    VFSMOUNT    = "vfs" # mount point for "virtual" skyrim install
+
+    ## profiles only
+    ACTIVEONLY = "activeonly"
+
 
 
 class OverwriteMode(Enum):

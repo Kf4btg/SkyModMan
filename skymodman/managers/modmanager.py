@@ -1,4 +1,4 @@
-import os
+# import os
 from pathlib import Path
 
 from skymodman import ModEntry, skylog
@@ -6,7 +6,7 @@ from skymodman.managers import (config as _config,
                                 database as _database,
                                 installer as _install)
 from skymodman.managers.profiles import Profile, ProfileManager
-from skymodman.constants import db_fields as _db_fields
+from skymodman.constants import (INISection, INIKey, db_fields as _db_fields)
 
 
 _configman  = None # type: _config.ConfigManager
@@ -52,6 +52,12 @@ def get_cursor():
     """
     return _dataman.conn.cursor()
 
+##=============================================
+## Profile Management
+##=============================================
+
+#<editor-fold desc="profiles">
+
 def active_profile() -> Profile:
     """
     Retrieves the presently loaded Profile from the Profile Manager.
@@ -71,7 +77,9 @@ def set_active_profile(profile):
         profile = profile.name
     assert isinstance(profile, str)
     _profileman.setActiveProfile(profile)
-    _configman.updateConfig(profile, "lastprofile")
+
+    _configman.updateConfig(INIKey.LASTPROFILE, INISection.GENERAL, profile)
+    # _configman.updateConfig(profile, "lastprofile")
 
     global _database_initialized
 
@@ -120,7 +128,8 @@ def rename_profile(new_name, current=None):
     _profileman.rename_profile(current, new_name)
 
     if current is active_profile():
-        _configman.updateConfig(current.name, "lastprofile")
+        # _configman.updateConfig(current.name, "lastprofile")
+        _configman.updateConfig(INIKey.LASTPROFILE, INISection.GENERAL, current.name)
 
 
 def delete_profile(profile):
@@ -174,6 +183,48 @@ def load_active_profile_data():
     _logger.info("Analyzing hidden files")
     _dataman.loadHiddenFiles(active_profile().hidden_files)
 
+def hidden_files(for_mod=None):
+    """
+
+    :param str for_mod:
+        If specified, must be the directory name of an installed mod; will yield only the files marked as hidden for that particular mod
+    :return: a generator over the Rows (basically a dict with keys 'directory' and 'filepath') of hiddenfiles; if 'for_mod' was given, will instead return a generator over just the hidden filepaths (generator of strings)
+    """
+    if for_mod is None:
+        yield from _dataman.execute_("Select * from hiddenfiles")
+    else:
+        yield from (t[0] for t in _dataman.execute_("Select filepath from hiddenfiles where directory=?", (for_mod, )))
+
+def get_errors(error_type):
+    """
+    Yields any recorded errors of the specified type from the active profile.
+    'Not Found' means that a mod was in the profile's list of installed mods, but could not be found on disk.
+    'Not Listed' means that a mod was found on disk that was not previously in the list of installed mods.
+
+    :param error_type: constants.SyncError
+    :yieldtype: str
+    :yield: names of mods that encountered the specified error_type during load
+    """
+
+    q = """SELECT mod, ordinal from (
+        SELECT moderrors.mod as mod, moderrors.errortype as etype, mods.ordinal as ordinal
+        FROM moderrors INNER JOIN mods
+        ON mod = mods.directory
+        WHERE etype = ?)
+        ORDER BY ordinal
+    """
+
+    yield from (r['mod'] for r in
+                _dataman.execute_(q, (error_type.value,)))
+
+#</editor-fold>
+
+##=============================================
+## Mod Information
+##=============================================
+
+#<editor-fold desc="modinfo">
+
 def validate_mod_installs():
     """
     Queries the disk and the database to see if the respective
@@ -202,6 +253,14 @@ def enabled_mods():
 
 def disabled_mods():
     yield from _dataman.disabledMods(True)
+
+#</editor-fold>
+
+##=============================================
+## Saving changes
+##=============================================
+
+#<editor-fold desc="saving">
 
 def save_user_edits(changes):
     """
@@ -241,19 +300,117 @@ def save_mod_list():
     # reset so that next install will reflect the new state
     __enabled_mods = None
 
-def get_profile_setting(section, name):
+def save_hidden_files():
+    _dataman.saveHiddenFiles(active_profile().hidden_files)
+
+
+#</editor-fold>
+
+##=============================================
+## Configuration querying, updating
+##=============================================
+
+#<editor-fold desc="config">
+
+def get_config_value(name, section=INISection.NONE, default=None, use_profile_override = True):
+    """
+    Get the current value of one of the main config values
+
+    :param name: the key for which to retrieve the value
+    :param section: "General" or "Directories" or "" (enum values are preferred)
+    :param default: value to return if the section/key is not found
+    :param use_profile_override:
+
+    :return:
+    """
+    val = None
+
+    if section == INISection.DIRECTORIES:
+        # check for overrides in current profile
+        ap = active_profile()
+        # section in profile-specific config file
+        psec = INISection.OVERRIDES
+
+
+        if name == INIKey.SKYRIMDIR:
+            val = ap.Config[psec][name] if (ap and use_profile_override) \
+                else conf['dir_skyrim']
+
+        elif name == INIKey.VFSMOUNT:
+            val = ap.Config[psec][name] if (ap and use_profile_override) \
+                else conf["dir_vfs"]
+
+        elif name == INIKey.MODDIR:
+            val =  ap.Config[psec][name] if (ap and use_profile_override) \
+                else conf["dir_mods"]
+
+    elif section == INISection.GENERAL:
+        if name == INIKey.LASTPROFILE:
+            val = conf.lastprofile
+
+    else:
+        # assume section is "NONE", meaning this is not a value
+        # from the main config file (but is still tracked by
+        # config manager...TODO: there's probably a better way to do this)
+        val = conf[name]
+
+    return val or default
+
+def set_config_value(name, section, value, set_profile_override=True):
+    """
+    Update the value for the setting with the given name under the given section.
+
+    :param name:
+    :param section:
+    :param value: the new value to save
+    :param set_profile_override: if the key to be updated is a directory, then, if this parameter is True, the updated value will be set as a directory override in the local settings of the active profile (if any). If this parameter is False, then the default value for the path will be updated instead, and the profile overrides left untouched.
+    """
+    if section == INISection.DIRECTORIES:
+        # if a profile is active, set an override
+        _change_configured_path(name, value,
+                                set_profile_override and
+                                active_profile() is not None)
+
+    elif section == INISection.GENERAL:
+        conf.updateConfig(name, section, value)
+
+
+def _change_configured_path(directory, new_path, profile_override):
+
+    if profile_override:
+        set_profile_setting(directory, INISection.OVERRIDES, new_path)
+    else:
+        conf.updateConfig(directory, INISection.DIRECTORIES, new_path)
+
+
+def set_directory(key, path, profile_override=True):
+    """
+    Update the configured value of the directory indicated by `key` (from constants.INIKey) to the new value given in `path`
+
+    :param key:
+    :param str path:
+    :param profile_override:
+    """
+    set_config_value(key, INISection.DIRECTORIES, path,
+                     profile_override)
+
+def get_directory(key, use_profile_override=True):
+    return get_config_value(key, INISection.DIRECTORIES, use_profile_override=use_profile_override)
+
+def get_profile_setting(name, section, default=None):
     """
 
     :param str section: Config file section the setting belongs to
     :param str name: Name of the setting
     :return: current value of the setting
+    :param default: value to return when there is no active profile
     """
     ap = active_profile()
     if ap is not None:
         return ap.Config[section][name]
-    return None
+    return default
 
-def set_profile_setting(section, name, value):
+def set_profile_setting(name, section, value):
     """
     :param str section: Config file section the setting belongs to
     :param str name: Name of the setting
@@ -261,42 +418,7 @@ def set_profile_setting(section, name, value):
     """
     active_profile().save_setting(section, name, value)
 
-def save_hidden_files():
-    _dataman.saveHiddenFiles(active_profile().hidden_files)
-
-def hidden_files(for_mod=None):
-    """
-
-    :param str for_mod:
-        If specified, must be the directory name of an installed mod; will yield only the files marked as hidden for that particular mod
-    :return: a generator over the Rows (basically a dict with keys 'directory' and 'filepath') of hiddenfiles; if 'for_mod' was given, will instead return a generator over just the hidden filepaths (generator of strings)
-    """
-    if for_mod is None:
-        yield from _dataman.execute_("Select * from hiddenfiles")
-    else:
-        yield from (t[0] for t in _dataman.execute_("Select filepath from hiddenfiles where directory=?", (for_mod, )))
-
-def get_errors(error_type):
-    """
-    Yields any recorded errors of the specified type from the active profile.
-    'Not Found' means that a mod was in the profile's list of installed mods, but could not be found on disk.
-    'Not Listed' means that a mod was found on disk that was not previously in the list of installed mods.
-
-    :param error_type: constants.SyncError
-    :yieldtype: str
-    :yield: names of mods that encountered the specified error_type during load
-    """
-
-    q="""SELECT mod, ordinal from (
-        SELECT moderrors.mod as mod, moderrors.errortype as etype, mods.ordinal as ordinal
-        FROM moderrors INNER JOIN mods
-        ON mod = mods.directory
-        WHERE etype = ?)
-        ORDER BY ordinal
-    """
-
-    yield from (r['mod'] for r in _dataman.execute_(q, (error_type.value, )))
-
+#</editor-fold>
 
 ##===============================================
 ## Mod [Un]Installation

@@ -3,9 +3,10 @@ from pathlib import Path
 
 import os
 from os.path import (exists as _exists,
-                     expanduser as _expand)
+                     expanduser as _expand,
+                     join as _join)
 
-__all__ = ["checkPath", "change_dir", "dir_move_merge"]
+__all__ = ["checkPath", "join_path", "change_dir", "dir_move_merge"]
 
 
 def checkPath(path, exp_user=False):
@@ -20,6 +21,20 @@ def checkPath(path, exp_user=False):
     if path:
         return _exists(_expand(path)) if exp_user else _exists(path)
     return False
+
+def join_path(base_path, *path_parts, as_path_object=False):
+    """
+
+    :param str base_path: first part of the path
+    :param str path_parts: any number of additional path pieces to join
+    :param bool as_path_object: if True, return the result as a pathlib.Path object; otherwise, it is returned as a string
+    :return:
+    """
+
+    if as_path_object:
+        return Path(base_path, *path_parts)
+
+    return _join(base_path, *path_parts)
 
 @contextmanager
 def change_dir(dir_):

@@ -34,7 +34,7 @@ from skymodman.interface.models import (
     FileViewerTreeFilter)
 from skymodman.interface.widgets import message, NewProfileDialog
 from skymodman.utils import withlogger, Notifier
-from skymodman.utils.fsutils import checkPath
+from skymodman.utils.fsutils import checkPath, join_path
 from skymodman.interface.install_helpers import InstallerUI
 
 from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow
@@ -140,7 +140,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # if "load_last_profile" is true, then the last profile will
         # be...um...loaded.
         if self.preferences["load_last_profile"]:
-            self.load_profile_by_name(Manager.conf.lastprofile)
+            self.load_profile_by_name(
+                Manager.get_config_value(INIKey.LASTPROFILE, INISection.GENERAL)
+                # Manager.conf.lastprofile
+            )
 
     @property
     def current_tab(self):
@@ -416,8 +419,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         notify_done()
 
     def __init_modlist_filter_state(self, filter_):
-        activeonly = Manager.get_profile_setting('File Viewer',
-                                                 'activeonly')
+        activeonly = Manager.get_profile_setting('activeonly', 'File Viewer')
 
         if activeonly is None:
             # if no profile loaded, set it unchecked and disable it
@@ -938,7 +940,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.filters[F.mod_list].setOnlyShowActive(checked)
         self.update_modlist_label(checked)
-        Manager.set_profile_setting('File Viewer', 'activeonly',
+        Manager.set_profile_setting(INIKey.ACTIVEONLY,
+                                    INISection.FILEVIEWER,
                                     checked)
 
     @pyqtSlot('QString')
@@ -1147,7 +1150,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
 
         # must have a configured skyrim installation folder
-        if not Manager.conf["dir_skyrim"]:
+        skydir = Manager.get_directory(INIKey.SKYRIMDIR)
+        # skydir = Manager.get_config_value(INIKey.SKYRIMDIR, INISection.DIRECTORIES)
+        # if not Manager.conf["dir_skyrim"]:
+        if not skydir:
             if message("information", "Select Skyrim Installation", 'Before the manager runs, please take a moment to specify the folder where Skyrim itself is installed. Click "OK" to show the folder selection dialog.', buttons=('ok', 'cancel'), default_button='ok'):
                 self.select_skyrim_dir()
             # else:
@@ -1299,9 +1305,14 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         moddir = indexCur.internalPointer().directory
 
-        p = Manager.conf.paths.dir_mods / moddir
+        # p = Manager.conf.paths.dir_mods / moddir
 
-        self.models[M.file_viewer].setRootPath(str(p))
+        # add the name of the mod directory to the path of the
+        # main mods folder
+        p = join_path(Manager.get_config_value(INIKey.MODDIR, INISection.DIRECTORIES), moddir)
+
+        # self.models[M.file_viewer].setRootPath(str(p))
+        self.models[M.file_viewer].setRootPath(p)
 
     def table_prompt_if_unsaved(self):
         """
@@ -1385,18 +1396,27 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     def choose_mod_folder(self):
         """
         Show dialog allowing user to choose a mod folder.
+
+        If a profile is currently loaded, this will set a directory override for the mods folder that applies to this profile only. The default directory can be set in the preferences dialog. When no profile is loaded, this will instead set the default directory.
         """
         # noinspection PyTypeChecker
         moddir = QFileDialog.getExistingDirectory(
             self,
             "Choose Directory Containing Installed Mods",
-            Manager.conf['dir_mods'])
+            Manager.get_directory(INIKey.MODDIR)
+            # Manager.get_config_value(INIKey.MODDIR, INISection.DIRECTORIES)
+            # Manager.conf['dir_mods']
+        )
 
         # update config with new path
         if checkPath(moddir):
-            Manager.conf.updateConfig(moddir,
-                                      INIKey.MODDIR,
-                                      INISection.GENERAL)
+            Manager.set_directory(INIKey.MODDIR, moddir)
+            # Manager.set_config_value(INIKey.MODDIR,
+            #                          INISection.DIRECTORIES,
+            #                          moddir)
+            # Manager.conf.updateConfig(INIKey.MODDIR,
+            #                           INISection.GENERAL,
+            #                           moddir)
 
             # reverify and reload the mods.
             if not Manager.validate_mod_installs():
@@ -1410,13 +1430,18 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         skydir = QFileDialog.getExistingDirectory(
             self,
-            "Select Skyrim Installation")
+            "Select Skyrim Installation",
+            Manager.get_directory(INIKey.SKYRIMDIR) or "")
 
         # update config with new path
         if checkPath(skydir):
-            Manager.conf.updateConfig(skydir,
-                                      INIKey.SKYRIMDIR,
-                                      INISection.GENERAL)
+            Manager.set_directory(INIKey.SKYRIMDIR, skydir)
+            # Manager.set_config_value(INIKey.SKYRIMDIR,
+            #                           INISection.DIRECTORIES,
+            #                           skydir)
+            # Manager.conf.updateConfig(INIKey.SKYRIMDIR,
+            #                           INISection.GENERAL,
+            #                           skydir)
         else:
             self.safe_quit()
 

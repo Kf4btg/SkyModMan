@@ -16,6 +16,7 @@ __myname = "skymodman"
 
 # bind these values locally, since we need the actual string more often than not here
 _SECTION_GENERAL = INISection.GENERAL.value
+_SECTION_DIRS = INISection.DIRECTORIES.value
 _KEY_LASTPRO = INIKey.LASTPROFILE.value
 _KEY_MODDIR  = INIKey.MODDIR.value
 _KEY_VFSMNT  = INIKey.VFSMOUNT.value
@@ -56,10 +57,12 @@ class ConfigManager:
 
     __DEFAULT_CONFIG={
         _SECTION_GENERAL: {
+            _KEY_LASTPRO: __DEFAULT_PROFILE
+        },
+        _SECTION_DIRS: {
             _KEY_SKYDIR: "",
             _KEY_MODDIR: appdirs.user_data_dir(__APPNAME) +"/mods",
             _KEY_VFSMNT: appdirs.user_data_dir(__APPNAME) +"/skyrimfs",
-            _KEY_LASTPRO: __DEFAULT_PROFILE
         }
     }
 
@@ -85,7 +88,7 @@ class ConfigManager:
         return self.__paths
 
 
-    def __getitem__(self, config_file_or_dir) -> str:
+    def __getitem__(self, config_file_or_dir):
         """
         Use dict-access to get string versions of any of the items from the "paths"
         of this config instance by property name
@@ -135,7 +138,7 @@ class ConfigManager:
             # if they didn't or it didn't exist, pull the config value
             if p is None:
                 try:
-                    config_val = config[_SECTION_GENERAL][inikey]
+                    config_val = config[_SECTION_DIRS][inikey]
 
                     if checkPath(config_val):
                         p = Path(config_val)
@@ -150,7 +153,7 @@ class ConfigManager:
                 # if key wasn't in config file for some reason,
                 # check that we have a default value (skydir, for example,
                 # does not (i.e. the default val is ""))
-                def_path = ConfigManager.__DEFAULT_CONFIG[_SECTION_GENERAL][
+                def_path = ConfigManager.__DEFAULT_CONFIG[_SECTION_DIRS][
                     inikey]
 
                 # if we have a default and it exists, use that.
@@ -184,7 +187,7 @@ class ConfigManager:
             #     finally:
             #         setattr(self.paths, paths_attr, p)
             # update config-file mirror
-            self.currentValues[_SECTION_GENERAL][inikey] = self[paths_attr]
+            self.currentValues[_SECTION_DIRS][inikey] = self[paths_attr]
 
         if self.path_errors:
             for att, errlist in self.path_errors.items():
@@ -346,13 +349,13 @@ class ConfigManager:
             config.write(configfile)
 
 
-    def updateConfig(self, value, key, section=_SECTION_GENERAL):
+    def updateConfig(self, key, section, value):
         """
         Update saved configuration file
 
         :param  value: the new value to set
         :param str key: which key will will be set to the new value
-        :param str section: only valid section is 'General' for the moment
+        :param str section: valid values are "General" and "Directories" (or the enum value)
         """
 
         # new configurator
@@ -366,10 +369,11 @@ class ConfigManager:
         config.read(str(self.paths.file_main))
 
         # validate new value
-        if key in [_KEY_MODDIR, _KEY_VFSMNT, _KEY_SKYDIR]:
+        if section == _SECTION_DIRS and key in [_KEY_MODDIR, _KEY_VFSMNT, _KEY_SKYDIR]:
             p=Path(value)
 
-        elif key == _KEY_LASTPRO:
+        elif section == _SECTION_GENERAL and key == _KEY_LASTPRO:
+        # elif key == _KEY_LASTPRO:
             p = self.paths.dir_profiles / value
         else:
             raise exceptions.InvalidConfigKeyError(key)
