@@ -47,6 +47,13 @@ class INIKey(str, Enum):
 
 class OverwriteMode(Enum):
     """
+    Used for name-conflicts when rearranging files in the
+    pseudo-file-system view of the manual install dialog.
+
+    Binary ops & and | have been implemented for this type,
+    as well as the __bool__ function so that PROMPT (with int
+    value 0) will indicate False while the other values are True
+
     PROMPT essentially means allow the error to be raised.
     It can then be caught and handled by the caller.
     """

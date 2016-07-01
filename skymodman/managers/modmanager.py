@@ -278,11 +278,13 @@ def hidden_files(for_mod=None):
 
 def get_errors(error_type):
     """
-    Returns any recorded errors of the specified type from the active profile.
+    Yields any recorded errors of the specified type from the active profile.
     'Not Found' means that a mod was in the profile's list of installed mods, but could not be found on disk.
     'Not Listed' means that a mod was found on disk that was not previously in the list of installed mods.
 
     :param error_type: constants.SyncError
+    :yieldtype: str
+    :yield: names of mods that encountered the specified error_type during load
     """
 
     q="""SELECT mod, ordinal from (

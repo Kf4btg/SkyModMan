@@ -108,7 +108,8 @@ class ModTable_TreeModel(QAbstractItemModel):
         # noinspection PyUnresolvedReferences
         self.mod_entries = [] #type: list[QModEntry]
 
-        self.errors = {}  # dict[str, int] of {mod_directory_name: err_type}
+        self.errors = {}  # type: dict[str, int]
+                          #  of {mod_directory_name: err_type}
 
         self.vheader_field = COL_ORDER
         # self.visible_columns = [COL.ENABLED, COL.ORDER, COL.NAME, COL.MODID, COL.VERSION]
@@ -136,7 +137,7 @@ class ModTable_TreeModel(QAbstractItemModel):
 
     @property
     def isDirty(self) -> bool:
-        return bool(self._modifications) and stack().haschanged()
+        return len(self._modifications) > 0 and stack().haschanged()
 
     def __getitem__(self, row):
         """
@@ -311,6 +312,16 @@ class ModTable_TreeModel(QAbstractItemModel):
         return super().headerData(section, orientation, role)
 
     def flags(self, index):
+        """
+        For the cell specified by `index`, return the appropriate flag value:
+
+            * Invalid Index: enabled
+            * 'Enabled' column: enabled, selectable, draggable, droppable, checkable
+            * 'Name' column: enabled, selectable, draggable, droppable, editable
+            * Any other column: enabled, selectable, draggable, droppable
+
+        :param QModelIndex index:
+        """
         if not index.isValid():
             return Qt_ItemIsEnabled
         col = index.column()
@@ -329,12 +340,16 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
         Search for the given text in the mod list (names, by default),
         and return the model index of the first or next matching entry.
+
         :param str text: search text
         :param QModelIndex start_index: the currently selected index; search will begin here and search down the table
+        :param int direction: if negative, search backwards from current location
         :return: QModelIndex
         """
         # an invalid index will have row==-1
         current_row = start_index.row()
+
+        reverse = direction < 0
 
         # Wildcard matching:
         #replace any '*' and '?' with '.*' and '.', respectively,
@@ -356,7 +371,7 @@ class ModTable_TreeModel(QAbstractItemModel):
             # search backwards if dir<0
             next_result = searcher(
                     start=current_row-1, step=-1) \
-                        if direction<0 else searcher(
+                        if reverse else searcher(
                     start=current_row+1)
 
         except StopIteration:
@@ -364,10 +379,9 @@ class ModTable_TreeModel(QAbstractItemModel):
             # end and continue until we either find a match or return to the
             # starting point.
             try:
-                next_result = searcher(
-                        end=current_row-1, step=-1) \
-                    if direction < 0 else searcher(
-                        end=current_row + 1)
+                next_result = searcher(end=current_row-1, step=-1) \
+                              if reverse \
+                              else searcher(end=current_row + 1)
             except StopIteration:
                 return QModelIndex()
 
@@ -580,17 +594,36 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         self.mod_entries = [QModEntry(**d) for d in Manager.basic_mod_info()]
 
-        self.getErrors()
+        self.checkForModLoadErrors()
 
         self.endResetModel()
         self.tablehaschanges.emit(False)
 
-    def getErrors(self):
-        self.errors = {}  # reset
-        for err in Manager.get_errors(SyncError.NOTFOUND):
+    def checkForModLoadErrors(self):
+        """
+        query the manager for any errors that were encountered while loading
+        the modlist for the current profile. The two error types are:
+
+            * SyncError.NOTFOUND: Mod listed in the profile's saved list is not present on disk
+            * SyncError.NOTLISTED: Mod found on disk is not in the profile's modlist
+
+        The model's ``errors`` property (a str=>int dictionary) is populated with the
+        results of this query; each key in the dict is the name of a mod (directory),
+        and the value is the int-enum value of the type of error it encountered.
+        If a mod is not present in this collection, then no error was encountered.
+
+        Ideally, ``errors`` will be empty after this method is called. In this case, the
+        model will notify the view to hide the Errors column of the table. If ``errors`` is not
+        empty, then the Errors column will be shown and an icon indicating the type of error
+        will be appear there in the row(s) of the problematic mod(s).
+        """
+        # self.errors = {}  # type: dict[str, int]
+        # reset
+        self.errors.clear()
+        for err in Manager.get_errors(SyncError.NOTFOUND): # type: str
             self.errors[err] = SyncError.NOTFOUND
 
-        for err in Manager.get_errors(SyncError.NOTLISTED):
+        for err in Manager.get_errors(SyncError.NOTLISTED): # type: str
             self.errors[err] = SyncError.NOTLISTED
 
         # only show error column when they are errors to report
@@ -603,7 +636,7 @@ class ModTable_TreeModel(QAbstractItemModel):
 
     def reloadErrorsOnly(self):
         self.beginResetModel()
-        self.getErrors()
+        self.checkForModLoadErrors()
         self.endResetModel()
 
     ##===============================================
