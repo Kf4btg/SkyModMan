@@ -42,6 +42,9 @@ class InstallerUI:
                 # count the files, and get the mod structure
                 # count = await installer.get_file_count()
                 # tree = await installer.mod_structure_tree()
+
+
+                # retrieve a view of the archive's contents as a pseudo-filesystem
                 modfs = await installer.mkarchivefs()
 
                 # print("count:", count)
@@ -61,9 +64,13 @@ class InstallerUI:
                 # print(toplevcount, toplevdata)
 
                 # if count:
+
+                ## check the root of the file hierarchy for usable data
                 if modfs.fsck_quick():
+                    ## if it's there, install the mod automatically
+
                     # await self.extraction_progress_dialog()
-                    message("information", title="Game Data Found", text="")
+                    message("information", title="Game Data Found", text="Here's where I'd automatically install the mod for you if I were working correctly. But I won't, because I'm not.")
 
 
                     # await installer.extract("/tmp/testinstall",
@@ -72,14 +79,17 @@ class InstallerUI:
                     #                         callback=
                     #              )
                 else:
-                    # one last check if the previous search turned up nothing:
+                    ## perform one last check if the previous search turned up nothing:
                     # if there is only one item on the top level
                     # of the mod and that item is a directory, then check inside that
                     # directory for the necessary files.
-                    _list = modfs.listdir("/")
+
+                    _list = modfs.listdir("/") # list of items in the root
+
+                       ## only 1 item...   ## which is a directory... ## that contains game data
                     if len(_list) == 1 and modfs.is_dir(_list[0]) and modfs.fsck_quick(_list[0]):
                         message("information", title="Game Data Found",
-                                text="In immediate subdirectory '{}'".format(_list[0]))
+                                text="In immediate subdirectory '{}'. Automatic install of this data would be performed now.".format(_list[0]))
 
                     else:
                         self.logger.debug("no toplevel items found; showing manual install dialog")
