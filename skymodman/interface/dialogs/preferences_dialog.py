@@ -1,6 +1,7 @@
 from functools import partial
 
-from PyQt5.QtWidgets import QDialog, QFileDialog
+from PyQt5.QtWidgets import QDialog, QFileDialog, QDataWidgetMapper
+# from PyQt5.QtCore import QStringListModel, Qt
 
 from skymodman.managers import modmanager as Manager
 from skymodman.interface.designer.uic.preferences_ui import Ui_Preferences
@@ -8,6 +9,10 @@ from skymodman.utils import withlogger
 from skymodman.utils.fsutils import checkPath
 from skymodman.constants import INIKey, INISection, UI_Pref
 
+
+# SKYPATH=0
+# MODPATH=1
+# VFSPATH=2
 
 @withlogger
 class PreferencesDialog(QDialog, Ui_Preferences):
@@ -31,6 +36,7 @@ class PreferencesDialog(QDialog, Ui_Preferences):
         self._restore_pos = ui_prefs[UI_Pref.RESTORE_WINPOS]
 
         ## Default Path values ##
+
         self.paths = {
             # pass false for `use_profile_override` to get the default value
             INIKey.SKYRIMDIR: Manager.get_directory(INIKey.SKYRIMDIR, False),
@@ -57,12 +63,38 @@ class PreferencesDialog(QDialog, Ui_Preferences):
         ## connect buttons ##
         self.btn_choosedir_skyrim.clicked.connect(
             partial(self.choose_directory, INIKey.SKYRIMDIR))
+            # partial(self.choose_directory, 0))
 
         self.btn_choosedir_mods.clicked.connect(
             partial(self.choose_directory, INIKey.MODDIR))
+            # partial(self.choose_directory, 1))
 
         self.btn_choosedir_vfs.clicked.connect(
             partial(self.choose_directory, INIKey.VFSMOUNT))
+            # partial(self.choose_directory, 2))
+
+        ## experiment with qdatawidgetmapper ##
+        ## XXX: this almost works, though as is it's still a 2-step
+        # process to update the text displayed in the line edits. Also, changing the data in the model doesn't actually seem to update the text like I thought it should...hmm...
+        # self.path_list = [self.paths[INIKey.SKYRIMDIR],
+        #                           self.paths[INIKey.MODDIR],
+        #                           self.paths[INIKey.VFSMOUNT]]
+        #
+        # self.model = QStringListModel()
+        # self.model.setStringList(self.path_list)
+        # # self.model.setStringList([self.paths[INIKey.SKYRIMDIR],
+        # #                           self.paths[INIKey.MODDIR],
+        # #                           self.paths[INIKey.VFSMOUNT]])
+        #
+        # self.mapper = QDataWidgetMapper()
+        # self.mapper.setOrientation(Qt.Vertical)
+        # self.mapper.setModel(self.model)
+        #
+        # self.mapper.addMapping(self.le_dirskyrim, 0)
+        # self.mapper.addMapping(self.le_dirmods, 1)
+        # self.mapper.addMapping(self.le_dirvfs, 2)
+        #
+        # self.mapper.toFirst()
 
 
     def choose_directory(self, folder):
@@ -70,7 +102,7 @@ class PreferencesDialog(QDialog, Ui_Preferences):
         Open the file dialog to allow the user to select a path for
         the given folder.
 
-        :param INIKey folder:
+        :param folder:
         :return:
         """
 
@@ -80,10 +112,13 @@ class PreferencesDialog(QDialog, Ui_Preferences):
         chosen = QFileDialog.getExistingDirectory(self,
                                                   "Select directory",
                                                   self.paths[folder] or "")
+                                                  # self.path_list[folder] or "")
 
         if checkPath(chosen):
             self.paths[folder] = chosen
             # TODO: associate the box with the ``paths`` dict as a backing store so that this happens automatically
             self.path_boxes[folder].setText(chosen)
+            # self.path_list[folder] = chosen
+            # self.model.setStringList(self.path_list)
 
 
