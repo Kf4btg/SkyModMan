@@ -2,14 +2,12 @@
 
 # Form implementation generated from reading ui file 'skymodman/interface/designer/ui/manager_window.ui'
 #
-# Created by: PyQt5 UI code generator 5.5.1
+# Created by: PyQt5 UI code generator 5.6
 #
 # WARNING! All changes made in this file will be lost!
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-
-# noinspection PyTypeChecker,PyArgumentList
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
@@ -28,6 +26,7 @@ class Ui_MainWindow(object):
         self.installed_mods_tab.setSizePolicy(sizePolicy)
         self.installed_mods_tab.setObjectName("installed_mods_tab")
         self.installed_mods_layout = QtWidgets.QGridLayout(self.installed_mods_tab)
+        self.installed_mods_layout.setContentsMargins(0, 0, 0, 0)
         self.installed_mods_layout.setObjectName("installed_mods_layout")
         self.profile_group = QtWidgets.QGroupBox(self.installed_mods_tab)
         self.profile_group.setFlat(True)
@@ -68,6 +67,7 @@ class Ui_MainWindow(object):
         self.filetree_tab = QtWidgets.QWidget()
         self.filetree_tab.setObjectName("filetree_tab")
         self.gridLayout_6 = QtWidgets.QGridLayout(self.filetree_tab)
+        self.gridLayout_6.setContentsMargins(0, 0, 0, 0)
         self.gridLayout_6.setObjectName("gridLayout_6")
         self._filetreesplitter = QtWidgets.QSplitter(self.filetree_tab)
         self._filetreesplitter.setOrientation(QtCore.Qt.Horizontal)
@@ -276,7 +276,7 @@ class Ui_MainWindow(object):
         self.action_uninstall_mod.setIcon(icon)
         self.action_uninstall_mod.setObjectName("action_uninstall_mod")
         self.action_preferences = QtWidgets.QAction(MainWindow)
-        icon = QtGui.QIcon.fromTheme("preferences-system")
+        icon = QtGui.QIcon.fromTheme("settings")
         self.action_preferences.setIcon(icon)
         self.action_preferences.setAutoRepeat(False)
         self.action_preferences.setObjectName("action_preferences")
@@ -332,6 +332,8 @@ class Ui_MainWindow(object):
         self.file_toolBar.addAction(self.action_revert_changes)
         self.file_toolBar.addAction(self.action_undo)
         self.file_toolBar.addAction(self.action_redo)
+        self.file_toolBar.addSeparator()
+        self.file_toolBar.addAction(self.action_preferences)
         self.profile_label.setBuddy(self.profile_selector)
 
         self.retranslateUi(MainWindow)

@@ -451,6 +451,8 @@
    <addaction name="action_revert_changes"/>
    <addaction name="action_undo"/>
    <addaction name="action_redo"/>
+   <addaction name="separator"/>
+   <addaction name="action_preferences"/>
   </widget>
   <widget class="QStatusBar" name="status_bar"/>
   <action name="action_install_mod">
@@ -763,7 +765,7 @@
   </action>
   <action name="action_preferences">
    <property name="icon">
-    <iconset theme="preferences-system">
+    <iconset theme="settings">
      <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
@@ -807,7 +809,8 @@
   </action>
   <action name="action_manual_install">
    <property name="icon">
-    <iconset theme="format-justify-left"/>
+    <iconset theme="format-justify-left">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
     <string>Ma&amp;nual Install...</string>
