@@ -9,6 +9,13 @@ from skymodman.utils import withlogger
 
 @withlogger
 class NewProfileDialog(QDialog,  Ui_NewProfileDialog):
+    """
+    Dialog window allowing the user to create a new profile. They
+    have the option of using default starting values or copying
+    the settings from an existing profile.
+
+    New profile names must be unique, ignoring case.
+    """
 
 
     def __init__(self, *, combobox_model, **kwargs):
@@ -24,8 +31,9 @@ class NewProfileDialog(QDialog,  Ui_NewProfileDialog):
 
         self.comboBox.setModel(combobox_model)
 
-        # according to timeit, checking if a word is in a list is faster than checking against
-        # a RegExp--even a compiled RE, and even if you pre-process the word to check each time
+        # according to timeit, checking if a word is in a list is
+        # faster than checking against a RegExp--even a compiled RE,
+        # and even if you pre-process the word to check each time
         # (e.g.: word.lower() in wordlist)
         self.name_list = [p.name.lower() for p in combobox_model.profiles]
 
@@ -44,24 +52,29 @@ class NewProfileDialog(QDialog,  Ui_NewProfileDialog):
         self.tt_invalid = "Profile names must be unique"
 
 
-    def on_lineEdit_textChanged(self, text:str):
+    def on_lineEdit_textChanged(self, text):
         """
-        This slot handles giving feedback to the user about the validity of their chosen profile name.
-        First, it makes sure that there is actually text in the lineedit. If not, the "OK" button
-        stays or becomes disabled.
-        If text has been entered, it is checked against the list of pre-existing profile names.
-        If there is a match, the text will become red and the OK button disabled to indicate
-        that only unique profile names will be accepted.
+        This slot handles giving feedback to the user about the
+        validity of their chosen profile name. First, it makes sure
+        that there is actually text in the lineedit. If not, the "OK"
+        button stays or becomes disabled.
+        If text has been entered, it is checked against the list of
+        pre-existing profile names. If there is a match, the text will
+        become red and the OK button disabled to indicate that only
+        unique profile names will be accepted.
 
-        We don't worry about spaces or invalid characters here because the user is prevented from typing
-        those into the box by the Regular Expression validator attached to the lineedit.
+        We don't worry about spaces or invalid characters here because
+        the user is prevented from typing those into the box by the
+        Regular Expression validator attached to the lineedit.
 
-        There are a lot of conditional checks in this method because we want to be sure to only
-        apply style/button-state when there's an actual change in the valid-state of the text.
-        This is important not only to maintain consistency in the interface, but also to minimize
-        the flicker that sometimes occurs when changing styles.
+        There are a lot of conditional checks in this method because
+        we want to be sure to only apply style/button-state when
+        there's an actual change in the valid-state of the text. This
+        is important not only to maintain consistency in the interface,
+        but also to minimize the flicker that sometimes occurs when
+        changing styles.
 
-        :param text: the text entered into the line edit
+        :param str text: the text entered into the line edit
         :return:
         """
         if text:
