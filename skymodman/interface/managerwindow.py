@@ -23,6 +23,7 @@ from skymodman.managers import modmanager as Manager
 from skymodman.constants import (Tab as TAB,
                                  INIKey,
                                  INISection,
+                                 UI_Pref as P,
                                  qModels as M,
                                  qFilters as F,
                                  Column)
@@ -32,7 +33,7 @@ from skymodman.interface.models import (
     ModFileTreeModel,
     ActiveModsListFilter,
     FileViewerTreeFilter)
-from skymodman.interface.dialogs import message, NewProfileDialog
+from skymodman.interface.dialogs import message, NewProfileDialog, PreferencesDialog
 from skymodman.utils import withlogger, Notifier
 from skymodman.utils.fsutils import checkPath, join_path
 from skymodman.interface.install_helpers import InstallerUI
@@ -128,18 +129,18 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.windowInitialized.emit()
 
         # default values for global preferences
-        self.preferences = {
-            "restore_window_size": True,
-            "restore_window_pos": True,
-            "load_last_profile": True
-        }
+        self.preferences = {} # type: dict[P, bool]
+            # P.RESTORE_WINSIZE: True,
+            # P.RESTORE_WINPOS: True,
+            # P.LOAD_LAST_PROFILE: True
+        # }
 
         # read in prefs and other settings
         self.read_settings()
 
         # if "load_last_profile" is true, then the last profile will
         # be...um...loaded.
-        if self.preferences["load_last_profile"]:
+        if self.preferences[P.LOAD_LAST_PROFILE]:
             self.load_profile_by_name(
                 Manager.get_config_value(INIKey.LASTPROFILE, INISection.GENERAL)
                 # Manager.conf.lastprofile
@@ -162,16 +163,21 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         settings.beginGroup("ManagerWindow")
 
-        # load boolean prefs
-        self.preferences["restore_window_size"] = settings.value(
-            "restore_window_size", True)
-        self.preferences["restore_window_pos"] = settings.value(
-            "restore_window_pos", True)
-        self.preferences["load_last_profile"] = settings.value(
-            "load_last_profile", True)
+        # load boolean prefs;
+        # specify the type as 'bool' or it may be loaded as a string
+        self.preferences = {
+            P.RESTORE_WINSIZE: settings.value(
+                P.RESTORE_WINSIZE.value, True, bool),
+
+            P.RESTORE_WINPOS: settings.value(
+                P.RESTORE_WINPOS.value, True, bool),
+
+            P.LOAD_LAST_PROFILE: settings.value(
+                P.LOAD_LAST_PROFILE.value, True, bool)
+        }
 
         s_size = settings.value("size")
-        if self.preferences["restore_window_size"] and s_size is not None:
+        if self.preferences[P.RESTORE_WINSIZE] and s_size is not None:
             self.resize(s_size)
             # toSize() is not necessary as pyQt does the conversion to
             # QSize automagically.
@@ -181,7 +187,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.resize(QGuiApplication.primaryScreen().availableSize() * 5 / 7)
 
         s_pos = settings.value("pos")
-        if self.preferences["restore_window_pos"] and s_pos is not None:
+        if self.preferences[P.RESTORE_WINPOS] and s_pos is not None:
             self.move(s_pos)
 
 
@@ -190,9 +196,14 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         settings.beginGroup("ManagerWindow")
 
-        settings.setValue("restore_window_size", self.preferences["restore_window_size"])
-        settings.setValue("restore_window_pos", self.preferences["restore_window_pos"])
-        settings.setValue("load_last_profile", self.preferences["load_last_profile"])
+        settings.setValue(P.RESTORE_WINSIZE.value,
+                          self.preferences[P.RESTORE_WINSIZE])
+
+        settings.setValue(P.RESTORE_WINPOS.value,
+                          self.preferences[P.RESTORE_WINPOS])
+
+        settings.setValue(P.LOAD_LAST_PROFILE.value,
+                          self.preferences[P.LOAD_LAST_PROFILE])
 
         settings.setValue("size", self.size())
         settings.setValue("pos", self.pos())
@@ -1389,8 +1400,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         Show a dialog allowing the user to change some application-wide preferences
         """
+
+        pdialog = PreferencesDialog(self.preferences)
+
+        pdialog.exec_()
+
         # todo
-        message(text="Preferences?")
+        # message(text="Preferences?")
 
     @pyqtSlot()
     def choose_mod_folder(self):
