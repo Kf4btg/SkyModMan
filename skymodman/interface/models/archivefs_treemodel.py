@@ -1,13 +1,13 @@
 from functools import lru_cache, partial
 
-from PyQt5 import QtGui, QtWidgets
+from PyQt5 import QtWidgets
 from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData
 
-from skymodman.constants import OverwriteMode
 from skymodman import exceptions
-from skymodman.utils.archivefs import ArchiveFS, PureCIPath, CIPath
+from skymodman.constants import OverwriteMode
+from skymodman.interface.dialogs.file_exists_dialog import FileExistsDialog
 from skymodman.utils import archivefs, icons, withlogger
-from skymodman.interface.widgets.file_exists_dialog import FileExistsDialog
+from skymodman.utils.archivefs import ArchiveFS, PureCIPath, CIPath
 
 
 class UndoCmd(QtWidgets.QUndoCommand):

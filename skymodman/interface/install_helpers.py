@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import quamash
 
 from skymodman.managers import modmanager as Manager
-from skymodman.interface.widgets import message, ManualInstallDialog
+from skymodman.interface.dialogs import message, ManualInstallDialog
 from skymodman.utils import withlogger
 
 @withlogger
@@ -107,7 +107,7 @@ class InstallerUI:
         (and only those files) will be extracted. After the install, the folder and its contents
         will be deleted automatically.
         """
-        from skymodman.interface.widgets import FomodInstaller
+        from skymodman.interface.dialogs import FomodInstaller
 
         # split the installer into a separate thread.
         with quamash.QThreadExecutor(1) as ex:

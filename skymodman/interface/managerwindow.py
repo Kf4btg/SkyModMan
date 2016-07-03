@@ -32,7 +32,7 @@ from skymodman.interface.models import (
     ModFileTreeModel,
     ActiveModsListFilter,
     FileViewerTreeFilter)
-from skymodman.interface.widgets import message, NewProfileDialog
+from skymodman.interface.dialogs import message, NewProfileDialog
 from skymodman.utils import withlogger, Notifier
 from skymodman.utils.fsutils import checkPath, join_path
 from skymodman.interface.install_helpers import InstallerUI
