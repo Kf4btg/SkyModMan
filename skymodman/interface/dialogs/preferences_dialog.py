@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import QDialog, QFileDialog, QDataWidgetMapper
 # from PyQt5.QtCore import QStringListModel, Qt
 
 from skymodman.managers import modmanager as Manager
+from skymodman.interface import app_settings
 from skymodman.interface.designer.uic.preferences_dialog_ui import Ui_Preferences_Dialog
 from skymodman.utils import withlogger
 from skymodman.utils.fsutils import checkPath
@@ -21,19 +22,15 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
     for the application.
     """
 
-    def __init__(self, ui_prefs, *args, **kwargs):
-        """
-
-        :param skymodman.interface.app_settings.AppSettings ui_prefs: boolean preferences specific to the graphical manager (passed from mainwindow)
-        """
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.setupUi(self)
 
         ## Extract UI preferences ##
-        self._loadlast = ui_prefs[UI_Pref.LOAD_LAST_PROFILE]
-        self._restore_size = ui_prefs[UI_Pref.RESTORE_WINSIZE]
-        self._restore_pos = ui_prefs[UI_Pref.RESTORE_WINPOS]
+        # self._loadlast     = app_settings.Get(UI_Pref.LOAD_LAST_PROFILE)
+        # self._restore_size = app_settings.Get(UI_Pref.RESTORE_WINSIZE)
+        # self._restore_pos  = app_settings.Get(UI_Pref.RESTORE_WINPOS)
 
         ## Default Path values ##
 
@@ -52,9 +49,14 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         }
 
         ## Set UI to reflect current preferences ##
-        self.cbox_loadlastprofile.setChecked(self._loadlast)
-        self.cbox_restore_size.setChecked(self._restore_size)
-        self.cbox_restore_pos.setChecked(self._restore_pos)
+        self.cbox_loadlastprofile.setChecked(
+            app_settings.Get(UI_Pref.LOAD_LAST_PROFILE))
+
+        self.cbox_restore_size.setChecked(
+            app_settings.Get(UI_Pref.RESTORE_WINSIZE))
+
+        self.cbox_restore_pos.setChecked(
+            app_settings.Get(UI_Pref.RESTORE_WINPOS))
 
         self.le_dirskyrim.setText(self.paths[INIKey.SKYRIMDIR])
         self.le_dirmods.setText(self.paths[INIKey.MODDIR])

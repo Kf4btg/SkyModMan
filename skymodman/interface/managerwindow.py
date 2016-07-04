@@ -7,7 +7,7 @@ from PyQt5.QtCore import (Qt,
                           QModelIndex,
                           # QDir,
                           QPropertyAnimation,
-                          QSettings,
+                          # QSettings,
                           # QStandardPaths,
                           )
 from PyQt5.QtGui import QGuiApplication, QKeySequence #, QFontDatabase
@@ -37,7 +37,7 @@ from skymodman.interface.dialogs import message, NewProfileDialog, PreferencesDi
 from skymodman.utils import withlogger, Notifier
 from skymodman.utils.fsutils import checkPath, join_path
 from skymodman.interface.install_helpers import InstallerUI
-from skymodman.interface.app_settings import AppSettings
+from skymodman.interface import app_settings
 
 from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow
 
@@ -137,11 +137,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # }
 
         # create instance to handle QSettings
-        self.appsettings = AppSettings()
+        # self.appsettings = AppSettings()
         # define our personal settings
         self.init_settings()
         # read in preferences and stored states
-        self.appsettings.read()
+        app_settings.read()
 
 
         # read in prefs and other settings
@@ -150,7 +150,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # if "load_last_profile" is true, then the last profile will
         # be...um...loaded.
         # if self.preferences[P.LOAD_LAST_PROFILE]:
-        if self.appsettings[P.LOAD_LAST_PROFILE]:
+        if app_settings.Get(P.LOAD_LAST_PROFILE):
             self.load_profile_by_name(
                 Manager.get_config_value(INIKey.LASTPROFILE, INISection.GENERAL)
                 # Manager.conf.lastprofile
@@ -174,9 +174,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
 
         ## define the boolean/toggle preferences ##
-        self.appsettings.add(P.RESTORE_WINSIZE, True)
-        self.appsettings.add(P.RESTORE_WINPOS, True)
-        self.appsettings.add(P.LOAD_LAST_PROFILE, True)
+        app_settings.add(P.RESTORE_WINSIZE, True)
+        app_settings.add(P.RESTORE_WINPOS, True)
+        app_settings.add(P.LOAD_LAST_PROFILE, True)
 
         ## setup saved-state prefs ##
 
@@ -185,16 +185,16 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         def _resize(size):
             # noinspection PyArgumentList
             self.resize(size
-                        if size and self.appsettings[P.RESTORE_WINSIZE]
+                        if size and app_settings.Get(P.RESTORE_WINSIZE)
                         else QGuiApplication.primaryScreen().availableSize() * 5 / 7)
 
         def _move(pos):
-            if pos and self.appsettings[P.RESTORE_WINPOS]:
+            if pos and app_settings.Get(P.RESTORE_WINPOS):
                 self.move(pos)
 
         # add the properties w/ callbacks
-        self.appsettings.add("size", self.size, on_read=_resize)
-        self.appsettings.add("pos", self.pos, on_read=_move)
+        app_settings.add("size", self.size, on_read=_resize)
+        app_settings.add("pos", self.pos, on_read=_move)
 
 
     # def read_settings(self):
@@ -1441,7 +1441,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
 
         # pdialog = PreferencesDialog(self.preferences)
-        pdialog = PreferencesDialog(self.appsettings)
+        pdialog = PreferencesDialog()
 
         pdialog.exec_()
 
@@ -1584,7 +1584,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             event.ignore()
         else:
             # self.write_settings()
-            self.appsettings.write()
+            app_settings.write()
             event.accept()
 
 
