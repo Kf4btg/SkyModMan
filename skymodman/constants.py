@@ -74,7 +74,7 @@ class INIKey(str, Enum):
     ## profiles only
     ACTIVEONLY = "activeonly"
 
-class UI_Pref(Enum):
+class UI_Pref:
     RESTORE_WINSIZE = "restore_window_size"
     RESTORE_WINPOS = "restore_window_pos"
     LOAD_LAST_PROFILE = "load_last_profile"

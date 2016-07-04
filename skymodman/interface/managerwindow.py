@@ -37,6 +37,7 @@ from skymodman.interface.dialogs import message, NewProfileDialog, PreferencesDi
 from skymodman.utils import withlogger, Notifier
 from skymodman.utils.fsutils import checkPath, join_path
 from skymodman.interface.install_helpers import InstallerUI
+from skymodman.interface.app_settings import AppSettings
 
 from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow
 
@@ -129,18 +130,27 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.windowInitialized.emit()
 
         # default values for global preferences
-        self.preferences = {} # type: dict[P, bool]
+        # self.preferences = {} # type: dict[P, bool]
             # P.RESTORE_WINSIZE: True,
             # P.RESTORE_WINPOS: True,
             # P.LOAD_LAST_PROFILE: True
         # }
 
+        # create instance to handle QSettings
+        self.appsettings = AppSettings()
+        # define our personal settings
+        self.init_settings()
+        # read in preferences and stored states
+        self.appsettings.read()
+
+
         # read in prefs and other settings
-        self.read_settings()
+        # self.read_settings()
 
         # if "load_last_profile" is true, then the last profile will
         # be...um...loaded.
-        if self.preferences[P.LOAD_LAST_PROFILE]:
+        # if self.preferences[P.LOAD_LAST_PROFILE]:
+        if self.appsettings[P.LOAD_LAST_PROFILE]:
             self.load_profile_by_name(
                 Manager.get_config_value(INIKey.LASTPROFILE, INISection.GENERAL)
                 # Manager.conf.lastprofile
@@ -158,56 +168,85 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     ## Application-wide settings management
     ##=============================================
 
-    def read_settings(self):
-        settings = QSettings("skymodman", "skymodman")
+    def init_settings(self):
+        """
+        Add the necessary properties and callbacks to the AppSettings instance
+        """
 
-        settings.beginGroup("ManagerWindow")
+        ## define the boolean/toggle preferences ##
+        self.appsettings.add(P.RESTORE_WINSIZE, True)
+        self.appsettings.add(P.RESTORE_WINPOS, True)
+        self.appsettings.add(P.LOAD_LAST_PROFILE, True)
 
-        # load boolean prefs;
-        # specify the type as 'bool' or it may be loaded as a string
-        self.preferences = {
-            P.RESTORE_WINSIZE: settings.value(
-                P.RESTORE_WINSIZE.value, True, bool),
+        ## setup saved-state prefs ##
 
-            P.RESTORE_WINPOS: settings.value(
-                P.RESTORE_WINPOS.value, True, bool),
+        # define some functions to pass as on_read callbacks
 
-            P.LOAD_LAST_PROFILE: settings.value(
-                P.LOAD_LAST_PROFILE.value, True, bool)
-        }
-
-        s_size = settings.value("size")
-        if self.preferences[P.RESTORE_WINSIZE] and s_size is not None:
-            self.resize(s_size)
-            # toSize() is not necessary as pyQt does the conversion to
-            # QSize automagically.
-            # self.resize(s_size.toSize())
-        else:
+        def _resize(size):
             # noinspection PyArgumentList
-            self.resize(QGuiApplication.primaryScreen().availableSize() * 5 / 7)
+            self.resize(size
+                        if size and self.appsettings[P.RESTORE_WINSIZE]
+                        else QGuiApplication.primaryScreen().availableSize() * 5 / 7)
 
-        s_pos = settings.value("pos")
-        if self.preferences[P.RESTORE_WINPOS] and s_pos is not None:
-            self.move(s_pos)
+        def _move(pos):
+            if pos and self.appsettings[P.RESTORE_WINPOS]:
+                self.move(pos)
+
+        # add the properties w/ callbacks
+        self.appsettings.add("size", self.size, on_read=_resize)
+        self.appsettings.add("pos", self.pos, on_read=_move)
 
 
-    def write_settings(self):
-        settings = QSettings("skymodman", "skymodman")
-
-        settings.beginGroup("ManagerWindow")
-
-        settings.setValue(P.RESTORE_WINSIZE.value,
-                          self.preferences[P.RESTORE_WINSIZE])
-
-        settings.setValue(P.RESTORE_WINPOS.value,
-                          self.preferences[P.RESTORE_WINPOS])
-
-        settings.setValue(P.LOAD_LAST_PROFILE.value,
-                          self.preferences[P.LOAD_LAST_PROFILE])
-
-        settings.setValue("size", self.size())
-        settings.setValue("pos", self.pos())
-        settings.endGroup()
+    # def read_settings(self):
+    #     settings = QSettings("skymodman", "skymodman")
+    #
+    #     settings.beginGroup("ManagerWindow")
+    #
+    #     # load boolean prefs;
+    #     # specify the type as 'bool' or it may be loaded as a string
+    #     self.preferences = {
+    #         P.RESTORE_WINSIZE: settings.value(
+    #             P.RESTORE_WINSIZE.value, True, bool),
+    #
+    #         P.RESTORE_WINPOS: settings.value(
+    #             P.RESTORE_WINPOS.value, True, bool),
+    #
+    #         P.LOAD_LAST_PROFILE: settings.value(
+    #             P.LOAD_LAST_PROFILE.value, True, bool)
+    #     }
+    #
+    #     s_size = settings.value("size")
+    #     if self.preferences[P.RESTORE_WINSIZE] and s_size is not None:
+    #         self.resize(s_size)
+    #         # toSize() is not necessary as pyQt does the conversion to
+    #         # QSize automagically.
+    #         # self.resize(s_size.toSize())
+    #     else:
+    #         # noinspection PyArgumentList
+    #         self.resize(QGuiApplication.primaryScreen().availableSize() * 5 / 7)
+    #
+    #     s_pos = settings.value("pos")
+    #     if self.preferences[P.RESTORE_WINPOS] and s_pos is not None:
+    #         self.move(s_pos)
+    #
+    #
+    # def write_settings(self):
+    #     settings = QSettings("skymodman", "skymodman")
+    #
+    #     settings.beginGroup("ManagerWindow")
+    #
+    #     settings.setValue(P.RESTORE_WINSIZE.value,
+    #                       self.preferences[P.RESTORE_WINSIZE])
+    #
+    #     settings.setValue(P.RESTORE_WINPOS.value,
+    #                       self.preferences[P.RESTORE_WINPOS])
+    #
+    #     settings.setValue(P.LOAD_LAST_PROFILE.value,
+    #                       self.preferences[P.LOAD_LAST_PROFILE])
+    #
+    #     settings.setValue("size", self.size())
+    #     settings.setValue("pos", self.pos())
+    #     settings.endGroup()
 
     ##===============================================
     ## Setup UI Functionality (called once on first load)
@@ -1401,7 +1440,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         Show a dialog allowing the user to change some application-wide preferences
         """
 
-        pdialog = PreferencesDialog(self.preferences)
+        # pdialog = PreferencesDialog(self.preferences)
+        pdialog = PreferencesDialog(self.appsettings)
 
         pdialog.exec_()
 
@@ -1543,7 +1583,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         if self.table_prompt_if_unsaved() == QMessageBox.Cancel:
             event.ignore()
         else:
-            self.write_settings()
+            # self.write_settings()
+            self.appsettings.write()
             event.accept()
 
 

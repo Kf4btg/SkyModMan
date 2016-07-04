@@ -24,7 +24,7 @@ class PreferencesDialog(QDialog, Ui_Preferences):
     def __init__(self, ui_prefs, *args, **kwargs):
         """
 
-        :param dict[UI_Pref, bool] ui_prefs: boolean preferences specific to the graphical manager (passed from mainwindow)
+        :param skymodman.interface.app_settings.AppSettings ui_prefs: boolean preferences specific to the graphical manager (passed from mainwindow)
         """
         super().__init__(*args, **kwargs)
 
