@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import QDialog, QFileDialog, QDataWidgetMapper
 # from PyQt5.QtCore import QStringListModel, Qt
 
 from skymodman.managers import modmanager as Manager
-from skymodman.interface.designer.uic.preferences_ui import Ui_Preferences
+from skymodman.interface.designer.uic.preferences_dialog_ui import Ui_Preferences_Dialog
 from skymodman.utils import withlogger
 from skymodman.utils.fsutils import checkPath
 from skymodman.constants import INIKey, INISection, UI_Pref
@@ -15,7 +15,7 @@ from skymodman.constants import INIKey, INISection, UI_Pref
 # VFSPATH=2
 
 @withlogger
-class PreferencesDialog(QDialog, Ui_Preferences):
+class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
     """
     Display a modal window allowing the user to modify general settings
     for the application.
@@ -116,7 +116,6 @@ class PreferencesDialog(QDialog, Ui_Preferences):
 
         if checkPath(chosen):
             self.paths[folder] = chosen
-            # TODO: associate the box with the ``paths`` dict as a backing store so that this happens automatically
             self.path_boxes[folder].setText(chosen)
             # self.path_list[folder] = chosen
             # self.model.setStringList(self.path_list)

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'skymodman/interface/designer/ui/preferences.ui'
+# Form implementation generated from reading ui file 'skymodman/interface/designer/ui/preferences_dialog.ui'
 #
 # Created by: PyQt5 UI code generator 5.6
 #
@@ -8,13 +8,13 @@
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-class Ui_Preferences(object):
-    def setupUi(self, Preferences):
-        Preferences.setObjectName("Preferences")
-        Preferences.resize(600, 400)
-        self.gridLayout = QtWidgets.QGridLayout(Preferences)
+class Ui_Preferences_Dialog(object):
+    def setupUi(self, Preferences_Dialog):
+        Preferences_Dialog.setObjectName("Preferences_Dialog")
+        Preferences_Dialog.resize(600, 400)
+        self.gridLayout = QtWidgets.QGridLayout(Preferences_Dialog)
         self.gridLayout.setObjectName("gridLayout")
-        self.prefs_tabwidget = QtWidgets.QTabWidget(Preferences)
+        self.prefs_tabwidget = QtWidgets.QTabWidget(Preferences_Dialog)
         self.prefs_tabwidget.setObjectName("prefs_tabwidget")
         self.tab_general = QtWidgets.QWidget()
         self.tab_general.setObjectName("tab_general")
@@ -96,39 +96,39 @@ class Ui_Preferences(object):
         self.tab_profiles.setObjectName("tab_profiles")
         self.prefs_tabwidget.addTab(self.tab_profiles, "")
         self.gridLayout.addWidget(self.prefs_tabwidget, 0, 0, 1, 1)
-        self.prefs_btnbox = QtWidgets.QDialogButtonBox(Preferences)
+        self.prefs_btnbox = QtWidgets.QDialogButtonBox(Preferences_Dialog)
         self.prefs_btnbox.setOrientation(QtCore.Qt.Horizontal)
         self.prefs_btnbox.setStandardButtons(QtWidgets.QDialogButtonBox.Apply|QtWidgets.QDialogButtonBox.Cancel|QtWidgets.QDialogButtonBox.Ok)
         self.prefs_btnbox.setObjectName("prefs_btnbox")
         self.gridLayout.addWidget(self.prefs_btnbox, 1, 0, 1, 1)
 
-        self.retranslateUi(Preferences)
+        self.retranslateUi(Preferences_Dialog)
         self.prefs_tabwidget.setCurrentIndex(0)
-        self.prefs_btnbox.accepted.connect(Preferences.accept)
-        self.prefs_btnbox.rejected.connect(Preferences.reject)
-        QtCore.QMetaObject.connectSlotsByName(Preferences)
+        self.prefs_btnbox.accepted.connect(Preferences_Dialog.accept)
+        self.prefs_btnbox.rejected.connect(Preferences_Dialog.reject)
+        QtCore.QMetaObject.connectSlotsByName(Preferences_Dialog)
 
-    def retranslateUi(self, Preferences):
+    def retranslateUi(self, Preferences_Dialog):
         _translate = QtCore.QCoreApplication.translate
-        Preferences.setWindowTitle(_translate("Preferences", "Preferences"))
-        self.gbox_general.setTitle(_translate("Preferences", "General"))
-        self.cbox_loadlastprofile.setText(_translate("Preferences", "Load most recent profile on start"))
-        self.cbox_restore_size.setText(_translate("Preferences", "Remember window size"))
-        self.cbox_restore_pos.setText(_translate("Preferences", "Remember window position"))
-        self.gbox_paths.setTitle(_translate("Preferences", "Default Paths"))
-        self.btn_choosedir_skyrim.setToolTip(_translate("Preferences", "Open file dialog"))
-        self.btn_choosedir_skyrim.setText(_translate("Preferences", "..."))
-        self.lbl_skyrim.setToolTip(_translate("Preferences", "Location of Skyrim installation folder"))
-        self.lbl_skyrim.setText(_translate("Preferences", "Skyrim"))
-        self.btn_choosedir_mods.setToolTip(_translate("Preferences", "Open file dialog"))
-        self.btn_choosedir_mods.setText(_translate("Preferences", "..."))
-        self.lbl_mods.setToolTip(_translate("Preferences", "Directory where installed mods will be stored"))
-        self.lbl_mods.setText(_translate("Preferences", "Mods"))
-        self.lbl_vfs.setToolTip(_translate("Preferences", "Path to empty folder to use as virtual-filesystem mount point"))
-        self.lbl_vfs.setText(_translate("Preferences", "VFS Mount"))
-        self.btn_choosedir_vfs.setToolTip(_translate("Preferences", "Open file dialog"))
-        self.btn_choosedir_vfs.setText(_translate("Preferences", "..."))
-        self.prefs_tabwidget.setTabText(self.prefs_tabwidget.indexOf(self.tab_general), _translate("Preferences", "General"))
-        self.prefs_tabwidget.setTabText(self.prefs_tabwidget.indexOf(self.tab_paths), _translate("Preferences", "Paths"))
-        self.prefs_tabwidget.setTabText(self.prefs_tabwidget.indexOf(self.tab_profiles), _translate("Preferences", "Profiles"))
+        Preferences_Dialog.setWindowTitle(_translate("Preferences_Dialog", "Preferences"))
+        self.gbox_general.setTitle(_translate("Preferences_Dialog", "General"))
+        self.cbox_loadlastprofile.setText(_translate("Preferences_Dialog", "Load most recent profile on start"))
+        self.cbox_restore_size.setText(_translate("Preferences_Dialog", "Remember window size"))
+        self.cbox_restore_pos.setText(_translate("Preferences_Dialog", "Remember window position"))
+        self.gbox_paths.setTitle(_translate("Preferences_Dialog", "Default Paths"))
+        self.btn_choosedir_skyrim.setToolTip(_translate("Preferences_Dialog", "Open file dialog"))
+        self.btn_choosedir_skyrim.setText(_translate("Preferences_Dialog", "..."))
+        self.lbl_skyrim.setToolTip(_translate("Preferences_Dialog", "Location of Skyrim installation folder"))
+        self.lbl_skyrim.setText(_translate("Preferences_Dialog", "Skyrim"))
+        self.btn_choosedir_mods.setToolTip(_translate("Preferences_Dialog", "Open file dialog"))
+        self.btn_choosedir_mods.setText(_translate("Preferences_Dialog", "..."))
+        self.lbl_mods.setToolTip(_translate("Preferences_Dialog", "Directory where installed mods will be stored"))
+        self.lbl_mods.setText(_translate("Preferences_Dialog", "Mods"))
+        self.lbl_vfs.setToolTip(_translate("Preferences_Dialog", "Path to empty folder to use as virtual-filesystem mount point"))
+        self.lbl_vfs.setText(_translate("Preferences_Dialog", "VFS Mount"))
+        self.btn_choosedir_vfs.setToolTip(_translate("Preferences_Dialog", "Open file dialog"))
+        self.btn_choosedir_vfs.setText(_translate("Preferences_Dialog", "..."))
+        self.prefs_tabwidget.setTabText(self.prefs_tabwidget.indexOf(self.tab_general), _translate("Preferences_Dialog", "General"))
+        self.prefs_tabwidget.setTabText(self.prefs_tabwidget.indexOf(self.tab_paths), _translate("Preferences_Dialog", "Paths"))
+        self.prefs_tabwidget.setTabText(self.prefs_tabwidget.indexOf(self.tab_profiles), _translate("Preferences_Dialog", "Profiles"))
 
