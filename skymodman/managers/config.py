@@ -370,7 +370,8 @@ class ConfigManager:
 
         # validate new value
         if section == _SECTION_DIRS and key in [_KEY_MODDIR, _KEY_VFSMNT, _KEY_SKYDIR]:
-            p=Path(value)
+            # if value is e.g. an empty string, clear the setting
+            p=Path(value) if value else None
 
         elif section == _SECTION_GENERAL and key == _KEY_LASTPRO:
         # elif key == _KEY_LASTPRO:
@@ -378,25 +379,26 @@ class ConfigManager:
         else:
             raise exceptions.InvalidConfigKeyError(key)
 
-        if checkPath(str(p)):
+        # leave verification to someone else...
+        # if checkPath(str(p)):
 
-            for case in [key.__eq__]:
-                if case(_KEY_MODDIR):
-                    self.paths.dir_mods = p
-                elif case(_KEY_VFSMNT):
-                    self.paths.dir_vfs = p
-                elif case(_KEY_SKYDIR):
-                    self.paths.dir_skyrim = p
-                elif case(_KEY_LASTPRO):
-                    self._lastprofile = value
+        for case in [key.__eq__]:
+            if case(_KEY_MODDIR):
+                self.paths.dir_mods = p
+            elif case(_KEY_VFSMNT):
+                self.paths.dir_vfs = p
+            elif case(_KEY_SKYDIR):
+                self.paths.dir_skyrim = p
+            elif case(_KEY_LASTPRO):
+                self._lastprofile = value
 
-            else: # should always run since we didn't use 'break' above
-                # now insert new value into saved config
-                config[section][key] = value
-                self.currentValues[section][key] = value
+        else: # should always run since we didn't use 'break' above
+            # now insert new value into saved config
+            config[section][key] = value
+            self.currentValues[section][key] = value
 
-        else:
-            raise FileNotFoundError(filename=value)
+        # else:
+        #     raise FileNotFoundError(filename=value)
 
 
         # write the new data to disk

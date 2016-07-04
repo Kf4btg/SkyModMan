@@ -29,10 +29,11 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
         ## Default Path values ##
         self.paths = {
-            # pass false for `use_profile_override` to get the default value
-            D.SKYRIM: Manager.get_directory(D.SKYRIM, False),
-            D.MODS: Manager.get_directory(D.MODS, False),
-            D.VFS: Manager.get_directory(D.VFS, False)
+            # pass false for `use_profile_override` to get the default value;
+            # make sure that we have an empty string if get_directory return None
+            D.SKYRIM: Manager.get_directory(D.SKYRIM, False) or "",
+            D.MODS: Manager.get_directory(D.MODS, False) or "",
+            D.VFS: Manager.get_directory(D.VFS, False) or ""
         }
 
         ## associate checkboxes w/ preference names
@@ -48,10 +49,6 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             D.MODS: self.le_dirmods,
             D.VFS: self.le_dirvfs
         }
-
-        ## track modifications
-        # self.changed_prefs = [] # type: list[str]
-        self.changed_paths = set()
 
         ## Set UI to reflect current preferences ##
 
@@ -90,15 +87,23 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
     @pyqtSlot()
     def apply_changes(self):
+        """
+        Save the user changes to the appropriate config files.
+        """
+        # TODO: disable the OK/Apply buttons when there are no changes to apply.
+        # TODO: allow resetting the paths to default
 
         for pref, cbox in self.checkboxes.items():
             app_settings.Set(pref, cbox.isChecked())
 
-        for path in self.changed_paths:
-        # for ddir, path in self.paths.items():
-            Manager.set_directory(path, self.paths[path], False)
+        # check if any of the paths have changed and update accordingly
+        for label, path in self.paths.items():
+            newpath = self.path_boxes[label].text()
 
-
+            # allow changing if the path is valid or cleared
+            if path != newpath and (newpath == "" or checkPath(newpath)):
+                Manager.set_directory(label, newpath, False)
+                self.paths[label] = newpath
 
     @pyqtSlot(str)
     def choose_directory(self, folder):
@@ -119,7 +124,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                                                   # self.path_list[folder] or "")
 
         if checkPath(chosen):
-            self.changed_paths.add(folder)
-            self.paths[folder] = chosen
+            # self.changed_paths.add(folder)
+            # self.paths[folder] = chosen
             self.path_boxes[folder].setText(chosen)
 
