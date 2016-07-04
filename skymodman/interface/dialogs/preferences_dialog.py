@@ -1,14 +1,14 @@
 from functools import partial
 
-from PyQt5.QtWidgets import QDialog, QFileDialog, QDataWidgetMapper
-# from PyQt5.QtCore import QStringListModel, Qt
+from PyQt5.QtWidgets import QDialog, QFileDialog, QDialogButtonBox
+from PyQt5.QtCore import pyqtSlot #QStringListModel, Qt
 
 from skymodman.managers import modmanager as Manager
 from skymodman.interface import app_settings
 from skymodman.interface.designer.uic.preferences_dialog_ui import Ui_Preferences_Dialog
 from skymodman.utils import withlogger
 from skymodman.utils.fsutils import checkPath
-from skymodman.constants import INIKey, INISection, UI_Pref
+from skymodman.constants import INIKey, INISection, UI_Pref as P, DataDir as D
 
 
 # SKYPATH=0
@@ -27,78 +27,80 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
         self.setupUi(self)
 
-        ## Extract UI preferences ##
-        # self._loadlast     = app_settings.Get(UI_Pref.LOAD_LAST_PROFILE)
-        # self._restore_size = app_settings.Get(UI_Pref.RESTORE_WINSIZE)
-        # self._restore_pos  = app_settings.Get(UI_Pref.RESTORE_WINPOS)
-
         ## Default Path values ##
-
         self.paths = {
             # pass false for `use_profile_override` to get the default value
-            INIKey.SKYRIMDIR: Manager.get_directory(INIKey.SKYRIMDIR, False),
-            INIKey.MODDIR: Manager.get_directory(INIKey.MODDIR, False),
-            INIKey.VFSMOUNT: Manager.get_directory(INIKey.VFSMOUNT, False)
+            D.SKYRIM: Manager.get_directory(D.SKYRIM, False),
+            D.MODS: Manager.get_directory(D.MODS, False),
+            D.VFS: Manager.get_directory(D.VFS, False)
+        }
+
+        ## associate checkboxes w/ preference names
+        self.checkboxes = {
+            P.LOAD_LAST_PROFILE: self.cbox_loadlastprofile,
+            P.RESTORE_WINSIZE: self.cbox_restore_size,
+            P.RESTORE_WINPOS: self.cbox_restore_pos
         }
 
         ## associate text boxes with directories ##
         self.path_boxes = {
-            INIKey.SKYRIMDIR: self.le_dirskyrim,
-            INIKey.MODDIR: self.le_dirmods,
-            INIKey.VFSMOUNT: self.le_dirvfs
+            D.SKYRIM: self.le_dirskyrim,
+            D.MODS: self.le_dirmods,
+            D.VFS: self.le_dirvfs
         }
 
+        ## track modifications
+        # self.changed_prefs = [] # type: list[str]
+        self.changed_paths = set()
+
         ## Set UI to reflect current preferences ##
+
+        #-- checkboxes
         self.cbox_loadlastprofile.setChecked(
-            app_settings.Get(UI_Pref.LOAD_LAST_PROFILE))
+            app_settings.Get(P.LOAD_LAST_PROFILE))
 
         self.cbox_restore_size.setChecked(
-            app_settings.Get(UI_Pref.RESTORE_WINSIZE))
+            app_settings.Get(P.RESTORE_WINSIZE))
 
         self.cbox_restore_pos.setChecked(
-            app_settings.Get(UI_Pref.RESTORE_WINPOS))
+            app_settings.Get(P.RESTORE_WINPOS))
 
-        self.le_dirskyrim.setText(self.paths[INIKey.SKYRIMDIR])
-        self.le_dirmods.setText(self.paths[INIKey.MODDIR])
-        self.le_dirvfs.setText(self.paths[INIKey.VFSMOUNT])
+        #-- line-edit text displays
+        self.le_dirskyrim.setText(self.paths[D.SKYRIM])
+        self.le_dirmods.setText(self.paths[D.MODS])
+        self.le_dirvfs.setText(self.paths[D.VFS])
+
 
         ## connect buttons ##
+
         self.btn_choosedir_skyrim.clicked.connect(
-            partial(self.choose_directory, INIKey.SKYRIMDIR))
-            # partial(self.choose_directory, 0))
+            partial(self.choose_directory, D.SKYRIM))
 
         self.btn_choosedir_mods.clicked.connect(
-            partial(self.choose_directory, INIKey.MODDIR))
-            # partial(self.choose_directory, 1))
+            partial(self.choose_directory, D.MODS))
 
         self.btn_choosedir_vfs.clicked.connect(
-            partial(self.choose_directory, INIKey.VFSMOUNT))
-            # partial(self.choose_directory, 2))
+            partial(self.choose_directory, D.VFS))
 
-        ## experiment with qdatawidgetmapper ##
-        ## XXX: this almost works, though as is it's still a 2-step
-        # process to update the text displayed in the line edits. Also, changing the data in the model doesn't actually seem to update the text like I thought it should...hmm...
-        # self.path_list = [self.paths[INIKey.SKYRIMDIR],
-        #                           self.paths[INIKey.MODDIR],
-        #                           self.paths[INIKey.VFSMOUNT]]
-        #
-        # self.model = QStringListModel()
-        # self.model.setStringList(self.path_list)
-        # # self.model.setStringList([self.paths[INIKey.SKYRIMDIR],
-        # #                           self.paths[INIKey.MODDIR],
-        # #                           self.paths[INIKey.VFSMOUNT]])
-        #
-        # self.mapper = QDataWidgetMapper()
-        # self.mapper.setOrientation(Qt.Vertical)
-        # self.mapper.setModel(self.model)
-        #
-        # self.mapper.addMapping(self.le_dirskyrim, 0)
-        # self.mapper.addMapping(self.le_dirmods, 1)
-        # self.mapper.addMapping(self.le_dirvfs, 2)
-        #
-        # self.mapper.toFirst()
+        ## apply button ##
+        self.prefs_btnbox.button(QDialogButtonBox.Apply).clicked.connect(self.apply_changes)
+
+        # also apply changes when clicking OK
+        self.accepted.connect(self.apply_changes)
+
+    @pyqtSlot()
+    def apply_changes(self):
+
+        for pref, cbox in self.checkboxes.items():
+            app_settings.Set(pref, cbox.isChecked())
+
+        for path in self.changed_paths:
+        # for ddir, path in self.paths.items():
+            Manager.set_directory(path, self.paths[path], False)
 
 
+
+    @pyqtSlot(str)
     def choose_directory(self, folder):
         """
         Open the file dialog to allow the user to select a path for
@@ -117,9 +119,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                                                   # self.path_list[folder] or "")
 
         if checkPath(chosen):
+            self.changed_paths.add(folder)
             self.paths[folder] = chosen
             self.path_boxes[folder].setText(chosen)
-            # self.path_list[folder] = chosen
-            # self.model.setStringList(self.path_list)
-
 

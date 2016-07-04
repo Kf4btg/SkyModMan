@@ -74,6 +74,11 @@ class INIKey(str, Enum):
     ## profiles only
     ACTIVEONLY = "activeonly"
 
+class DataDir:
+    SKYRIM = "skyrim" # location of base skyrim install
+    MODS = "mods" # location of mod storage
+    VFS = "vfs" # mount point for "virtual" skyrim install
+
 class UI_Pref:
     RESTORE_WINSIZE = "restore_window_size"
     RESTORE_WINPOS = "restore_window_pos"
