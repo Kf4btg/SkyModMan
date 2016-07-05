@@ -53,10 +53,27 @@ class INISection(str, Enum):
     OVERRIDES = "Directory Overrides"
     FILEVIEWER = "File Viewer"
 
+class Strenum(type):
+    """
+    Using this as a metaclass, one can iterate over the public class-level fields
+    of a non-instantiated subclass (ie the type object itself). See INI below for
+    an example
+    """
+    def __iter__(cls):
+        yield from (v for k,v in cls.__dict__.items() if not k.startswith('_'))
+
 class KeyStr:
     __slots__ = ()
 
-    class INI:
+    class INI(metaclass=Strenum):
+        """
+        Thanks to the Strenum metaclass, the public fields in this class
+        can be iterated over without having to instantiate the class,
+        simply by doing something like:
+
+            >>> for f in INI:
+            >>>     print(f)
+        """
         __slots__=()
         ## main INI
         LASTPROFILE = "lastprofile"  # name of last loaded profile
@@ -65,13 +82,13 @@ class KeyStr:
         ## profiles only
         ACTIVEONLY = "activeonly"
 
-    class Dirs:
+    class Dirs(metaclass=Strenum):
         __slots__=()
         SKYRIM = "skyrim"  # location of base skyrim install
         MODS = "mods"  # location of mod storage
         VFS = "vfs"  # mount point for "virtual" skyrim install
 
-    class UI:
+    class UI(metaclass=Strenum):
         __slots__=()
         RESTORE_WINSIZE = "restore_window_size"
         RESTORE_WINPOS = "restore_window_pos"
