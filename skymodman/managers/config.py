@@ -258,12 +258,23 @@ class ConfigManager:
 
         # save in local clone
         # self.currentValues[_SECTION_GENERAL][_KEY_LASTPRO] = \
-        self.lastprofile = config[_SECTION_GENERAL][_KEY_LASTPRO]
+        try:
+            self.lastprofile = config[_SECTION_GENERAL][_KEY_LASTPRO]
+        except KeyError as e:
+            self.LOGGER.error(repr(e))
+            self.LOGGER << "setting last profile to default value"
+            # it should already be the default value
+            # self.lastprofile = self.__DEFAULT_PROFILE
             # self._lastprofile
 
         ## same for the default profile:
         # self.currentValues[_SECTION_GENERAL][_KEY_DEFPRO] =\
-        self.default_profile = config[_SECTION_GENERAL][_KEY_DEFPRO]
+        try:
+            self.default_profile = config[_SECTION_GENERAL][_KEY_DEFPRO]
+        except KeyError as e:
+            self.LOGGER.error(repr(e))
+            self.LOGGER << "setting default profile to default value"
+            # self.default_profile = self.__DEFAULT_PROFILE
 
         ######################################################################
         #  check env for vfs mount
