@@ -53,6 +53,34 @@ class INISection(str, Enum):
     OVERRIDES = "Directory Overrides"
     FILEVIEWER = "File Viewer"
 
+class KeyStr:
+    __slots__ = ()
+
+    class INI:
+        __slots__=()
+        ## main INI
+        LASTPROFILE = "lastprofile"  # name of last loaded profile
+        DEFAULT_PROFILE = "defaultprofile"
+
+        ## profiles only
+        ACTIVEONLY = "activeonly"
+
+    class Dirs:
+        __slots__=()
+        SKYRIM = "skyrim"  # location of base skyrim install
+        MODS = "mods"  # location of mod storage
+        VFS = "vfs"  # mount point for "virtual" skyrim install
+
+    class UI:
+        __slots__=()
+        RESTORE_WINSIZE = "restore_window_size"
+        RESTORE_WINPOS = "restore_window_pos"
+
+        PROFILE_LOAD_POLICY = "load_profile_on_start"
+
+        LOAD_LAST_PROFILE = "load_last_profile"
+        LOAD_DEFAULT_PROFILE = "load_default_profile"
+        LOAD_NO_PROFILE = "load_no_profile"
 
 
 class INIKey(str, Enum):
@@ -82,8 +110,15 @@ class DataDir:
 class UI_Pref:
     RESTORE_WINSIZE = "restore_window_size"
     RESTORE_WINPOS = "restore_window_pos"
-    LOAD_LAST_PROFILE = "load_last_profile"
 
+    PROFILE_LOAD_POLICY = "load_profile_on_start"
+
+    LOAD_LAST_PROFILE = "load_last_profile"
+    LOAD_DEFAULT_PROFILE = "load_default_profile"
+    LOAD_NO_PROFILE = "load_no_profile"
+
+class ProfileLoadPolicy(Enum):
+    last, default, none = range(3)
 
 
 class OverwriteMode(Enum):
