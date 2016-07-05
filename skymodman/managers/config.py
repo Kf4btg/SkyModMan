@@ -10,17 +10,20 @@ from skymodman import exceptions
 from skymodman.utils import withlogger
 from skymodman.utils.fsutils import checkPath
 # from skymodman.managers import modmanager as Manager
-from skymodman.constants import (EnvVars, INIKey, INISection)
+from skymodman.constants import (EnvVars, INISection, KeyStr)
 
 __myname = "skymodman"
 
 # bind these values locally, since we need the actual string more often than not here
 _SECTION_GENERAL = INISection.GENERAL.value
 _SECTION_DIRS = INISection.DIRECTORIES.value
-_KEY_LASTPRO = INIKey.LASTPROFILE.value
-_KEY_MODDIR  = INIKey.MODDIR.value
-_KEY_VFSMNT  = INIKey.VFSMOUNT.value
-_KEY_SKYDIR  = INIKey.SKYRIMDIR.value
+
+# for convenience
+_KEY_LASTPRO = KeyStr.INI.LASTPROFILE
+_KEY_DEFPRO  = KeyStr.INI.DEFAULT_PROFILE
+_KEY_MODDIR  = KeyStr.Dirs.MODS
+_KEY_VFSMNT  = KeyStr.Dirs.VFS
+_KEY_SKYDIR  = KeyStr.Dirs.SKYRIM
 
 class ConfigPaths:
     __slots__=["file_main", "dir_config", "dir_data", "dir_profiles", "dir_mods", "dir_vfs", "dir_skyrim"]
@@ -57,7 +60,9 @@ class ConfigManager:
 
     __DEFAULT_CONFIG={
         _SECTION_GENERAL: {
-            _KEY_LASTPRO: __DEFAULT_PROFILE
+            _KEY_LASTPRO: __DEFAULT_PROFILE,
+            _KEY_DEFPRO: __DEFAULT_PROFILE
+
         },
         _SECTION_DIRS: {
             _KEY_SKYDIR: "",
@@ -70,13 +75,16 @@ class ConfigManager:
         super().__init__()
 
         self.__paths = ConfigPaths()
-        self._lastprofile = None # type: str
+        # self._lastprofile = None # type: str
+        # self._default_profile = None # type: str
 
         # keep a dictionary that is effectively an in-memory version of the main config file
         self.currentValues = deepcopy(ConfigManager.__DEFAULT_CONFIG)
 
         # track errors encountered while loading paths
         self.path_errors=defaultdict(list)
+
+        self._environment = {k:os.getenv(k, "") for k in EnvVars}
 
         self.ensureDefaultSetup()
 
@@ -90,8 +98,8 @@ class ConfigManager:
 
     def __getitem__(self, config_file_or_dir):
         """
-        Use dict-access to get string versions of any of the items from the "paths"
-        of this config instance by property name
+        Use dict-access to get string versions of any of the items from
+        the "paths" of this config instance by property name.
         E.g.: config['dir_mods'] -> '/path/to/mod/install/directory'
 
         :param str config_file_or_dir:
@@ -106,7 +114,38 @@ class ConfigManager:
         """
         :return: Name of most recently active profile
         """
-        return self._lastprofile
+        return self.currentValues[_SECTION_GENERAL][_KEY_LASTPRO]
+        # return self._lastprofile
+
+    @lastprofile.setter
+    def lastprofile(self, value):
+        self.currentValues[_SECTION_GENERAL][_KEY_LASTPRO] = value
+
+    @property
+    def default_profile(self):
+        """
+        :return: Name of the profile marked as default
+        """
+        return self.currentValues[_SECTION_GENERAL][_KEY_DEFPRO]
+
+    @default_profile.setter
+    def default_profile(self, value):
+        self.currentValues[_SECTION_GENERAL][_KEY_DEFPRO] = value
+
+    @property
+    def env(self):
+        """
+        :return: the dictionary containing the defined environment variables
+        """
+        return self._environment
+
+    def getenv(self, var):
+        """
+
+        :param var:
+        :return: the value of the environment variable specified by `var`
+        """
+        return self._environment[var]
 
     def loadConfig(self):
         """
@@ -128,7 +167,7 @@ class ConfigManager:
             p=None #type: Path
 
             # first, check if the user has specified an environment variable
-            envval = os.getenv(evar)
+            envval = self._environment[evar]
             if envval:
                 if checkPath(envval):
                     p=Path(envval)
@@ -199,21 +238,32 @@ class ConfigManager:
         ######################################################################
         # then, which profile is loaded on boot
 
-        env_lpname = os.getenv(EnvVars.PROFILE)
+        # env_lpname = self._environment[EnvVars.PROFILE]
+        #
+        # # see if the named profile exists in the profiles dir
+        # if env_lpname:
+        #     env_lpname = env_lpname.lower() # ignore case
+        #     for p in (d.name for d in self.paths.dir_profiles.iterdir() if d.is_dir()):
+        #         if env_lpname == p.lower():
+        #             self._lastprofile = p # but make sure we get the proper-cased name here
+        #             break
+        #
+        # # if it wasn't set above, get the value from config file
+        # if not self._lastprofile:
+        #     self._lastprofile = config[_SECTION_GENERAL][_KEY_LASTPRO]
 
-        # see if the named profile exists in the profiles dir
-        if env_lpname:
-            env_lpname = env_lpname.lower() # ignore case
-            for p in (d.name for d in self.paths.dir_profiles.iterdir() if d.is_dir()):
-                if env_lpname == p.lower():
-                    self._lastprofile = p # but make sure we get the proper-cased name here
-                    break
+        ## just load in the saved value; other parts of the program
+        ## can check the environment
+        # self._lastprofile = config[_SECTION_GENERAL][_KEY_LASTPRO]
 
-        # if it wasn't set above, get the value from config file
-        if not self._lastprofile:
-            self._lastprofile = config[_SECTION_GENERAL][_KEY_LASTPRO]
+        # save in local clone
+        # self.currentValues[_SECTION_GENERAL][_KEY_LASTPRO] = \
+        self.lastprofile = config[_SECTION_GENERAL][_KEY_LASTPRO]
+            # self._lastprofile
 
-        self.currentValues[_SECTION_GENERAL][_KEY_LASTPRO] = self._lastprofile
+        ## same for the default profile:
+        # self.currentValues[_SECTION_GENERAL][_KEY_DEFPRO] =\
+        self.default_profile = config[_SECTION_GENERAL][_KEY_DEFPRO]
 
         ######################################################################
         #  check env for vfs mount
@@ -248,7 +298,11 @@ class ConfigManager:
         self._check_for_mods_dir(self.paths)
 
         ## check that folder for MRU profile exists
-        self._check_for_lastprofile_dir(self.paths)
+        # self._check_for_lastprofile_dir(self.paths)
+
+        # check the last-profile and default-profile dirs
+        self._check_for_profile_dir(_KEY_LASTPRO, self.paths)
+        self._check_for_profile_dir(_KEY_DEFPRO, self.paths)
 
     def _check_default_dirs(self, config_paths):
         """
@@ -314,21 +368,36 @@ class ConfigManager:
             else:
                 self.LOGGER.error("Configured mods directory not found")
 
-    def _check_for_lastprofile_dir(self, paths):
+    def _check_for_profile_dir(self, key, paths):
         """
-        See if the directory for the most recently-loaded profile exists;
-        if not, set "default" as the MRU profile
+        Check that profile for the given key (last or default) exists
 
+        :param key:
         :param paths:
         """
+        pname = self.currentValues[_SECTION_GENERAL][key]
+        pdir = paths.dir_profiles / pname
 
-        lpdir = paths.dir_profiles / self._lastprofile
-        if not lpdir.exists():
-            self.LOGGER.error(
-                "Directory for last-loaded profile '{}' could not be found! Falling back to default.".format(
-                    self._lastprofile))
+        if not pdir.exists():
+            self.LOGGER.error("{}: Profile directory '{}' not found; falling back to default.".format(key, pname))
 
-            self._lastprofile = self.__DEFAULT_PROFILE
+            self.currentValues[_SECTION_GENERAL][key] = self.__DEFAULT_PROFILE
+
+    # def _check_for_lastprofile_dir(self, paths):
+    #     """
+    #     See if the directory for the most recently-loaded profile exists;
+    #     if not, set "default" as the MRU profile
+    #
+    #     :param paths:
+    #     """
+    #
+    #     lpdir = paths.dir_profiles / self._lastprofile
+    #     if not lpdir.exists():
+    #         self.LOGGER.error(
+    #             "Directory for last-loaded profile '{}' could not be found! Falling back to default.".format(
+    #                 self._lastprofile))
+    #
+    #         self._lastprofile = self.__DEFAULT_PROFILE
 
     def create_default_config(self):
         """
@@ -373,8 +442,8 @@ class ConfigManager:
             # if value is e.g. an empty string, clear the setting
             p=Path(value) if value else None
 
-        elif section == _SECTION_GENERAL and key == _KEY_LASTPRO:
-        # elif key == _KEY_LASTPRO:
+        # elif section == _SECTION_GENERAL and key == _KEY_LASTPRO:
+        elif section == _SECTION_GENERAL and key in [_KEY_LASTPRO, _KEY_DEFPRO]:
             p = self.paths.dir_profiles / value
         else:
             raise exceptions.InvalidConfigKeyError(key)
@@ -389,8 +458,9 @@ class ConfigManager:
                 self.paths.dir_vfs = p
             elif case(_KEY_SKYDIR):
                 self.paths.dir_skyrim = p
-            elif case(_KEY_LASTPRO):
-                self._lastprofile = value
+            # elif case(_KEY_LASTPRO) or case(_KEY_DEFPRO):
+            #     self.currentValues[_SECTION_GENERAL][key] = value
+                # self.lastprofile = value
 
         else: # should always run since we didn't use 'break' above
             # now insert new value into saved config
