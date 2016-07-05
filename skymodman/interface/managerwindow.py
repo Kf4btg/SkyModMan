@@ -20,7 +20,9 @@ from PyQt5.QtWidgets import (QMainWindow,
 
 from skymodman import exceptions
 from skymodman.managers import modmanager as Manager
+from skymodman import constants
 from skymodman.constants import (Tab as TAB,
+                                 KeyStr,
                                  INIKey,
                                  INISection,
                                  UI_Pref as P,
@@ -129,32 +131,35 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # Let sub-widgets know the main window is initialized
         self.windowInitialized.emit()
 
-        # default values for global preferences
-        # self.preferences = {} # type: dict[P, bool]
-            # P.RESTORE_WINSIZE: True,
-            # P.RESTORE_WINPOS: True,
-            # P.LOAD_LAST_PROFILE: True
-        # }
 
-        # create instance to handle QSettings
-        # self.appsettings = AppSettings()
-        # define our personal settings
+        # define the application settings
         self.init_settings()
+
         # read in preferences and stored states
         app_settings.read()
 
+        # see which profile to load, if any
+        pload = app_settings.Get(KeyStr.UI.PROFILE_LOAD_POLICY)
 
-        # read in prefs and other settings
-        # self.read_settings()
+        # TODO: handle and prioritize the SMM_PROFILE env var
 
-        # if "load_last_profile" is true, then the last profile will
-        # be...um...loaded.
-        # if self.preferences[P.LOAD_LAST_PROFILE]:
-        if app_settings.Get(P.LOAD_LAST_PROFILE):
+        # Also TODO: maybe pass this stuff to the on_read handler in the app_settings, just like the move() and resize() handlers
+        if pload == constants.ProfileLoadPolicy.last:
+            # load last profile
             self.load_profile_by_name(
-                Manager.get_config_value(INIKey.LASTPROFILE, INISection.GENERAL)
-                # Manager.conf.lastprofile
-            )
+                Manager.get_config_value(KeyStr.INI.LASTPROFILE,
+                                         INISection.GENERAL))
+
+        ## FIXME: this currently acts the same as "load-none"
+        # (i.e. nothing happens...)
+        elif pload == constants.ProfileLoadPolicy.default:
+            # load whichever profile is set as default
+            self.load_profile_by_name(
+                Manager.get_config_value(KeyStr.INI.DEFAULT_PROFILE,
+                                         INISection.GENERAL))
+        # otherwise, load nothing
+
+
 
     @property
     def current_tab(self):
@@ -174,14 +179,17 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
 
         ## define the boolean/toggle preferences ##
-        app_settings.add(P.RESTORE_WINSIZE, True)
-        app_settings.add(P.RESTORE_WINPOS, True)
-        app_settings.add(P.LOAD_LAST_PROFILE, True)
+        app_settings.add(KeyStr.UI.RESTORE_WINSIZE, True)
+        # app_settings.add(P.RESTORE_WINSIZE, True)
 
-        ## setup saved-state prefs ##
+        app_settings.add(KeyStr.UI.RESTORE_WINPOS, True)
+        # app_settings.add(P.RESTORE_WINPOS, True)
+
+        app_settings.add(KeyStr.UI.PROFILE_LOAD_POLICY, constants.ProfileLoadPolicy.last)
+
+        ## setup window-state prefs ##
 
         # define some functions to pass as on_read callbacks
-
         def _resize(size):
             # noinspection PyArgumentList
             self.resize(size
