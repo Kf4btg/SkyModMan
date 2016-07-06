@@ -84,9 +84,10 @@ class KeyStr:
 
     class Dirs(metaclass=Strenum):
         __slots__=()
-        SKYRIM = "skyrim"  # location of base skyrim install
-        MODS = "mods"  # location of mod storage
-        VFS = "vfs"  # mount point for "virtual" skyrim install
+        PROFILES = "dir_profiles" # storage location for user profiles
+        SKYRIM = "dir_skyrim"  # location of base skyrim install
+        MODS = "dir_mods"  # location of mod storage
+        VFS = "dir_vfs"  # mount point for "virtual" skyrim install
 
     class UI(metaclass=Strenum):
         __slots__=()
@@ -120,9 +121,9 @@ class INIKey(str, Enum):
     ACTIVEONLY = "activeonly"
 
 class DataDir:
-    SKYRIM = "skyrim" # location of base skyrim install
-    MODS = "mods" # location of mod storage
-    VFS = "vfs" # mount point for "virtual" skyrim install
+    SKYRIM = "dir_skyrim" # location of base skyrim install
+    MODS = "dir_mods" # location of mod storage
+    VFS = "dir_vfs" # mount point for "virtual" skyrim install
 
 class UI_Pref:
     RESTORE_WINSIZE = "restore_window_size"
