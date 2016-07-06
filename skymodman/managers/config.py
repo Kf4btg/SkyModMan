@@ -174,8 +174,15 @@ class ConfigManager:
         return self.currentValues[_SECTION_GENERAL][_KEY_LASTPRO]
 
     @lastprofile.setter
-    def lastprofile(self, value):
-        self.currentValues[_SECTION_GENERAL][_KEY_LASTPRO] = value
+    def lastprofile(self, name):
+        """
+        Set `name` as the value of the 'lastproifile;' cobfig key
+        and write the change to the configuration file
+
+        :param name:
+        """
+        self.currentValues[_SECTION_GENERAL][_KEY_LASTPRO] = name
+        self._save_value(_SECTION_GENERAL, _KEY_LASTPRO, name)
 
     @property
     def default_profile(self):
@@ -185,8 +192,15 @@ class ConfigManager:
         return self.currentValues[_SECTION_GENERAL][_KEY_DEFPRO]
 
     @default_profile.setter
-    def default_profile(self, value):
-        self.currentValues[_SECTION_GENERAL][_KEY_DEFPRO] = value
+    def default_profile(self, name):
+        """
+        Set `name` as the valuie of the 'default_profile' config key
+        and write the change to tghe configuration file
+        :param str name:
+        """
+        self.currentValues[_SECTION_GENERAL][_KEY_DEFPRO] = name
+        self._save_value(_SECTION_GENERAL, _KEY_DEFPRO, name)
+
 
     @property
     def env(self):
@@ -740,6 +754,26 @@ class ConfigManager:
 
         # write the new data to disk
         # todo: maybe this operation should be async? Maybe it already is?
+        with self.paths.file_main.open('w') as f:
+            config.write(f)
+
+    def _save_value(self, section, key, value):
+        """
+        Update thje config file with a single value.
+        Performs no validation or error-handling.
+        Only meant to be called internally
+
+        :param section:
+        :param key:
+        :param value:
+        :return:
+        """
+        config = configparser.ConfigParser()
+
+        config.read(self.paths['file_main'])
+
+        config[section][key] = value
+
         with self.paths.file_main.open('w') as f:
             config.write(f)
 

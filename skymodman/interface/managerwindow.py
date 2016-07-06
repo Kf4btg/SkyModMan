@@ -1455,7 +1455,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         from skymodman.interface.dialogs.preferences_dialog import PreferencesDialog
 
         # pdialog = PreferencesDialog(self.preferences)
-        pdialog = PreferencesDialog()
+        pdialog = PreferencesDialog(self.profile_selector.model())
 
         pdialog.exec_()
 

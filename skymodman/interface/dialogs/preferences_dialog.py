@@ -34,7 +34,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
     profilePolicyChanged = pyqtSignal(int, bool)
     pathEditFinished = pyqtSignal(str)
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, profilebox_model, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.setupUi(self)
@@ -142,6 +142,20 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         self.pathEditFinished.connect(self.on_path_edit)
 
         ##=================================
+        ## Tab 3: Profiles
+        ##---------------------------------
+
+        # reuse the main profile-combobox-model for this one here
+        self.combo_profiles.setModel(profilebox_model)
+
+        self._selected_profile = Manager.active_profile().name
+        self.check_default()
+
+        self.combo_profiles.currentTextChanged.connect(self.change_profile)
+
+        self.cbox_default.toggled.connect(self.set_default_profile)
+
+        ##=================================
         ## Connect Buttons
         ##---------------------------------
 
@@ -197,7 +211,32 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             label.setVisible(False)
 
 
+    @pyqtSlot(str)
+    def change_profile(self, profile):
+        """Update the data on the profiles tab to reflect the data from the selected profile."""
+        # TODO
+        print("change_profile:", profile)
+        self._selected_profile = profile
+        self.check_default()
 
+    # FIXME: this borken.
+    def set_default_profile(self, checked):
+        """
+        When the user checks the "default" box next to the profile selector,
+        update the config to mark the current profile as default.
+        If they uncheck it, mark 'default' as default...
+        """
+        if checked:
+            Config.default_profile = self._selected_profile
+        else:
+            Config.default_profile = 'default'
+
+    def check_default(self):
+        """
+        If the active profile is marked as default, check the "is_default" checkbox.
+        Otherwise, uncheck it.
+        """
+        self.cbox_default.setChecked(self._selected_profile.lower() == Config.default_profile.lower())
 
 
     @pyqtSlot()

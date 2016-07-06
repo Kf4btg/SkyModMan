@@ -78,7 +78,9 @@ def set_active_profile(profile):
     assert isinstance(profile, str)
     _profileman.setActiveProfile(profile)
 
-    _configman.updateConfig(INIKey.LASTPROFILE, INISection.GENERAL, profile)
+    _configman.lastprofile = profile
+
+    # _configman.updateConfig(INIKey.LASTPROFILE, INISection.GENERAL, profile)
     # _configman.updateConfig(profile, "lastprofile")
 
     global _database_initialized
