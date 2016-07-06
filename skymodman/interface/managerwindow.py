@@ -35,7 +35,7 @@ from skymodman.interface.models import (
     ModFileTreeModel,
     ActiveModsListFilter,
     FileViewerTreeFilter)
-from skymodman.interface.dialogs import message, NewProfileDialog, PreferencesDialog
+from skymodman.interface.dialogs import message
 from skymodman.utils import withlogger, Notifier
 from skymodman.utils.fsutils import checkPath, join_path
 from skymodman.interface.install_helpers import InstallerUI
@@ -908,6 +908,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         When the 'add profile' button is clicked, create and show a small dialog for the user to choose a name for the new profile.
         """
+
+        from skymodman.interface.dialogs.new_profile_dialog import NewProfileDialog
+
         popup = NewProfileDialog(
             combobox_model=self.profile_selector.model())
 
@@ -925,6 +928,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             # self.profile_selector.setCurrentIndex(
             #     self.profile_selector.findText(new_profile.name,
             #                                    Qt.MatchFixedString))
+
+        del NewProfileDialog
 
     @pyqtSlot()
     def on_remove_profile_action(self):
@@ -1447,14 +1452,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         Show a dialog allowing the user to change some application-wide preferences
         """
+        from skymodman.interface.dialogs.preferences_dialog import PreferencesDialog
 
         # pdialog = PreferencesDialog(self.preferences)
         pdialog = PreferencesDialog()
 
         pdialog.exec_()
 
-        # todo
-        # message(text="Preferences?")
+        del PreferencesDialog
+
 
     @pyqtSlot()
     def choose_mod_folder(self):
@@ -1529,20 +1535,20 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # short-circuit for testing
         filename='res/7ztest.7z'
         if filename:
-            self.installui = InstallerUI() # helper class
+            installui = InstallerUI() # helper class
             if manual:
                 self.show_statusbar_progress("Loading archive:")
 
                 self.task = asyncio.get_event_loop().create_task(
-                    self.installui.do_manual_install(filename,
-                                                     self.hide_statusbar_progress))
+                    installui.do_manual_install(filename,
+                                                 self.hide_statusbar_progress))
 
             else:
                 # show busy indicator while installer loads
                 self.show_statusbar_progress("Preparing installer:")
 
                 self.task = asyncio.get_event_loop().create_task(
-                    self.installui.do_install(filename, self.hide_statusbar_progress))
+                    installui.do_install(filename, self.hide_statusbar_progress))
 
                 # todo: add callback to show the new mod if install succeeded
                 # self.task.add_done_callback(self.on_new_mod())

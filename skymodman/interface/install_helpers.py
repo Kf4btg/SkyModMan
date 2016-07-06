@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import quamash
 
 from skymodman.managers import modmanager as Manager
-from skymodman.interface.dialogs import message, ManualInstallDialog
+from skymodman.interface.dialogs import message
 from skymodman.utils import withlogger
 
 @withlogger
@@ -107,7 +107,7 @@ class InstallerUI:
         (and only those files) will be extracted. After the install, the folder and its contents
         will be deleted automatically.
         """
-        from skymodman.interface.dialogs import FomodInstaller
+        from skymodman.interface.dialogs.fomod_installer_wizard import FomodInstaller
 
         # split the installer into a separate thread.
         with quamash.QThreadExecutor(1) as ex:
@@ -135,6 +135,8 @@ class InstallerUI:
 
     async def _show_manual_install_dialog(self, contents):
 
+        from skymodman.interface.dialogs.manual_install_dialog import ManualInstallDialog
+
         self.logger.debug("creating manual install dialog")
         with quamash.QThreadExecutor(1) as ex:
             mi_dialog = ManualInstallDialog(contents)
@@ -142,6 +144,8 @@ class InstallerUI:
             f = asyncio.get_event_loop(
                 ).run_in_executor(ex, mi_dialog.exec_)
             await f
+
+        del ManualInstallDialog
 
 
     async def extraction_progress_dialog(self, archive, entries, numfiles):
