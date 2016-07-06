@@ -4,12 +4,29 @@ class Error(Exception):
 class DependencyError(Error):
     pass
 
-#----------------------------
-class InvalidConfigKeyError(Error):
-    def __init__(self, key: str):
+class ConfigError(Error):
+    def __init__(self, key, section):
+        self.section = section
         self.key = key
+
+#----------------------------
+
+class ConfigValueUnsetError(ConfigError):
+    """The given key and section exist, but do not contain a valid value"""
     def __str__(self):
-        return "'{}' is not a valid configuration key.".format(self.key)
+        return "Configuration parameter '{0.key}' in section '{0.section}' is unset.".format(self)
+
+class MissingConfigKeyError(ConfigError):
+    """Based on the config-file schema, the application has determined that a key that should be in the config file is not present."""
+    def __str__(self):
+        return "Configuration file missing key '{0.key}' from section '{0.section}'.".format(self)
+
+class InvalidConfigKeyError(ConfigError):
+    """
+    A key was requested from the configuration file that is not present in the schema
+    """
+    def __str__(self):
+        return "'{0.key}' is not a valid configuration key for section '{0.section}'.".format(self)
 
 #---------------------------
 
