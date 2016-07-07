@@ -346,9 +346,10 @@ def get_config_value(name, section=INISection.NONE, default=None, use_profile_ov
             val =  ap.Config[psec][name] if (ap and use_profile_override) \
                 else conf["dir_mods"]
 
-    elif section == INISection.GENERAL:
-        if name == INIKey.LASTPROFILE:
-            val = conf.lastprofile
+    # elif section == INISection.GENERAL:
+    #     val = conf[name]
+        # if name == INIKey.LASTPROFILE:
+        #     val = conf.lastprofile
 
     else:
         # assume section is "NONE", meaning this is not a value

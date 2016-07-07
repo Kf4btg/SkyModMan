@@ -2,6 +2,8 @@
 A singleton manager for the QSettings-based application preferences.
 """
 
+from functools import partial
+
 from PyQt5.QtCore import QSettings
 
 class QS_Property:
@@ -48,6 +50,18 @@ def Set(pref_name, value):
     """
     _preferences[pref_name] = value
 
+def _readwrapper(func, name, value):
+    """
+    Wraps a provide on_read callback with one that first sets the value in
+    the preferences store
+    :param name:
+    :param value:
+    :param func:
+    :return:
+    """
+    _preferences[name] = value
+    func(value)
+
 def Get(pref_name):
     """
 
@@ -58,7 +72,7 @@ def Get(pref_name):
 
 
 def add(name, value=None, p_type=None,
-        on_read=lambda t: None, on_change=lambda t: None):
+        on_read=None, on_change=None):
     """
     Create a QSetting property (``QS_Property``) that will be properly
     read-from/saved-to QSettings native storage.
@@ -89,12 +103,12 @@ def add(name, value=None, p_type=None,
 
     :param (T)->None on_read: called with the value read from
         native storage when the settings are first loaded. If
-        `value` is a constant, this parameter is not used and
-        the read value is stored within the AppSettings instance
-        (can be accessed via item access, e.g.
-        ``my_settings["restore_state"]``).
+        `value` is a constant, the read value is first stored
+        within the AppSettings (can be accessed using
+        ``app_settings.Get("option_name")`` ) before the `on_read`
+        callback--if any--is invoked.
 
-    :param (T)->None on_change: not currently used
+    :param (T)->None on_change: currently unused
     """
 
 
@@ -102,20 +116,28 @@ def add(name, value=None, p_type=None,
         # no default, but read value from app when writing
         _properties.append(QS_Property(p_type, name,
                                       accessor=value,
-                                      on_read=on_read,
-                                      on_change=on_change))
+                                      on_read=on_read if callable(on_read) else (lambda t: None),
+                                      on_change=on_change if callable(on_read) else (lambda t: None)))
     else:
         if value is not None and p_type is None:
             p_type = type(value)
 
         # property is constant (stored when read and changed,
         # not read dynamically from app state)
-        _properties.append(QS_Property(p_type, name,
-                                      default=value,
-                                      accessor=lambda: _preferences[
-                                          name],
-                                      on_read=lambda t: Set(name, t),
-                                      on_change=on_change))
+        _properties.append(QS_Property(p_type,
+                                       name,
+                                       default=value,
+                                       accessor=lambda: _preferences[name],
+                                       on_read=partial(_readwrapper,
+                                                       on_read,
+                                                       name)
+                                                if callable( on_read)
+                                                else partial(Set, name),
+                                       on_change=on_change
+                                                if callable(on_change)
+                                                else (lambda t: None)
+                                       )
+                           )
 
 
 def read():
