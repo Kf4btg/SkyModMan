@@ -248,9 +248,6 @@ class Ui_Preferences_Dialog(object):
         self.combo_profiles = QtWidgets.QComboBox(self.tab_profiles)
         self.combo_profiles.setObjectName("combo_profiles")
         self.gridLayout_3.addWidget(self.combo_profiles, 0, 0, 1, 2)
-        self.groupBox = QtWidgets.QGroupBox(self.tab_profiles)
-        self.groupBox.setObjectName("groupBox")
-        self.gridLayout_3.addWidget(self.groupBox, 2, 0, 1, 4)
         spacerItem3 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
         self.gridLayout_3.addItem(spacerItem3, 0, 3, 1, 1)
         self.cbox_default = QtWidgets.QCheckBox(self.tab_profiles)
@@ -260,7 +257,7 @@ class Ui_Preferences_Dialog(object):
         self.gridLayout.addWidget(self.prefs_tabwidget, 0, 0, 1, 1)
 
         self.retranslateUi(Preferences_Dialog)
-        self.prefs_tabwidget.setCurrentIndex(1)
+        self.prefs_tabwidget.setCurrentIndex(0)
         self.prefs_btnbox.accepted.connect(Preferences_Dialog.accept)
         self.prefs_btnbox.rejected.connect(Preferences_Dialog.reject)
         self.btn_enable_skydir_override.toggled['bool'].connect(self.le_skydir_override.setEnabled)
@@ -322,7 +319,6 @@ class Ui_Preferences_Dialog(object):
         self.btn_enable_vfsdir_override.setText(_translate("Preferences_Dialog", "VFS Mount"))
         self.btn_enable_moddir_override.setToolTip(_translate("Preferences_Dialog", "Press to enable this override"))
         self.btn_enable_moddir_override.setText(_translate("Preferences_Dialog", "Mods"))
-        self.groupBox.setTitle(_translate("Preferences_Dialog", "Path Overrides"))
         self.cbox_default.setToolTip(_translate("Preferences_Dialog", "Default profile"))
         self.prefs_tabwidget.setTabText(self.prefs_tabwidget.indexOf(self.tab_profiles), _translate("Preferences_Dialog", "Profiles"))
 

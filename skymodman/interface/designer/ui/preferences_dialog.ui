@@ -27,7 +27,7 @@
    <item row="0" column="0">
     <widget class="QTabWidget" name="prefs_tabwidget">
      <property name="currentIndex">
-      <number>1</number>
+      <number>2</number>
      </property>
      <widget class="QWidget" name="tab_general">
       <attribute name="title">
@@ -556,13 +556,6 @@
        </item>
        <item row="0" column="0" colspan="2">
         <widget class="QComboBox" name="combo_profiles"/>
-       </item>
-       <item row="2" column="0" colspan="4">
-        <widget class="QGroupBox" name="groupBox">
-         <property name="title">
-          <string>Path Overrides</string>
-         </property>
-        </widget>
        </item>
        <item row="0" column="3">
         <spacer name="horizontalSpacer">

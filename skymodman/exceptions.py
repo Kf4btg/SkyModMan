@@ -4,12 +4,20 @@ class Error(Exception):
 class DependencyError(Error):
     pass
 
+class GeneralError(Error):
+    """
+    Generic exception that accepts an explanatory string.
+    """
+    def __init__(self, message:str):
+        self.msg = message
+    def __str__(self):
+        return self.msg
+
+#----------------------------
 class ConfigError(Error):
     def __init__(self, key, section):
         self.section = section
         self.key = key
-
-#----------------------------
 
 class ConfigValueUnsetError(ConfigError):
     """The given key and section exist, but do not contain a valid value"""
@@ -54,6 +62,13 @@ class DeleteDefaultProfileError(ProfileError):
                          "The default profile cannot be deleted or renamed")
 
 #---------------------------
+class FileAccessError(GeneralError):
+    """
+    Generic error for issues encountered when doing filesystem-related operations. pass the filename as the first argument, and use '{file}' in the message arg to refer to it.
+    """
+    def __init__(self, file, message='{file}'):
+        super().__init__(message.format(file=file))
+
 class FilesystemDesyncError(Error):
     """
     Raised when there is a mismatch between the folders extant in

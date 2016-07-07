@@ -173,6 +173,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             partial(self.choose_directory, D.VFS))
 
         ## apply button ##
+        btn_apply = self.prefs_btnbox.button(QDialogButtonBox.Apply)
         self.prefs_btnbox.button(QDialogButtonBox.Apply).clicked.connect(self.apply_changes)
 
         # also apply changes when clicking OK

@@ -7,7 +7,7 @@ from collections import defaultdict
 import appdirs
 
 from skymodman import exceptions
-from skymodman.utils import withlogger
+from skymodman.utils import withlogger, fsutils
 from skymodman.utils.fsutils import checkPath
 from skymodman.constants import EnvVars, INISection, KeyStr, FALLBACK_PROFILE
 
@@ -32,7 +32,6 @@ _DEFAULT_CONFIG_={
     _SECTION_GENERAL: {
         _KEY_LASTPRO: FALLBACK_PROFILE,
         _KEY_DEFPRO:  FALLBACK_PROFILE
-
     },
     _SECTION_DIRS: {
         _KEY_PROFDIR: appdirs.user_config_dir(_APPNAME_) + "/profiles",
@@ -265,8 +264,6 @@ class ConfigManager:
             (self.paths.dir_profiles / FALLBACK_PROFILE).mkdir()
 
 
-
-
         # store {last,default} profile in local clone
 
         for key in (_KEY_LASTPRO, _KEY_DEFPRO):
@@ -283,7 +280,6 @@ class ConfigManager:
                 # and now check that the folders for those dirs exist
                 self._check_for_profile_dir(key)
 
-        # self.loadConfig()
 
         ##=================================
         ## Game-Data Storage Folders*
@@ -318,56 +314,6 @@ class ConfigManager:
 
             with self.paths.file_main.open('w') as f:
                 config.write(f)
-
-
-
-
-
-
-    # def _check_default_dirs(self, config_paths):
-    #     """
-    #
-    #     :type config_paths: ConfigPaths
-    #     """
-    #
-    #     # get the path to the our folder within the user's configuration directory
-    #     # (e.g. ~/.config), using appdirs
-    #     config_paths.dir_config = Path(appdirs.user_config_dir(_APPNAME_))
-    #
-    #     # path to directory which holds all the profile info
-    #     # TODO: should this stuff actually be in XDG_DATA_HOME??
-    #     config_paths.dir_profiles = config_paths.dir_config / _PROFILES_DIRNAME_
-    #
-    #     ## check for config dir, create if missing ##
-    #     self._check_dir_exist('dir_config')
-    #
-    #     ## check for profiles dir, create if missing ##
-    #     if not self._check_dir_exist('dir_profiles'):
-    #         # if it was missing, also create the folder for the default/fallback profile
-    #         self.LOGGER.info("Creating directory for default profile.")
-    #         (config_paths.dir_profiles / FALLBACK_PROFILE).mkdir()
-
-
-        # if not config_paths.dir_config.exists():
-        #     self.LOGGER.warning("Configuration directory not found.")
-        #     self.LOGGER.info(
-        #         "Creating configuration directory at: {}".format(
-        #             config_paths.dir_config))
-        #
-        #     config_paths.dir_config.mkdir(parents=True)
-        #
-        ## check for profiles dir, create if missing ##
-        # if not config_paths.dir_profiles.exists():
-        #     self.LOGGER.info(
-        #         "Creating profiles directory at: {}".format(
-        #             config_paths.dir_profiles))
-        #
-        #     config_paths.dir_profiles.mkdir(parents=True)
-        #
-        #     default_prof = config_paths.dir_profiles / FALLBACK_PROFILE
-        #
-        #     self.LOGGER.info("Creating directory for default profile.")
-        #     default_prof.mkdir()
 
     def _check_dir_exist(self, which, create=True):
         """
@@ -409,24 +355,6 @@ class ConfigManager:
             # create it w/ default values if it doesn't
             self.create_default_config()
 
-    def _check_for_mods_dir(self):
-        """
-        Check that configured directory for mods storage exists. If it does not, only
-        create it if the configured is the same as the default path.
-        """
-        ## TODO: maybe we shouldn't create the mod directory by default?
-        dir_mods = self.paths.dir_mods
-        if not dir_mods.exists():
-            # for now, only create if the location in the config is same as the default
-            if str(dir_mods) == _DEFAULT_CONFIG_[_SECTION_DIRS][_KEY_MODDIR]:
-                self.LOGGER.info(
-                    "Creating new mods directory at: {}".format(
-                        dir_mods))
-
-                dir_mods.mkdir(parents=True)
-            else:
-                self.LOGGER.error("Configured mods directory not found")
-
     def _check_for_profile_dir(self, key):
         """
         Check that profile for the given key (last or default) exists.
@@ -452,9 +380,6 @@ class ConfigManager:
                 self.LOGGER << "creating default profile directory"
                 # if it is the default, create the directory
                 self.pdir.mkdir()
-
-
-
 
     def _load_data_dirs(self, config):
         """
@@ -554,25 +479,6 @@ class ConfigManager:
         ## just load in the saved value; other parts of the program
         ## can check the environment
 
-        # try:
-        #     # save in local clone
-        #     self.lastprofile = config[_SECTION_GENERAL][_KEY_LASTPRO]
-        # except KeyError as e:
-        #     self.LOGGER.error(repr(e))
-        #     self.LOGGER << "setting last profile to default value"
-        #     self.missing_keys.append((_SECTION_GENERAL, _KEY_LASTPRO))
-        #     # it should already be the default value
-        #     # self.lastprofile = FALLBACK_PROFILE
-        #     # self._lastprofile
-        #
-        # ## same for the default profile:
-        # # self.currentValues[_SECTION_GENERAL][_KEY_DEFPRO] =\
-        # try:
-        #     self.default_profile = config[_SECTION_GENERAL][_KEY_DEFPRO]
-        # except KeyError as e:
-        #     self.LOGGER.error(repr(e))
-        #     self.LOGGER << "setting default profile to default value"
-        #     self.missing_keys.append((_SECTION_GENERAL, _KEY_DEFPRO))
 
     def create_default_config(self):
         """
@@ -592,111 +498,6 @@ class ConfigManager:
         with self.paths.file_main.open('w') as configfile:
             config.write(configfile)
 
-    # def loadConfig(self):
-    #     """
-    #     Based on values from defined Environment values (first priority) and settings in config file (second priority), setup the configuration that will be used throughout this session.
-    #     """
-    #     config = configparser.ConfigParser()
-    #     config.read(self.paths['file_main'])
-    #
-    #     ######################################################################
-    #     # allow setting some things via ENV
-    #     ######################################################################
-    #     # first, the skyrim installation, mod storage, vfs mount
-    #
-    #     for evar, path_key in (
-    #             (EnvVars.SKYDIR, _KEY_SKYDIR),
-    #             (EnvVars.MOD_DIR, _KEY_MODDIR),
-    #             (EnvVars.VFS_MOUNT, _KEY_VFSMNT),
-    #     ):
-    #         p = None  # type: Path
-    #
-    #         # first, check if the user has specified an environment variable
-    #         envval = self._environment[evar]
-    #         if envval:
-    #             if checkPath(envval):
-    #                 p = Path(envval)
-    #             else:
-    #                 self.path_errors[path_key].append(envval)
-    #
-    #         # if they didn't or it didn't exist, pull the config value
-    #         if p is None:
-    #             try:
-    #                 config_val = config[_SECTION_DIRS][path_key]
-    #             except KeyError:
-    #                 self.missing_keys.append((_SECTION_DIRS, path_key))
-    #                 self.path_errors[path_key].append(
-    #                     "config key '" + path_key + "' not found")
-    #             else:
-    #                 if checkPath(config_val):
-    #                     p = Path(config_val)
-    #                 else:
-    #                     self.path_errors[path_key].append(config_val)
-    #
-    #         if p is None:
-    #             # if key wasn't in config file for some reason,
-    #             # check that we have a default value (skydir, for example,
-    #             # does not (i.e. the default val is ""))
-    #             def_path = \
-    #             _DEFAULT_CONFIG_[_SECTION_DIRS][
-    #                 path_key]
-    #
-    #             # if we have a default and it exists, use that.
-    #             # otherwise log the error
-    #             # noinspection PyTypeChecker
-    #             if checkPath(def_path):
-    #                 p = Path(def_path)
-    #             else:
-    #                 # noinspection PyTypeChecker
-    #                 self.path_errors[path_key].append(
-    #                     "default invalid: " + def_path)
-    #
-    #         # finally, if we have successfully deduced the path, set
-    #         # it on the ConfigPaths object
-    #         if p is not None:
-    #             self.paths[path_key] = p
-    #             # setattr(self.paths, path_key, p)
-    #
-    #         # update config-file mirror
-    #         self.currentValues[_SECTION_DIRS][path_key] = self[path_key]
-    #
-    #     if self.path_errors:
-    #         for att, errlist in self.path_errors.items():
-    #             for err in errlist:
-    #                 self.LOGGER << "Path error [" + att + "]: " + err
-    #
-    #     ######################################################################
-    #     ######################################################################
-    #     # then, which profile is loaded on boot
-    #
-    #     ## just load in the saved value; other parts of the program
-    #     ## can check the environment
-    #
-    #     try:
-    #         # save in local clone
-    #         self.lastprofile = config[_SECTION_GENERAL][_KEY_LASTPRO]
-    #     except KeyError as e:
-    #         self.LOGGER.error(repr(e))
-    #         self.LOGGER << "setting last profile to default value"
-    #         self.missing_keys.append((_SECTION_GENERAL, _KEY_LASTPRO))
-    #         # it should already be the default value
-    #         # self.lastprofile = FALLBACK_PROFILE
-    #         # self._lastprofile
-    #
-    #     ## same for the default profile:
-    #     # self.currentValues[_SECTION_GENERAL][_KEY_DEFPRO] =\
-    #     try:
-    #         self.default_profile = config[_SECTION_GENERAL][_KEY_DEFPRO]
-    #     except KeyError as e:
-    #         self.LOGGER.error(repr(e))
-    #         self.LOGGER << "setting default profile to default value"
-    #         self.missing_keys.append((_SECTION_GENERAL, _KEY_DEFPRO))
-    #
-    #         # self.default_profile = FALLBACK_PROFILE
-
-
-
-
     def updateConfig(self, key, section, value):
         """
         Update saved configuration file
@@ -706,45 +507,54 @@ class ConfigManager:
         :param str section: valid values are "General" and "Directories" (or the enum value)
         """
 
-        # new configurator
+        # validate new value against schema
+        try:
+            _DEFAULT_CONFIG_[section][key]
+        except KeyError as e:
+            raise exceptions.InvalidConfigKeyError(key, section) from e
+
+        # get new configurator
         config = configparser.ConfigParser()
         # populate with current values
-        # config.read_dict(self.currentValues)
 
         # because we don't want to overwrite saved config values with
         # session-temporary values (e.g. from ENV vars or cli-options),
         # we read the saved data from disk again.
         config.read(str(self.paths.file_main))
 
-        # validate new value
-        if section == _SECTION_DIRS and key in [_KEY_MODDIR, _KEY_VFSMNT, _KEY_SKYDIR]:
+        if section == _SECTION_DIRS:
+            # means we're updating a data path
+
             # if value is e.g. an empty string, clear the setting
             p=Path(value) if value else None
 
-        # elif section == _SECTION_GENERAL and key == _KEY_LASTPRO:
-        elif section == _SECTION_GENERAL and key in [_KEY_LASTPRO, _KEY_DEFPRO]:
-            p = self.paths.dir_profiles / value
-        else:
-            raise exceptions.InvalidConfigKeyError(key, section)
+            # leave verification to someone else...
+            # if checkPath(str(p)):
 
-        # leave verification to someone else...
-        # if checkPath(str(p)):
+            # update the ConfigPaths object
+            for case in [key.__eq__]:
+                if case(_KEY_MODDIR):
+                    self.paths.dir_mods = p
+                elif case(_KEY_VFSMNT):
+                    self.paths.dir_vfs = p
+                elif case(_KEY_SKYDIR):
+                    self.paths.dir_skyrim = p
 
-        for case in [key.__eq__]:
-            if case(_KEY_MODDIR):
-                self.paths.dir_mods = p
-            elif case(_KEY_VFSMNT):
-                self.paths.dir_vfs = p
-            elif case(_KEY_SKYDIR):
-                self.paths.dir_skyrim = p
+        # elif section == _SECTION_GENERAL:
+            # means we're setting either the default or most-recent profile
+            # p = self.paths.dir_profiles / value
+
+
+
             # elif case(_KEY_LASTPRO) or case(_KEY_DEFPRO):
             #     self.currentValues[_SECTION_GENERAL][key] = value
                 # self.lastprofile = value
 
-        else: # should always run since we didn't use 'break' above
-            # now insert new value into saved config
-            config[section][key] = value
-            self.currentValues[section][key] = value
+        # else: # should always run since we didn't use 'break' above
+
+        # now insert new value into saved config
+        config[section][key] = value
+        self.currentValues[section][key] = value
 
         # else:
         #     raise FileNotFoundError(filename=value)
@@ -754,6 +564,50 @@ class ConfigManager:
         # todo: maybe this operation should be async? Maybe it already is?
         with self.paths.file_main.open('w') as f:
             config.write(f)
+
+    def move_dir(self, dir_label, destination):
+        """
+        Change the storage path for the given directory and move the current contents of
+        that directory to the new location.
+
+        :param dir_label: label (e.g. 'dir_mods') for the dir to move
+        :param str destination: where to move it
+        """
+        curr_path = self.paths._getpath(dir_label)
+
+        new_path = Path(destination)
+
+        # make sure new_path does not exist/is empty
+        if new_path.exists():
+
+            # also make sure it's a directory
+            if not new_path.is_dir():
+                raise exceptions.FileAccessError(destination,
+                                                 "'{file}' is not a directory")
+
+            if len(os.listdir(destination)) > 0:
+                raise exceptions.FileAccessError(destination, "The directory '{file}' must be non-existent or empty.")
+            ## dir exists and is empty; easiest thing to do would be to remove
+            ## it and move the old folder into its place; though if the dir is a
+            ## symlink, that could really mess things up...guess we'll have move
+            ## stuff one-by-one, then.
+            for item in curr_path.iterdir():
+                # move all items inside the new path
+                fsutils.move_path(item, new_path)
+                # item.rename(new_path / item.name)
+
+            ## after all that, we can remove the old dir
+            curr_path.rmdir()
+        else:
+            # new_path does not exist, so we can just move the old dir to the destination
+            fsutils.move_path(curr_path, new_path)
+
+
+
+
+
+
+
 
     def _save_value(self, section, key, value):
         """
@@ -782,7 +636,7 @@ class ConfigManager:
 
         :return: list of names
         """
-        self.LOGGER.info("Getting list of mod directories from {}".format(self.paths.dir_mods))
-        return os.listdir(str(self.paths.dir_mods))
+        self.LOGGER.info("Getting list of mod directories from {}".format(self.paths['dir_mods']))
+        return os.listdir(self.paths['dir_mods'])
 
 

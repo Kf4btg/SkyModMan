@@ -2,6 +2,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import os
+import shutil
 from os.path import (exists as _exists,
                      expanduser as _expand,
                      join as _join)
@@ -86,3 +87,22 @@ def _merge_dir(src, dst, ow, name_mod):
             child.unlink()
     # after all children taken care of, remove the source
     src.rmdir()
+
+def move_path(src, dst):
+    """
+    Given two pathlib.Path objects, recursively rename `src` to `dst`, creating any necessary intermediate directories.
+    :param Path src:
+    :param Path dst:
+    :return:
+    """
+    # FIXME: I don't think is actually going to work...
+
+    # if the destination does not exist or is a directory,
+    # move using default shutil semantics (i.e. move the item inside
+    # the destination directory, or create the destination and parent dirs)
+    if (not dst.exists()) or dst.is_dir():
+        shutil.move(str(src), str(dst))
+
+
+
+
