@@ -1,22 +1,14 @@
-# from enum import Enum
 from pathlib import Path
-# from collections import namedtuple
 from configparser import ConfigParser as confparser
 
 from skymodman import exceptions
-# from skymodman.managers import modmanager as Manager
-from skymodman.constants import SyncError as SE
+from skymodman.constants import SyncError as SE, FALLBACK_PROFILE
 from skymodman.utils import withlogger, diqt, open_for_safe_write
-
-
-# well...that's all for now i guess!
-# _psettings = namedtuple("_psettings", "modlist_onlyactive")
 
 
 ProfileFiles = (MODINFO, LOADORDER, INIEDITS, OVERWRITE, HIDDEN, SETTINGS) = (
     "modinfo.json", "loadorder.json", "iniedits.json",
     "overwrites.json", "hiddenfiles.json", "settings.ini")
-
 
 
 # from skymodman.utils import humanizer
@@ -249,9 +241,9 @@ class ProfileManager:
 
         if len(self._profile_names) == 0:
             self.LOGGER.warning("No profiles found. Creating default profile.")
-            self._profile_names.append("default")
+            self._profile_names.append(FALLBACK_PROFILE)
             # self._current_profile = self.loadProfile("default")
-            self.loadProfile("default")
+            self.loadProfile(FALLBACK_PROFILE)
 
     ################
     ## Properties ##
@@ -393,7 +385,9 @@ class ProfileManager:
         # now make sure we have a Profile instance
         assert isinstance(profile, Profile)
 
-        if profile.name.lower() == "default":
+        # don't allow deletion of the fallback; .lower() is redundant on
+        # FALLBACK_PROFILE as it is, but just to future-proof it...
+        if profile.name.lower() == FALLBACK_PROFILE.lower():
             raise exceptions.DeleteDefaultProfileError()
 
         # remove from available_profiles list

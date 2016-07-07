@@ -9,8 +9,7 @@ import appdirs
 from skymodman import exceptions
 from skymodman.utils import withlogger
 from skymodman.utils.fsutils import checkPath
-# from skymodman.managers import modmanager as Manager
-from skymodman.constants import (EnvVars, INISection, KeyStr)
+from skymodman.constants import EnvVars, INISection, KeyStr, FALLBACK_PROFILE
 
 # bind these values locally, since we need the actual string more often than not here
 _SECTION_GENERAL = INISection.GENERAL.value
@@ -26,14 +25,13 @@ _KEY_SKYDIR  = KeyStr.Dirs.SKYRIM
 
 ## config file schema (and default values) ##
 _MAIN_CONFIG_ = "skymodman.ini"
-_FALLBACK_PROFILE_ = "default"
 _PROFILES_DIRNAME_ = "profiles"
 _APPNAME_ = "skymodman"
 
 _DEFAULT_CONFIG_={
     _SECTION_GENERAL: {
-        _KEY_LASTPRO: _FALLBACK_PROFILE_,
-        _KEY_DEFPRO:  _FALLBACK_PROFILE_
+        _KEY_LASTPRO: FALLBACK_PROFILE,
+        _KEY_DEFPRO:  FALLBACK_PROFILE
 
     },
     _SECTION_DIRS: {
@@ -264,7 +262,7 @@ class ConfigManager:
         if not self._check_dir_exist('dir_profiles'):
             # if it was missing, also create the folder for the default/fallback profile
             self.LOGGER.info("Creating directory for default profile.")
-            (self.paths.dir_profiles / _FALLBACK_PROFILE_).mkdir()
+            (self.paths.dir_profiles / FALLBACK_PROFILE).mkdir()
 
 
 
@@ -279,7 +277,7 @@ class ConfigManager:
             except exceptions.MissingConfigKeyError as e:
                 self.missing_keys.append(e)
                 self.LOGGER << "setting "+key+" to default value"
-                self.currentValues[_SECTION_GENERAL][key] = _FALLBACK_PROFILE_
+                self.currentValues[_SECTION_GENERAL][key] = FALLBACK_PROFILE
 
             finally:
                 # and now check that the folders for those dirs exist
@@ -347,7 +345,7 @@ class ConfigManager:
     #     if not self._check_dir_exist('dir_profiles'):
     #         # if it was missing, also create the folder for the default/fallback profile
     #         self.LOGGER.info("Creating directory for default profile.")
-    #         (config_paths.dir_profiles / _FALLBACK_PROFILE_).mkdir()
+    #         (config_paths.dir_profiles / FALLBACK_PROFILE).mkdir()
 
 
         # if not config_paths.dir_config.exists():
@@ -366,7 +364,7 @@ class ConfigManager:
         #
         #     config_paths.dir_profiles.mkdir(parents=True)
         #
-        #     default_prof = config_paths.dir_profiles / _FALLBACK_PROFILE_
+        #     default_prof = config_paths.dir_profiles / FALLBACK_PROFILE
         #
         #     self.LOGGER.info("Creating directory for default profile.")
         #     default_prof.mkdir()
@@ -443,10 +441,10 @@ class ConfigManager:
             self.LOGGER.warning("{}: Profile directory '{}' not found".format(key, pname))
 
             # if the profile is not already the default, set it so.
-            if pname != _FALLBACK_PROFILE_:
+            if pname != FALLBACK_PROFILE:
                 self.LOGGER << "falling back to default."
                 self.currentValues[_SECTION_GENERAL][
-                    key] = _FALLBACK_PROFILE_
+                    key] = FALLBACK_PROFILE
                 # and go ahead and recurse this once,
                 # to ensure that the default folder is created
                 self._check_for_profile_dir(key)
@@ -564,7 +562,7 @@ class ConfigManager:
         #     self.LOGGER << "setting last profile to default value"
         #     self.missing_keys.append((_SECTION_GENERAL, _KEY_LASTPRO))
         #     # it should already be the default value
-        #     # self.lastprofile = _FALLBACK_PROFILE_
+        #     # self.lastprofile = FALLBACK_PROFILE
         #     # self._lastprofile
         #
         # ## same for the default profile:
@@ -682,7 +680,7 @@ class ConfigManager:
     #         self.LOGGER << "setting last profile to default value"
     #         self.missing_keys.append((_SECTION_GENERAL, _KEY_LASTPRO))
     #         # it should already be the default value
-    #         # self.lastprofile = _FALLBACK_PROFILE_
+    #         # self.lastprofile = FALLBACK_PROFILE
     #         # self._lastprofile
     #
     #     ## same for the default profile:
@@ -694,7 +692,7 @@ class ConfigManager:
     #         self.LOGGER << "setting default profile to default value"
     #         self.missing_keys.append((_SECTION_GENERAL, _KEY_DEFPRO))
     #
-    #         # self.default_profile = _FALLBACK_PROFILE_
+    #         # self.default_profile = FALLBACK_PROFILE
 
 
 
