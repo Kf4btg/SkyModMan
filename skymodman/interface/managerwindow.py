@@ -36,7 +36,7 @@ from skymodman.interface.models import (
     ActiveModsListFilter,
     FileViewerTreeFilter)
 from skymodman.interface.dialogs import message
-from skymodman.utils import withlogger, Notifier
+from skymodman.utils import withlogger
 from skymodman.utils.fsutils import checkPath, join_path
 from skymodman.interface.install_helpers import InstallerUI
 from skymodman.interface import app_settings
@@ -44,12 +44,24 @@ from skymodman.interface import app_settings
 from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow
 
 
+## Interestingly, using the icon font as a font works just fine;
+## One can do things like:
+##    >>> btn_colview.setIcon(QIcon()) # just unsets current icon
+##    >>> btn_colview.setText("\uf0db")
+## and
+##    >>> btn_colview.setStyleSheet("QToolButton {font-family: FontAwesome;}")
+## to get the 'icon' for that character to show on the button.
+## This reduces dependencies, but the qtawesome bindings do make configuring
+## and tweaking the icon much easier, as well as allowing for stacking and
+## animation, if desired.
+# _id = QFontDatabase.addApplicationFont("skymodman/thirdparty/qtawesome/fonts/fontawesome-webfont.ttf")
+
 @withlogger
 class ModManagerWindow(QMainWindow, Ui_MainWindow):
     modListModified     = pyqtSignal()
     modListSaved        = pyqtSignal()
 
-    windowInitialized   = pyqtSignal()
+    # windowInitialized   = pyqtSignal()
 
     newProfileLoaded    = pyqtSignal(str)
 
@@ -67,18 +79,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.LOGGER.info("Initializing ModManager Window")
         ModManagerWindow._this = self
 
-        ## Interestingly, using the icon font as a font works just fine;
-        ## One can do things like:
-        ##    >>> btn_colview.setIcon(QIcon()) # just unsets current icon
-        ##    >>> btn_colview.setText("\uf0db")
-        ## and
-        ##    >>> btn_colview.setStyleSheet("QToolButton {font-family: FontAwesome;}")
-        ## to get the 'icon' for that character to show on the button.
-        ## This reduces dependencies, but the qtawesome bindings do make configuring
-        ## and tweaking the icon much easier, as well as allowing for stacking and
-        ## animation, if desired.
-        # _id = QFontDatabase.addApplicationFont("skymodman/thirdparty/qtawesome/fonts/fontawesome-webfont.ttf")
-
         # verify basic setup
         # self.check_setup()
 
@@ -88,33 +88,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # setup trackers for all of our models and proxies
         self.models  = {} #type: dict[M,QAbstractItemModel]
         self.filters = {} #type: dict[F,QSortFilterProxyModel]
-
-        # slots (methods) to be called after __init__ is finished
-        # setupSlots = [
-        #     self._setup_toolbar,
-        #     self._setup_statusbar,
-        #     self._setup_profile_selector,
-        #     self._setup_table,
-        #     self._setup_file_tree,
-        #     self._setup_actions,
-        #     self._setup_button_connections,
-        #     self._setup_local_signals_connections,
-        #     self._setup_slot_connections,
-        # ]
-
-        ## Notifier object for the above 'setup...' slots to
-        ## call when they've completed their setup process.
-        ## After the final call, the UI will updated and
-        ## presented to the user
-        # TODO: turn the "notify_done" param and call into a decorator
-        # self.SetupDone = Notifier(len(setupSlots), self.update_UI)
-
-        # connect the windowinit signal to the setup slots, and pass
-        # them the notifier so they know who to call
-        # for s in setupSlots:
-        #     self.windowInitialized.connect(partial(s, self.SetupDone))
-
-        self.windowInitialized.connect(self.update_UI)
 
         # setup the base ui
         self.setupUi(self)
@@ -140,12 +113,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # define and read the application settings
         self.init_settings()
 
-        # Let anything that cares know that the main window is ready;
-        # if nothing else, this makes sure the right stuff is showing
-        self.windowInitialized.emit()
-
-
-
+        # finally, make sure the right stuff is showing
+        self.update_UI()
 
     @property
     def current_tab(self):
@@ -166,10 +135,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         ## define the boolean/toggle preferences ##
         app_settings.add(KeyStr.UI.RESTORE_WINSIZE, True)
-        # app_settings.add(P.RESTORE_WINSIZE, True)
 
         app_settings.add(KeyStr.UI.RESTORE_WINPOS, True)
-        # app_settings.add(P.RESTORE_WINPOS, True)
 
         ## on_load function for the profile_load_policy pref
         def _load_profile(prof_policy):
@@ -195,92 +162,24 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             if pos and app_settings.Get(P.RESTORE_WINPOS):
                 self.move(pos)
 
-
-
         # add the properties w/ callbacks
         app_settings.add("size", self.size, on_read=_resize)
         app_settings.add("pos", self.pos, on_read=_move)
 
+        # TODO: handle and prioritize the SMM_PROFILE env var
         app_settings.add(KeyStr.UI.PROFILE_LOAD_POLICY, constants.ProfileLoadPolicy.last, on_read=_load_profile)
 
         ## ----------------------------------------------------- ##
         ## Now that we've defined them all, time to read them in ##
 
-        # read in preferences and stored states
+        # this will possibly:
+        #  a) move the window
+        #  b) resize the window
+        #  c) load data for a specific profile
+        #  d) any or none of the above
         app_settings.read()
 
-        # see which profile to load, if any
-        # pload = app_settings.Get(KeyStr.UI.PROFILE_LOAD_POLICY)
 
-        # TODO: handle and prioritize the SMM_PROFILE env var
-
-        # Also TODO: maybe pass this stuff to the on_read handler in the app_settings, just like the move() and resize() handlers
-        # if pload == constants.ProfileLoadPolicy.last:
-        #     # load last profile
-        #     self.load_profile_by_name(
-        #         Manager.get_config_value(KeyStr.INI.LASTPROFILE,
-        #                                  INISection.GENERAL))
-        #
-        # ## FIXME: this currently acts the same as "load-none"
-        # # (i.e. nothing happens...)
-        # elif pload == constants.ProfileLoadPolicy.default:
-        #     # load whichever profile is set as default
-        #     self.load_profile_by_name(
-        #         Manager.get_config_value(KeyStr.INI.DEFAULT_PROFILE,
-        #                                  INISection.GENERAL))
-            # otherwise, load nothing
-
-
-    # def read_settings(self):
-    #     settings = QSettings("skymodman", "skymodman")
-    #
-    #     settings.beginGroup("ManagerWindow")
-    #
-    #     # load boolean prefs;
-    #     # specify the type as 'bool' or it may be loaded as a string
-    #     self.preferences = {
-    #         P.RESTORE_WINSIZE: settings.value(
-    #             P.RESTORE_WINSIZE.value, True, bool),
-    #
-    #         P.RESTORE_WINPOS: settings.value(
-    #             P.RESTORE_WINPOS.value, True, bool),
-    #
-    #         P.LOAD_LAST_PROFILE: settings.value(
-    #             P.LOAD_LAST_PROFILE.value, True, bool)
-    #     }
-    #
-    #     s_size = settings.value("size")
-    #     if self.preferences[P.RESTORE_WINSIZE] and s_size is not None:
-    #         self.resize(s_size)
-    #         # toSize() is not necessary as pyQt does the conversion to
-    #         # QSize automagically.
-    #         # self.resize(s_size.toSize())
-    #     else:
-    #         # noinspection PyArgumentList
-    #         self.resize(QGuiApplication.primaryScreen().availableSize() * 5 / 7)
-    #
-    #     s_pos = settings.value("pos")
-    #     if self.preferences[P.RESTORE_WINPOS] and s_pos is not None:
-    #         self.move(s_pos)
-    #
-    #
-    # def write_settings(self):
-    #     settings = QSettings("skymodman", "skymodman")
-    #
-    #     settings.beginGroup("ManagerWindow")
-    #
-    #     settings.setValue(P.RESTORE_WINSIZE.value,
-    #                       self.preferences[P.RESTORE_WINSIZE])
-    #
-    #     settings.setValue(P.RESTORE_WINPOS.value,
-    #                       self.preferences[P.RESTORE_WINPOS])
-    #
-    #     settings.setValue(P.LOAD_LAST_PROFILE.value,
-    #                       self.preferences[P.LOAD_LAST_PROFILE])
-    #
-    #     settings.setValue("size", self.size())
-    #     settings.setValue("pos", self.pos())
-    #     settings.endGroup()
 
     ##===============================================
     ## Setup UI Functionality (called once on first load)
@@ -344,8 +243,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         Add a progress bar to the status bar. Will be used for showing
         progress or activity of long-running processes.
-
-        :param notify_done:
         """
         self.LOGGER.debug("_setup_statusbar")
 
@@ -367,9 +264,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def _setup_table(self):
         """
-        This is where we finally tell the manager to load all the actual data for the profile.
-
-        :param notify_done:
+        Prepare the mods-display table and related functionality
         """
         self.LOGGER.debug("_setup_table")
 
@@ -416,17 +311,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         for name, profile in Manager.get_profiles(
                 names_only=False):
             model.insertRows(data=profile)
-        #     if name == Manager.active_profile().name:
-        #         self.logger << "Setting {} as chosen profile".format(
-        #             name)
-        #         start_idx = model.rowCount() - 1
-        #
-        #         # see if we should enable the remove-profile button
-        #         self.check_enable_profile_delete(name)
 
         self.profile_selector.setModel(model)
-
-        # self.populate_profile_selector()
 
         # start with no selection
         self.profile_selector.setCurrentIndex(-1)
@@ -518,8 +404,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         else:
             self.filetree_activeonlytoggle.setEnabled(True)
 
-        # if activeonly is not None:
-        # self.filetree_activeonlytoggle.setEnabled(True)
         filter_.onlyShowActive = activeonly
 
         # apply setting to box
@@ -752,9 +636,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     def _setup_slot_connections(self):
         """
         SLOTS:
-
-
-
         self._enable_mod_move_actions
 
         on_new_profile_action
@@ -829,7 +710,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.models[M.file_viewer].hasUnsavedChanges.connect(
             self.on_table_unsaved_change)
 
-
     # </editor-fold>
 
     ##=============================================
@@ -857,7 +737,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         data with it. Also show a message about unsaved changes to the
         current profile.
 
-        :param index:
+        :param int index:
         """
 
         old_index = self.profile_selector_index
@@ -883,17 +763,18 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 # check for unsaved changes to the mod-list
                 reply = self.table_prompt_if_unsaved()
 
-                # only continue to change profile if user does NOT click cancel
-                # (or if there are no changes to save)
+                # only continue to change profile if user does NOT
+                # click cancel (or if there are no changes to save)
                 if reply == QMessageBox.Cancel:
                     # reset the text in the profile selector;
                     # this SHOULDn't enter an infinite loop because,
-                    # since we haven't yet changed self.profile_selector_index,
-                    # now 'index' will be the same as 'old_index' at the top
-                    # of this function and nothing else in the program will change
-                    # (just the name shown in the profile selector)
+                    # since we haven't yet changed
+                    # self.profile_selector_index, now 'index' will be
+                    # the same as 'old_index' at the top of this
+                    # function and nothing else in the program will
+                    # change (just the name shown in the profile
+                    # selector)
                     self.profile_selector.setCurrentIndex(old_index)
-                # if reply != QMessageBox.Cancel:
                 else:
                     # update our variable which tracks the current index
                     self.profile_selector_index = index
@@ -984,8 +865,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         Query the user for a new name, then ask the mod-manager backend to rename the profile folder.
         """
 
-        newname = \
-        QInputDialog.getText(self, "Rename Profile", "New name")[0]
+        # noinspection PyTypeChecker,PyArgumentList
+        newname = QInputDialog.getText(self,
+                                       "Rename Profile",
+                                       "New name")[0]
 
         if newname:
             try:
@@ -1158,12 +1041,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def show_statusbar_progress(self, text="Working:", minimum=0, maximum=0, show_bar_text=False):
         """
-        Set up and display the small progress bar on the bottom right of the window
-        (in the status bar). If `minimum` == `maximum` == 0, the bar will be in
-        indeterminate ('busy') mode: this is useful for indicating to the user
-        that *something* is going on on the background during activities that may
-        take a moment or two to complete, so the user need not worry
-        that their last command had no effect.
+        Set up and display the small progress bar on the bottom right
+        of the window (in the status bar). If `minimum` == `maximum`
+        == 0, the bar will be in indeterminate ('busy') mode: this is
+        useful for indicating to the user that *something* is going on
+        in the background during activities that may take a moment or
+        two to complete, so the user need not worry that their last
+        command had no effect.
 
         :param text: Text that will be shown to the left of the progress bar
         :param minimum: Minumum value for the bar
@@ -1212,7 +1096,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # self.toggle_search_box(ensure_state=0)
 
 
-
     def _reset_file_tree(self):
         # clear the filter boxes
         self.filetree_modfilter.clear()
@@ -1224,9 +1107,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # update the label and checkbox on the modlist
         self.__init_modlist_filter_state(
             self.filters[F.mod_list])
-
-
-
 
     ##===============================================
     ## UI Helper Functions
@@ -1482,7 +1362,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         from skymodman.interface.dialogs.preferences_dialog import PreferencesDialog
 
-        # pdialog = PreferencesDialog(self.preferences)
         pdialog = PreferencesDialog(self.profile_selector.model(), self.profile_selector.currentIndex())
 
         pdialog.exec_()
@@ -1502,19 +1381,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self,
             "Choose Directory Containing Installed Mods",
             Manager.get_directory(INIKey.MODDIR)
-            # Manager.get_config_value(INIKey.MODDIR, INISection.DIRECTORIES)
             # Manager.conf['dir_mods']
         )
 
         # update config with new path
         if checkPath(moddir):
             Manager.set_directory(INIKey.MODDIR, moddir)
-            # Manager.set_config_value(INIKey.MODDIR,
-            #                          INISection.DIRECTORIES,
-            #                          moddir)
-            # Manager.conf.updateConfig(INIKey.MODDIR,
-            #                           INISection.GENERAL,
-            #                           moddir)
 
             # reverify and reload the mods.
             if not Manager.validate_mod_installs():
@@ -1526,6 +1398,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         Show file selection dialog for user to select the directory
         where Skyrim is installed
         """
+        # noinspection PyTypeChecker
         skydir = QFileDialog.getExistingDirectory(
             self,
             "Select Skyrim Installation",
@@ -1534,12 +1407,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # update config with new path
         if checkPath(skydir):
             Manager.set_directory(INIKey.SKYRIMDIR, skydir)
-            # Manager.set_config_value(INIKey.SKYRIMDIR,
-            #                           INISection.DIRECTORIES,
-            #                           skydir)
-            # Manager.conf.updateConfig(INIKey.SKYRIMDIR,
-            #                           INISection.GENERAL,
-            #                           skydir)
         else:
             self.safe_quit()
 
@@ -1595,7 +1462,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # todo: implement re-running the installer
         row = self.mod_table.currentIndex().row()
         if row > -1:
-            mod = self.models[M.mod_table][row]
+            # mod = self.models[M.mod_table][row]
             self.LOGGER << "Here's where we'd reinstall this mod."
 
     def uninstall_mod(self):
@@ -1605,7 +1472,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # todo: implement removing the mod
         row = self.mod_table.currentIndex().row()
         if row > -1:
-            mod = self.models[M.mod_table][row]
+            # mod = self.models[M.mod_table][row]
             self.LOGGER << "Here's where we'd uninstall this mod."
 
     #</editor-fold>
