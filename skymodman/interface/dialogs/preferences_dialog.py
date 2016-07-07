@@ -4,17 +4,14 @@ from PyQt5.QtWidgets import QDialog, QFileDialog, QDialogButtonBox
 from PyQt5.QtCore import pyqtSlot, pyqtSignal #QStringListModel, Qt
 
 from skymodman.managers import modmanager as Manager
-from skymodman.interface import app_settings
+from skymodman.interface import app_settings, blocked_signals
 from skymodman.interface.designer.uic.preferences_dialog_ui import Ui_Preferences_Dialog
 from skymodman.utils import withlogger
 from skymodman.utils.fsutils import checkPath
-from skymodman.constants import KeyStr, ProfileLoadPolicy
+from skymodman import constants
 
 
-# SKYPATH=0
-# MODPATH=1
-# VFSPATH=2
-
+# ref to the ConfigManager
 Config = Manager.conf
 
 ## text and style sheets for indicator labels
@@ -34,13 +31,15 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
     profilePolicyChanged = pyqtSignal(int, bool)
     pathEditFinished = pyqtSignal(str)
 
-    def __init__(self, profilebox_model, *args, **kwargs):
+    def __init__(self, profilebox_model, profilebox_index, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.setupUi(self)
 
-        D = KeyStr.Dirs
-
+        # because I'm lazy
+        D = constants.KeyStr.Dirs
+        UI = constants.KeyStr.UI
+        PLP = constants.ProfileLoadPolicy
 
         ## Default Path values ##
         # pass false for `use_profile_override` to get the default value;
@@ -62,29 +61,29 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
         ## associate checkboxes w/ preference names
         self.checkboxes = {
-            KeyStr.UI.RESTORE_WINSIZE: self.cbox_restore_size,
-            KeyStr.UI.RESTORE_WINPOS: self.cbox_restore_pos
+            UI.RESTORE_WINSIZE: self.cbox_restore_size,
+            UI.RESTORE_WINPOS: self.cbox_restore_pos
         }
 
         ## Set UI to reflect current preferences ##
 
         # -- checkboxes
         self.cbox_restore_size.setChecked(
-            app_settings.Get(KeyStr.UI.RESTORE_WINSIZE))
+            app_settings.Get(UI.RESTORE_WINSIZE))
 
         self.cbox_restore_pos.setChecked(
-            app_settings.Get(KeyStr.UI.RESTORE_WINPOS))
+            app_settings.Get(UI.RESTORE_WINPOS))
 
         ## Setup Profile Load Policy radiobuttons ##
         self.radios = {
-            ProfileLoadPolicy.last: self.rad_load_last_profile,
-            ProfileLoadPolicy.default: self.rad_load_default_profile,
-            ProfileLoadPolicy.none: self.rad_load_no_profile
+            PLP.last: self.rad_load_last_profile,
+            PLP.default: self.rad_load_default_profile,
+            PLP.none: self.rad_load_no_profile
         }
 
         # load and store the current policy
         self._active_plp = self._selected_plp = app_settings.Get(
-                             KeyStr.UI.PROFILE_LOAD_POLICY)
+                             UI.PROFILE_LOAD_POLICY)
 
         # check the appropriate radio button based on current policy;
         # associate a change in the radio selection with updating _selected_plp
@@ -147,8 +146,10 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
         # reuse the main profile-combobox-model for this one here
         self.combo_profiles.setModel(profilebox_model)
+        self.combo_profiles.setCurrentIndex(profilebox_index)
 
-        self._selected_profile = Manager.active_profile().name
+        # store the currently-selected Profile object
+        self._selected_profile = self.combo_profiles.currentData()
         self.check_default()
 
         self.combo_profiles.currentTextChanged.connect(self.change_profile)
@@ -186,7 +187,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         """
 
         if enabled:
-            self._selected_plp = ProfileLoadPolicy(value)
+            self._selected_plp = constants.ProfileLoadPolicy(value)
 
     @pyqtSlot(str)
     def on_path_edit(self, key):
@@ -211,15 +212,13 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             label.setVisible(False)
 
 
-    @pyqtSlot(str)
-    def change_profile(self, profile):
+    @pyqtSlot()
+    def change_profile(self):
         """Update the data on the profiles tab to reflect the data from the selected profile."""
-        # TODO
-        print("change_profile:", profile)
-        self._selected_profile = profile
+        self._selected_profile = self.combo_profiles.currentData()
         self.check_default()
 
-    # FIXME: this borken.
+    @pyqtSlot(bool)
     def set_default_profile(self, checked):
         """
         When the user checks the "default" box next to the profile selector,
@@ -227,16 +226,21 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         If they uncheck it, mark 'default' as default...
         """
         if checked:
-            Config.default_profile = self._selected_profile
+            if self._selected_profile:
+                Config.default_profile = self._selected_profile.name
         else:
-            Config.default_profile = 'default'
+            Config.default_profile = constants.FALLBACK_PROFILE
 
     def check_default(self):
         """
         If the active profile is marked as default, check the "is_default" checkbox.
         Otherwise, uncheck it.
         """
-        self.cbox_default.setChecked(self._selected_profile.lower() == Config.default_profile.lower())
+        # make sure we have a valid profile
+        if self._selected_profile:
+            # don't want unchecking this to trigger changing the default profile
+            with blocked_signals(self.cbox_default):
+                self.cbox_default.setChecked(self._selected_profile.name == Config.default_profile)
 
 
     @pyqtSlot()
@@ -252,7 +256,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
         # check for a change in the profile-load-policy
         if self._active_plp != self._selected_plp:
-            app_settings.Set(KeyStr.UI.PROFILE_LOAD_POLICY, self._selected_plp)
+            app_settings.Set(constants.KeyStr.UI.PROFILE_LOAD_POLICY, self._selected_plp)
 
         # check if any of the paths have changed and update accordingly
         for label, path in self.paths.items():

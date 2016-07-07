@@ -178,7 +178,8 @@ class OverwriteMode(Enum):
     def __bool__(self):
         return self.value != 0
 
-
+# this profile must exist. If it doesn't, we must create it.
+FALLBACK_PROFILE = "default"
 
 # defines the names and order of fields in the database
 db_fields = ["ordinal", "directory", "name", "modid", "version", "enabled"]
