@@ -90,29 +90,31 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.filters = {} #type: dict[F,QSortFilterProxyModel]
 
         # slots (methods) to be called after __init__ is finished
-        setupSlots = [
-            self._setup_toolbar,
-            self._setup_statusbar,
-            self._setup_profile_selector,
-            self._setup_table,
-            self._setup_file_tree,
-            self._setup_actions,
-            self._setup_button_connections,
-            self._setup_local_signals_connections,
-            self._setup_slot_connections,
-        ]
+        # setupSlots = [
+        #     self._setup_toolbar,
+        #     self._setup_statusbar,
+        #     self._setup_profile_selector,
+        #     self._setup_table,
+        #     self._setup_file_tree,
+        #     self._setup_actions,
+        #     self._setup_button_connections,
+        #     self._setup_local_signals_connections,
+        #     self._setup_slot_connections,
+        # ]
 
         ## Notifier object for the above 'setup...' slots to
         ## call when they've completed their setup process.
         ## After the final call, the UI will updated and
         ## presented to the user
         # TODO: turn the "notify_done" param and call into a decorator
-        self.SetupDone = Notifier(len(setupSlots), self.update_UI)
+        # self.SetupDone = Notifier(len(setupSlots), self.update_UI)
 
         # connect the windowinit signal to the setup slots, and pass
         # them the notifier so they know who to call
-        for s in setupSlots:
-            self.windowInitialized.connect(partial(s, self.SetupDone))
+        # for s in setupSlots:
+        #     self.windowInitialized.connect(partial(s, self.SetupDone))
+
+        self.windowInitialized.connect(self.update_UI)
 
         # setup the base ui
         self.setupUi(self)
@@ -128,36 +130,20 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self._search_text=''
 
-        # Let sub-widgets know the main window is initialized
-        self.windowInitialized.emit()
+        ## Yeah...all that Notifier business was silly. Everything
+        ## was still called synchronously (and in the order defined
+        ## by the list), so it was just a bunch of sugar and no meat.
+        ## This meta_setup() method may still be silly, but it doesn't
+        ## pretend to be fancy...
+        self._meta_setup()
 
-
-        # define the application settings
+        # define and read the application settings
         self.init_settings()
 
-        # read in preferences and stored states
-        app_settings.read()
+        # Let anything that cares know that the main window is ready;
+        # if nothing else, this makes sure the right stuff is showing
+        self.windowInitialized.emit()
 
-        # see which profile to load, if any
-        pload = app_settings.Get(KeyStr.UI.PROFILE_LOAD_POLICY)
-
-        # TODO: handle and prioritize the SMM_PROFILE env var
-
-        # Also TODO: maybe pass this stuff to the on_read handler in the app_settings, just like the move() and resize() handlers
-        if pload == constants.ProfileLoadPolicy.last:
-            # load last profile
-            self.load_profile_by_name(
-                Manager.get_config_value(KeyStr.INI.LASTPROFILE,
-                                         INISection.GENERAL))
-
-        ## FIXME: this currently acts the same as "load-none"
-        # (i.e. nothing happens...)
-        elif pload == constants.ProfileLoadPolicy.default:
-            # load whichever profile is set as default
-            self.load_profile_by_name(
-                Manager.get_config_value(KeyStr.INI.DEFAULT_PROFILE,
-                                         INISection.GENERAL))
-        # otherwise, load nothing
 
 
 
@@ -185,7 +171,16 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         app_settings.add(KeyStr.UI.RESTORE_WINPOS, True)
         # app_settings.add(P.RESTORE_WINPOS, True)
 
-        app_settings.add(KeyStr.UI.PROFILE_LOAD_POLICY, constants.ProfileLoadPolicy.last)
+        ## on_load function for the profile_load_policy pref
+        def _load_profile(prof_policy):
+            if prof_policy:
+                val = {
+                    constants.ProfileLoadPolicy.last:
+                        KeyStr.INI.LASTPROFILE,
+                    constants.ProfileLoadPolicy.default:
+                        KeyStr.INI.DEFAULT_PROFILE
+                }[prof_policy]
+                self.load_profile_by_name(Manager.get_config_value(val, INISection.GENERAL))
 
         ## setup window-state prefs ##
 
@@ -200,9 +195,40 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             if pos and app_settings.Get(P.RESTORE_WINPOS):
                 self.move(pos)
 
+
+
         # add the properties w/ callbacks
         app_settings.add("size", self.size, on_read=_resize)
         app_settings.add("pos", self.pos, on_read=_move)
+
+        app_settings.add(KeyStr.UI.PROFILE_LOAD_POLICY, constants.ProfileLoadPolicy.last, on_read=_load_profile)
+
+        ## ----------------------------------------------------- ##
+        ## Now that we've defined them all, time to read them in ##
+
+        # read in preferences and stored states
+        app_settings.read()
+
+        # see which profile to load, if any
+        # pload = app_settings.Get(KeyStr.UI.PROFILE_LOAD_POLICY)
+
+        # TODO: handle and prioritize the SMM_PROFILE env var
+
+        # Also TODO: maybe pass this stuff to the on_read handler in the app_settings, just like the move() and resize() handlers
+        # if pload == constants.ProfileLoadPolicy.last:
+        #     # load last profile
+        #     self.load_profile_by_name(
+        #         Manager.get_config_value(KeyStr.INI.LASTPROFILE,
+        #                                  INISection.GENERAL))
+        #
+        # ## FIXME: this currently acts the same as "load-none"
+        # # (i.e. nothing happens...)
+        # elif pload == constants.ProfileLoadPolicy.default:
+        #     # load whichever profile is set as default
+        #     self.load_profile_by_name(
+        #         Manager.get_config_value(KeyStr.INI.DEFAULT_PROFILE,
+        #                                  INISection.GENERAL))
+            # otherwise, load nothing
 
 
     # def read_settings(self):
@@ -262,7 +288,21 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     # <editor-fold desc="setup">
 
-    def _setup_toolbar(self, notify_done):
+    def _meta_setup(self):
+        """
+        Calls all the setup methods
+        """
+        self._setup_toolbar()
+        self._setup_statusbar()
+        self._setup_profile_selector()
+        self._setup_table()
+        self._setup_file_tree()
+        self._setup_actions()
+        self._setup_button_connections()
+        self._setup_local_signals_connections()
+        self._setup_slot_connections()
+
+    def _setup_toolbar(self):
         """We've got a few things to add to the toolbar:
 
         * Profile Selector
@@ -299,9 +339,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # show_busybar_action.triggered.connect(self.show_statusbar_progress)
         # self.file_toolBar.addAction(show_busybar_action)
 
-        notify_done()
 
-    def _setup_statusbar(self, notify_done):
+    def _setup_statusbar(self):
         """
         Add a progress bar to the status bar. Will be used for showing
         progress or activity of long-running processes.
@@ -325,9 +364,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.sb_progress_bar.setVisible(False)
 
 
-        notify_done()
 
-    def _setup_table(self, notify_done):
+    def _setup_table(self):
         """
         This is where we finally tell the manager to load all the actual data for the profile.
 
@@ -366,9 +404,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # we don't actually use this yet...
         self.filters_dropdown.setVisible(False)
 
-        notify_done()
 
-    def _setup_profile_selector(self, notify_done):
+    def _setup_profile_selector(self):
         """
         Initialize the dropdown list for selecting profiles with the names of the profiles found on disk
         """
@@ -400,10 +437,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.profile_selector.currentIndexChanged.connect(
             self.on_profile_select)
 
-        # let setup know we're done here
-        notify_done()
 
-    def _setup_file_tree(self, notify_done):
+    def _setup_file_tree(self):
         """
         Create and populate the list of mod-folders shown on the
         filetree tab, as well as prepare the fileviewer pane to show
@@ -473,9 +508,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         for f in [self.filetree_modfilter, self.filetree_filefilter]:
             f.escapeLineEdit.connect(f.clearFocus)
 
-        # let setup know we're done here
-        notify_done()
-
     def __init_modlist_filter_state(self, filter_):
         activeonly = Manager.get_profile_setting('activeonly', 'File Viewer')
 
@@ -504,7 +536,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         #     self.update_modlist_label(False)
         #     self.filetree_activeonlytoggle.setEnabled(False)
 
-    def _setup_actions(self, notify_done):
+    def _setup_actions(self):
         """Connect all the actions to their appropriate slots/whatevers
 
         Actions:
@@ -652,9 +684,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.action_find_previous.triggered.connect(
             partial(self.on_table_search, -1))
 
-        notify_done()
 
-    def _setup_button_connections(self, notify_done):
+    def _setup_button_connections(self):
         """ Make the buttons do stuff
         """
         self.LOGGER.debug("_setup_buttons")
@@ -685,11 +716,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.modtable_search_button.released.connect(
             self.toggle_search_box)
 
-        notify_done()
 
     # inspector complains about alleged lack of "connect" function
     # noinspection PyUnresolvedReferences
-    def _setup_local_signals_connections(self, notify_done):
+    def _setup_local_signals_connections(self):
         """
         SIGNALS:
 
@@ -718,9 +748,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.moveModsToTop.connect(
             self.mod_table.onMoveModsToTopAction)
 
-        notify_done()
 
-    def _setup_slot_connections(self, notify_done):
+    def _setup_slot_connections(self):
         """
         SLOTS:
 
@@ -800,7 +829,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.models[M.file_viewer].hasUnsavedChanges.connect(
             self.on_table_unsaved_change)
 
-        notify_done()
 
     # </editor-fold>
 
