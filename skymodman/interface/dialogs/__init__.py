@@ -1,1 +1,1 @@
-from .message import message
+from .message import message, checkbox_message
