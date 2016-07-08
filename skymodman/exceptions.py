@@ -69,6 +69,27 @@ class FileAccessError(GeneralError):
     def __init__(self, file, message='{file}'):
         super().__init__(message.format(file=file))
 
+class MultiFileError(Error):
+    """
+    Raised when errors occur during a multi-file filesystem operation,
+    such as moving a number of folders to a new location on the filesystem.
+    Contains the collection of errors.
+    """
+    def __init__(self, errors, message=""):
+        """
+
+        :param errors: a list of tuples of form (src, dest, exception)
+        :param message: optional message containing additional information.
+        """
+        self.errors = errors
+        self.msg = message
+
+    def __str__(self):
+        if self.msg:
+            return "{0.msg}: {0.errors}".format(self)
+        return str(self.errors)
+
+
 class FilesystemDesyncError(Error):
     """
     Raised when there is a mismatch between the folders extant in

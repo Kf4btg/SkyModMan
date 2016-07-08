@@ -39,17 +39,29 @@ _no_response = [QMessageBox.No, QMessageBox.Cancel, QMessageBox.Close, QMessageB
 
 def message(icon='question', title='', text="What's that you say?", info_text=None, buttons=('yes', 'no'), default_button = 'none', parent=None, min_width=500):
     """
-    Helper for constructing and gettting replies from QMessageBoxes. Most arguments take strings (buttons an iterable of strings). Rather than return the response code from the QMessageBox, this method filters almost all the codes down to either 'positive' or 'negative' response and return True or False accordingly. If, somehow, the response does not fall in one of these categories, then the code will be returned instead.
+    Helper for constructing and gettting replies from QMessageBoxes.
+    Most arguments take strings (buttons an iterable of strings). Rather
+    than return the response code from the QMessageBox, this method
+    filters almost all the codes down to either 'positive' or 'negative'
+    response and return True or False accordingly. If, somehow, the
+    response does not fall in one of these categories, then the code
+    will be returned instead.
 
     :param parent: QWidget parent
-    :param str icon: one of 'question', 'warning', 'info', 'information', 'critical', 'none', or 'noicon' (these last 2 are the same)
+    :param str icon: one of 'question', 'warning', 'info', 'information',
+        'critical', 'none', or 'noicon' (these last 2 are the same)
     :param str title:
     :param str text:
     :param str info_text:
-    :param buttons: a str or tuple of strs, which can be any of: 'ok', 'open', 'save', 'cancel', 'close', 'discard', 'apply', 'reset', 'restore', 'help', 'yes', 'no', 'abort', 'retry', 'ignore', 'none', or 'nobutton'.  The default is ``('yes', 'no')``
+    :param buttons: a str or tuple of strs, which can be any of: 'ok',
+        'open', 'save', 'cancel', 'close', 'discard', 'apply', 'reset',
+        'restore', 'help', 'yes', 'no', 'abort', 'retry', 'ignore',
+        'none', or 'nobutton'.  The default is ``('yes', 'no')``
 
-    :param str default_button: by default, there is no default button. Specified one of the buttons passed for `buttons` to make it the default.
-    :param int min_width: minimum width of the created box
+    :param str default_button: by default, there is no default button.
+        Specify one of the buttons passed for `buttons` to make it the
+        default.
+    :param int min_width: minimum width of the created dialog box
     :return: True or False
     """
     # defaults

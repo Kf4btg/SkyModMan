@@ -7,6 +7,8 @@ from os.path import (exists as _exists,
                      expanduser as _expand,
                      join as _join)
 
+from skymodman.exceptions import FileAccessError
+
 __all__ = ["checkPath", "join_path", "change_dir", "dir_move_merge"]
 
 
@@ -95,13 +97,13 @@ def move_path(src, dst):
     :param Path dst:
     :return:
     """
-    # FIXME: I don't think is actually going to work...
-
     # if the destination does not exist or is a directory,
     # move using default shutil semantics (i.e. move the item inside
     # the destination directory, or create the destination and parent dirs)
-    if (not dst.exists()) or dst.is_dir():
+    if not dst.exists() or dst.is_dir():
         shutil.move(str(src), str(dst))
+    else:
+        raise FileAccessError(str(dst), "'{file}' must be a directory or must not already exist.")
 
 
 

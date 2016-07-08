@@ -1,4 +1,5 @@
 from enum import Enum, IntEnum
+from collections import namedtuple
 
 
 # using IntEnums here because they are interacting with code I can't change (Qt)
@@ -53,7 +54,7 @@ class INISection(str, Enum):
     OVERRIDES = "Directory Overrides"
     FILEVIEWER = "File Viewer"
 
-class Strenum(type):
+class Iternum(type):
     """
     Using this as a metaclass, one can iterate over the public class-level fields
     of a non-instantiated subclass (ie the type object itself). See INI below for
@@ -65,7 +66,7 @@ class Strenum(type):
 class KeyStr:
     __slots__ = ()
 
-    class INI(metaclass=Strenum):
+    class INI(metaclass=Iternum):
         """
         Thanks to the Strenum metaclass, the public fields in this class
         can be iterated over without having to instantiate the class,
@@ -82,14 +83,14 @@ class KeyStr:
         ## profiles only
         ACTIVEONLY = "activeonly"
 
-    class Dirs(metaclass=Strenum):
+    class Dirs(metaclass=Iternum):
         __slots__=()
         PROFILES = "dir_profiles" # storage location for user profiles
         SKYRIM = "dir_skyrim"  # location of base skyrim install
         MODS = "dir_mods"  # location of mod storage
         VFS = "dir_vfs"  # mount point for "virtual" skyrim install
 
-    class UI(metaclass=Strenum):
+    class UI(metaclass=Iternum):
         __slots__=()
         RESTORE_WINSIZE = "restore_window_size"
         RESTORE_WINPOS = "restore_window_pos"
@@ -100,6 +101,22 @@ class KeyStr:
         LOAD_DEFAULT_PROFILE = "load_default_profile"
         LOAD_NO_PROFILE = "load_no_profile"
 
+# For things that are going to presented to the user as
+# customizable preferences, we also need a user-friendly
+# display name to plug into labels and messages
+DisplayNames = {
+    KeyStr.INI.ACTIVEONLY: "Only Show Active Mods",
+    KeyStr.INI.DEFAULT_PROFILE: "Default Profile",
+    KeyStr.INI.LASTPROFILE: "Last Loaded Profile",
+
+    KeyStr.Dirs.PROFILES: "Profiles Directory",
+    KeyStr.Dirs.SKYRIM: "Skyrim Installation",
+    KeyStr.Dirs.MODS: "Mods Directory",
+    KeyStr.Dirs.VFS: "Virtual FS Mount Point",
+
+    KeyStr.UI.RESTORE_WINSIZE: "Restore Window Size",
+    KeyStr.UI.RESTORE_WINPOS: "Restore Window Position",
+}
 
 class INIKey(str, Enum):
 

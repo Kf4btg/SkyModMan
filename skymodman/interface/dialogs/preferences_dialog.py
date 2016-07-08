@@ -5,10 +5,12 @@ from PyQt5.QtCore import pyqtSlot, pyqtSignal #QStringListModel, Qt
 
 from skymodman.managers import modmanager as Manager
 from skymodman.interface import app_settings, blocked_signals
-from skymodman.interface.designer.uic.preferences_dialog_ui import Ui_Preferences_Dialog
+from skymodman.interface.dialogs import message
+from skymodman.interface.designer.uic.preferences_dialog_ui import \
+    Ui_Preferences_Dialog
 from skymodman.utils import withlogger
 from skymodman.utils.fsutils import checkPath
-from skymodman import constants
+from skymodman import constants, exceptions
 
 
 # ref to the ConfigManager
@@ -19,7 +21,8 @@ _invalid_path_str = "Path not found"
 _invalid_path_style = "QLabel {color: red; font-size: 10pt;}"
 
 _missing_path_str = "Path is required"
-_missing_path_style = "QLabel {color: orange; font-size: 10pt; font-style: italic; }"
+_missing_path_style = "QLabel {color: orange; font-size: 10pt; " \
+                      "font-style: italic; }"
 
 @withlogger
 class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
@@ -43,8 +46,10 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
         ## Default Path values ##
         # pass false for `use_profile_override` to get the default value;
-        # make sure that we have an empty string if get_directory return None
+        # make sure that we have an empty string if get_directory
+        # returns None.
         # self.paths={p:Manager.get_directory(p, False) or "" for p in KeyStr.Dirs}
+
         self.paths={p:Config.paths[p] for p in D}
 
         ## associate text boxes with directories ##
@@ -86,17 +91,22 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                              UI.PROFILE_LOAD_POLICY)
 
         # check the appropriate radio button based on current policy;
-        # associate a change in the radio selection with updating _selected_plp
+        # associate a change in the radio selection with updating
+        # _selected_plp
         for plp, rb in self.radios.items():
             if plp == self._selected_plp:
                 rb.setChecked(True)
 
-            # chain each button's toggled(bool) signal to the profilePolicyChanged
-            # signal, which includes the value of the button's associated policy
-            rb.toggled.connect(partial(self.profilePolicyChanged.emit, plp.value))
+            # chain each button's toggled(bool) signal to the
+            # profilePolicyChanged signal, which includes the value of
+            # the button's associated policy
+            rb.toggled.connect(partial(self.profilePolicyChanged.emit,
+                                       plp.value))
 
-        # and connect this signal to the handler which updates _selected_plp
-        self.profilePolicyChanged.connect(self.on_profile_policy_changed)
+        # and connect this signal to the handler which updates
+        # _selected_plp
+        self.profilePolicyChanged.connect(
+            self.on_profile_policy_changed)
 
 
         ## setup profiles-dir selector
@@ -136,7 +146,8 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         # have the line edits with an indicator label emit a signal when editing is finished
         for k,b in self.path_boxes.items():
             if k in self.indicator_labels.keys():
-                b.editingFinished.connect(partial(self.pathEditFinished.emit, k))
+                b.editingFinished.connect(
+                    partial(self.pathEditFinished.emit, k))
 
         self.pathEditFinished.connect(self.on_path_edit)
 
@@ -183,8 +194,10 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
     def on_profile_policy_changed(self, value, enabled):
         """
 
-        :param int value: corresponding to a value in constants.ProfileLoadPolicy
-        :param bool enabled: whether the button associated with this value was just enabled or disabled
+        :param int value: corresponding to a value in
+            constants.ProfileLoadPolicy
+        :param bool enabled: whether the button associated with this
+            value was just enabled or disabled
         """
 
         if enabled:
@@ -257,16 +270,48 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
         # check for a change in the profile-load-policy
         if self._active_plp != self._selected_plp:
-            app_settings.Set(constants.KeyStr.UI.PROFILE_LOAD_POLICY, self._selected_plp)
+            app_settings.Set(
+                constants.KeyStr.UI.PROFILE_LOAD_POLICY,
+                self._selected_plp)
 
         # check if any of the paths have changed and update accordingly
         for label, path in self.paths.items():
             newpath = self.path_boxes[label].text()
 
             # allow changing if the path is valid or cleared
-            if path != newpath and (newpath == "" or checkPath(newpath)):
-                Manager.set_directory(label, newpath, False)
-                self.paths[label] = newpath
+            if path != newpath:
+                # if they unset the path, just change it
+                if not newpath:
+                    self._update_path(label, newpath)
+
+                # if they set a new path, ask if they want to copy
+                # their existing data (assuming there is any)
+                elif checkPath(newpath):
+                    if not path:
+                        self._update_path(label, newpath)
+                    elif message(
+                            title="Transfer {} Data?".format(
+                                constants.DisplayNames[label]),
+                            text="Would you like to move your existing "
+                                 "data to the new location?"):
+                        try:
+                            Config.move_dir(label, newpath)
+                        except exceptions.FileAccessError as e:
+                            message('critical',
+                                    "Cannot perform move operation.",
+                                    "The following error occurred:",
+                                    str(e), buttons='ok',
+                                    default_button='ok')
+                        else:
+                            self._update_path(label, newpath)
+                    else:
+                        self._update_path(label, newpath)
+
+
+    def _update_path(self, label, newpath):
+        Manager.set_directory(label, newpath, False)
+        self.paths[label] = newpath
+
 
     @pyqtSlot(str)
     def choose_directory(self, folder):
