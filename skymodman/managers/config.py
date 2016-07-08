@@ -586,7 +586,7 @@ class ConfigManager:
         with self.paths.file_main.open('w') as f:
             config.write(f)
 
-    def move_dir(self, dir_label, destination):
+    def move_dir(self, dir_label, destination, remove_old_dir=True):
         """
         Change the storage path for the given directory and move the current contents of
         that directory to the new location.
@@ -594,6 +594,8 @@ class ConfigManager:
         :param dir_label: label (e.g. 'dir_mods') for the dir to move
         :param str destination: where to move it
         :raises: ``exceptions.FileAccessError`` if the destination exists and is not an empty directory, or if there is an issue with removing the original directory after the move has occurred. If errors occur during the move operation itself, an ``exceptions.MultiFileError`` will be raised. The ``errors`` attribute on this exception object is a collection of tuples for each file that failed to copy correctly, containing the name of the file and the original exception.
+        :param remove_old_dir: if True, remove the original directory from disk after
+            moving all its contents
         """
         curr_path = self.paths._getpath(dir_label)
 
@@ -602,6 +604,10 @@ class ConfigManager:
         # list of 2-tuples; item1 is the file we were attempting to move,
         # item2 is the exception that occurred during that attempt
         errors = []
+
+        # flag to indicate whether we should copy all the contents or
+        # move the original dir itself
+        copy_contents = True
 
         # make sure new_path does not exist/is empty dir
         if new_path.exists():
@@ -617,6 +623,15 @@ class ConfigManager:
             ## it and move the old folder into its place; though if the dir is a
             ## symlink, that could really mess things up...guess we'll have to do
             ## it one-by-one, then.
+            # copy_contents = True
+
+        elif remove_old_dir:
+            # The scenario where the destination does not exist and we're
+            # removing the original folder is really the only situation
+            # in which we can get away with simply moving the original...
+            copy_contents=False
+
+        if copy_contents:
             for item in curr_path.iterdir():
                 # move all items inside the new path
                 try:
@@ -625,10 +640,8 @@ class ConfigManager:
                     self.LOGGER.error(e)
                     errors.append((item, e))
 
-                # item.rename(new_path / item.name)
-
             ## after all that, we can remove the old dir...hopefully
-            if not errors:
+            if remove_old_dir and not errors:
                 try:
                     curr_path.rmdir()
                 except OSError as e:
@@ -643,8 +656,6 @@ class ConfigManager:
 
         if errors:
             raise exceptions.MultiFileError(errors, "Errors occurred during move operation.")
-
-        # return len(errors) > 0, errors
 
 
     def listModFolders(self):

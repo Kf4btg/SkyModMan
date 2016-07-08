@@ -105,6 +105,32 @@ def move_path(src, dst):
     else:
         raise FileAccessError(str(dst), "'{file}' must be a directory or must not already exist.")
 
+def create_dir(path, parents=True):
+    """
+    Create a directory. If parents is True, also create all intermediate
+    directories. If parents is false and the necessary file hierarchy
+    does not exist, the typical OSError will be raised.
 
+    If the path already exists, no error will be raised, but the method
+    will return False
 
+    :param path: of the directory to create
+    :param bool parents: create parent directories, if needed.
+    :return: True if the directory was successfully created. False if it
+        already existed.
+    """
+
+    if parents:
+        try:
+            os.makedirs(path, exist_ok=False)
+        except OSError:
+            # OSError is thrown if target already exists
+            return False
+    else:
+        try:
+            os.mkdir(path)
+        except FileExistsError:
+            return False
+
+    return True
 

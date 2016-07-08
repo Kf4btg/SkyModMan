@@ -1,15 +1,16 @@
 from functools import partial
+import os
 
 from PyQt5.QtWidgets import QDialog, QFileDialog, QDialogButtonBox
 from PyQt5.QtCore import pyqtSlot, pyqtSignal #QStringListModel, Qt
 
 from skymodman.managers import modmanager as Manager
 from skymodman.interface import app_settings, blocked_signals
-from skymodman.interface.dialogs import message
+from skymodman.interface.dialogs import message, checkbox_message
 from skymodman.interface.designer.uic.preferences_dialog_ui import \
     Ui_Preferences_Dialog
 from skymodman.utils import withlogger
-from skymodman.utils.fsutils import checkPath
+from skymodman.utils.fsutils import checkPath, create_dir
 from skymodman import constants, exceptions
 
 
@@ -23,6 +24,8 @@ _invalid_path_style = "QLabel {color: red; font-size: 10pt;}"
 _missing_path_str = "Path is required"
 _missing_path_style = "QLabel {color: orange; font-size: 10pt; " \
                       "font-style: italic; }"
+
+_notabs_path_str = "Path must be absolute"
 
 @withlogger
 class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
@@ -211,19 +214,50 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         new_value = self.path_boxes[key].text()
         label = self.indicator_labels[key]
 
-        # if they cleared the box
+        # if they cleared the box, mark it missing
         if not new_value:
-            label.setText("Path is required")
-            label.setStyleSheet("QLabel {color: orange; font-size: 10pt; font-style: italic; }")
-            label.setVisible(True)
+            self._mark_missing_path(label)
 
-        # if they entered an invalid path
-        elif not checkPath(new_value, True):
-            label.setText("Path not found")
-            label.setStyleSheet("QLabel {color: red; font-size: 10pt;}")
-            label.setVisible(True)
-        else:
+        elif not os.path.isabs(new_value):
+            # then they didn't enter an absolute path
+            self._mark_nonabs_path(label)
+
+        # if they entered a valid path
+        elif os.path.exists(new_value):
+            # hide the label cause we're all good
             label.setVisible(False)
+
+        else: # but if it was invalid...
+            # show a messagebox asking if they would like to create it
+            if message(title='Path not found',
+                       text="Would you like to create this directory?",
+                       info_text=new_value):
+                create_dir(new_value)
+
+                # and just to make sure...
+                if os.path.exists(new_value):
+                    label.setVisible(False)
+                else:
+                    self._mark_invalid_path(label)
+            # if they say no, mark it invalid
+            else:
+                self._mark_invalid_path(label)
+
+    def _mark_invalid_path(self, qlabel):
+        # takes given indicator label and sets it to 'invalid' status
+        qlabel.setText(_invalid_path_str)
+        qlabel.setStyleSheet(_invalid_path_style)
+        qlabel.setVisible(True)
+    def _mark_missing_path(self, qlabel):
+        # takes given indicator label and sets it to 'missing' status
+        qlabel.setText(_missing_path_str)
+        qlabel.setStyleSheet(_missing_path_style)
+        qlabel.setVisible(True)
+    def _mark_nonabs_path(self, qlabel):
+        # takes given indicator label and sets it to 'not absolute' status
+        qlabel.setText(_notabs_path_str)
+        qlabel.setStyleSheet(_invalid_path_style)
+        qlabel.setVisible(True)
 
 
     @pyqtSlot()
@@ -275,42 +309,57 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                 self._selected_plp)
 
         # check if any of the paths have changed and update accordingly
-        for label, path in self.paths.items():
-            newpath = self.path_boxes[label].text()
+        for key, path in self.paths.items():
+            newpath = self.path_boxes[key].text()
 
-            # allow changing if the path is valid or cleared
             if path != newpath:
-                # if they unset the path, just change it
+                # allow changing if the path is valid or cleared
+
                 if not newpath:
-                    self._update_path(label, newpath)
+                    # if they unset the path, just change it
+                    self._update_path(key, newpath)
 
-                # if they set a new path, ask if they want to copy
+                # if they set a valid new path, ask if they want to copy
                 # their existing data (assuming there is any)
-                elif checkPath(newpath):
+                elif os.path.isabs(newpath) and os.path.exists(newpath):
                     if not path:
-                        self._update_path(label, newpath)
-                    elif message(
-                            title="Transfer {} Data?".format(
-                                constants.DisplayNames[label]),
-                            text="Would you like to move your existing "
-                                 "data to the new location?"):
-                        try:
-                            Config.move_dir(label, newpath)
-                        except exceptions.FileAccessError as e:
-                            message('critical',
-                                    "Cannot perform move operation.",
-                                    "The following error occurred:",
-                                    str(e), buttons='ok',
-                                    default_button='ok')
-                        else:
-                            self._update_path(label, newpath)
+                        # if the path is currently unset, nothing to move
+                        self._update_path(key, newpath)
                     else:
-                        self._update_path(label, newpath)
+                        do_move, remove_old = checkbox_message(
+                            title="Transfer {} Data?".format(
+                                constants.DisplayNames[key]),
+                            text="Would you like to move your existing "
+                                 "data to the new location?",
+                            checkbox_text="Also remove original directory",
+                            checkbox_checked=True)
+                        if do_move:
+                            try:
+                                Config.move_dir(key, newpath, remove_old)
+                            except exceptions.FileAccessError as e:
+                                message('critical',
+                                        "Cannot perform move operation.",
+                                        "The following error occurred:",
+                                        str(e), buttons='ok',
+                                        default_button='ok')
+                            except exceptions.MultiFileError as mfe:
+                                s=""
+                                for file, exc in mfe.errors:
+                                    s+="{0}: {1}\n".format(file, exc)
+                                message('critical',
+                                        title="Errors during move operation",
+                                        text="The move operation may not have fully completed. The following errors were encountered: ",
+                                        info_text=s,
+                                        buttons='ok', default_button='ok')
+                            else:
+                                self._update_path(key, newpath)
+                        else:
+                            self._update_path(key, newpath)
 
 
-    def _update_path(self, label, newpath):
-        Manager.set_directory(label, newpath, False)
-        self.paths[label] = newpath
+    def _update_path(self, key, newpath):
+        Manager.set_directory(key, newpath, False)
+        self.paths[key] = newpath
 
 
     @pyqtSlot(str)
