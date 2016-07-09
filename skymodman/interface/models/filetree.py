@@ -11,6 +11,7 @@ from skymodman.utils.fsutils import checkPath
 from skymodman.managers import modmanager as Manager
 # from skymodman.utils import humanizer
 
+# actually provides a slight (but noticeable) speedup
 Qt_Checked = Qt.Checked
 Qt_Unchecked = Qt.Unchecked
 Qt_PartiallyChecked = Qt.PartiallyChecked
@@ -59,28 +60,33 @@ class FSItem:
         self._level = len(self.ppath.parts)
 
     @property
-    def path(self)->str: return self._path
+    def path(self):
+        """Relative path to this item from its containing mod-directory"""
+        return self._path
 
     @property
-    def lpath(self)->str:
+    def lpath(self):
         """All-lowercase version of this item's relative path"""
         return self._lpath
 
     @property
-    def name(self)->str: return self._name
+    def name(self):
+        """Name of the file"""
+        return self._name
 
     @property
-    def ppath(self)->Path:
+    def ppath(self):
         """The relative path of this item as a pathlib.Path object"""
         return Path(self._path)
 
     @property
-    def row(self)->int:
+    def row(self):
         """Which row (relative to its parent) does this item appear on"""
         return self._row
 
     @row.setter
-    def row(self, value:int): self._row = value
+    def row(self, value:int):
+        self._row = value
 
     @property
     def level(self):
@@ -88,7 +94,7 @@ class FSItem:
         return self._level
 
     @property
-    def isdir(self)->bool:
+    def isdir(self):
         """Whether this item represents a directory"""
         return self._isdir
 
@@ -98,7 +104,7 @@ class FSItem:
         return self._hidden
 
     @hidden.setter
-    def hidden(self, value):
+    def hidden(self, value:bool):
         self._hidden = value
 
     @property
@@ -119,10 +125,12 @@ class FSItem:
         :param int|str item:
         """
         try:
+            # assume `item` is an int
             return self._children[item]
         except TypeError:
             try:
-                return self._children[self._childnames.index(item)] # assume string name passed
+                # assume `item` is the name of the file as a string
+                return self._children[self._childnames.index(item)]
             except (ValueError, AttributeError):
                 return None
 
@@ -146,18 +154,23 @@ class FSItem:
         else:
             yield from self._children
 
+    #TODO: This doc comment makes no freaking sense...absolute relative rel_root path name?? WHAT??
     def loadChildren(self, rel_root, namefilter = None):
         """
         Given a root, construct an absolute path from that root and
-        this item's (relative) path. Then scan that path for entries, creating an
-        FSItem for each file found and adding it to this item's list of children.
-        If the entry found is a directory, then call the loadChildren() method
-        of the new FSItem with the same root given here.
+        this item's (relative) path. Then scan that path for entries,
+        creating an FSItem for each file found and adding it to this
+        item's list of children. If the entry found is a directory, then
+        call the loadChildren() method of the new FSItem with the same
+        root given here.
 
         :param str rel_root:
-        # :param conflicts: a collection of filepaths (all relative to a mod's 'data' directory) that have been determined to exist in multiple mods; if the name of a loaded file is in this collection, it will be marked as "has_conflict"
-        :param (str)->bool namefilter: if given and not none, each filename found will be passed to the `namefilter` callable. If the namefiter returns True, that file will NOT be added to the list of children
+        :param (str)->bool namefilter: if given and not none, each
+            filename found will be passed to the `namefilter` callable.
+            If the namefiter returns True, that file will NOT be added
+            to the list of children
         """
+        # :param conflicts: a collection of filepaths (all relative to a mod's 'data' directory) that have been determined to exist in multiple mods; if the name of a loaded file is in this collection, it will be marked as "has_conflict"
 
         rpath = Path(rel_root)
         path = rpath / self.path
@@ -167,17 +180,18 @@ class FSItem:
             nfilter = lambda p:not namefilter(p.name)
 
         # sort by name  ### TODO: folders first?
-        entries = sorted(filter(nfilter, path.iterdir()), key=lambda p:p.name)
-                         # , key = lambda p: p.name)
-        for r,e in enumerate(sorted(entries, key=lambda p:p.is_file())): #type: int, Path
-            rel = str(e.relative_to(rpath))
+        entries = sorted(filter(nfilter, path.iterdir()),
+                         key=lambda p:p.name)
+
+        for row,entry in enumerate(sorted(entries, key=lambda p:p.is_file())): #type: int, Path
+            rel = str(entry.relative_to(rpath))
 
             # using type(self) here to make sure we get an instance of the subclass we're using
             # instead of the base FSItem
-            child = type(self)(path=rel, name=e.name, parent=self, isdir=e.is_dir())
-            if e.is_dir():
+            child = type(self)(path=rel, name=entry.name, parent=self, isdir=entry.is_dir())
+            if entry.is_dir():
                 child.loadChildren(rel_root, namefilter)
-            child.row = r
+            child.row = row
             # if child.path in conflicts:
             #     child._hasconflict = True
             self._children.append(child)
@@ -192,14 +206,14 @@ class FSItem:
         return self.lpath == other.lpath
 
     def __str__(self):
-        return "\n  {0.__class__.__name__}(name: '{0._name}', " \
-               "path: '{0._path}',\n" \
+        return  "\n  {0.__class__.__name__}(name: '{0._name}', " \
+                "path: '{0._path}',\n" \
                 "    row: {0._row}, " \
                 "level: {0._level}, " \
-               "isdir: {0._isdir}, " \
-               "kids: {0.child_count}, " \
-               "hidden: {0._hidden}" \
-               ")".format(self)
+                "isdir: {0._isdir}, " \
+                "kids: {0.child_count}, " \
+                "hidden: {0._hidden}" \
+                ")".format(self)
 
 # @humanizer.humanize
 class QFSItem(FSItem):

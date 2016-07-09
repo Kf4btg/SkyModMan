@@ -144,7 +144,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                     constants.ProfileLoadPolicy.default:
                         KeyStr.INI.DEFAULT_PROFILE
                 }[prof_policy]
-                self.load_profile_by_name(Manager.get_config_value(val, KeyStr.Section.GENERAL))
+                self.load_profile_by_name(
+                    Manager.get_config_value(val,
+                                             KeyStr.Section.GENERAL))
 
         ## setup window-state prefs ##
 
@@ -152,8 +154,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         def _resize(size):
             # noinspection PyArgumentList
             self.resize(size
-                        if size and app_settings.Get(KeyStr.UI.RESTORE_WINSIZE)
-                        else QGuiApplication.primaryScreen().availableSize() * 5 / 7)
+                        if size and app_settings.Get(
+                                KeyStr.UI.RESTORE_WINSIZE)
+                        else QGuiApplication.primaryScreen()
+                                .availableSize() * 5 / 7)
 
         def _move(pos):
             if pos and app_settings.Get(KeyStr.UI.RESTORE_WINPOS):
@@ -164,7 +168,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         app_settings.add("pos", self.pos, on_read=_move)
 
         # TODO: handle and prioritize the SMM_PROFILE env var
-        app_settings.add(KeyStr.UI.PROFILE_LOAD_POLICY, constants.ProfileLoadPolicy.last, on_read=_load_profile)
+        app_settings.add(KeyStr.UI.PROFILE_LOAD_POLICY,
+                         constants.ProfileLoadPolicy.last,
+                         on_read=_load_profile)
 
         ## ----------------------------------------------------- ##
         ## Now that we've defined them all, time to read them in ##
@@ -210,7 +216,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # Profile selector and add/remove buttons
         self.file_toolBar.addSeparator()
         self.file_toolBar.addWidget(self.profile_group)
-        self.file_toolBar.addActions([self.action_new_profile, self.action_delete_profile])
+        self.file_toolBar.addActions([self.action_new_profile,
+                                      self.action_delete_profile])
 
         # Action Group for the mod-movement buttons.
         # this just makes it easier to enable/disable them all at once
@@ -299,7 +306,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def _setup_profile_selector(self):
         """
-        Initialize the dropdown list for selecting profiles with the names of the profiles found on disk
+        Initialize the dropdown list for selecting profiles with the
+        names of the profiles found on disk
         """
         self.LOGGER.debug("_setup_profile_selector")
 
@@ -381,7 +389,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         ## resize 'name' column to be larger at first than 'path' column
         self.filetree_fileviewer.header().resizeSection(0, 400)
         # todo: remember user column resizes
-        # self.models[M.file_viewer].rootPathChanged.connect(self.on_filetree_fileviewer_rootpathchanged)
+        # self.models[M.file_viewer].rootPathChanged.connect(
+        #   self.on_filetree_fileviewer_rootpathchanged)
 
         ## show new files when mod selection in list
         self.filetree_modlist.selectionModel().currentChanged.connect(
@@ -394,7 +403,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             f.escapeLineEdit.connect(f.clearFocus)
 
     def __init_modlist_filter_state(self, filter_):
-        activeonly = Manager.get_profile_setting('activeonly', 'File Viewer')
+        activeonly = Manager.get_profile_setting(KeyStr.INI.ACTIVEONLY,
+                                            KeyStr.Section.FILEVIEWER)
 
         if activeonly is None:
             # if no profile loaded, set it unchecked and disable it
@@ -505,7 +515,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # action_choose_mod_folder
         self.action_choose_mod_folder.triggered.connect(
             self.choose_mod_folder)
-        # self.action_choose_mod_folder.setIcon(icons.get('folder', color_disabled=QPalette().color(QPalette.Midlight)))
+        # self.action_choose_mod_folder.setIcon(icons.get(
+        # 'folder', color_disabled=QPalette().color(QPalette.Midlight)))
 
         # --------------------------------------------------
 
@@ -522,7 +533,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # * action_undo
         # * action_redo
         self.action_undo.setShortcut(QKeySequence.Undo)
-        # self.action_undo.setIcon(icons.get('undo', color_disabled=QPalette().color(QPalette.Midlight)))
+        # self.action_undo.setIcon(icons.get('undo',
+        #  color_disabled=QPalette().color(QPalette.Midlight)))
         self.action_redo.setShortcut(QKeySequence.Redo)
         # connect undo/redo actions to table model
         self.action_undo.triggered.connect(self.mod_table.undo)
@@ -680,8 +692,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         ].tablehaschanges.connect(
             self.on_table_unsaved_change)
 
-        # depending on selection in table, the movement actions will be enabled
-        # or disabled
+        # depending on selection in table, the movement actions will be
+        # enabled or disabled
         self.mod_table.enableModActions.connect(
             self.on_make_or_clear_mod_selection)
         self.mod_table.canMoveItems.connect(
@@ -705,8 +717,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.on_fileviewer_filter_textchanged)
         # self.filters[F.file_viewer].setFilterWildcard)
 
-        # left the selectionModel() changed connection in the _setup function;
-        # it's just easier to handle it there
+        # left the selectionModel() changed connection in the _setup
+        # function; it's just easier to handle it there
 
         self.models[M.file_viewer].hasUnsavedChanges.connect(
             self.on_table_unsaved_change)
@@ -722,7 +734,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     @pyqtSlot(int)
     def on_tab_changed(self, newindex):
         """
-        When the user switches tabs, make sure the proper GUI components are visible and active
+        When the user switches tabs, make sure the proper GUI components
+        are visible and active
 
         :param int newindex:
         """
@@ -781,8 +794,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                     self.profile_selector_index = index
                     # No => "Don't save changes, drop them"
                     if reply == QMessageBox.No:
-                        # don't bother reverting, mods list is getting reset;
-                        # just disable the buttons
+                        # don't bother reverting, mods list is getting
+                        # reset; just disable the buttons
                         self.on_table_unsaved_change(False)
 
                     self.LOGGER.info(
@@ -816,10 +829,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     @pyqtSlot()
     def on_new_profile_action(self):
         """
-        When the 'add profile' button is clicked, create and show a small dialog for the user to choose a name for the new profile.
+        When the 'add profile' button is clicked, create and show a
+        small dialog for the user to choose a name for the new profile.
         """
 
-        from skymodman.interface.dialogs.new_profile_dialog import NewProfileDialog
+        from skymodman.interface.dialogs.new_profile_dialog \
+            import NewProfileDialog
 
         popup = NewProfileDialog(
             combobox_model=self.profile_selector.model())
@@ -844,7 +859,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     @pyqtSlot()
     def on_remove_profile_action(self):
         """
-        Show a warning about irreversibly deleting the profile, then, if the user accept the warning, proceed to delete the profile from disk and remove its entry from the profile selector.
+        Show a warning about irreversibly deleting the profile, then, if
+        the user accept the warning, proceed to delete the profile from
+        disk and remove its entry from the profile selector.
         """
         profile = Manager.active_profile()
 
@@ -863,7 +880,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     @pyqtSlot()
     def on_rename_profile_action(self):
         """
-        Query the user for a new name, then ask the mod-manager backend to rename the profile folder.
+        Query the user for a new name, then ask the mod-manager backend
+        to rename the profile folder.
         """
 
         # noinspection PyTypeChecker,PyArgumentList
@@ -881,7 +899,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     @pyqtSlot(bool)
     def on_make_or_clear_mod_selection(self, has_selection):
         """
-        Enable or disable buttons and actions that rely on having a selection in the mod table.
+        Enable or disable buttons and actions that rely on having a
+        selection in the mod table.
         """
         # self.LOGGER << "modtable selection->{}".format(has_selection)
         for a in (self.mod_movement_group,
@@ -893,7 +912,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     @pyqtSlot(bool)
     def on_table_unsaved_change(self, unsaved_changes_present):
         """
-        When a change is made to the table, enable or disable certain actions depending on whether the table's current state matches the last savepoint or not.
+        When a change is made to the table, enable or disable certain
+        actions depending on whether the table's current state matches
+        the last savepoint or not.
 
         :param unsaved_changes_present:
         """
@@ -908,7 +929,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     @pyqtSlot(bool)
     def on_modlist_activeonly_toggle(self, checked):
         """
-        Toggle showing/hiding inactive mods in the Mods list on the file-tree tab
+        Toggle showing/hiding inactive mods in the Mods list on the
+        file-tree tab
+
         :param checked: state of the checkbox
         """
         # self.LOGGER << "ActiveOnly toggled->{}".format(checked)
@@ -935,10 +958,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     def on_fileviewer_filter_textchanged(self, text):
         """
         Query the modfiles table in the db for files matching the filter
-        string given by `text`. The resulting matches are fed to the proxy
-        filter on the file viewer which uses them to make sure that matching
-        files are shown in the tree regardless of whether their parent
-        directories match the filter or not.
+        string given by `text`. The resulting matches are fed to the
+        proxy filter on the file viewer which uses them to make sure
+        that matching files are shown in the tree regardless of whether
+        their parent directories match the filter or not.
 
         :param str text:
         """
@@ -963,7 +986,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     @pyqtSlot(str, str)
     def on_undo_redo_event(self, undo_text, redo_text):
-        """Update the undo/redo text to reflect the passed text.  If an argument is passed as ``None`` or an empty string, that button will instead be disabled."""
+        """Update the undo/redo text to reflect the passed text.  If an
+        argument is passed as an empty string, that button will instead
+        be disabled."""
         # self.LOGGER << "Undoevent({}, {})".format(undo_text, redo_text)
 
         for action, text, default_text in [
@@ -981,7 +1006,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         Save command does different things depending on which
         tab is active.
-        :return:
         """
         if self.current_tab == TAB.MODTABLE:
             self.mod_table.saveChanges()
@@ -1040,7 +1064,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     ## Statusbar operations
     ##=============================================
 
-    def show_statusbar_progress(self, text="Working:", minimum=0, maximum=0, show_bar_text=False):
+    def show_statusbar_progress(self, text="Working:",
+                                minimum=0, maximum=0,
+                                show_bar_text=False):
         """
         Set up and display the small progress bar on the bottom right
         of the window (in the status bar). If `minimum` == `maximum`
@@ -1050,10 +1076,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         two to complete, so the user need not worry that their last
         command had no effect.
 
-        :param text: Text that will be shown to the left of the progress bar
+        :param text: Text that will be shown to the left of the
+            progress bar
         :param minimum: Minumum value for the bar
         :param maximum: Maximum value for the bar
-        :param show_bar_text: Whether to show the bar's text (% done by default)
+        :param show_bar_text: Whether to show the bar's text
+            (% done by default)
         """
         self.sb_progress_label.setText(text)
         self.sb_progress_bar.reset()
@@ -1090,7 +1118,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def _reset_table(self):
         """
-        Called when a new profile is loaded or some other major change occurs
+        Called when a new profile is loaded or some other major
+        change occurs
         """
         self.mod_table.loadData()
         self.modtable_search_box.clear() # might be good enough
@@ -1126,7 +1155,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # skydir = Manager.get_config_value(INIKey.SKYRIMDIR, INISection.DIRECTORIES)
         # if not Manager.conf["dir_skyrim"]:
         if not skydir:
-            if message("information", "Select Skyrim Installation", 'Before the manager runs, please take a moment to specify the folder where Skyrim itself is installed. Click "OK" to show the folder selection dialog.', buttons=('ok', 'cancel'), default_button='ok'):
+            if message("information", "Select Skyrim Installation",
+                       'Before the manager runs, please take a moment to'
+                       ' specify the folder where Skyrim itself is'
+                       ' installed. Click "OK" to show the folder'
+                       ' selection dialog.',
+                       buttons=('ok', 'cancel'), default_button='ok'):
                 self.select_skyrim_dir()
             # else:
             #     self.safe_quit()
@@ -1210,8 +1244,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         Enable or disable the mod-movement actions
 
-        :param bool enable_moveup: whether to enable the move-up/move-to-top actions
-        :param bool enable_movedown: whether to enable the move-down/move-to-bottom actions
+        :param bool enable_moveup: whether to enable the
+            move-up/move-to-top actions
+        :param bool enable_movedown: whether to enable the
+            move-down/move-to-bottom actions
         """
         for action in [self.action_move_mod_to_bottom,
                        self.action_move_mod_down]:
@@ -1247,7 +1283,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def update_modlist_label(self, inactive_hidden):
         """
-        Change the label beside the "hide inactive mods" check box to reflect its current state.
+        Change the label beside the "hide inactive mods" check box to
+        reflect its current state.
 
         :param inactive_hidden:
         """
@@ -1298,15 +1335,19 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         a new profile (thus forcing a full table reset) or quitting the
         app.
 
-        :return: the value of the button the user clicked (QMessageBox.[Yes/No/Cancel]),
-        or None if the message box was not shown
+        :return: the value of the button the user clicked
+            (QMessageBox.[Yes/No/Cancel]), or None if the message box
+            was not shown
         """
         # check for unsaved changes to the mod-list
-        if Manager.active_profile() is not None and self.mod_table.model().isDirty:
+        if Manager.active_profile() is not None \
+                and self.mod_table.model().isDirty:
             ok = QMessageBox(QMessageBox.Warning, 'Unsaved Changes',
-                             'Your mod install-order has unsaved changes. '
-                             'Would you like to save them before continuing?',
-                             QMessageBox.No | QMessageBox.Yes | QMessageBox.Cancel).exec_()
+                             'Your mod install-order has unsaved '
+                             'changes. Would you like to save them '
+                             'before continuing?',
+                             QMessageBox.No | QMessageBox.Yes |
+                             QMessageBox.Cancel).exec_()
 
             if ok == QMessageBox.Yes:
                 self.mod_table.saveChanges()
@@ -1340,7 +1381,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def load_profile_by_name(self, name):
         """
-        Have the profile selector show and activate the profile with the given name
+        Have the profile selector show and activate the profile with
+        the given name
+
         :param name:
         """
         # set new profile as active and load data;
@@ -1361,11 +1404,14 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     @pyqtSlot()
     def edit_preferences(self):
         """
-        Show a dialog allowing the user to change some application-wide preferences
+        Show a dialog allowing the user to change some application-wide
+        preferences
         """
-        from skymodman.interface.dialogs.preferences_dialog import PreferencesDialog
+        from skymodman.interface.dialogs.preferences_dialog \
+            import PreferencesDialog
 
-        pdialog = PreferencesDialog(self.profile_selector.model(), self.profile_selector.currentIndex())
+        pdialog = PreferencesDialog(self.profile_selector.model(),
+                                    self.profile_selector.currentIndex())
 
         pdialog.exec_()
 
@@ -1377,7 +1423,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         Show dialog allowing user to choose a mod folder.
 
-        If a profile is currently loaded, this will set a directory override for the mods folder that applies to this profile only. The default directory can be set in the preferences dialog. When no profile is loaded, this will instead set the default directory.
+        If a profile is currently loaded, this will set a directory
+        override for the mods folder that applies to this profile only.
+        The default directory can be set in the preferences dialog.
+        When no profile is loaded, this will instead set the default
+        directory.
         """
         # noinspection PyTypeChecker
         moddir = QFileDialog.getExistingDirectory(
@@ -1438,15 +1488,16 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                 self.show_statusbar_progress("Loading archive:")
 
                 self.task = asyncio.get_event_loop().create_task(
-                    installui.do_manual_install(filename,
-                                                 self.hide_statusbar_progress))
+                    installui.do_manual_install(
+                        filename, self.hide_statusbar_progress))
 
             else:
                 # show busy indicator while installer loads
                 self.show_statusbar_progress("Preparing installer:")
 
                 self.task = asyncio.get_event_loop().create_task(
-                    installui.do_install(filename, self.hide_statusbar_progress))
+                    installui.do_install(filename,
+                                         self.hide_statusbar_progress))
 
                 # todo: add callback to show the new mod if install succeeded
                 # self.task.add_done_callback(self.on_new_mod())
@@ -1486,7 +1537,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     def closeEvent(self, event):
         """
-        Override close event to check for unsaved changes and to save settings to disk
+        Override close event to check for unsaved changes and to save
+        settings to disk
+
         :param event:
         """
 
@@ -1496,6 +1549,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             event.ignore()
         else:
             # self.write_settings()
+            # TODO: save profile-specific settings here as well (such
+            # as the active-only checkbox) instead of on each change.
             app_settings.write()
             event.accept()
 

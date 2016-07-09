@@ -44,9 +44,10 @@ class ModTable_TreeView(QTreeView):
         # only show error col if there are errors
         self._model.hideErrorColumn.connect(self._hideErrorColumn)
 
-        # some final UI adjustments
-        self.setColumnHidden(Column.DIRECTORY,
-                             True)  # hide directory column by default
+        ## some final UI adjustments ##
+
+        # hide directory column by default
+        self.setColumnHidden(Column.DIRECTORY, True)
         # stretch the Name section
         self.header().setSectionResizeMode(Column.NAME,QHeaderView.Stretch)
 

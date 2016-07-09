@@ -36,7 +36,8 @@ def init():
     _configman = conf = _config.ConfigManager()
 
     # must be created after config manager
-    _profileman = profiles = ProfileManager(_configman.paths.dir_profiles)
+    _profileman = profiles = ProfileManager(
+        _configman.paths.dir_profiles)
     # set the most-recently loaded profile as active.
     # _profileman.setActiveProfile(_configman.lastprofile)
 
@@ -47,7 +48,8 @@ def init():
 
 def get_cursor():
     """
-    Using this, a component can request a cursor object for interacting with the database
+    Using this, a component can request a cursor object for
+    interacting with the database
     :return: sqlite3.Cursor
     """
     return _dataman.conn.cursor()
@@ -68,7 +70,9 @@ def active_profile() -> Profile:
 def set_active_profile(profile):
     """
     To be called by external interfaces.
-    Set `profile` as currently loaded. Updates saved config file to mark this profile as the last-loaded profile, and loads the data for the newly-activated profile
+    Set `profile` as currently loaded. Updates saved config file to mark
+    this profile as the last-loaded profile, and loads the data for the
+    newly-activated profile
 
     :param profile:
     """
@@ -79,9 +83,6 @@ def set_active_profile(profile):
     _profileman.setActiveProfile(profile)
 
     _configman.lastprofile = profile
-
-    # _configman.updateConfig(INIKey.LASTPROFILE, INISection.GENERAL, profile)
-    # _configman.updateConfig(profile, "lastprofile")
 
     global _database_initialized
 
@@ -98,7 +99,8 @@ def get_profiles(names_only = True):
     """
     Generator that iterates over all existing profiles.
 
-    :param names_only: if True, only yield the profile names. If false, yield tuples of (name, Profile) pairs"""
+    :param names_only: if True, only yield the profile names. If false,
+        yield tuples of (name, Profile) pairs"""
     if names_only:
         yield from (n for n in _profileman.profile_names)
     else:
@@ -106,8 +108,9 @@ def get_profiles(names_only = True):
 
 def new_profile(name, copy_from = None):
     """
-    Create and return a new Profile object with the specified name, optionally
-    copying config files from the `copy_from` Profile
+    Create and return a new Profile object with the specified name,
+    optionally copying config files from the `copy_from` Profile
+
     :param str name:
     :param profiles.Profile copy_from:
     :return: new Profile object
@@ -116,7 +119,10 @@ def new_profile(name, copy_from = None):
 
 def rename_profile(new_name, current=None):
     """
-    Change the name of profile `current` to `new_name`. If `current` is passed as None, rename the active profile. This renames the profile's directory on disk.
+    Change the name of profile `current` to `new_name`. If `current` is
+    passed as None, rename the active profile. This renames the
+    profile's directory on disk.
+
     :param new_name:
     :param current:
     """
@@ -130,8 +136,8 @@ def rename_profile(new_name, current=None):
     _profileman.rename_profile(current, new_name)
 
     if current is active_profile():
-        # _configman.updateConfig(current.name, "lastprofile")
-        _configman.updateConfig(KeyStr.INI.LASTPROFILE, KeyStr.Section.GENERAL, current.name)
+        _configman.updateConfig(KeyStr.INI.LASTPROFILE,
+                                KeyStr.Section.GENERAL, current.name)
 
 
 def delete_profile(profile):
@@ -151,7 +157,9 @@ def load_active_profile_data():
         validate_mod_installs()
 
     else:
-        _logger << "Could not load mod info, reading from configured mods directory: " + _configman['dir_mods']
+        _logger << "Could not load mod info, reading " \
+                   "from configured mods directory: " \
+                   + _configman['dir_mods']
         # if it fails, re-read mod data from disk
         _dataman.getModDataFromModDirectory(_configman.paths.dir_mods)
         # and [re]create the cache file
@@ -167,14 +175,16 @@ def load_active_profile_data():
     sky_dir = _configman.paths.dir_skyrim
 
     if sky_dir is None:
-        _logger << "The main Skyrim folder could not be found. That's going to be a problem."
+        _logger << "The main Skyrim folder could not be found. " \
+                   "That's going to be a problem."
     else:
         for f in sky_dir.iterdir():
             if f.name.lower() == "data":
                 _dataman.add_files_from_dir('Skyrim', str(f))
                 break
 
-    # [print(*r) for r in _dataman._con.execute("select * from modfiles where directory='Skyrim'")]
+    # [print(*r) for r in _dataman._con.execute("select *
+    # from modfiles where directory='Skyrim'")]
 
 
 
@@ -188,28 +198,39 @@ def load_active_profile_data():
 def hidden_files(for_mod=None):
     """
 
-    :param str for_mod:
-        If specified, must be the directory name of an installed mod; will yield only the files marked as hidden for that particular mod
-    :return: a generator over the Rows (basically a dict with keys 'directory' and 'filepath') of hiddenfiles; if 'for_mod' was given, will instead return a generator over just the hidden filepaths (generator of strings)
+    :param str for_mod: If specified, must be the directory name of an
+        installed mod; will yield only the files marked as hidden for
+        that particular mod.
+    :return: a generator over the Rows (basically a dict with keys
+        'directory' and 'filepath') of hiddenfiles; if 'for_mod' was
+        given, will instead return a generator over just the hidden
+        filepaths (generator of strings)
     """
     if for_mod is None:
         yield from _dataman.execute_("Select * from hiddenfiles")
     else:
-        yield from (t[0] for t in _dataman.execute_("Select filepath from hiddenfiles where directory=?", (for_mod, )))
+        yield from (t[0] for t in _dataman.execute_(
+            "Select filepath from hiddenfiles where directory=?",
+            (for_mod, )))
 
 def get_errors(error_type):
     """
-    Yields any recorded errors of the specified type from the active profile.
-    'Not Found' means that a mod was in the profile's list of installed mods, but could not be found on disk.
-    'Not Listed' means that a mod was found on disk that was not previously in the list of installed mods.
+    Yields any recorded errors of the specified type from the active
+    profile. 'Not Found' means that a mod was in the profile's list of
+    installed mods, but could not be found on disk. 'Not Listed' means
+    that a mod was found on disk that was not previously in the list of
+    installed mods.
 
     :param error_type: constants.SyncError
     :yieldtype: str
-    :yield: names of mods that encountered the specified error_type during load
+    :yield: names of mods that encountered the specified error_type
+        during load
     """
 
     q = """SELECT mod, ordinal from (
-        SELECT moderrors.mod as mod, moderrors.errortype as etype, mods.ordinal as ordinal
+        SELECT moderrors.mod as mod,
+            moderrors.errortype as etype,
+            mods.ordinal as ordinal
         FROM moderrors INNER JOIN mods
         ON mod = mods.directory
         WHERE etype = ?)
@@ -239,7 +260,9 @@ def validate_mod_installs():
 
 def basic_mod_info():
     """
-    Obtain an iterator over all the rows in the database which yields _all_ the info for a mod as a dict, intended for feeding to ModEntry(**d) or using directly.
+    Obtain an iterator over all the rows in the database which yields
+    _all_ the info for a mod as a dict, intended for feeding to
+    ModEntry(**d) or using directly.
 
     :rtype: __generator[dict[str, sqlite3.Row], Any, None]
     """
@@ -314,13 +337,14 @@ def save_hidden_files():
 
 #<editor-fold desc="config">
 
-# def get_config_value(name, section=INISection.NONE, default=None, use_profile_override = True):
-def get_config_value(name, section=KeyStr.Section.NONE, default=None, use_profile_override = True):
+def get_config_value(name, section=KeyStr.Section.NONE,
+                     default=None, use_profile_override = True):
     """
     Get the current value of one of the main config values
 
     :param name: the key for which to retrieve the value
-    :param section: "General" or "Directories" or "" (enum values are preferred)
+    :param section: "General" or "Directories" or "" (enum values
+        are preferred)
     :param default: value to return if the section/key is not found
     :param use_profile_override:
 
@@ -329,9 +353,12 @@ def get_config_value(name, section=KeyStr.Section.NONE, default=None, use_profil
     ap = active_profile()
 
     # IF there is an active profile, AND we happen to be asking for a
-    # directory, AND use_profile_override is True, AND the active profile
-    # actually contains an override for this directory: return that override
-    if ap and section == KeyStr.Section.DIRECTORIES and use_profile_override and ap.Config[KeyStr.Section.OVERRIDES][name]:
+    # directory, AND use_profile_override is True, AND the active
+    # profile actually contains an override for this directory: return
+    # that override
+    if ap and section == KeyStr.Section.DIRECTORIES \
+            and use_profile_override \
+            and ap.Config[KeyStr.Section.OVERRIDES][name]:
         val = ap.Config[KeyStr.Section.OVERRIDES][name]
     else:
         # in all other situations, just return the stored config value
@@ -341,55 +368,26 @@ def get_config_value(name, section=KeyStr.Section.NONE, default=None, use_profil
     # value), return the `default` parameter instead
     return val if val else default
 
-        # check for overrides in current profile
-        # ap = active_profile()
-        # section in profile-specific config file
-        # psec = INISection.OVERRIDES
-
-        # if there is no active profile or profile_override is False,
-        # # use the default value
-        # if not ap or not use_profile_override:
-        #     val = conf[name]
-        #
-        # else:
-        #     # if there is an active profile and profile_override is True,
-        #     # return the override if there is one, otherwise fall
-        #     # back to the default
-        #     val = ap.Config[INISection.OVERRIDES][name] or conf[name]
-
-        # if name == KeyStr.Dirs.SKYRIM:
-        #
-        #     val = ap.Config[psec][name] if (ap and use_profile_override) \
-        #         else conf['dir_skyrim']
-        #
-        # elif name == KeyStr.Dirs.VFS:
-        #     val = ap.Config[psec][name] if (ap and use_profile_override) \
-        #         else conf["dir_vfs"]
-        #
-        # elif name == KeyStr.Dirs.MODS:
-        #     val =  ap.Config[psec][name] if (ap and use_profile_override) \
-        #         else conf["dir_mods"]
-
-    # elif section == INISection.GENERAL:
-    #     val = conf[name]
-        # if name == INIKey.LASTPROFILE:
-        #     val = conf.lastprofile
-
         # assume section is "NONE", meaning this is not a value
         # from the main config file (but is still tracked by
         # config manager...TODO: there's probably a better way to do this)
         # val = conf[name]
 
-    # return val or default
 
 def set_config_value(name, section, value, set_profile_override=True):
     """
-    Update the value for the setting with the given name under the given section.
+    Update the value for the setting with the given name under the given
+    section.
 
     :param name:
     :param section:
     :param value: the new value to save
-    :param set_profile_override: if the key to be updated is a directory, then, if this parameter is True, the updated value will be set as a directory override in the local settings of the active profile (if any). If this parameter is False, then the default value for the path will be updated instead, and the profile overrides left untouched.
+    :param set_profile_override: if the key to be updated is a directory,
+        then, if this parameter is True, the updated value will be set
+        as a directory override in the local settings of the active
+        profile (if any). If this parameter is False, then the default
+        value for the path will be updated instead, and the profile
+        overrides left untouched.
     """
     if section == KeyStr.Section.DIRECTORIES:
         # if a profile is active, set an override
@@ -411,7 +409,8 @@ def _change_configured_path(directory, new_path, profile_override):
 
 def set_directory(key, path, profile_override=True):
     """
-    Update the configured value of the directory indicated by `key` (from constants.INIKey) to the new value given in `path`
+    Update the configured value of the directory indicated by `key`
+    (from constants.KeyStr.Dirs) to the new value given in `path`
 
     :param key:
     :param str path:
@@ -421,15 +420,29 @@ def set_directory(key, path, profile_override=True):
                      profile_override)
 
 def get_directory(key, use_profile_override=True):
-    return get_config_value(key, KeyStr.Section.DIRECTORIES, use_profile_override=use_profile_override)
+    """
+    Get the stored path for the app directory referenced by `key`.
+    If use_profile_override is True and an override is set in the
+    currently active profile for this directory, that override will be
+    returned. In all other cases, the value from the default config
+    will be returned.
+
+    :param key: constants.KeyStr.Dirs.WHATEVER
+    :param use_profile_override: Return the path-override from the
+        currently active profile, if one is set.
+    :return:
+    """
+    return get_config_value(key,
+                            KeyStr.Section.DIRECTORIES,
+                            use_profile_override=use_profile_override)
 
 def get_profile_setting(name, section, default=None):
     """
 
     :param str section: Config file section the setting belongs to
     :param str name: Name of the setting
-    :return: current value of the setting
     :param default: value to return when there is no active profile
+    :return: current value of the setting
     """
     ap = active_profile()
     if ap is not None:
@@ -483,13 +496,15 @@ async def get_mod_archive_structure(archive=None):
     """
 
     :param archive:
-    :return: the internal folder structure of the mod `archive` represented by a Tree structure
+    :return: the internal folder structure of the mod `archive`
+        represented by a Tree structure
     """
     global installman
 
     if not archive and not installman:
         raise TypeError(
-            "If no InstallManager is active, the `archive` element cannot be None.")
+            "If no InstallManager is active, "
+            "the `archive` element cannot be None.")
 
     if archive and (not installman or installman.archive != archive):
         installman = _install.InstallManager(archive)
@@ -514,7 +529,8 @@ from skymodman.installer.common import FileState
 
 def checkFileState(file, state):
     """
-    Query the database of known mod files for the given filename and return whether it is in the given Activation State
+    Query the database of known mod files for the given filename and
+    return whether it is in the given Activation State
 
     M = "Missing"
     I = "Inactive"
@@ -525,7 +541,9 @@ def checkFileState(file, state):
     :return: bool
     """
 
-    matches = list(r['directory'] for r in _dataman.execute_("SELECT directory FROM modfiles WHERE filepath=?", (file.lower(), )))
+    matches = list(r['directory'] for r in _dataman.execute_(
+        "SELECT directory FROM modfiles WHERE filepath=?",
+        (file.lower(), )))
 
     if matches:
         if any(m=='Skyrim' or mod_is_enabled(m) for m in matches):
