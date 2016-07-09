@@ -452,6 +452,18 @@ class ModTable_TreeModel(QAbstractItemModel):
     # noinspection PyUnresolvedReferences
     @undoable
     def changeModField(self, index, row, mod, field, value):
+        """
+        Used to change a mod attribute *other* than ordinal
+        (i.e. do not use this when the mod's install order is
+        being changed)
+
+        :param QModelIndex index: QMI object for this mod
+        :param int row: current row number of the mod in the table
+        :param QModEntry mod: the mod's entry
+        :param str field: name of the attribute to change
+        :param value: the new value of the attribute
+        :return:
+        """
         # this is for changing a mod attribute *other* than ordinal
         # (i.e. do not use this when the mod's install order is being changed)
 
