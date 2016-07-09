@@ -10,7 +10,7 @@ from PyQt5.QtCore import (Qt,
                           # QSettings,
                           # QStandardPaths,
                           )
-from PyQt5.QtGui import QGuiApplication, QKeySequence #, QFontDatabase
+from PyQt5.QtGui import QGuiApplication, QKeySequence #, QPalette #, QFontDatabase
 from PyQt5.QtWidgets import (QMainWindow,
                              QDialogButtonBox,
                              QMessageBox,
@@ -36,7 +36,7 @@ from skymodman.interface.models import (
     ActiveModsListFilter,
     FileViewerTreeFilter)
 from skymodman.interface.dialogs import message
-from skymodman.utils import withlogger
+from skymodman.utils import withlogger #, icons
 from skymodman.utils.fsutils import checkPath, join_path
 from skymodman.interface.install_helpers import InstallerUI
 from skymodman.interface import app_settings
@@ -506,6 +506,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # action_choose_mod_folder
         self.action_choose_mod_folder.triggered.connect(
             self.choose_mod_folder)
+        # self.action_choose_mod_folder.setIcon(icons.get('folder', color_disabled=QPalette().color(QPalette.Midlight)))
 
         # --------------------------------------------------
 
@@ -522,6 +523,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # * action_undo
         # * action_redo
         self.action_undo.setShortcut(QKeySequence.Undo)
+        # self.action_undo.setIcon(icons.get('undo', color_disabled=QPalette().color(QPalette.Midlight)))
         self.action_redo.setShortcut(QKeySequence.Redo)
         # connect undo/redo actions to table model
         self.action_undo.triggered.connect(self.mod_table.undo)

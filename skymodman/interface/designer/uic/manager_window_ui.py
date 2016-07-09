@@ -177,6 +177,7 @@ class Ui_MainWindow(object):
         self.menu_mod.setObjectName("menu_mod")
         MainWindow.setMenuBar(self._menubar)
         self.file_toolBar = QtWidgets.QToolBar(MainWindow)
+        self.file_toolBar.setToolButtonStyle(QtCore.Qt.ToolButtonFollowStyle)
         self.file_toolBar.setObjectName("file_toolBar")
         MainWindow.addToolBar(QtCore.Qt.TopToolBarArea, self.file_toolBar)
         self.status_bar = QtWidgets.QStatusBar(MainWindow)
