@@ -16,7 +16,8 @@ from PyQt5.QtWidgets import (QMainWindow,
                              QMessageBox,
                              QFileDialog, QInputDialog,
                              QAction, QAbstractButton,  # QHeaderView,
-                             QActionGroup, QProgressBar, QLabel)
+                             QActionGroup, QProgressBar, QLabel,
+                             QWidget, QSizePolicy, QToolBar)
 
 from skymodman import exceptions
 from skymodman.managers import modmanager as Manager
@@ -214,14 +215,29 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.LOGGER.debug("_setup_toolbar")
 
         # Profile selector and add/remove buttons
-        self.file_toolBar.addSeparator()
+        # self.file_toolBar.addSeparator()
+
+
+        # since qtoolbars don't allow spacer widgets, we'll "fake" one
+        # with a plain old qwidget.
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        # add it to the toolbar
+        self.file_toolBar.addWidget(spacer)
+
+        # now when we add the profile_group box, it will be right-aligned
         self.file_toolBar.addWidget(self.profile_group)
         self.file_toolBar.addActions([self.action_new_profile,
                                       self.action_delete_profile])
 
+
+        # self.profile_group.addActions([self.action_new_profile,
+        #                               self.action_delete_profile])
+
         # Action Group for the mod-movement buttons.
         # this just makes it easier to enable/disable them all at once
-        self.file_toolBar.addSeparator()
+        # self.file_toolBar.addSeparator()
         # mmag => "Mod Movement Action Group"
         mmag = self.mod_movement_group = QActionGroup(self)
 
@@ -235,7 +251,19 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         mmag.setExclusive(False)
         for a in macts: mmag.addAction(a)
 
-        self.file_toolBar.addActions(macts)
+        # self.file_toolBar.addActions(macts)
+
+        # let's actually make a new, vertical toolbar
+        # for these and add it to the side of the mods table.
+        movement_toolbar = QToolBar(self.installed_mods_tab)
+        movement_toolbar.setOrientation(Qt.Vertical)
+        ## Note to : adding it to the left of the table never worked,
+        ## for some reason...it always overlapped the table. Managed
+        ## to get it placed on the right, though.
+        self.installed_mods_layout.addWidget(movement_toolbar, 1, self.installed_mods_layout.columnCount(), -1, 1)
+        movement_toolbar.addActions(macts)
+
+
 
         ## This is for testing the progress indicator::
         # show_busybar_action = QAction("busy",self)
@@ -366,6 +394,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self._filetreesplitter.setSizes(
             [1, 500])  # just make the left one smaller ok?
+
+        # if the main mods directory is unset, just disable the list
+        # until the user corrects this
+        if not Manager.get_directory(KeyStr.Dirs.MODS):
+            self.filetree_modlist.setEnabled(False)
 
         ##################################
         ## File Viewer
@@ -1318,12 +1351,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # add the name of the mod directory to the path of the
         # main mods folder
-        print(Manager.get_directory(KeyStr.Dirs.MODS))
-        print(moddir)
-        p = join_path(Manager.get_directory(KeyStr.Dirs.MODS), moddir)
 
-        # self.models[M.file_viewer].setRootPath(str(p))
-        self.models[M.file_viewer].setRootPath(p)
+        modstorage = Manager.get_directory(KeyStr.Dirs.MODS)
+        if modstorage:
+            p = join_path(Manager.get_directory(KeyStr.Dirs.MODS), moddir)
+
+            # self.models[M.file_viewer].setRootPath(str(p))
+            self.models[M.file_viewer].setRootPath(p)
+        # if the main mods-storage directory is unset, don't attempt
+        # to show anything
 
     def table_prompt_if_unsaved(self):
         """
