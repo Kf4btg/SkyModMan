@@ -6,7 +6,7 @@ from skymodman.managers import (config as _config,
                                 database as _database,
                                 installer as _install)
 from skymodman.managers.profiles import Profile, ProfileManager
-from skymodman.constants import (INISection, INIKey, db_fields as _db_fields)
+from skymodman.constants import (KeyStr, db_fields as _db_fields)
 
 
 _configman  = None # type: _config.ConfigManager
@@ -131,7 +131,7 @@ def rename_profile(new_name, current=None):
 
     if current is active_profile():
         # _configman.updateConfig(current.name, "lastprofile")
-        _configman.updateConfig(INIKey.LASTPROFILE, INISection.GENERAL, current.name)
+        _configman.updateConfig(KeyStr.INI.LASTPROFILE, KeyStr.Section.GENERAL, current.name)
 
 
 def delete_profile(profile):
@@ -314,7 +314,8 @@ def save_hidden_files():
 
 #<editor-fold desc="config">
 
-def get_config_value(name, section=INISection.NONE, default=None, use_profile_override = True):
+# def get_config_value(name, section=INISection.NONE, default=None, use_profile_override = True):
+def get_config_value(name, section=KeyStr.Section.NONE, default=None, use_profile_override = True):
     """
     Get the current value of one of the main config values
 
@@ -325,39 +326,61 @@ def get_config_value(name, section=INISection.NONE, default=None, use_profile_ov
 
     :return:
     """
-    val = None
+    ap = active_profile()
 
-    if section == INISection.DIRECTORIES:
+    # IF there is an active profile, AND we happen to be asking for a
+    # directory, AND use_profile_override is True, AND the active profile
+    # actually contains an override for this directory: return that override
+    if ap and section == KeyStr.Section.DIRECTORIES and use_profile_override and ap.Config[KeyStr.Section.OVERRIDES][name]:
+        val = ap.Config[KeyStr.Section.OVERRIDES][name]
+    else:
+        # in all other situations, just return the stored config value
+        val = conf[name]
+
+    # if the value stored in config was None (or some other False-like
+    # value), return the `default` parameter instead
+    return val if val else default
+
         # check for overrides in current profile
-        ap = active_profile()
+        # ap = active_profile()
         # section in profile-specific config file
-        psec = INISection.OVERRIDES
+        # psec = INISection.OVERRIDES
 
+        # if there is no active profile or profile_override is False,
+        # # use the default value
+        # if not ap or not use_profile_override:
+        #     val = conf[name]
+        #
+        # else:
+        #     # if there is an active profile and profile_override is True,
+        #     # return the override if there is one, otherwise fall
+        #     # back to the default
+        #     val = ap.Config[INISection.OVERRIDES][name] or conf[name]
 
-        if name == INIKey.SKYRIMDIR:
-            val = ap.Config[psec][name] if (ap and use_profile_override) \
-                else conf['dir_skyrim']
-
-        elif name == INIKey.VFSMOUNT:
-            val = ap.Config[psec][name] if (ap and use_profile_override) \
-                else conf["dir_vfs"]
-
-        elif name == INIKey.MODDIR:
-            val =  ap.Config[psec][name] if (ap and use_profile_override) \
-                else conf["dir_mods"]
+        # if name == KeyStr.Dirs.SKYRIM:
+        #
+        #     val = ap.Config[psec][name] if (ap and use_profile_override) \
+        #         else conf['dir_skyrim']
+        #
+        # elif name == KeyStr.Dirs.VFS:
+        #     val = ap.Config[psec][name] if (ap and use_profile_override) \
+        #         else conf["dir_vfs"]
+        #
+        # elif name == KeyStr.Dirs.MODS:
+        #     val =  ap.Config[psec][name] if (ap and use_profile_override) \
+        #         else conf["dir_mods"]
 
     # elif section == INISection.GENERAL:
     #     val = conf[name]
         # if name == INIKey.LASTPROFILE:
         #     val = conf.lastprofile
 
-    else:
         # assume section is "NONE", meaning this is not a value
         # from the main config file (but is still tracked by
         # config manager...TODO: there's probably a better way to do this)
-        val = conf[name]
+        # val = conf[name]
 
-    return val or default
+    # return val or default
 
 def set_config_value(name, section, value, set_profile_override=True):
     """
@@ -368,22 +391,22 @@ def set_config_value(name, section, value, set_profile_override=True):
     :param value: the new value to save
     :param set_profile_override: if the key to be updated is a directory, then, if this parameter is True, the updated value will be set as a directory override in the local settings of the active profile (if any). If this parameter is False, then the default value for the path will be updated instead, and the profile overrides left untouched.
     """
-    if section == INISection.DIRECTORIES:
+    if section == KeyStr.Section.DIRECTORIES:
         # if a profile is active, set an override
         _change_configured_path(name, value,
                                 set_profile_override and
                                 active_profile() is not None)
 
-    elif section == INISection.GENERAL:
+    elif section == KeyStr.Section.GENERAL:
         conf.updateConfig(name, section, value)
 
 
 def _change_configured_path(directory, new_path, profile_override):
 
     if profile_override:
-        set_profile_setting(directory, INISection.OVERRIDES, new_path)
+        set_profile_setting(directory, KeyStr.Section.OVERRIDES, new_path)
     else:
-        conf.updateConfig(directory, INISection.DIRECTORIES, new_path)
+        conf.updateConfig(directory, KeyStr.Section.DIRECTORIES, new_path)
 
 
 def set_directory(key, path, profile_override=True):
@@ -394,11 +417,11 @@ def set_directory(key, path, profile_override=True):
     :param str path:
     :param profile_override:
     """
-    set_config_value(key, INISection.DIRECTORIES, path,
+    set_config_value(key, KeyStr.Section.DIRECTORIES, path,
                      profile_override)
 
 def get_directory(key, use_profile_override=True):
-    return get_config_value(key, INISection.DIRECTORIES, use_profile_override=use_profile_override)
+    return get_config_value(key, KeyStr.Section.DIRECTORIES, use_profile_override=use_profile_override)
 
 def get_profile_setting(name, section, default=None):
     """
@@ -478,7 +501,7 @@ async def get_mod_archive_structure(archive=None):
     return modfs
 
 def install_mod_from_dir(directory):
-    pass
+    print("installing mod from", directory)
 
 
 ##===============================================

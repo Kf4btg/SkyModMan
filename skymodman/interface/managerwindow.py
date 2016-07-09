@@ -23,9 +23,6 @@ from skymodman.managers import modmanager as Manager
 from skymodman import constants
 from skymodman.constants import (Tab as TAB,
                                  KeyStr,
-                                 INIKey,
-                                 INISection,
-                                 UI_Pref as P,
                                  qModels as M,
                                  qFilters as F,
                                  Column)
@@ -147,7 +144,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                     constants.ProfileLoadPolicy.default:
                         KeyStr.INI.DEFAULT_PROFILE
                 }[prof_policy]
-                self.load_profile_by_name(Manager.get_config_value(val, INISection.GENERAL))
+                self.load_profile_by_name(Manager.get_config_value(val, KeyStr.Section.GENERAL))
 
         ## setup window-state prefs ##
 
@@ -155,11 +152,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         def _resize(size):
             # noinspection PyArgumentList
             self.resize(size
-                        if size and app_settings.Get(P.RESTORE_WINSIZE)
+                        if size and app_settings.Get(KeyStr.UI.RESTORE_WINSIZE)
                         else QGuiApplication.primaryScreen().availableSize() * 5 / 7)
 
         def _move(pos):
-            if pos and app_settings.Get(P.RESTORE_WINPOS):
+            if pos and app_settings.Get(KeyStr.UI.RESTORE_WINPOS):
                 self.move(pos)
 
         # add the properties w/ callbacks
@@ -343,10 +340,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             F.mod_list] = ActiveModsListFilter(
             self.filetree_modlist)
 
+        # use the main mod-table model as the source
         mod_filter.setSourceModel(self.models[M.mod_table])
+        # ignore case when filtering
         mod_filter.setFilterCaseSensitivity(Qt.CaseInsensitive)
 
-        # tell filter to read mod name
+        # tell filter to read mod name column
         mod_filter.setFilterKeyColumn(Column.NAME.value)
 
         # load and apply saved setting for 'activeonly' toggle
@@ -386,9 +385,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         ## show new files when mod selection in list
         self.filetree_modlist.selectionModel().currentChanged.connect(
-            lambda c, p: self.viewer_show_file_tree(
-                mod_filter.mapToSource(c),
-                mod_filter.mapToSource(p)))
+            lambda curr, prev: self.viewer_show_file_tree(
+                mod_filter.mapToSource(curr),
+                mod_filter.mapToSource(prev)))
 
         ## have escape key unfocus the filter boxes
         for f in [self.filetree_modfilter, self.filetree_filefilter]:
@@ -916,8 +915,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.filters[F.mod_list].setOnlyShowActive(checked)
         self.update_modlist_label(checked)
-        Manager.set_profile_setting(INIKey.ACTIVEONLY,
-                                    INISection.FILEVIEWER,
+        Manager.set_profile_setting(KeyStr.INI.ACTIVEONLY,
+                                    KeyStr.Section.FILEVIEWER,
                                     checked)
 
     @pyqtSlot('QString')
@@ -1123,7 +1122,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
 
         # must have a configured skyrim installation folder
-        skydir = Manager.get_directory(INIKey.SKYRIMDIR)
+        skydir = Manager.get_directory(KeyStr.Dirs.SKYRIM)
         # skydir = Manager.get_config_value(INIKey.SKYRIMDIR, INISection.DIRECTORIES)
         # if not Manager.conf["dir_skyrim"]:
         if not skydir:
@@ -1282,7 +1281,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # add the name of the mod directory to the path of the
         # main mods folder
-        p = join_path(Manager.get_config_value(INIKey.MODDIR, INISection.DIRECTORIES), moddir)
+        print(Manager.get_directory(KeyStr.Dirs.MODS))
+        print(moddir)
+        p = join_path(Manager.get_directory(KeyStr.Dirs.MODS), moddir)
 
         # self.models[M.file_viewer].setRootPath(str(p))
         self.models[M.file_viewer].setRootPath(p)
@@ -1382,13 +1383,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         moddir = QFileDialog.getExistingDirectory(
             self,
             "Choose Directory Containing Installed Mods",
-            Manager.get_directory(INIKey.MODDIR)
+            Manager.get_directory(KeyStr.Dirs.MODS)
             # Manager.conf['dir_mods']
         )
 
         # update config with new path
         if checkPath(moddir):
-            Manager.set_directory(INIKey.MODDIR, moddir)
+            Manager.set_directory(KeyStr.Dirs.MODS, moddir)
 
             # reverify and reload the mods.
             if not Manager.validate_mod_installs():
@@ -1404,11 +1405,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         skydir = QFileDialog.getExistingDirectory(
             self,
             "Select Skyrim Installation",
-            Manager.get_directory(INIKey.SKYRIMDIR) or "")
+            Manager.get_directory(KeyStr.Dirs.SKYRIM) or "")
 
         # update config with new path
         if checkPath(skydir):
-            Manager.set_directory(INIKey.SKYRIMDIR, skydir)
+            Manager.set_directory(KeyStr.Dirs.SKYRIM, skydir)
         else:
             self.safe_quit()
 

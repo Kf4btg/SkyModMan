@@ -66,6 +66,20 @@ class Iternum(type):
 class KeyStr:
     __slots__ = ()
 
+    class Section(metaclass=Iternum):
+        __slots__=()
+        NONE = ""
+
+        # main INI
+        DEFAULT = "General"
+        GENERAL = DEFAULT
+        DIRECTORIES = "Directories"
+
+        # profile INIs
+        OVERRIDES = "Directory Overrides"
+        FILEVIEWER = "File Viewer"
+
+
     class INI(metaclass=Iternum):
         """
         Thanks to the Strenum metaclass, the public fields in this class
@@ -118,39 +132,39 @@ DisplayNames = {
     KeyStr.UI.RESTORE_WINPOS: "Restore Window Position",
 }
 
-class INIKey(str, Enum):
-
-    ## main INI
-    LASTPROFILE = "lastprofile"         # name of last loaded profile
-
-    ## main and profile INIs
-    ## these have their own section now, so we can probably be more concise
-    # SKYRIMDIR   = "skyriminstalldir"    # location of base skyrim install
-    SKYRIMDIR   = "skyrim"    # location of base skyrim install
-
-    # MODDIR      = "modsdirectory"       # location of mod storage
-    MODDIR      = "mods"       # location of mod storage
-
-    # VFSMOUNT    = "virtualfsmountpoint" # mount point for "virtual" skyrim install
-    VFSMOUNT    = "vfs" # mount point for "virtual" skyrim install
-
-    ## profiles only
-    ACTIVEONLY = "activeonly"
-
-class DataDir:
-    SKYRIM = "dir_skyrim" # location of base skyrim install
-    MODS = "dir_mods" # location of mod storage
-    VFS = "dir_vfs" # mount point for "virtual" skyrim install
-
-class UI_Pref:
-    RESTORE_WINSIZE = "restore_window_size"
-    RESTORE_WINPOS = "restore_window_pos"
-
-    PROFILE_LOAD_POLICY = "load_profile_on_start"
-
-    LOAD_LAST_PROFILE = "load_last_profile"
-    LOAD_DEFAULT_PROFILE = "load_default_profile"
-    LOAD_NO_PROFILE = "load_no_profile"
+# class INIKey(str, Enum):
+#
+#     ## main INI
+#     LASTPROFILE = "lastprofile"         # name of last loaded profile
+#
+#     ## main and profile INIs
+#     ## these have their own section now, so we can probably be more concise
+#     # SKYRIMDIR   = "skyriminstalldir"    # location of base skyrim install
+#     SKYRIMDIR   = "skyrim"    # location of base skyrim install
+#
+#     # MODDIR      = "modsdirectory"       # location of mod storage
+#     MODDIR      = "mods"       # location of mod storage
+#
+#     # VFSMOUNT    = "virtualfsmountpoint" # mount point for "virtual" skyrim install
+#     VFSMOUNT    = "vfs" # mount point for "virtual" skyrim install
+#
+#     ## profiles only
+#     ACTIVEONLY = "activeonly"
+#
+# class DataDir:
+#     SKYRIM = "dir_skyrim" # location of base skyrim install
+#     MODS = "dir_mods" # location of mod storage
+#     VFS = "dir_vfs" # mount point for "virtual" skyrim install
+#
+# class UI_Pref:
+#     RESTORE_WINSIZE = "restore_window_size"
+#     RESTORE_WINPOS = "restore_window_pos"
+#
+#     PROFILE_LOAD_POLICY = "load_profile_on_start"
+#
+#     LOAD_LAST_PROFILE = "load_last_profile"
+#     LOAD_DEFAULT_PROFILE = "load_default_profile"
+#     LOAD_NO_PROFILE = "load_no_profile"
 
 class ProfileLoadPolicy(Enum):
     last, default, none = range(3)

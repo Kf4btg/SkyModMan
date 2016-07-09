@@ -9,13 +9,12 @@ import appdirs
 from skymodman import exceptions
 from skymodman.utils import withlogger, fsutils
 from skymodman.utils.fsutils import checkPath
-from skymodman.constants import EnvVars, INISection, KeyStr, FALLBACK_PROFILE
+from skymodman.constants import EnvVars, KeyStr, FALLBACK_PROFILE
 
-# bind these values locally, since we need the actual string more often than not here
-_SECTION_GENERAL = INISection.GENERAL.value
-_SECTION_DIRS = INISection.DIRECTORIES.value
+# for convenience and quicker lookup
+_SECTION_GENERAL = KeyStr.Section.GENERAL
+_SECTION_DIRS = KeyStr.Section.DIRECTORIES
 
-# for convenience
 _KEY_LASTPRO = KeyStr.INI.LASTPROFILE
 _KEY_DEFPRO  = KeyStr.INI.DEFAULT_PROFILE
 _KEY_PROFDIR = KeyStr.Dirs.PROFILES

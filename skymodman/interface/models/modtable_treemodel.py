@@ -160,6 +160,16 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
         if index.isValid(): return self.mod_entries[index.row()]
 
+    def mod_has_error(self, mod_dir_name):
+        """
+        Return whether the mod with the given directory name is currently
+        in an error state.
+
+        :param mod_dir_name:
+        :return:
+        """
+        return mod_dir_name in self.errors.keys()
+
     ##===============================================
     ## Undo/Redo
     ##===============================================
@@ -620,11 +630,11 @@ class ModTable_TreeModel(QAbstractItemModel):
         # self.errors = {}  # type: dict[str, int]
         # reset
         self.errors.clear()
-        for err in Manager.get_errors(SyncError.NOTFOUND): # type: str
-            self.errors[err] = SyncError.NOTFOUND
+        for err_mod in Manager.get_errors(SyncError.NOTFOUND): # type: str
+            self.errors[err_mod] = SyncError.NOTFOUND
 
-        for err in Manager.get_errors(SyncError.NOTLISTED): # type: str
-            self.errors[err] = SyncError.NOTLISTED
+        for err_mod in Manager.get_errors(SyncError.NOTLISTED): # type: str
+            self.errors[err_mod] = SyncError.NOTLISTED
 
         # only show error column when they are errors to report
         if self.errors:

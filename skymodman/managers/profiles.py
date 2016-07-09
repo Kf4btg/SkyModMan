@@ -2,7 +2,7 @@ from pathlib import Path
 from configparser import ConfigParser as confparser
 
 from skymodman import exceptions
-from skymodman.constants import SyncError as SE, FALLBACK_PROFILE
+from skymodman.constants import SyncError as SE, FALLBACK_PROFILE, KeyStr
 from skymodman.utils import withlogger, diqt, open_for_safe_write
 
 
@@ -19,18 +19,18 @@ class Profile:
     Represents a User profile with customized mod combinations, ini edits, loadorder, etc.
     """
     __default_settings = {
-        "File Viewer": {
-            "activeonly": True,
+        KeyStr.Section.FILEVIEWER: {
+            KeyStr.INI.ACTIVEONLY: True,
         },
-        "Directory Overrides": {
-            "skyrim": "",
-            "mods": "",
-            "vfs": "",
+        KeyStr.Section.OVERRIDES: {
+            KeyStr.Dirs.SKYRIM: "",
+            KeyStr.Dirs.MODS: "",
+            KeyStr.Dirs.VFS: "",
         }
     }
 
 
-    def __init__(self, profiles_dir, name="default",
+    def __init__(self, profiles_dir, name=FALLBACK_PROFILE,
                  copy_profile=None, create_on_enoent=True):
         """
 
@@ -120,7 +120,7 @@ class Profile:
         :param str new_name:
         :return:
         """
-        if self.name.lower() == "default":
+        if self.name.lower() == FALLBACK_PROFILE.lower():
             raise exceptions.DeleteDefaultProfileError()
 
         new_dir = self.folder.with_name(new_name) #type: Path
@@ -251,8 +251,6 @@ class ProfileManager:
 
     @property
     def active_profile(self):
-        # if self._current_profile is None:
-        #     self._current_profile = self.loadProfile("default")
         return self._current_profile
 
     @property
