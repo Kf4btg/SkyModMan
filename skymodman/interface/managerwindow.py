@@ -20,13 +20,13 @@ from PyQt5.QtWidgets import (QMainWindow,
                              QWidget, QSizePolicy, QToolBar)
 
 from skymodman import exceptions
-from skymodman.managers import modmanager as Manager
 from skymodman import constants
-from skymodman.constants import (Tab as TAB,
-                                 KeyStr,
-                                 qModels as M,
-                                 qFilters as F,
-                                 Column)
+from skymodman.managers import modmanager as Manager
+# from skymodman.constants import (Tab as TAB,
+#                                  KeyStr,
+#                                  qModels as M,
+#                                  qFilters as F,
+#                                  Column)
 from skymodman.interface.models import (
     ModTable_TreeModel,
     ProfileListModel,
@@ -41,6 +41,10 @@ from skymodman.interface import app_settings
 
 from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow
 
+M = constants.qModels
+F = constants.qFilters
+TAB = constants.Tab
+KeyStr = constants.KeyStr
 
 ## Interestingly, using the icon font as a font works just fine;
 ## One can do things like:
@@ -58,8 +62,6 @@ from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow
 class ModManagerWindow(QMainWindow, Ui_MainWindow):
     modListModified     = pyqtSignal()
     modListSaved        = pyqtSignal()
-
-    # windowInitialized   = pyqtSignal()
 
     newProfileLoaded    = pyqtSignal(str)
 
@@ -382,7 +384,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         mod_filter.setFilterCaseSensitivity(Qt.CaseInsensitive)
 
         # tell filter to read mod name column
-        mod_filter.setFilterKeyColumn(Column.NAME.value)
+        mod_filter.setFilterKeyColumn(constants.Column.NAME.value)
 
         # load and apply saved setting for 'activeonly' toggle
         self.__init_modlist_filter_state(mod_filter)
@@ -390,7 +392,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # finally, set the filter as the model for the modlist
         self.filetree_modlist.setModel(mod_filter)
         # make sure we're just showing the mod name
-        self.filetree_modlist.setModelColumn(Column.NAME.value)
+        self.filetree_modlist.setModelColumn(constants.Column.NAME.value)
 
         self._filetreesplitter.setSizes(
             [1, 500])  # just make the left one smaller ok?

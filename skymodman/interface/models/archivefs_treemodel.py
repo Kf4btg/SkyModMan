@@ -11,7 +11,12 @@ from skymodman.utils.archivefs import ArchiveFS, PureCIPath, CIPath
 
 
 class UndoCmd(QtWidgets.QUndoCommand):
-    def __init__(self, type, *args, call_before_redo=None, call_before_undo=None, call_after_redo=None, call_after_undo=None, **kwargs):
+    def __init__(self, type, *args,
+                 call_before_redo=None,
+                 call_before_undo=None,
+                 call_after_redo=None,
+                 call_after_undo=None,
+                 **kwargs):
         super().__init__(*args, **kwargs)
         self.type = type
 
@@ -29,7 +34,9 @@ class TrashCommand(UndoCmd):
         :param CIPath trash_path:
         :param dict trash_info:
         """
-        super().__init__("trash", "Delete {}".format(path.name), *args, **kwargs)
+        super().__init__("trash",
+                         "Delete {}".format(path.name),
+                         *args, **kwargs)
 
         self.inode = path.inode
         self.orig_name = path.name
@@ -68,7 +75,8 @@ class TrashCommand(UndoCmd):
 
 class MoveCommand(UndoCmd):
     """
-    Command for moving a path `source_path` to a different folder `target_path`.
+    Command for moving a path `source_path` to a different folder
+     `target_path`.
     """
 
     def __init__(self, source_path,
@@ -189,7 +197,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
         """
 
         :param ArchiveFS mod_fs:
-        :param undostack: QUndoStack instance that any actions performed by the model will be pushed to.
+        :param undostack: QUndoStack instance to which we will push
+            any actions performed by the model.
         """
         super().__init__(*args, **kwargs)
 
@@ -218,10 +227,10 @@ class ModArchiveTreeModel(QAbstractItemModel):
         self._unchecked=set()
 
         # just tracking any functions with lru_caches
-        self._caches=[self._sorted_dirlist,
-                      self._isdir]
+        self._caches=[self._sorted_dirlist, self._isdir]
 
-        # create a 'Trash' folder to use for deletions (and easy restorations)
+        # create a 'Trash' folder to use for deletions
+        # (and easy restorations)
         self._fs.mkdir("/.trash")
         self.trash = self._fs.get_path("/.trash")
 
@@ -231,13 +240,15 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
     @property
     def root(self):
-        """Return absolute path of the directory that is currently set as the "visible" root of the fs"""
+        """Return absolute path of the directory that is currently
+        set as the "visible" root of the fs"""
         return self._currentroot
 
     @root.setter
     def root(self, index):
         """
         Set root item to path derived from `index`
+
         :param index:
         """
         self._currentroot_inode = index.internalId()
@@ -260,7 +271,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
         """
 
         :param index:
-        :return: Number of filesystem entries contained by the directory pointed to by `index`
+        :return: Number of filesystem entries contained by the
+            directory pointed to by `index`
         """
         try:
             return len(self.path4index(index))
@@ -271,9 +283,9 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
     def columnCount(self, *args, **kwargs):
         """
-        Just one column
-        ... for now? todo: maybe add a type column. And/Or a size column?
+        Just one column ... for now?
         """
+        #todo: maybe add a type column. And/Or a size column?
         return 1
 
     def index(self, row, col, parent=QModelIndex(), *args, **kwargs) -> QModelIndex:
@@ -289,7 +301,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
         try:
             child = self._sorted_dirlist(parentpath)[row]
 
-            # print("index(): creating index({0}, {1}, {2.inode}) for {2}".format(row, col, child))
+            # print("index(): creating index({0}, {1}, {2.inode})
+            #   for {2}".format(row, col, child))
 
             # using an int for the third argument makes it internalId(),
             # not internalPointer()
@@ -297,7 +310,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
         except IndexError as e:
             print("index({}, {}, {}({})): IndexError({})".format(row, col, parentpath, parent.internalId(), e))
             print(self._sorted_dirlist(parentpath))
-            # self.LOGGER << "index({}, {}, {}): IndexError".format(row, col, parent.internalId())
+            # self.LOGGER << "index({}, {}, {}): IndexError".format(
+            #   row, col, parent.internalId())
             # self.LOGGER << self._sorted_dirlist(parentpath)
             return QModelIndex()
 
@@ -330,8 +344,9 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :return:
         """
         if not index.isValid():
-            # the root of the tree (all the empty space below the final item)
-            # should be able to accept sub-folders dragged to it
+            # the root of the tree (all the empty space below
+            # the final item) should be able to accept sub-folders
+            # dragged to it
             return Qt.ItemIsEnabled | Qt.ItemIsDropEnabled
 
         if self._isdir(index.internalId()):
@@ -345,14 +360,17 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param int role:
         """
 
-        if role in {Qt.DisplayRole, Qt.DecorationRole, Qt.CheckStateRole, Qt.EditRole}:
+        if role in {Qt.DisplayRole,
+                    Qt.DecorationRole,
+                    Qt.CheckStateRole,
+                    Qt.EditRole}:
 
             path = self.path4index(index)
 
             return {
-                Qt.DisplayRole:
-                    path.name,
-                Qt.EditRole: path.name, # make sure editor keeps current text when opened
+                Qt.DisplayRole: path.name,
+                # make sure editor keeps current text when opened
+                Qt.EditRole: path.name,
                 Qt.DecorationRole:
                     self.FILE_ICON if path.is_file else (
                         self.FOLDER_ICON,
@@ -411,9 +429,11 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
     def mimeData(self, indexes):
         """
-        This is a single-selection model, so there should only be 1 row getting dragged.
+        This is a single-selection model, so there should only be
+        one row getting dragged.
 
-        And what we're dragging around is simply a text version of the inode for the dragged file.
+        And what we're dragging around is simply a text version of
+        the inode for the dragged file.
         :param indexes:
         :return:
         """
@@ -431,10 +451,12 @@ class ModArchiveTreeModel(QAbstractItemModel):
         else:
             par_path = self.index2path(parent)
             if row < 0 and par_path.is_file:
-                # dropped directly on parent, and 'parent' is not a directory
+                # dropped directly on parent, and 'parent' is
+                # not a directory
                 target_path = par_path.sparent
             else:
-                # either dropped directly on parent or before row,col in parent,
+                # either dropped directly on parent or before
+                # row,col in parent,
                 target_path = par_path
 
         src_path = self._fs.pathfor(int(mimedata.text()))
@@ -454,24 +476,29 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :return:
         """
 
-        # print("canDropMimeData({}, {}, {}, {}, {})".format(mimedata, action, row, col, parent.internalId()))
+        # print("canDropMimeData({}, {}, {}, {}, {})".format(
+        #   mimedata, action, row, col, parent.internalId()))
 
         dragged_inode = int(mimedata.text())
         dragged_path = self._fs.pathfor(dragged_inode)
 
         if not parent.isValid():
-            ## target is (the real) root directory, so return True so long as source
-            ## was not already a top-level item.
+            ## target is (the real) root directory, so return
+            ## True so long as source was not already a
+            ## top-level item.
             return dragged_path not in self._realroot
         else:
             parpath = self.index2path(parent)
 
             if row < 0 and parpath.is_file:
-                # dropped directly on parent, and 'parent' is not a directory
+                # dropped directly on parent, and 'parent' is
+                # not a directory
                 target = parpath.sparent
             else:
-                # either dropped directly on parent or before row,col in parent,
-                # doesn't really matter, we just need to add to parent's list
+                # either dropped directly on parent or before
+                # row,col in parent;
+                # doesn't really matter, we just need to add it
+                # to parent's list
                 target = parpath
 
             # can't drop on self or on immediate parent
@@ -482,8 +509,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
         return True
         # print("calling super()")
-        # now that we've gone through all that, leave the rest of the decision
-            # up to the super class
+        # now that we've gone through all that, leave the rest of
+        # the decision up to the super class
         # return super().canDropMimeData(mimedata, action, row, col, parent)
 
     ##===============================================
@@ -494,8 +521,10 @@ class ModArchiveTreeModel(QAbstractItemModel):
         """
         Call before an operation that moves a path to a new location.
 
-        :param src_row: Original location within its original parent directory
-        :param trg_row: Where it will be placed within the target directory
+        :param src_row: Original location within its original parent
+            directory
+        :param trg_row: Where it will be placed within the target
+            directory
         :param src_parent_path: The path's original parent
         :param trg_parent_path: The target directory of the move
         """
@@ -512,7 +541,9 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
     def _end_rename(self, changed_inode):
         """
-        Only call this when the renaming of an item does not result in a change to its sorted location within the parent directory.
+        Only call this when the renaming of an item does not result in a
+        change to its sorted location within the parent directory.
+
         :param changed_inode:
         """
         self._invalidate_caches(self._sorted_dirlist)
@@ -524,7 +555,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
         self.folder_structure_changed.emit()
 
     def _begin_insert(self, parent, row):
-        """Call before inserting a new item into directory `parent` at row `row`"""
+        """Call before inserting a new item into directory `parent`
+        at row `row`"""
         # beginInsertRows(parent, first, last)
         self.beginInsertRows(self.index4path(parent), row, row)
 
@@ -535,7 +567,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
         self.endInsertRows()
 
     def _begin_remove(self, parent, row):
-        """Call before removing a path from the filesystem; the path to be removed is located at `row` in directory `parent`."""
+        """Call before removing a path from the filesystem; the path to
+         be removed is located at `row` in directory `parent`."""
         self.beginRemoveRows(self.index4path(parent), row, row)
 
     def _end_remove(self):
@@ -544,7 +577,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
         self.endRemoveRows()
 
     def move_to_dir(self, src_path, target_dir):
-        """Move the file located at src_path from its current location to within `target_dir`"""
+        """Move the file located at src_path from its current
+        location to within `target_dir`"""
         trg_path = PureCIPath(target_dir, src_path.name)
 
         self._prepare_move(src_path, trg_path)
@@ -552,7 +586,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
     do_op = {
         # do nothing on IGNORE
         OverwriteMode.IGNORE:  lambda s, ss, d: None,
-        # merge on MERGE (should only be possible to get MERGE when both src and dest are dirs)
+        # merge on MERGE (should only be possible to get MERGE
+        # when both src and dest are dirs)
         OverwriteMode.MERGE:   lambda self, s, d: self._begin_merge(s, d),
         OverwriteMode.REPLACE: lambda self, s, d: self._replace(s, d),
         OverwriteMode.PROMPT:  lambda self, s, d: self._move_item(s, d)
@@ -635,7 +670,9 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
     def _replace(self, src, dest):
         """
-        Combines a Delete and a Move Command into a single undo action (macro)
+        Combines a Delete and a Move Command into a single
+        undo action (macro)
+
         :param src: path to eventually move to destination.
         :param dest: path to be removed and replaced.
         """
@@ -649,12 +686,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         self.undostack.endMacro()
 
     def _begin_merge(self, src, dst):
-        # todo: perform as many move, merge, & replace operations as necessary
-        # within the macro to fully merge the directories. IF any further conflicts
-        # arise during the process, keep prompting the user for each one unless
-        # they check the 'apply to all' box in the conflict-dialog. If the user
-        # cancels the operation during the run, only the files moved before that
-        # point will be included in the macro.
+        # todo: perform as many move, merge, & replace operations as necessary within the macro to fully merge the directories. IF any further conflicts arise during the process, keep prompting the user for each one unless they check the 'apply to all' box in the conflict-dialog. If the user cancels the operation during the run, only the files moved before that point will be included in the macro.
 
         # print(">>>", "_begin_merge:", src, dst)
         self.undostack.beginMacro("Merge directories")
@@ -818,7 +850,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
     def validate_mod_structure(self, root_index):
         """
-        Check if the directory-tree - as rooted at the path specified by root_index - has valid game_data on its top level.
+        Check if the directory-tree - as rooted at the path specified
+        by root_index - has valid game_data on its top level.
         :param root_index:
         :return:
         """
@@ -827,7 +860,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
     @lru_cache()
     def _sorted_dirlist(self, dirpath):
         """
-        retrieve the sorted version of a directory's entries. Sub-folders will be listed before files
+        retrieve the sorted version of a directory's entries.
+        Sub-folders will be listed before files
 
         :param CIPath dirpath:
         :rtype: list[CIPath]
@@ -837,22 +871,28 @@ class ModArchiveTreeModel(QAbstractItemModel):
         return sorted(self._fs.listdir(dirpath))
 
     def future_row_after_rename(self, current_path, new_name):
-        """ Determine updated row for current_path after it has been renamed to `new_name`
+        """
+        Determine updated row for current_path after it has been
+        renamed to `new_name`
+
         :param current_path:
         :param new_name:
-        :return:
+        :return: row
         """
         # get *copy* of file list for current directory, and remove the current path
         flist = self._sorted_dirlist(current_path.parent).copy()
         flist.remove(current_path)
 
-        return self._get_insertion_index(current_path.with_name(new_name), None,
-                                         path_is_folder=current_path.is_dir,
-                                         use_list=flist)
+        return self._get_insertion_index(
+            current_path.with_name(new_name),
+            None,
+            path_is_folder=current_path.is_dir,
+            use_list=flist)
 
     def future_row_after_move(self, path, target_dir):
         """
-        Determine where in the  directory 'target_dir' `path` will appear if it is moved there.
+        Determine where in the  directory 'target_dir' `path` will
+        appear if it is moved there.
 
         :param path:
         :param target_dir:
@@ -864,7 +904,9 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
     def future_row_after_create(self, file_name, target_dir, isfolder=False):
         """
-         Return the index in target_dir's child list where a file with name `file_name` would be inserted after creation.
+         Return the index in target_dir's child list where a file with
+         name `file_name` would be inserted after creation.
+
          :param file_name:
          :param target_dir:
          :param isfolder: whether the file to be created will be a folder
@@ -876,10 +918,13 @@ class ModArchiveTreeModel(QAbstractItemModel):
 
     def _get_insertion_index(self, path, target_dir, path_is_folder=False, use_list=None):
         """
-        Return the index in `target_dir`'s child list where `path` would be inserted.
+        Return the index in `target_dir`'s child list where `path`
+        would be inserted.
+
         :param path:
         :param target_dir:
-        :param use_list: if provided, will be used instead of `target_dir`'s contents list for determining insertion point.
+        :param use_list: if provided, will be used instead of
+            `target_dir`'s contents list for determining insertion point.
         """
         # print("_get_insertion_index({}, {}, {}, {})".format(path, target_dir, path_is_folder, use_list))
 
@@ -897,7 +942,8 @@ class ModArchiveTreeModel(QAbstractItemModel):
             if path_is_folder == p.is_dir:
                 if path < p: return i
 
-            # we know that only one of them is a folder; if it's path, return i
+            # we know that only one of them is a folder;
+            # if it's path, return i
             elif path_is_folder: return i
 
         # if no insertion point found, insert after end
@@ -919,10 +965,11 @@ class ModArchiveTreeModel(QAbstractItemModel):
             c.cache_clear()
 
     def _print_fstree(self):
+        # for debugging
         indent="  "
         for d, fstat in self._fs.lstree(self._realroot,
-                                          include_root=False,
-                                          verbose=True):
+                                        include_root=False,
+                                        verbose=True):
             print(indent*d,
                   fstat.st_name,
                   {"d":"/", "f":""}[fstat.st_type],
@@ -949,8 +996,9 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param QModelIndex index:
         :return: path to the item
         """
-        return self._fs.pathfor(index.internalId()
-                                ) if index.isValid() else self.root
+        return self._fs.pathfor(index.internalId()) \
+            if index.isValid() \
+            else self.root
 
     def index2path(self, index):
         """
@@ -969,11 +1017,14 @@ class ModArchiveTreeModel(QAbstractItemModel):
         # print("index4path({})".format(path))
         return QModelIndex() \
             if path == self._realroot \
-            else self.createIndex(self.row4path(path), 0, self._fs.inodeof(path))
+            else self.createIndex(self.row4path(path), 0,
+                                  self._fs.inodeof(path))
 
     def row4inode(self, inode):
         """
-        Return the sorted position in the inode's parent directory where the inode's current path would appear
+        Return the sorted position in the inode's parent directory
+        where the inode's current path would appear
+
         :param inode:
         """
         return self.row4path(self._fs.pathfor(inode))

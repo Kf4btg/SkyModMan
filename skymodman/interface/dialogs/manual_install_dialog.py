@@ -9,9 +9,15 @@ from skymodman.interface.widgets.overlay_layout import Overlay, OverlayCenter
 from skymodman.interface.models.archivefs_treemodel import ModArchiveTreeModel
 from skymodman.utils import withlogger, icons
 
-_description = """Arrange the directory structure of the archive shown to the right into the proper structure for installation, then click "OK" to install the mod."""
+_description = "Arrange the directory structure of the archive shown" \
+               " to the right into the proper structure for" \
+               " installation, then click \"OK\" to install the mod."
 
-_bad_package_desc = """This mod does not appear to have been packaged correctly. Please rearrange the directory structure to the right to place the game data on the top level of the mod, then click "OK" to continue."""
+_bad_package_desc = "This mod does not appear to have been packaged" \
+                    " correctly. Please rearrange the directory" \
+                    " structure to the right to place the game data" \
+                    " on the top level of the mod, then click \"OK\"" \
+                    " to continue."
 
 _tree_tooltip = """Drag files and folders to rearrange.
 Uncheck items to exclude them from installation.
@@ -25,7 +31,8 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
     def __init__(self, mod_fs, *args, **kwargs):
         """
 
-        :param skymodman.utils.archivefs.ArchiveFS mod_fs: An instance of an ArchiveFS pseudo-filesystem.
+        :param skymodman.utils.archivefs.ArchiveFS mod_fs: An
+            instance of an ArchiveFS pseudo-filesystem.
 
         :param args: passed to base class constructors
         :param kwargs: passed to base class constructors
@@ -42,7 +49,11 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         self.num_to_copy = 0
 
         # create undo framework
-        self.undostack, self.action_undo, self.action_redo, self.undoview = self.__setup_undo()
+        (self.undostack
+         , self.action_undo
+         , self.action_redo
+         # , self.undoview
+         ) = self.__setup_undo()
 
         # Create button overlay
         # self.main_overlay, self.tree_overlay, self.button_overlay = self.__setup_overlay()
@@ -97,19 +108,22 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         # show colview by default while we're testing it
         # self.btn_colview.click()
 
-    # noinspection PyArgumentList,PyTypeChecker
     def __setup_undo(self):
         undostack = QtWidgets.QUndoStack()
 
         undoaction = undostack.createUndoAction(self, "Undo")
         undoaction.pyqtConfigure(shortcut=QKeySequence.Undo,
-                                 icon=icons.get("undo", scale_factor=0.85, offset=(0, 0.1)),
+                                 icon=icons.get(
+                                     "undo", scale_factor=0.85,
+                                     offset=(0, 0.1)),
                                  # icon=QIcon.fromTheme("edit-undo"),
                                  triggered=self.undo)
 
         redoaction = undostack.createRedoAction(self, "Redo")
         redoaction.pyqtConfigure(shortcut=QKeySequence.Redo,
-                                 icon=icons.get("redo", scale_factor=0.85, offset=(0, 0.1)),
+                                 icon=icons.get(
+                                     "redo", scale_factor=0.85,
+                                     offset=(0, 0.1)),
                                  # icon=QIcon.fromTheme("edit-redo"),
                                  triggered=self.redo)
 
@@ -117,7 +131,7 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         # undoview.show()
         # undoview.setAttribute(Qt.WA_QuitOnClose, False)
 
-        return undostack, undoaction, redoaction, None# undoview
+        return undostack, undoaction, redoaction #, None# undoview
 
     def __setup_overlay(self):
         tree_overlay = Overlay()
@@ -217,7 +231,8 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
 
     def get_rclickmenu(self, for_view):
-        # here's the custom menu (actions will be made in/visible as required)
+        # here's the custom menu (actions will be made in/visible
+        # as required)
         rclickmenu = QMenu(for_view)
 
         rclickmenu.addActions(
@@ -258,7 +273,6 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         """
         Reset the visible root to the default root for the fs.
         :param args:
-        :return:
         """
         self.LOGGER << "unset_toplevel()"
         self.fsroot = QModelIndex()
@@ -271,9 +285,10 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
     def create_dir(self, *args):
         """
-        Create a new directory as a sibling (if the clicked item was a file) or child (if it was a folder) of the target of the last context-menu event, and open its name-editor.
+        Create a new directory as a sibling (if the clicked item was a
+        file) or child (if it was a folder) of the target of the last
+         context-menu event, and open its name-editor.
         :param args:
-        :return:
         """
 
         # self.LOGGER << "create_dir()"
@@ -295,7 +310,9 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
         # noinspection PyArgumentList,PyTypeChecker
         new_name = QInputDialog.getText(self, "New Folder",
-                                        "Create new folder in:\n{}".format(parent), text=startname)[0]
+                                        "Create new folder in:\n{}"
+                                        .format(parent),
+                                        text=startname)[0]
 
         if new_name:
             fsmod.create_new_dir(parent, new_name)
@@ -364,7 +381,8 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
         self.rclickmenu.exec_(self.mod_structure_view.mapToGlobal(position))
 
-    # def check_top_level(self, parent=None, first=-1, last=-1, dest=None, dest_row=-1):
+    # def check_top_level(self, parent=None, first=-1, last=-1,
+    # dest=None, dest_row=-1):
     def check_top_level(self, *args):
 
         isvalid = self.modfsmodel.validate_mod_structure(self.fsroot)
@@ -389,7 +407,8 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
     # def change_view(self, widget_index):
     #     self.view_switcher.setCurrentIndex(widget_index)
     #     self._active_view = (self.mod_structure_view,
-    #                          self.mod_structure_column_view)[widget_index]
+    #                          self.mod_structure_column_view
+    # )[widget_index]
 
     def is_expanded(self, index):
         return self._active_view.isExpanded(index)

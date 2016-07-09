@@ -16,10 +16,12 @@ import re
 
 # <editor-fold desc="ModuleConstants">
 
-VISIBLE_COLS  = [COL.ORDER, COL.ENABLED, COL.NAME, COL.MODID, COL.VERSION, COL.ERRORS]
-DBLCLICK_COLS = {COL.MODID, COL.VERSION}
+# VISIBLE_COLS  = [COL.ORDER, COL.ENABLED, COL.NAME, COL.MODID, COL.VERSION, COL.ERRORS]
+# DBLCLICK_COLS = {COL.MODID, COL.VERSION}
 
-# Locally binding some names to improve resolution speed in some of the constantly-called methods like data()
+# Locally binding some names to improve resolution speed in some of
+# the constantly-called methods like data() (in profiling, the speedup
+# was small, but noticeable, especially for large operations)
 COL_ENABLED = COL.ENABLED.value
 COL_NAME    = COL.NAME.value
 COL_ERRORS  = COL.ERRORS.value
@@ -108,6 +110,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         # noinspection PyUnresolvedReferences
         self.mod_entries = [] #type: list[QModEntry]
 
+        # noinspection PyUnresolvedReferences
         self.errors = {}  # type: dict[str, int]
                           #  of {mod_directory_name: err_type}
 
