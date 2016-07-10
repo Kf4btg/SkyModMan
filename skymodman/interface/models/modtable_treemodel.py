@@ -258,10 +258,7 @@ class ModTable_TreeModel(QAbstractItemModel):
                                      SyncError.NOTLISTED: 'dialog-warning'}))
 
                     if case(Qt_ToolTipRole): return choices(
-                            {SyncError.NOTFOUND: "The data for this mod was not found"
-                                                 "in the currently configured mod directory."
-                                                 "Have the files been moved? The mod"
-                                                 "cannot be loaded if it cannot be found!",
+                            {SyncError.NOTFOUND: "Mod directory not found.",
                              SyncError.NOTLISTED: "This mod was found in the mods directory"
                                                   "but has not previously been seen my this"
                                                   "profile. Be sure that it is either set up"

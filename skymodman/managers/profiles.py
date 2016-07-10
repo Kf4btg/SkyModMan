@@ -143,6 +143,15 @@ class Profile:
         self.folder = new_dir
         self.name = new_name
 
+    def delete_files(self):
+        """
+        Delete all the files in this profile's directory.
+        """
+        for f in [self.folder / p for p in ProfileFiles]:
+            if f.exists():
+                f.unlink()
+
+
 
 
     def recordErrors(self, error_type, errors):
@@ -394,12 +403,19 @@ class ProfileManager:
         if profile.name in self.__cache:
             self.__cache.remove(profile.name)
 
-        # delete files in folder
-        for f in profile.localfiles.values():
-            if f.exists(): f.unlink()
+        try:
+            # delete files in folder
+            profile.delete_files()
+            # remove folder
+            profile.folder.rmdir()
+        except OSError as e:
+            self.LOGGER.error(e)
+            raise exceptions.ProfileDeletionError(profile.name) from e
 
-        # remove folder
-        profile.folder.rmdir()
+
+        # for f in profile.localfiles.values():
+        #     if f.exists(): f.unlink()
+
 
     def rename_profile(self, profile, new_name):
         """

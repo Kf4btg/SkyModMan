@@ -56,6 +56,12 @@ class ProfileExistsError(ProfileError):
         super().__init__(profilename,
                          "A profile matching the name '{name}' already exists.")
 
+class ProfileDeletionError(ProfileError):
+    def __init__(self, profilename):
+        super().__init__(profilename,
+                         "The profile directory for '{name}' could be"
+                         " fully removed")
+
 class DeleteDefaultProfileError(ProfileError):
     def __init__(self):
         super().__init__('default',
@@ -68,6 +74,12 @@ class FileAccessError(GeneralError):
     """
     def __init__(self, file, message='{file}'):
         super().__init__(message.format(file=file))
+
+class FileDeletionError(FileAccessError):
+    """
+    Raised when an attempt to delete a file or folder fails
+    """
+
 
 class MultiFileError(Error):
     """
