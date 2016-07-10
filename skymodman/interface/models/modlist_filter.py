@@ -41,14 +41,21 @@ class ActiveModsListFilter(QSortFilterProxyModel):
 
     def filterAcceptsRow(self, row, parent):
         """
+        Rejects the row if the mod for that row is disabled and
+        "OnlyShowActive" is set to True. Also rejects the row if the mod
+        could not be found on disk
 
         :param int row: row in the source
         :param PyQt5.QtCore.QModelIndex parent: parent of row in the source
         :return: whether or not we allow the row to show. Y'know.
         """
 
-        if self._onlyactive and not self.sourceModel()[row].enabled:
+        mod = self.sourceModel()[row]
+
+        if self._onlyactive and not mod.enabled:
             return False
+
+        if self.sourceModel().mod_missing(mod): return False
 
         return super().filterAcceptsRow(row, parent)
 

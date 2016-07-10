@@ -115,6 +115,9 @@ class ModTable_TreeModel(QAbstractItemModel):
         # noinspection PyUnresolvedReferences
         self.errors = {}  # type: dict[str, int]
                           #  of {mod_directory_name: err_type}
+        # keep a reference to the keys() dictview (which will
+        # dynamically update itself)
+        self.missing_mods = self.errors.keys()
 
         self.vheader_field = COL_ORDER
         # self.visible_columns = [COL.ENABLED, COL.ORDER, COL.NAME, COL.MODID, COL.VERSION]
@@ -166,15 +169,14 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
         if index.isValid(): return self.mod_entries[index.row()]
 
-    def mod_has_error(self, mod_dir_name):
+    def mod_missing(self, mod_entry):
         """
-        Return whether the mod with the given directory name is currently
-        in an error state.
+        Return whether the specified mod is currently in an error state.
 
-        :param mod_dir_name:
+        :param QModEntry mod_entry:
         :return:
         """
-        return mod_dir_name in self.errors.keys()
+        return mod_entry.directory in self.missing_mods
 
     def mark_modified(self, iterable):
         """
