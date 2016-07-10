@@ -39,6 +39,7 @@ class ModTable_TreeView(QTreeView):
         self.handle_move_signals = True
         # self.LOGGER << "Init ModTable_TreeView"
 
+        # create an undo stack for the mods tab
         self._undo_stack = QUndoStack()
 
 
@@ -99,12 +100,12 @@ class ModTable_TreeView(QTreeView):
         for i in range(self._model.columnCount()):
             self.resizeColumnToContents(i)
 
-    def revertChanges(self):
-        self.LOGGER << "Reverting all user edits"
-        # self._model.revert_all()
-        self.enableModActions.emit(False)
-
-        # self.clearSelection()
+    # def revertChanges(self):
+    #     self.LOGGER << "Reverting all user edits"
+    #     # self._model.revert_all()
+    #     self.enableModActions.emit(False)
+    #
+    #     # self.clearSelection()
 
     def saveChanges(self):
         self.LOGGER << "Saving user changes"
@@ -187,22 +188,22 @@ class ModTable_TreeView(QTreeView):
             rows = self._selectedrownumbers()
             self._tellmodelshiftrows(rows[0]+distance, rows=rows)
 
-    def undo(self):
-        # we check the hasSelection() result to see whether
-        # whether we want to ignore notifications about row
-        # movement sent by the model (which we would only be
-        # interested in if the selection were being moved around)
-        self.handle_move_signals = self._selection_model.hasSelection()
-        self._model.undo()
-
-        # and reset it afterwards
-        self.handle_move_signals = True
-
-    def redo(self):
-        # see note above
-        self.handle_move_signals = self._selection_model.hasSelection()
-        self._model.redo()
-        self.handle_move_signals = True
+    # def undo(self):
+    #     # we check the hasSelection() result to see whether
+    #     # whether we want to ignore notifications about row
+    #     # movement sent by the model (which we would only be
+    #     # interested in if the selection were being moved around)
+    #     self.handle_move_signals = self._selection_model.hasSelection()
+    #     self._model.undo()
+    #
+    #     # and reset it afterwards
+    #     self.handle_move_signals = True
+    #
+    # def redo(self):
+    #     # see note above
+    #     self.handle_move_signals = self._selection_model.hasSelection()
+    #     self._model.redo()
+    #     self.handle_move_signals = True
 
     def dragEnterEvent(self, event):
         """ Qt-override.
@@ -247,10 +248,10 @@ class ModTable_TreeView(QTreeView):
 
         # splitting these up may help with some undo weirdness...
 
-
         if len(sel) > self._model.columnCount():
             # multiple rows selected
-            # with group(": {} Mods".format(["Enable", "Disable"][currstate])):
+
+            # bind them all into one undo-action
             with undomacro(self.undo_stack, ": {} Mods".format(_text)):
                 for idx in filter(lambda i: i.column() == COL_ENABLED, sel):
                     # if i.column() == COL_ENABLED:

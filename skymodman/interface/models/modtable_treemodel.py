@@ -135,12 +135,6 @@ class ModTable_TreeModel(QAbstractItemModel):
         # entries have been modified
         self._modifications = deque()
 
-
-
-        # stack().undocallback = partial(self._undo_event, 'undo')
-        # stack().docallback = partial(self._undo_event, 'redo')
-
-
         self.LOGGER << "init ModTable_TreeModel"
 
     ##===============================================
@@ -149,7 +143,7 @@ class ModTable_TreeModel(QAbstractItemModel):
 
     @property
     def isDirty(self) -> bool:
-        return len(self._modifications) > 0 #and stack().haschanged()
+        return len(self._modifications) > 0
 
     def __getitem__(self, row):
         """
@@ -201,60 +195,6 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
         for _ in range(count):
             self._modifications.pop()
-
-    ##===============================================
-    ## Undo/Redo
-    ##===============================================
-    # @property
-    # def stack(self):
-    #     """A reference to the undo stack"""
-    #     return stack()
-    #
-    # @property
-    # def undotext(self):
-    #     """Text describing the topmost event on the undo stack"""
-    #     # if undotext() is None, return an empty string
-    #     # to prevent crash in the Qt Signal
-    #     return stack().undotext() or ''
-    # @property
-    # def redotext(self):
-    #     """Text describing the topmost event on the redo stack"""
-    #     # if undotext() is None, return an empty string
-    #     # to prevent crash in the Qt Signal
-    #     return stack().redotext() or ''
-    #
-    # @property
-    # def canundo(self):
-    #     return stack().canundo()
-    # @property
-    # def canredo(self):
-    #     return stack().canredo()
-    #
-    # # FIXME: on the FIRST undoable action (when there are no undos available), the timed stack implementation doesn't react to the undo key sequence until the timer runs out; this is because the the Undo QAction is disabled until something is in the **real** undo stack. The non-responsive shortcut is rather jarring. Later, when there are already undos in the stack, the undo command interrupts the timer as it's supposed to.
-    # def undo(self):
-    #     """
-    #     Undo the most recent action
-    #     """
-    #     stack().undo()
-    #
-    # def redo(self):
-    #     """
-    #     Redo the most recently undone action
-    #     """
-    #     stack().redo()
-    #
-    # def _undo_event(self, action=None):
-    #     """
-    #     Passed to the undo stack as ``undocallback``, so that we can notify the UI of the new text
-    #     :param action:
-    #     """
-    #     if action is None:  # Reset
-    #         self.tablehaschanges.emit(False)
-    #         self.undoevent.emit('', '')
-    #     else:
-    #         self._check_dirty_status()
-    #         self.undoevent.emit(self.undotext,
-    #                             self.redotext)
 
     def _push_command(self, command):
         """
@@ -481,8 +421,6 @@ class ModTable_TreeModel(QAbstractItemModel):
                     post_undo_callback = cb2)
                 )
 
-                # self.changeModField(index, row, self.mod_entries[row],
-                #                     'enabled', int(value == Qt_Checked))
                 return True
         elif role == Qt_EditRole:
             if index.column() == COL_NAME:
@@ -500,7 +438,6 @@ class ModTable_TreeModel(QAbstractItemModel):
                     post_undo_callback = cb2)
                 )
 
-                # self.changeModField(index, row, mod, 'name', new_name)
                 return True
         else:
             return super().setData(index, value, role)
@@ -715,24 +652,6 @@ class ModTable_TreeModel(QAbstractItemModel):
     #         me[i]=deck.popleft()
     #         me[i].ordinal = i+1
 
-    # def _check_dirty_status(self):
-    #     """
-    #     Checks whether the table has just gone from a saved to an unsaved state, or vice-versa, and sends a notification signal iff there is a state change.
-    #     """
-    #
-    #     # if signals are blocked, there's no reason to continue (this
-    #     # probably means we're in a 'revert'/undo-all command, and this
-    #     # method will be called again at the end of that
-    #     if self.signalsBlocked(): return
-    #
-    #     if self._datahaschanged is None \
-    #             or stack().haschanged() != self._datahaschanged:
-    #         # if _datahaschanged is None, then this is the first
-    #         # time we've changed data this session.
-    #         # Otherwise, we only want to activate when there is
-    #         # a difference between the current and cached state
-    #         self._datahaschanged = stack().haschanged()
-    #         self.tablehaschanges.emit(self._datahaschanged)
 
     ##===============================================
     ## Getting data from disk into model
@@ -745,9 +664,6 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
         self.beginResetModel()
         self._modifications.clear()
-        # self._datahaschanged = None
-        # stack().clear()
-        # stack().savepoint()
 
         self.mod_entries = [QModEntry(**d) for d in Manager.basic_mod_info()]
 
@@ -806,32 +722,6 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         Manager.save_user_edits(to_save)
 
-        # for now, let's just reset the undo stack and consider
-        # this the new "start" point
-        # stack().clear()
-        # self._datahaschanged = None
-        # stack().savepoint()
-
-        # self._undo_event()
-
-    # def revert_all(self):
-    #     """
-    #     Does a 'mass undo' of all changes made to the table so far.
-    #     :return:
-    #     """
-    #     self.beginResetModel()
-    #     self.blockSignals(True)
-    #
-    #     while stack().canundo():
-    #         stack().undo()
-    #
-    #     self.blockSignals(False)
-    #     self.endResetModel()
-    #
-    #     # now call all the signals that were missed
-    #     # self.notifyViewRowsMoved.emit()
-    #     self._check_dirty_status()
-    #     self.undoevent.emit(self.undotext, self.redotext)
 
     ##===============================================
     ## Drag & Drop

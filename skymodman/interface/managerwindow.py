@@ -327,8 +327,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         self.models[M.mod_table] = self.mod_table.model()
 
-        # self.mod_table.loadData()
-
         # setup the animation to show/hide the search bar
         self.animate_show_search = QPropertyAnimation(
             self.modtable_search_box, b"maximumWidth")
@@ -582,17 +580,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.action_toggle_mod.triggered.connect(
             self.mod_table.toggleSelectionCheckstate)
 
-        # --------------------------------------------------
-
-        # * action_undo
-        # * action_redo
-        # self.action_undo.setShortcut(QKeySequence.Undo)
-        # self.action_undo.setIcon(icons.get('undo',
-        #  color_disabled=QPalette().color(QPalette.Midlight)))
-        # self.action_redo.setShortcut(QKeySequence.Redo)
-        # connect undo/redo actions to table model
-        # self.action_undo.triggered.connect(self.mod_table.undo)
-        # self.action_redo.triggered.connect(self.mod_table.redo)
 
         # --------------------------------------------------
 
@@ -778,6 +765,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         #     self.on_table_unsaved_change)
 
     def _setup_undo_manager(self):
+        """
+        Setup the main QUndoGroup that we will use to manage all the
+        undo stacks in the app (all TWO of them so far).
+
+        ...actually just one so far...
+        """
+        # create and configure undo action
         self.action_undo = self.undoManager.createUndoAction(self, "Undo")
         self.action_undo.pyqtConfigure(shortcut=QKeySequence.Undo,
                                  # icon=icons.get(
@@ -787,7 +781,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                                  , triggered=self.on_undo
                                  )
 
-
+        # create and configure redo action
         self.action_redo = self.undoManager.createRedoAction(self, "Redo")
         self.action_redo.pyqtConfigure(shortcut=QKeySequence.Redo,
                                  # icon=icons.get(
@@ -797,13 +791,15 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                                  , triggered=self.on_redo
                                  )
 
-        self.menu_edit.insertActions(self.action_save_changes, [self.action_undo, self.action_redo])
-        # self.menu_edit.addAction(self.action_undo)
-        # self.menu_edit.addAction(self.action_redo)
+        # insert into the "Edit" menu before the save-changes entry
+        self.menu_edit.insertActions(
+            self.action_save_changes,
+            [self.action_undo, self.action_redo])
 
-        self.file_toolBar.insertActions(self.action_save_changes, [self.action_undo, self.action_redo])
-        # self.file_toolBar.addAction(self.action_undo)
-        # self.file_toolBar.addAction(self.action_redo)
+        # insert into the toolbar before the save-changes entry
+        self.file_toolBar.insertActions(
+            self.action_save_changes,
+            [self.action_undo, self.action_redo])
 
         # add stacks
         self.undoManager.addStack(self.mod_table.undo_stack)
@@ -813,13 +809,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.undo_stacks[TAB.FILETREE] = QUndoStack()
         self.undoManager.addStack(self.undo_stacks[TAB.FILETREE])
 
-        self.undoManager.cleanChanged.connect(self.on_table_clean_changed)
+        self.undoManager.cleanChanged.connect(
+            self.on_table_clean_changed)
 
-        self.undoView = QtWidgets.QUndoView(self.undoManager)
-        self.undoView.show()
-        self.undoView.setAttribute(Qt.WA_QuitOnClose, False)
-
-
+        # self.undoView = QtWidgets.QUndoView(self.undoManager)
+        # self.undoView.show()
+        # self.undoView.setAttribute(Qt.WA_QuitOnClose, False)
 
 
     # </editor-fold>
@@ -902,7 +897,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                         self.mod_table.undo_stack.clear()
                         # for s in self.undo_stacks:
                         #     s.clear()
-                        # self.on_table_unsaved_change(False)
 
                     self.LOGGER.info(
                         "Activating profile '{}'".format(
@@ -1016,7 +1010,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             a.setEnabled(has_selection)
 
     @pyqtSlot(bool)
-    # def on_table_unsaved_change(self, unsaved_changes_present):
     def on_table_clean_changed(self, clean):
         """
         When a change is made to the table __that takes it from a
@@ -1031,7 +1024,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         for widgy in [self.save_cancel_btnbox,
                       self.action_save_changes,
                       self.action_revert_changes]:
-            widgy.setEnabled(clean)
+            widgy.setEnabled(not clean)
 
     @pyqtSlot(bool)
     def on_modlist_activeonly_toggle(self, checked):
@@ -1091,23 +1084,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.filters[F.file_viewer].setFilterWildcard(text)
             self.filetree_fileviewer.expandAll()
 
-    # @pyqtSlot(str, str)
-    # def on_undo_redo_event(self, undo_text, redo_text):
-    #     """Update the undo/redo text to reflect the passed text.  If an
-    #     argument is passed as an empty string, that button will instead
-    #     be disabled."""
-    #     # self.LOGGER << "Undoevent({}, {})".format(undo_text, redo_text)
-    #
-    #     for action, text, default_text in [
-    #         (self.action_undo, undo_text, "Undo"),
-    #         (self.action_redo, redo_text, "Redo")]:
-    #         if text:
-    #             action.setText(text)
-    #             action.setEnabled(True)
-    #         else:
-    #             action.setText(default_text)
-    #             action.setEnabled(False)
-
     @pyqtSlot()
     def on_save_command(self):
         """
@@ -1153,7 +1129,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     @pyqtSlot()
     def on_redo(self):
         self.undoManager.redo()
-
 
 
     def on_table_search(self, direction=1):
@@ -1286,8 +1261,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # must have a configured skyrim installation folder
         skydir = Manager.get_directory(KeyStr.Dirs.SKYRIM)
-        # skydir = Manager.get_config_value(INIKey.SKYRIMDIR, INISection.DIRECTORIES)
-        # if not Manager.conf["dir_skyrim"]:
         if not skydir:
             if message("information", "Select Skyrim Installation",
                        'Before the manager runs, please take a moment to'
@@ -1308,8 +1281,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         Some manager components should be hidden on certain tabs
         """
-        # tab=self.current_tab
-
         all_components = [
             self.save_cancel_btnbox,      # 0
             self.next_button,             # 1
@@ -1341,8 +1312,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             "afn": self.action_find_next,       # 4
             "afp": self.action_find_previous,   # 5
             "aum": self.action_uninstall_mod,   # 6
-            # self.action_undo,            # 4
-            # self.action_redo,            # 5
         }
 
         # this is a selector that, depending on how it is
@@ -1355,10 +1324,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         if self.current_tab == TAB.MODTABLE:
             # tmodel = self.models[M.mod_table]
             s["mmg"] = s["atm"] = s["aum"] = self.mod_table.selectionModel().hasSelection()
-            # s[2] = s[3] = tmodel.isDirty
-            s["asc"] = s["arc"] = self.undoManager.isClean()
-            # s[4],  s[5] = tmodel.canundo, tmodel.canredo
-            # s[6] = s[7] = bool(self._search_text)
+            s["asc"] = s["arc"] = not self.undoManager.isClean()
             s["afn"] = s["afp"] = bool(self._search_text)
         elif self.current_tab == TAB.FILETREE:
             s["asc"] = s["arc"] = self.models[M.file_viewer].has_unsaved_changes
@@ -1373,7 +1339,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         :param QAction action:
         :param QAbstractButton button:
-        :return:
         """
         button.setEnabled(action.isEnabled())
         button.setToolTip(action.toolTip())
@@ -1453,8 +1418,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         moddir = indexCur.internalPointer().directory
 
-        # p = Manager.conf.paths.dir_mods / moddir
-
         # add the name of the mod directory to the path of the
         # main mods folder
 
@@ -1483,7 +1446,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         # check for unsaved changes to the mod-list
         if Manager.active_profile() is not None \
-                and self.mod_table.model().isDirty:
+                and not self.mod_table.undo_stack.isClean():
+                # and self.mod_table.model().isDirty:
             ok = QMessageBox(QMessageBox.Warning, 'Unsaved Changes',
                              'Your mod install-order has unsaved '
                              'changes. Would you like to save them '
