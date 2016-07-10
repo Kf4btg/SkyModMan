@@ -1,46 +1,19 @@
 from functools import partial
 import asyncio
 
-from PyQt5 import QtWidgets
-
-from PyQt5.QtCore import (Qt,
-                          pyqtSignal,
-                          pyqtSlot,
-                          QModelIndex,
-                          # QDir,
-                          QPropertyAnimation,
-                          # QSettings,
-                          # QStandardPaths,
-                          )
-from PyQt5.QtGui import QGuiApplication, QKeySequence, QIcon #, QPalette #, QFontDatabase
-from PyQt5.QtWidgets import (QMainWindow,
-                             QDialogButtonBox,
-                             QMessageBox,
-                             QFileDialog, QInputDialog,
-                             QAction, QAbstractButton,  # QHeaderView,
-                             QActionGroup, QProgressBar, QLabel,
-                             QWidget, QSizePolicy, QToolBar,
-                             QUndoGroup, QUndoStack)
+from PyQt5 import QtWidgets, QtGui, QtCore
+# specifically import some frequently used names
+from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
+from PyQt5.QtWidgets import QMessageBox
 
 from skymodman import exceptions
 from skymodman import constants
 from skymodman.managers import modmanager as Manager
-# from skymodman.constants import (Tab as TAB,
-#                                  KeyStr,
-#                                  qModels as M,
-#                                  qFilters as F,
-#                                  Column)
-from skymodman.interface.models import (
-    ModTable_TreeModel,
-    ProfileListModel,
-    ModFileTreeModel,
-    ActiveModsListFilter,
-    FileViewerTreeFilter)
+from skymodman.interface import models, app_settings, ui_utils
 from skymodman.interface.dialogs import message
+from skymodman.interface.install_helpers import InstallerUI
 from skymodman.utils import withlogger #, icons
 from skymodman.utils.fsutils import checkPath, join_path
-from skymodman.interface.install_helpers import InstallerUI
-from skymodman.interface import app_settings, blocked_signals
 
 from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow
 
@@ -62,7 +35,7 @@ KeyStr = constants.KeyStr
 # _id = QFontDatabase.addApplicationFont("skymodman/thirdparty/qtawesome/fonts/fontawesome-webfont.ttf")
 
 @withlogger
-class ModManagerWindow(QMainWindow, Ui_MainWindow):
+class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     modListModified     = pyqtSignal()
     modListSaved        = pyqtSignal()
 
@@ -74,7 +47,6 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
     instance = None # type: ModManagerWindow
 
-    # noinspection PyUnresolvedReferences
     def __init__(self, **kwargs):
         """
         :param kwargs: anything to pass on the the base class constructors
@@ -91,8 +63,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.task = None
 
         # setup trackers for all of our models and proxies
-        self.models  = {} #type: dict[M,QAbstractItemModel]
-        self.filters = {} #type: dict[F,QSortFilterProxyModel]
+        # noinspection PyUnresolvedReferences
+        self.models  = {} #type: dict[M,QtCore.QAbstractItemModel]
+        # noinspection PyUnresolvedReferences
+        self.filters = {} #type: dict[F,QtCore.QSortFilterProxyModel]
 
         # setup the base ui
         self.setupUi(self)
@@ -113,11 +87,11 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         ## tabs, the stack for that tab will become the active stack
         ## in the main undoGroup, and the undo/redo actions will thus
         ## only affect that tab.
-        self.undoManager = QUndoGroup(self)
+        self.undoManager = QtWidgets.QUndoGroup(self)
         # initialize a map of the undo stacks
         self.undo_stacks = {
-            TAB.MODTABLE: None, # type: QUndoStack
-            TAB.FILETREE: None  # type: QUndoStack
+            TAB.MODTABLE: None, # type: QtWidgets.QUndoStack
+            TAB.FILETREE: None  # type: QtWidgets.QUndoStack
         }
 
         ## Yeah...all that Notifier business was silly. Everything
@@ -176,7 +150,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.resize(size
                         if size and app_settings.Get(
                                 KeyStr.UI.RESTORE_WINSIZE)
-                        else QGuiApplication.primaryScreen()
+                        else QtGui.QGuiApplication.primaryScreen()
                                 .availableSize() * 5 / 7)
 
         def _move(pos):
@@ -241,8 +215,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # since qtoolbars don't allow spacer widgets, we'll "fake" one
         # with a plain old qwidget.
-        spacer = QWidget()
-        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        spacer = QtWidgets.QWidget()
+        spacer.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
 
         # add it to the toolbar
         self.file_toolBar.addWidget(spacer)
@@ -260,7 +234,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # this just makes it easier to enable/disable them all at once
         # self.file_toolBar.addSeparator()
         # mmag => "Mod Movement Action Group"
-        mmag = self.mod_movement_group = QActionGroup(self)
+        mmag = self.mod_movement_group = QtWidgets.QActionGroup(self)
 
         # mact => "Movement ACTion"
         macts = [self.action_move_mod_to_top,
@@ -276,7 +250,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # let's actually make a new, vertical toolbar
         # for these and add it to the side of the mods table.
-        movement_toolbar = QToolBar(self.installed_mods_tab)
+        movement_toolbar = QtWidgets.QToolBar(self.installed_mods_tab)
         movement_toolbar.setOrientation(Qt.Vertical)
         ## Note to : adding it to the left of the table never worked,
         ## for some reason...it always overlapped the table. Managed
@@ -304,8 +278,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # widget caused the 'busy' animation not to play...
         # I never did figure out why, but adding them separately
         # bypasses the issue.
-        self.sb_progress_label = QLabel("Working:", self)
-        self.sb_progress_bar = QProgressBar(self)
+        self.sb_progress_label = QtWidgets.QLabel("Working:", self)
+        self.sb_progress_bar = QtWidgets.QProgressBar(self)
         self.sb_progress_bar.setMaximumWidth(100)
 
         self.status_bar.addPermanentWidget(self.sb_progress_label)
@@ -323,12 +297,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # Manager.load_active_profile_data()
         self.mod_table.setModel(
-            ModTable_TreeModel(parent=self.mod_table))
+            models.ModTable_TreeModel(parent=self.mod_table))
 
         self.models[M.mod_table] = self.mod_table.model()
 
         # setup the animation to show/hide the search bar
-        self.animate_show_search = QPropertyAnimation(
+        self.animate_show_search = QtCore.QPropertyAnimation(
             self.modtable_search_box, b"maximumWidth")
         self.animate_show_search.setDuration(300)
         self.modtable_search_box.setMaximumWidth(0)
@@ -358,7 +332,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         self.LOGGER.debug("_setup_profile_selector")
 
-        model = ProfileListModel()
+        model = models.ProfileListModel()
 
         for name, profile in Manager.get_profiles(
                 names_only=False):
@@ -392,7 +366,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # setup filter proxy for active mods list
         mod_filter = self.filters[
-            F.mod_list] = ActiveModsListFilter(
+            F.mod_list] = models.ActiveModsListFilter(
             self.filetree_modlist)
 
         # use the main mod-table model as the source
@@ -424,12 +398,12 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         ##################################
         ## model for tree view of files
         fileviewer_model = self.models[
-            M.file_viewer] = ModFileTreeModel(
+            M.file_viewer] = models.ModFileTreeModel(
             parent=self.filetree_fileviewer)
 
         ## filter
         fileviewer_filter = self.filters[
-            F.file_viewer] = FileViewerTreeFilter(
+            F.file_viewer] = models.FileViewerTreeFilter(
             self.filetree_fileviewer)
 
         fileviewer_filter.setSourceModel(fileviewer_model)
@@ -542,7 +516,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.edit_preferences)
 
         # action_quit
-        self.action_quit.setShortcut(QKeySequence.Quit)
+        self.action_quit.setShortcut(QtGui.QKeySequence.Quit)
         # self.action_quit.triggered.connect(self.safe_quit)
         # connect quit action to close event
         self.action_quit.triggered.connect(self.close)
@@ -585,7 +559,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # action_save_changes
         self.action_save_changes.setShortcut(
-            QKeySequence.Save)
+            QtGui.QKeySequence.Save)
         self.action_save_changes.triggered.connect(
             self.on_save_command)
 
@@ -611,14 +585,14 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # --------------------------------------------------
 
         # show search bar
-        self.action_show_search.setShortcut(QKeySequence.Find)
+        self.action_show_search.setShortcut(QtGui.QKeySequence.Find)
 
         # find next
-        self.action_find_next.setShortcut(QKeySequence.FindNext)
+        self.action_find_next.setShortcut(QtGui.QKeySequence.FindNext)
         self.action_find_next.triggered.connect(
             partial(self.on_table_search, 1))
         # find prev
-        self.action_find_previous.setShortcut(QKeySequence.FindPrevious)
+        self.action_find_previous.setShortcut(QtGui.QKeySequence.FindPrevious)
         self.action_find_previous.triggered.connect(
             partial(self.on_table_search, -1))
 
@@ -631,9 +605,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # use a dialog-button-box for save/cancel;
         # have to specify by standard button type
         btn_apply = self.save_cancel_btnbox.button(
-            QDialogButtonBox.Apply)
+            QtWidgets.QDialogButtonBox.Apply)
         btn_reset = self.save_cancel_btnbox.button(
-            QDialogButtonBox.Reset)
+            QtWidgets.QDialogButtonBox.Reset)
 
         btn_apply.clicked.connect(
             self.action_save_changes.trigger)
@@ -773,21 +747,21 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         # create and configure undo action
         self.action_undo = self.undoManager.createUndoAction(self, "Undo")
-        self.action_undo.pyqtConfigure(shortcut=QKeySequence.Undo,
+        self.action_undo.pyqtConfigure(shortcut=QtGui.QKeySequence.Undo,
                                  # icon=icons.get(
                                  #     "undo", scale_factor=0.85,
                                  #     offset=(0, 0.1)),
-                                 icon=QIcon().fromTheme("edit-undo")
+                                 icon=QtGui.QIcon().fromTheme("edit-undo")
                                  , triggered=self.on_undo
                                  )
 
         # create and configure redo action
         self.action_redo = self.undoManager.createRedoAction(self, "Redo")
-        self.action_redo.pyqtConfigure(shortcut=QKeySequence.Redo,
+        self.action_redo.pyqtConfigure(shortcut=QtGui.QKeySequence.Redo,
                                  # icon=icons.get(
                                  #     "redo", scale_factor=0.85,
                                  #     offset=(0, 0.1)),
-                                 icon=QIcon().fromTheme("edit-redo")
+                                 icon=QtGui.QIcon().fromTheme("edit-redo")
                                  , triggered=self.on_redo
                                  )
 
@@ -806,9 +780,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.undo_stacks[TAB.MODTABLE] = self.mod_table.undo_stack
 
         # add a dummy stack for the filetree tab, for now
-        self.undo_stacks[TAB.FILETREE] = QUndoStack()
+        self.undo_stacks[TAB.FILETREE] = QtWidgets.QUndoStack()
         self.undoManager.addStack(self.undo_stacks[TAB.FILETREE])
 
+        # noinspection PyUnresolvedReferences
         self.undoManager.cleanChanged.connect(
             self.on_table_clean_changed)
 
@@ -877,7 +852,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
                 # only continue to change profile if user does NOT
                 # click cancel (or if there are no changes to save)
-                if reply == QMessageBox.Cancel:
+                if reply == QtWidgets.QMessageBox.Cancel:
                     # reset the text in the profile selector;
                     # this SHOULDn't enter an infinite loop because,
                     # since we haven't yet changed
@@ -891,7 +866,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                     # update our variable which tracks the current index
                     self.profile_selector_index = index
                     # No => "Don't save changes, drop them"
-                    if reply == QMessageBox.No:
+                    if reply == QtWidgets.QMessageBox.No:
                         # don't bother reverting, mods list is getting
                         # reset; just disable the buttons
                         self.mod_table.undo_stack.clear()
@@ -985,7 +960,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
 
         # noinspection PyTypeChecker,PyArgumentList
-        newname = QInputDialog.getText(self,
+        newname = QtWidgets.QInputDialog.getText(self,
                                        "Rename Profile",
                                        "New name")[0]
 
@@ -1108,7 +1083,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
             # block signals from the model so we don't
             # overwhelm the user's processor with gatling-gun commands
-            with blocked_signals(m):
+            with ui_utils.blocked_signals(m):
                 while (self.undoManager.canUndo()
                        and not self.undoManager.isClean()):
                     self.undoManager.undo()
@@ -1337,8 +1312,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         Synchronize a button's state with that of a given QAction
 
-        :param QAction action:
-        :param QAbstractButton button:
+        :param QtWidgets.QAction action:
+        :param QtWidgets.QAbstractButton button:
         """
         button.setEnabled(action.isEnabled())
         button.setToolTip(action.toolTip())
@@ -1536,7 +1511,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         directory.
         """
         # noinspection PyTypeChecker
-        moddir = QFileDialog.getExistingDirectory(
+        moddir = QtWidgets.QFileDialog.getExistingDirectory(
             self,
             "Choose Directory Containing Installed Mods",
             Manager.get_directory(KeyStr.Dirs.MODS)
@@ -1558,7 +1533,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         where Skyrim is installed
         """
         # noinspection PyTypeChecker
-        skydir = QFileDialog.getExistingDirectory(
+        skydir = QtWidgets.QFileDialog.getExistingDirectory(
             self,
             "Select Skyrim Installation",
             Manager.get_directory(KeyStr.Dirs.SKYRIM) or "")
@@ -1580,7 +1555,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         the archive and allow the user to choose which parts to install.
 
         """
-        # todo: default to home folder or something instead of current dir
+        # fixme: default to home folder or something instead of current dir
         # filename=QFileDialog.getOpenFileName(
         #     self, "Select Mod Archive",
         #     QDir.currentPath() + "/res",
