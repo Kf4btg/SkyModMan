@@ -1,20 +1,14 @@
-from PyQt5.QtWidgets import (QHeaderView,
-                             QTreeView,
-                             QAbstractItemView,
-                             QMenu,
-                             QUndoStack
-                             )
-from PyQt5.QtCore import Qt, pyqtSignal, QItemSelectionModel
+from PyQt5 import QtWidgets as qtW
+
+from PyQt5.QtCore import Qt, pyqtSignal, QItemSelectionModel as qISM
 
 from skymodman.constants import Column
 from skymodman.utils import withlogger
-# from skymodman.thirdparty.undo import group
 
-from skymodman.interface.models.modtable_treemodel import ModTable_TreeModel
-# from skymodman.interface.models.undo_commands import (
-#     ChangeModAttributeCommand, ShiftRowsCommand)
-from skymodman.interface import undomacro
+from skymodman.interface.models import ModTable_TreeModel
+from skymodman.interface.ui_utils import undomacro
 
+qmenu = qtW.QMenu
 
 Qt_Checked   = Qt.Checked
 Qt_Unchecked = Qt.Unchecked
@@ -24,7 +18,7 @@ COL_ENABLED = Column.ENABLED.value
 
 
 @withlogger
-class ModTable_TreeView(QTreeView):
+class ModTable_TreeView(qtW.QTreeView):
 
     enableModActions = pyqtSignal(bool)
 
@@ -40,8 +34,13 @@ class ModTable_TreeView(QTreeView):
         # self.LOGGER << "Init ModTable_TreeView"
 
         # create an undo stack for the mods tab
-        self._undo_stack = QUndoStack()
+        self._undo_stack = qtW.QUndoStack()
 
+        # cache the context menu instance;
+        # the actions must be added later because at this point,
+        # the "main window" isn't fully defined yet
+        # (its actions aren't available)
+        self.ctxmenu = qmenu(self)
 
     @property
     def undo_stack(self):
@@ -67,7 +66,15 @@ class ModTable_TreeView(QTreeView):
         # hide directory column by default
         self.setColumnHidden(Column.DIRECTORY, True)
         # stretch the Name section
-        self.header().setSectionResizeMode(Column.NAME,QHeaderView.Stretch)
+        self.header().setSectionResizeMode(Column.NAME,
+                                           qtW.QHeaderView.Stretch)
+
+        ## take this moment to construct the context menu
+        mw = self.window()  # mainwindow
+
+        self.ctxmenu.addActions(
+            [mw.action_toggle_mod,
+             mw.action_uninstall_mod])
 
     def loadData(self):
         self._model.loadData()
@@ -77,7 +84,9 @@ class ModTable_TreeView(QTreeView):
         """
         Query the model for the row containing the given text;
         if it is found, scroll to and select the row.
-        :param text:
+
+        :param str text:
+        :param int direction: positive for up, negative for down
         :return:
         """
         cindex = self.currentIndex()
@@ -90,8 +99,8 @@ class ModTable_TreeView(QTreeView):
                 # to differentiate it.
                 return None
 
-            self._selection_model.select(result, QItemSelectionModel.ClearAndSelect)
-            self.scrollTo(result, QAbstractItemView.PositionAtCenter)
+            self._selection_model.select(result, qISM.ClearAndSelect)
+            self.scrollTo(result, qtW.QAbstractItemView.PositionAtCenter)
             self.setCurrentIndex(result)
             return True
         return False
@@ -224,13 +233,16 @@ class ModTable_TreeView(QTreeView):
 
         :param QContextMenuEvent event:
         """
+        #
+        # mw = self.window() # mainwindow
+        #
+        # menu = qmenu(self)
+        # menu.addActions([mw.action_toggle_mod,
+        #                  mw.action_uninstall_mod,
+        #                  ])
 
-        mw = self.window() # mainwindow
-        menu = QMenu(self)
-        menu.addActions([mw.action_toggle_mod,
-                         mw.action_uninstall_mod,
-                         ])
-        menu.exec_(event.globalPos())
+        # menu.exec_(event.globalPos())
+        self.ctxmenu.exec_(event.globalPos())
 
     def toggleSelectionCheckstate(self):
         # to keep things simple, we base the first toggle off of the
