@@ -448,8 +448,6 @@
    <addaction name="action_install_mod"/>
    <addaction name="separator"/>
    <addaction name="action_manual_install"/>
-   <addaction name="action_save_changes"/>
-   <addaction name="action_revert_changes"/>
    <addaction name="separator"/>
    <addaction name="action_preferences"/>
   </widget>

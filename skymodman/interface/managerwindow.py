@@ -796,9 +796,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.action_save_changes,
             [self.action_undo, self.action_redo])
 
-        # insert into the toolbar before the save-changes entry
+        # insert into the toolbar before the preferences entry
         self.file_toolBar.insertActions(
-            self.action_save_changes,
+            self.action_preferences,
             [self.action_undo, self.action_redo])
 
         # add stacks

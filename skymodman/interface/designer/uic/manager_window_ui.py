@@ -317,8 +317,6 @@ class Ui_MainWindow(object):
         self.file_toolBar.addAction(self.action_install_mod)
         self.file_toolBar.addSeparator()
         self.file_toolBar.addAction(self.action_manual_install)
-        self.file_toolBar.addAction(self.action_save_changes)
-        self.file_toolBar.addAction(self.action_revert_changes)
         self.file_toolBar.addSeparator()
         self.file_toolBar.addAction(self.action_preferences)
         self.profile_label.setBuddy(self.profile_selector)
