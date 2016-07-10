@@ -1,6 +1,8 @@
 from functools import partial
 import asyncio
 
+from PyQt5 import QtWidgets
+
 from PyQt5.QtCore import (Qt,
                           pyqtSignal,
                           pyqtSlot,
@@ -10,14 +12,15 @@ from PyQt5.QtCore import (Qt,
                           # QSettings,
                           # QStandardPaths,
                           )
-from PyQt5.QtGui import QGuiApplication, QKeySequence #, QPalette #, QFontDatabase
+from PyQt5.QtGui import QGuiApplication, QKeySequence, QIcon #, QPalette #, QFontDatabase
 from PyQt5.QtWidgets import (QMainWindow,
                              QDialogButtonBox,
                              QMessageBox,
                              QFileDialog, QInputDialog,
                              QAction, QAbstractButton,  # QHeaderView,
                              QActionGroup, QProgressBar, QLabel,
-                             QWidget, QSizePolicy, QToolBar)
+                             QWidget, QSizePolicy, QToolBar,
+                             QUndoGroup, QUndoStack)
 
 from skymodman import exceptions
 from skymodman import constants
@@ -37,7 +40,7 @@ from skymodman.interface.dialogs import message
 from skymodman.utils import withlogger #, icons
 from skymodman.utils.fsutils import checkPath, join_path
 from skymodman.interface.install_helpers import InstallerUI
-from skymodman.interface import app_settings
+from skymodman.interface import app_settings, blocked_signals
 
 from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow
 
@@ -69,6 +72,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     moveModsToTop       = pyqtSignal()
     moveModsToBottom    = pyqtSignal()
 
+    instance = None # type: ModManagerWindow
+
     # noinspection PyUnresolvedReferences
     def __init__(self, **kwargs):
         """
@@ -77,7 +82,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         super().__init__(**kwargs)
 
         self.LOGGER.info("Initializing ModManager Window")
-        ModManagerWindow._this = self
+        ModManagerWindow.instance = self
 
         # verify basic setup
         # self.check_setup()
@@ -102,6 +107,18 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.manager_tabs.setCurrentIndex(self._currtab.value)
 
         self._search_text=''
+
+        ## The undo framework.
+        ## Each tab will have its own UndoStack; when the user changes
+        ## tabs, the stack for that tab will become the active stack
+        ## in the main undoGroup, and the undo/redo actions will thus
+        ## only affect that tab.
+        self.undoManager = QUndoGroup(self)
+        # initialize a map of the undo stacks
+        self.undo_stacks = {
+            TAB.MODTABLE: None, # type: QUndoStack
+            TAB.FILETREE: None  # type: QUndoStack
+        }
 
         ## Yeah...all that Notifier business was silly. Everything
         ## was still called synchronously (and in the order defined
@@ -206,6 +223,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self._setup_button_connections()
         self._setup_local_signals_connections()
         self._setup_slot_connections()
+
+        self._setup_undo_manager()
 
     def _setup_toolbar(self):
         """We've got a few things to add to the toolbar:
@@ -567,13 +586,13 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
 
         # * action_undo
         # * action_redo
-        self.action_undo.setShortcut(QKeySequence.Undo)
+        # self.action_undo.setShortcut(QKeySequence.Undo)
         # self.action_undo.setIcon(icons.get('undo',
         #  color_disabled=QPalette().color(QPalette.Midlight)))
-        self.action_redo.setShortcut(QKeySequence.Redo)
+        # self.action_redo.setShortcut(QKeySequence.Redo)
         # connect undo/redo actions to table model
-        self.action_undo.triggered.connect(self.mod_table.undo)
-        self.action_redo.triggered.connect(self.mod_table.redo)
+        # self.action_undo.triggered.connect(self.mod_table.undo)
+        # self.action_redo.triggered.connect(self.mod_table.redo)
 
         # --------------------------------------------------
 
@@ -713,8 +732,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         #     self.on_profile_select)
 
         # connect the undo event handler
-        self.models[M.mod_table].undoevent.connect(
-            self.on_undo_redo_event)
+        # self.models[M.mod_table].undoevent.connect(
+        #     self.on_undo_redo_event)
 
         ##===================================
         ## Mod Table Tab
@@ -723,9 +742,9 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # when the user first makes changes to the table or reverts
         # to a saved state from a modified state,  enable/disable
         # the save/cancel btns
-        self.models[M.mod_table
-        ].tablehaschanges.connect(
-            self.on_table_unsaved_change)
+        # self.models[M.mod_table
+        # ].tablehaschanges.connect(
+        #     self.on_table_unsaved_change)
 
         # depending on selection in table, the movement actions will be
         # enabled or disabled
@@ -755,8 +774,53 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         # left the selectionModel() changed connection in the _setup
         # function; it's just easier to handle it there
 
-        self.models[M.file_viewer].hasUnsavedChanges.connect(
-            self.on_table_unsaved_change)
+        # self.models[M.file_viewer].hasUnsavedChanges.connect(
+        #     self.on_table_unsaved_change)
+
+    def _setup_undo_manager(self):
+        self.action_undo = self.undoManager.createUndoAction(self, "Undo")
+        self.action_undo.pyqtConfigure(shortcut=QKeySequence.Undo,
+                                 # icon=icons.get(
+                                 #     "undo", scale_factor=0.85,
+                                 #     offset=(0, 0.1)),
+                                 icon=QIcon().fromTheme("edit-undo")
+                                 , triggered=self.on_undo
+                                 )
+
+
+        self.action_redo = self.undoManager.createRedoAction(self, "Redo")
+        self.action_redo.pyqtConfigure(shortcut=QKeySequence.Redo,
+                                 # icon=icons.get(
+                                 #     "redo", scale_factor=0.85,
+                                 #     offset=(0, 0.1)),
+                                 icon=QIcon().fromTheme("edit-redo")
+                                 , triggered=self.on_redo
+                                 )
+
+        self.menu_edit.insertActions(self.action_save_changes, [self.action_undo, self.action_redo])
+        # self.menu_edit.addAction(self.action_undo)
+        # self.menu_edit.addAction(self.action_redo)
+
+        self.file_toolBar.insertActions(self.action_save_changes, [self.action_undo, self.action_redo])
+        # self.file_toolBar.addAction(self.action_undo)
+        # self.file_toolBar.addAction(self.action_redo)
+
+        # add stacks
+        self.undoManager.addStack(self.mod_table.undo_stack)
+        self.undo_stacks[TAB.MODTABLE] = self.mod_table.undo_stack
+
+        # add a dummy stack for the filetree tab, for now
+        self.undo_stacks[TAB.FILETREE] = QUndoStack()
+        self.undoManager.addStack(self.undo_stacks[TAB.FILETREE])
+
+        self.undoManager.cleanChanged.connect(self.on_table_clean_changed)
+
+        self.undoView = QtWidgets.QUndoView(self.undoManager)
+        self.undoView.show()
+        self.undoView.setAttribute(Qt.WA_QuitOnClose, False)
+
+
+
 
     # </editor-fold>
 
@@ -777,6 +841,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         self.current_tab = TAB(newindex)
         self._update_visible_components()
         self._update_enabled_actions()
+
+        # also change the current undo stack
+        self.undoManager.setActiveStack(
+            self.undo_stacks[self.current_tab])
 
     @pyqtSlot(int)
     def on_profile_select(self, index):
@@ -831,7 +899,10 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
                     if reply == QMessageBox.No:
                         # don't bother reverting, mods list is getting
                         # reset; just disable the buttons
-                        self.on_table_unsaved_change(False)
+                        self.mod_table.undo_stack.clear()
+                        # for s in self.undo_stacks:
+                        #     s.clear()
+                        # self.on_table_unsaved_change(False)
 
                     self.LOGGER.info(
                         "Activating profile '{}'".format(
@@ -945,21 +1016,22 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             a.setEnabled(has_selection)
 
     @pyqtSlot(bool)
-    def on_table_unsaved_change(self, unsaved_changes_present):
+    # def on_table_unsaved_change(self, unsaved_changes_present):
+    def on_table_clean_changed(self, clean):
         """
-        When a change is made to the table, enable or disable certain
-        actions depending on whether the table's current state matches
-        the last savepoint or not.
+        When a change is made to the table __that takes it from a
+        clean-save-state to a state w/ unsaved changes__, or vice versa,
+        enable or disable certain actions depending on it's clean-vs.-
+        unsaved status.
 
-        :param unsaved_changes_present:
+        :param bool clean: whether there are unsaved changes
         """
         # self.LOGGER << "table status: {}".format("dirty" if unsaved_changes_present else "clean")
 
         for widgy in [self.save_cancel_btnbox,
                       self.action_save_changes,
                       self.action_revert_changes]:
-            widgy.setEnabled(
-                unsaved_changes_present)
+            widgy.setEnabled(clean)
 
     @pyqtSlot(bool)
     def on_modlist_activeonly_toggle(self, checked):
@@ -1019,22 +1091,22 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
             self.filters[F.file_viewer].setFilterWildcard(text)
             self.filetree_fileviewer.expandAll()
 
-    @pyqtSlot(str, str)
-    def on_undo_redo_event(self, undo_text, redo_text):
-        """Update the undo/redo text to reflect the passed text.  If an
-        argument is passed as an empty string, that button will instead
-        be disabled."""
-        # self.LOGGER << "Undoevent({}, {})".format(undo_text, redo_text)
-
-        for action, text, default_text in [
-            (self.action_undo, undo_text, "Undo"),
-            (self.action_redo, redo_text, "Redo")]:
-            if text:
-                action.setText(text)
-                action.setEnabled(True)
-            else:
-                action.setText(default_text)
-                action.setEnabled(False)
+    # @pyqtSlot(str, str)
+    # def on_undo_redo_event(self, undo_text, redo_text):
+    #     """Update the undo/redo text to reflect the passed text.  If an
+    #     argument is passed as an empty string, that button will instead
+    #     be disabled."""
+    #     # self.LOGGER << "Undoevent({}, {})".format(undo_text, redo_text)
+    #
+    #     for action, text, default_text in [
+    #         (self.action_undo, undo_text, "Undo"),
+    #         (self.action_redo, redo_text, "Redo")]:
+    #         if text:
+    #             action.setText(text)
+    #             action.setEnabled(True)
+    #         else:
+    #             action.setText(default_text)
+    #             action.setEnabled(False)
 
     @pyqtSlot()
     def on_save_command(self):
@@ -1043,7 +1115,8 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         tab is active.
         """
         if self.current_tab == TAB.MODTABLE:
-            self.mod_table.saveChanges()
+            self.mod_table.model.save()
+            # self.mod_table.saveChanges()
         elif self.current_tab == TAB.FILETREE:
             self.models[M.file_viewer].save()
 
@@ -1052,10 +1125,36 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         Undo all changes made to the table since the last savepoint
         """
+
         if self.current_tab == TAB.MODTABLE:
-            self.mod_table.revertChanges()
+            m = self.mod_table.model()
+            m.beginResetModel()
+
+            # block signals from the model so we don't
+            # overwhelm the user's processor with gatling-gun commands
+            with blocked_signals(m):
+                while (self.undoManager.canUndo()
+                       and not self.undoManager.isClean()):
+                    self.undoManager.undo()
+            m.endResetModel()
+            self.mod_table.enableModActions.emit(False)
+            # self.mod_table.revertChanges()
+
         elif self.current_tab == TAB.FILETREE:
             self.models[M.file_viewer].revert()
+
+    @pyqtSlot()
+    def on_undo(self):
+
+        # calls undo() on the current undoStack
+        self.undoManager.undo()
+        # if self.current_tab == TAB.MODTABLE:
+
+    @pyqtSlot()
+    def on_redo(self):
+        self.undoManager.redo()
+
+
 
     def on_table_search(self, direction=1):
         """
@@ -1203,6 +1302,7 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
     # def update_UI(self, *args):
     def update_UI(self):
         self._update_visible_components()
+        self.undoManager.setActiveStack(self.undo_stacks[self.current_tab])
 
     def _update_visible_components(self):
         """
@@ -1233,35 +1333,39 @@ class ModManagerWindow(QMainWindow, Ui_MainWindow):
         """
         # tab=self.current_tab
 
-        all_components = [
-            self.mod_movement_group,     # 0
-            self.action_toggle_mod,      # 1
-            self.action_save_changes,    # 2
-            self.action_revert_changes,  # 3
-            self.action_undo,            # 4
-            self.action_redo,            # 5
-            self.action_find_next,       # 6
-            self.action_find_previous,   # 7
-            self.action_uninstall_mod,   # 8
-        ]
+        all_components = {
+            "mmg": self.mod_movement_group,     # 0
+            "atm": self.action_toggle_mod,      # 1
+            "asc": self.action_save_changes,    # 2
+            "arc": self.action_revert_changes,  # 3
+            "afn": self.action_find_next,       # 4
+            "afp": self.action_find_previous,   # 5
+            "aum": self.action_uninstall_mod,   # 6
+            # self.action_undo,            # 4
+            # self.action_redo,            # 5
+        }
 
         # this is a selector that, depending on how it is
         # modified below, will allow us to set every
         # component to its appropriate enabled state
-        s = [False]*len(all_components)
+        # s = [False]*len(all_components)
+        s = {c:False for c in all_components.keys()}
+        # s = zip(all_components.keys(), repeat(False))
 
         if self.current_tab == TAB.MODTABLE:
-            tmodel = self.models[M.mod_table]
-            s[0] = s[1] = s[8] = self.mod_table.selectionModel().hasSelection()
-            s[2] = s[3] = tmodel.isDirty
-            s[4],  s[5] = tmodel.canundo, tmodel.canredo
-            s[6] = s[7] = bool(self._search_text)
+            # tmodel = self.models[M.mod_table]
+            s["mmg"] = s["atm"] = s["aum"] = self.mod_table.selectionModel().hasSelection()
+            # s[2] = s[3] = tmodel.isDirty
+            s["asc"] = s["arc"] = self.undoManager.isClean()
+            # s[4],  s[5] = tmodel.canundo, tmodel.canredo
+            # s[6] = s[7] = bool(self._search_text)
+            s["afn"] = s["afp"] = bool(self._search_text)
         elif self.current_tab == TAB.FILETREE:
-            s[2] = s[3] = self.models[M.file_viewer].has_unsaved_changes
+            s["asc"] = s["arc"] = self.models[M.file_viewer].has_unsaved_changes
 
 
-        for comp, select in zip(all_components, s):
-            comp.setEnabled(select)
+        for comp, select in s.items():
+            all_components[comp].setEnabled(select)
 
     def update_button_from_action(self, action, button):
         """

@@ -404,8 +404,6 @@
      <addaction name="action_edit_skyrim_ini"/>
      <addaction name="action_edit_skyrimprefs_ini"/>
     </widget>
-    <addaction name="action_undo"/>
-    <addaction name="action_redo"/>
     <addaction name="action_save_changes"/>
     <addaction name="action_revert_changes"/>
     <addaction name="separator"/>
@@ -452,8 +450,6 @@
    <addaction name="action_manual_install"/>
    <addaction name="action_save_changes"/>
    <addaction name="action_revert_changes"/>
-   <addaction name="action_undo"/>
-   <addaction name="action_redo"/>
    <addaction name="separator"/>
    <addaction name="action_preferences"/>
   </widget>
@@ -557,7 +553,7 @@
     <string>SkyrimPrefs.&amp;ini</string>
    </property>
   </action>
-  <action name="action_undo">
+  <action name="action_undo_old">
    <property name="enabled">
     <bool>false</bool>
    </property>
@@ -568,11 +564,8 @@
    <property name="text">
     <string>&amp;Undo</string>
    </property>
-   <property name="shortcut">
-    <string>Ctrl+Z</string>
-   </property>
   </action>
-  <action name="action_redo">
+  <action name="action_redo_old">
    <property name="enabled">
     <bool>false</bool>
    </property>
@@ -582,9 +575,6 @@
    </property>
    <property name="text">
     <string>&amp;Redo</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+Shift+Z</string>
    </property>
   </action>
   <action name="action_toggle_mod">

@@ -1,11 +1,20 @@
-from PyQt5.QtWidgets import QHeaderView, QTreeView, QAbstractItemView, QMenu
+from PyQt5.QtWidgets import (QHeaderView,
+                             QTreeView,
+                             QAbstractItemView,
+                             QMenu,
+                             QUndoStack
+                             )
 from PyQt5.QtCore import Qt, pyqtSignal, QItemSelectionModel
 
 from skymodman.constants import Column
 from skymodman.utils import withlogger
-from skymodman.thirdparty.undo import group
+# from skymodman.thirdparty.undo import group
 
 from skymodman.interface.models.modtable_treemodel import ModTable_TreeModel
+# from skymodman.interface.models.undo_commands import (
+#     ChangeModAttributeCommand, ShiftRowsCommand)
+from skymodman.interface import undomacro
+
 
 Qt_Checked   = Qt.Checked
 Qt_Unchecked = Qt.Unchecked
@@ -24,10 +33,18 @@ class ModTable_TreeView(QTreeView):
     def __init__(self, parent, *args, **kwargs):
         # noinspection PyArgumentList
         super().__init__(parent, *args, **kwargs)
+
         self._model  = None  # type: ModTable_TreeModel
         self._selection_model = None # type: QtCore.QItemSelectionModel
         self.handle_move_signals = True
         # self.LOGGER << "Init ModTable_TreeView"
+
+        self._undo_stack = QUndoStack()
+
+
+    @property
+    def undo_stack(self):
+        return self._undo_stack
 
     def _hideErrorColumn(self, hide):
         self.setColumnHidden(Column.ERRORS, hide)
@@ -84,7 +101,7 @@ class ModTable_TreeView(QTreeView):
 
     def revertChanges(self):
         self.LOGGER << "Reverting all user edits"
-        self._model.revert_all()
+        # self._model.revert_all()
         self.enableModActions.emit(False)
 
         # self.clearSelection()
@@ -99,7 +116,8 @@ class ModTable_TreeView(QTreeView):
         if selected is None:
             # self.handle_move_signals will be false if there
             # is no selection and we're in an undo/redo cmd
-            if self.handle_move_signals:
+            # if self.handle_move_signals:
+            if self._selection_model.hasSelection():
                 self._selection_moved()
         else:
             # self.LOGGER << "selection changed"
@@ -129,7 +147,8 @@ class ModTable_TreeView(QTreeView):
         )
 
     def _selectedrownumbers(self):
-        # we use set() first because Qt sends the row number once for each column in the row.
+        # we use set() first because Qt sends the row number once for
+        # each column in the row.
         return sorted(set(
                 [idx.row()
                  for idx in
@@ -137,9 +156,13 @@ class ModTable_TreeView(QTreeView):
 
     def _tellmodelshiftrows(self, dest, *, rows=None, text="Reorder Mods"):
         """
-        :param int dest: either the destination row number or a callable that takes the sorted list of selected rows as an argument and returns the destination row number.
-        :param rows: the rows to shift. If None or not specified, will be derived from the current selection.
-        :param text: optional text that will appear after 'Undo' or 'Redo' in the Edit menu
+        :param int dest: either the destination row number or a callable
+            that takes the sorted list of selected rows as an argument
+            and returns the destination row number.
+        :param rows: the rows to shift. If None or not specified, will
+            be derived from the current selection.
+        :param text: optional text that will appear after 'Undo' or
+            'Redo' in the Edit menu
         """
         if rows is None:
             rows = self._selectedrownumbers()
@@ -160,8 +183,8 @@ class ModTable_TreeView(QTreeView):
         """
         :param distance: if positive, we're increasing the mod install ordinal--i.e. moving the mod further down the list.  If negative, we're decreasing the ordinal, and moving the mod up the list.
         """
-        rows = self._selectedrownumbers()
         if  distance != 0:
+            rows = self._selectedrownumbers()
             self._tellmodelshiftrows(rows[0]+distance, rows=rows)
 
     def undo(self):
@@ -209,26 +232,35 @@ class ModTable_TreeView(QTreeView):
         menu.exec_(event.globalPos())
 
     def toggleSelectionCheckstate(self):
-        # to keep things simple, we base the first toggle off of the enabled state of the
-        # current index.  E.g., even if it's the only enabled mod in the selection,
-        # the first toggle will still be a disable command. It's rough, but the user may
-        # need to hit 'Space' **twice** to achieve their goal.  Might lose a lot of people over this.
+        # to keep things simple, we base the first toggle off of the
+        # enabled state of the current index. E.g., even if it's the
+        # only enabled mod in the selection, the first toggle will
+        # still be a disable command. It's rough, but the user may
+        # need to hit 'Space' **twice** to achieve their goal.  Might
+        # lose a lot of people over this.
+
         currstate = self.currentIndex().internalPointer().enabled
         sel = self.selectedIndexes()
 
-        # splitting these up may help with some undo weirdness...
-        if len(sel) > self._model.columnCount(): # multiple rows selected
-            with group(": {} Mods".format(["Enable", "Disable"][currstate])):
+        _text = ("Enable", "Disable")[currstate]
+        _checked = (Qt_Checked, Qt_Unchecked)[currstate]
 
-                for i in sel:
-                    if i.column() == COL_ENABLED:
-                        self._model.setData(i, [Qt_Checked, Qt_Unchecked][
-                            currstate], Qt_CheckStateRole)
+        # splitting these up may help with some undo weirdness...
+
+
+        if len(sel) > self._model.columnCount():
+            # multiple rows selected
+            # with group(": {} Mods".format(["Enable", "Disable"][currstate])):
+            with undomacro(self.undo_stack, ": {} Mods".format(_text)):
+                for idx in filter(lambda i: i.column() == COL_ENABLED, sel):
+                    # if i.column() == COL_ENABLED:
+                    self._model.setData(idx, _checked,
+                                        Qt_CheckStateRole)
         else:
             # only one row
-            self._model.setData(sel[COL_ENABLED], [Qt_Checked,
-                                    Qt_Unchecked][currstate],
+            self._model.setData(sel[COL_ENABLED], _checked,
                                 Qt_CheckStateRole)
+
 
 if __name__ == '__main__':
     from PyQt5 import QtCore #, QtGui

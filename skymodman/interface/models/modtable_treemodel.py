@@ -6,8 +6,10 @@ from skymodman.managers import modmanager as Manager
 from skymodman.constants import (Column as COL, SyncError)
 # , DBLCLICK_COLS, VISIBLE_COLS)
 from skymodman.utils import withlogger
-from skymodman.thirdparty.undo import undoable #, group #,stack
-from skymodman.utils.timedundo import stack
+# from skymodman.thirdparty.undo import undoable #, group #,stack
+# from skymodman.utils.timedundo import stack
+from skymodman.interface.models.undo_commands import (
+    ChangeModAttributeCommand, ShiftRowsCommand)
 
 from functools import total_ordering, partial
 from collections import deque
@@ -97,7 +99,7 @@ class QModEntry(ModEntry):
 class ModTable_TreeModel(QAbstractItemModel):
 
     tablehaschanges = pyqtSignal(bool)
-    undoevent = pyqtSignal(str, str) # undotext, redotext
+    # undoevent = pyqtSignal(str, str) # undotext, redotext
     notifyViewRowsMoved = pyqtSignal() # let view know selection may have moved
     hideErrorColumn = pyqtSignal(bool)
 
@@ -117,7 +119,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         self.vheader_field = COL_ORDER
         # self.visible_columns = [COL.ENABLED, COL.ORDER, COL.NAME, COL.MODID, COL.VERSION]
 
-        self._datahaschanged = None # placeholder for first start
+        # self._datahaschanged = None # placeholder for first start
 
         # track the row numbers of every mod in the table that is
         # changed in any way. Every time a change is made, the row
@@ -125,11 +127,18 @@ class ModTable_TreeModel(QAbstractItemModel):
         # is already present. Allowing duplicates in this way lets
         # an undo() remove the most recent changes without losing
         # track of any previous changes made to that row.
+
+        # More importantly, this allows us to directly specify precisely
+        # which mods need to be updated in the DB when the user issues
+        # a save command, rather than updating every entry in the table
+        # each time. This can safe a lot of cycles when only 1 or 2
+        # entries have been modified
         self._modifications = deque()
 
 
-        stack().undocallback = partial(self._undo_event, 'undo')
-        stack().docallback = partial(self._undo_event, 'redo')
+
+        # stack().undocallback = partial(self._undo_event, 'undo')
+        # stack().docallback = partial(self._undo_event, 'redo')
 
 
         self.LOGGER << "init ModTable_TreeModel"
@@ -140,7 +149,7 @@ class ModTable_TreeModel(QAbstractItemModel):
 
     @property
     def isDirty(self) -> bool:
-        return len(self._modifications) > 0 and stack().haschanged()
+        return len(self._modifications) > 0 #and stack().haschanged()
 
     def __getitem__(self, row):
         """
@@ -173,59 +182,86 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
         return mod_dir_name in self.errors.keys()
 
+    def mark_modified(self, iterable):
+        """
+        Add the items from `iterable` to the collection of modified rows.
+
+        :param iterable: an iterable collection of ints. The values must
+            all be valid indices in the model's list of mods
+        """
+        self._modifications.extend(iterable)
+
+    def unmark_modified(self, count):
+        """
+        Remove the `count` most recent additions to the modifications
+        collection
+
+        :param int count:
+        :return:
+        """
+        for _ in range(count):
+            self._modifications.pop()
+
     ##===============================================
     ## Undo/Redo
     ##===============================================
-    @property
-    def stack(self):
-        """A reference to the undo stack"""
-        return stack()
+    # @property
+    # def stack(self):
+    #     """A reference to the undo stack"""
+    #     return stack()
+    #
+    # @property
+    # def undotext(self):
+    #     """Text describing the topmost event on the undo stack"""
+    #     # if undotext() is None, return an empty string
+    #     # to prevent crash in the Qt Signal
+    #     return stack().undotext() or ''
+    # @property
+    # def redotext(self):
+    #     """Text describing the topmost event on the redo stack"""
+    #     # if undotext() is None, return an empty string
+    #     # to prevent crash in the Qt Signal
+    #     return stack().redotext() or ''
+    #
+    # @property
+    # def canundo(self):
+    #     return stack().canundo()
+    # @property
+    # def canredo(self):
+    #     return stack().canredo()
+    #
+    # # FIXME: on the FIRST undoable action (when there are no undos available), the timed stack implementation doesn't react to the undo key sequence until the timer runs out; this is because the the Undo QAction is disabled until something is in the **real** undo stack. The non-responsive shortcut is rather jarring. Later, when there are already undos in the stack, the undo command interrupts the timer as it's supposed to.
+    # def undo(self):
+    #     """
+    #     Undo the most recent action
+    #     """
+    #     stack().undo()
+    #
+    # def redo(self):
+    #     """
+    #     Redo the most recently undone action
+    #     """
+    #     stack().redo()
+    #
+    # def _undo_event(self, action=None):
+    #     """
+    #     Passed to the undo stack as ``undocallback``, so that we can notify the UI of the new text
+    #     :param action:
+    #     """
+    #     if action is None:  # Reset
+    #         self.tablehaschanges.emit(False)
+    #         self.undoevent.emit('', '')
+    #     else:
+    #         self._check_dirty_status()
+    #         self.undoevent.emit(self.undotext,
+    #                             self.redotext)
 
-    @property
-    def undotext(self):
-        """Text describing the topmost event on the undo stack"""
-        # if undotext() is None, return an empty string
-        # to prevent crash in the Qt Signal
-        return stack().undotext() or ''
-    @property
-    def redotext(self):
-        """Text describing the topmost event on the redo stack"""
-        # if undotext() is None, return an empty string
-        # to prevent crash in the Qt Signal
-        return stack().redotext() or ''
-
-    @property
-    def canundo(self):
-        return stack().canundo()
-    @property
-    def canredo(self):
-        return stack().canredo()
-
-    # FIXME: on the FIRST undoable action (when there are no undos available), the timed stack implementation doesn't react to the undo key sequence until the timer runs out; this is because the the Undo QAction is disabled until something is in the **real** undo stack. The non-responsive shortcut is rather jarring. Later, when there are already undos in the stack, the undo command interrupts the timer as it's supposed to.
-    def undo(self):
+    def _push_command(self, command):
         """
-        Undo the most recent action
+        Push a QUndoCommand to the parent's undo_stack
+        :param command:
         """
-        stack().undo()
-
-    def redo(self):
-        """
-        Redo the most recently undone action
-        """
-        stack().redo()
-
-    def _undo_event(self, action=None):
-        """
-        Passed to the undo stack as ``undocallback``, so that we can notify the UI of the new text
-        :param action:
-        """
-        if action is None:  # Reset
-            self.tablehaschanges.emit(False)
-            self.undoevent.emit('', '')
-        else:
-            self._check_dirty_status()
-            self.undoevent.emit(self.undotext,
-                                self.redotext)
+        self._parent.undo_stack.push(command)
 
     ##===============================================
     ## Required Qt Abstract Method Overrides
@@ -432,8 +468,21 @@ class ModTable_TreeModel(QAbstractItemModel):
         if role == Qt_CheckStateRole:
             if index.column() == COL_ENABLED:
                 row = index.row()
-                self.changeModField(index, row, self.mod_entries[row],
-                                    'enabled', int(value == Qt_Checked))
+
+                # callbacks for changing (1) or reverting (2)
+                cb1 = partial(self._post_change_mod_attr, index, row)
+                cb2 = partial(self._post_change_mod_attr, index)
+
+                self._push_command(ChangeModAttributeCommand(
+                    self.mod_entries[row],
+                    "enabled",
+                    int(value == Qt_Checked),
+                    post_redo_callback = cb1,
+                    post_undo_callback = cb2)
+                )
+
+                # self.changeModField(index, row, self.mod_entries[row],
+                #                     'enabled', int(value == Qt_Checked))
                 return True
         elif role == Qt_EditRole:
             if index.column() == COL_NAME:
@@ -442,55 +491,77 @@ class ModTable_TreeModel(QAbstractItemModel):
                 new_name = value.strip()  # remove trailing/leading space
                 if new_name in [mod.name, ""]: return False
 
-                self.changeModField(index, row, mod, 'name', new_name)
+                # callbacks for changing (1) or reverting (2)
+                cb1 = partial(self._post_change_mod_attr, index, row)
+                cb2 = partial(self._post_change_mod_attr, index)
+                self._push_command(ChangeModAttributeCommand(
+                    mod, "name", new_name,
+                    post_redo_callback = cb1,
+                    post_undo_callback = cb2)
+                )
+
+                # self.changeModField(index, row, mod, 'name', new_name)
                 return True
         else:
             return super().setData(index, value, role)
 
         return False # if role was checkstate or edit, but column was not enabled/name, just ret false
 
+    def _post_change_mod_attr(self, index, row=-1):
+        """
+        For use as a callback after updating (+ redo/undo) a
+        mod attribute. Args will need to be filled in w/ partial()
+        """
+
+        # having row == -1 signifies that this is an UNDO operation,
+        # so we should just pop the end off the modification deque
+        if row < 0:
+            # remove this row number from the modified rows stack
+            self._modifications.pop()
+        else:
+            self._modifications.append(row)
+        self.dataChanged.emit(index, index)
+
     # noinspection PyUnresolvedReferences
-    @undoable
-    def changeModField(self, index, row, mod, field, value):
-        """
-        Used to change a mod attribute *other* than ordinal
-        (i.e. do not use this when the mod's install order is
-        being changed)
-
-        :param QModelIndex index: QMI object for this mod
-        :param int row: current row number of the mod in the table
-        :param QModEntry mod: the mod's entry
-        :param str field: name of the attribute to change
-        :param value: the new value of the attribute
-        :return:
-        """
-        # this is for changing a mod attribute *other* than ordinal
-        # (i.e. do not use this when the mod's install order is being changed)
-
-        #do/redo code:
-        old_value = getattr(mod, field)
-        setattr(mod, field, value)
-
-        # record this row number in the modified rows stack
-        self._modifications.append(row)
-
-        self.dataChanged.emit(index, index)
-
-        yield "Change {}".format(field)
-
-        # undo code:
-        setattr(mod,field, old_value)
-        # remove this row number from the modified rows stack
-        self._modifications.pop()
-
-        self.dataChanged.emit(index, index)
+    # @undoable
+    # def changeModField(self, index, row, mod, field, value):
+    #     """
+    #     Used to change a mod attribute *other* than ordinal
+    #     (i.e. do not use this when the mod's install order is
+    #     being changed)
+    #
+    #     :param QModelIndex index: QMI object for this mod
+    #     :param int row: current row number of the mod in the table
+    #     :param QModEntry mod: the mod's entry
+    #     :param str field: name of the attribute to change
+    #     :param value: the new value of the attribute
+    #     :return:
+    #     """
+    #     # this is for changing a mod attribute *other* than ordinal
+    #     # (i.e. do not use this when the mod's install order is being changed)
+    #
+    #     #do/redo code:
+    #     old_value = getattr(mod, field)
+    #     setattr(mod, field, value)
+    #
+    #     # record this row number in the modified rows stack
+    #     self._modifications.append(row)
+    #
+    #     self.dataChanged.emit(index, index)
+    #
+    #     yield "Change {}".format(field)
+    #
+    #     # undo code:
+    #     setattr(mod,field, old_value)
+    #     # remove this row number from the modified rows stack
+    #     self._modifications.pop()
+    #
+    #     self.dataChanged.emit(index, index)
 
     ##===============================================
     ## Modifying Row Position
     ##===============================================
 
-    # let's try it a smarter way
-    @undoable
     def shiftRows(self, start_row, end_row, move_to_row, parent=QModelIndex(), undotext="Reorder Mods"):
         """
         :param int start_row: start of shifted block
@@ -498,10 +569,8 @@ class ModTable_TreeModel(QAbstractItemModel):
         :param int move_to_row: destination row; where the `start_row` should end up
         :param QModelIndex parent:
         :param str undotext: optional text that will appear in the Undo/Redo menu items
-        :return:
         """
-        # self.LOGGER << "Moving rows {}-{} to row {}.".format(start_row, end_row, move_to_row)
-
+        # push a new shift-command to the undo stack
         count = 1 + end_row - start_row
 
         # shift distance; could be pos/neg
@@ -509,20 +578,20 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         # get inverse step (normal vector);
         # this will be +1 for up, -1 for down
-        rstep = -(d_shift//abs(d_shift))
+        rstep = -(d_shift // abs(d_shift))
 
-        _end_offset = 0 # need this later
-        if move_to_row < start_row: # If we're moving UP:
+        _end_offset = 0  # need this later
+        if move_to_row < start_row:  # If we're moving UP:
 
             # get a slice from smallest index...
             slice_start = dest_child = move_to_row
             # ...to the end of the rows to displace
-            slice_end   = 1 + end_row
+            slice_end = 1 + end_row
 
-        else: # moving DOWN:
+        else:  # moving DOWN:
             slice_start = start_row
 
-            slice_end   = move_to_row + count
+            slice_end = move_to_row + count
             # we want to make sure we don't try to move past the end;
             # if we would, change the slice end to the max row number,
             # but save the amount we would have gone over for later reference
@@ -531,76 +600,139 @@ class ModTable_TreeModel(QAbstractItemModel):
                 slice_end -= _end_offset
             dest_child = slice_end
 
-
-        self.beginMoveRows(parent, start_row, end_row, parent, dest_child)
-        self._doshift(slice_start, slice_end, count, rstep)
-        self.endMoveRows()
-
-        # track all modified rows
-        self._modifications.extend(range(slice_start, slice_end))
-
-        self.notifyViewRowsMoved.emit()
-
-        yield undotext
+        pre_redo=partial(self.beginMoveRows, parent, start_row, end_row, parent,
+                           dest_child)
 
         # here's where we use that offset we saved;
         # have to subtract it from both start and end to make sure
         # we're referencing the right block of rows when
         # calling beginMoveRows
-        self.beginMoveRows(parent,
+        pre_undo = partial(self.beginMoveRows, parent,
                       move_to_row - _end_offset,
                       end_row + d_shift - _end_offset, parent,
                       slice_end if move_to_row < start_row else slice_start)
 
-        # the internal undo just involves rotating in the opposite direction
-        self._doshift(slice_start, slice_end, count, -rstep)
-        self.endMoveRows()
+        self._push_command(ShiftRowsCommand(
+            self, slice_start, slice_end, count, rstep,
+            text=undotext,
+            pre_redo_callback=pre_redo,
+            post_redo_callback=self.notifyViewRowsMoved.emit,
+            pre_undo_callback=pre_undo,
+            post_undo_callback=self.notifyViewRowsMoved.emit
+        ))
 
-        # remove all de-modified row numbers
-        for _ in range(slice_end-slice_start):
-            self._modifications.pop()
 
-        self.notifyViewRowsMoved.emit()
+    # let's try it a smarter way
+    # @undoable
+    # def _shiftRows(self, start_row, end_row, move_to_row, parent=QModelIndex(), undotext="Reorder Mods"):
+    #     """
+    #     :param int start_row: start of shifted block
+    #     :param int end_row: end of shifted block
+    #     :param int move_to_row: destination row; where the `start_row` should end up
+    #     :param QModelIndex parent:
+    #     :param str undotext: optional text that will appear in the Undo/Redo menu items
+    #     """
+    #     # self.LOGGER << "Moving rows {}-{} to row {}.".format(start_row, end_row, move_to_row)
+    #
+    #     count = 1 + end_row - start_row
+    #
+    #     # shift distance; could be pos/neg
+    #     d_shift = move_to_row - start_row
+    #
+    #     # get inverse step (normal vector);
+    #     # this will be +1 for up, -1 for down
+    #     rstep = -(d_shift//abs(d_shift))
+    #
+    #     _end_offset = 0 # need this later
+    #     if move_to_row < start_row: # If we're moving UP:
+    #
+    #         # get a slice from smallest index...
+    #         slice_start = dest_child = move_to_row
+    #         # ...to the end of the rows to displace
+    #         slice_end   = 1 + end_row
+    #
+    #     else: # moving DOWN:
+    #         slice_start = start_row
+    #
+    #         slice_end   = move_to_row + count
+    #         # we want to make sure we don't try to move past the end;
+    #         # if we would, change the slice end to the max row number,
+    #         # but save the amount we would have gone over for later reference
+    #         _end_offset = max(0, slice_end - self.rowCount())
+    #         if _end_offset > 0:
+    #             slice_end -= _end_offset
+    #         dest_child = slice_end
+    #
+    #
+    #     self.beginMoveRows(parent, start_row, end_row, parent, dest_child)
+    #     self._doshift(slice_start, slice_end, count, rstep)
+    #     self.endMoveRows()
+    #
+    #     # track all modified rows
+    #     self._modifications.extend(range(slice_start, slice_end))
+    #
+    #     self.notifyViewRowsMoved.emit()
+    #
+    #     yield undotext
+    #
+    #     # here's where we use that offset we saved;
+    #     # have to subtract it from both start and end to make sure
+    #     # we're referencing the right block of rows when
+    #     # calling beginMoveRows
+    #     self.beginMoveRows(parent,
+    #                   move_to_row - _end_offset,
+    #                   end_row + d_shift - _end_offset, parent,
+    #                   slice_end if move_to_row < start_row else slice_start)
+    #
+    #     # the internal undo just involves rotating in the opposite direction
+    #     self._doshift(slice_start, slice_end, count, -rstep)
+    #     self.endMoveRows()
+    #
+    #     # remove all de-modified row numbers
+    #     for _ in range(slice_end-slice_start):
+    #         self._modifications.pop()
+    #
+    #     self.notifyViewRowsMoved.emit()
+    #
+    # def _doshift(self, slice_start, slice_end, count, uvector):
+    #     # self.LOGGER << "Rotating [{}:{}] by {}.".format(
+    #     #     slice_start, slice_end, count*uvector)
+    #
+    #     # copy the slice for reference afterwards
+    #     # s_copy = self.mod_entries[slice_start:slice_end]
+    #     me = self.mod_entries
+    #
+    #     # now copy the slice into a deque;
+    #     deck = deque(me[slice_start:slice_end]) #type: deque[QModEntry]
+    #
+    #     # rotate the deck in the opposite direction and voila!
+    #     # its like we shifted everything.
+    #     deck.rotate(count * uvector)
+    #
+    #     # pop em back in, replacing the ordinal to reflect
+    #     # the mod's new position
+    #     for i in range(slice_start, slice_end):
+    #         me[i]=deck.popleft()
+    #         me[i].ordinal = i+1
 
-    def _doshift(self, slice_start, slice_end, count, uvector):
-        # self.LOGGER << "Rotating [{}:{}] by {}.".format(
-        #     slice_start, slice_end, count*uvector)
-
-        # copy the slice for reference afterwards
-        # s_copy = self.mod_entries[slice_start:slice_end]
-        me = self.mod_entries
-
-        # now copy the slice into a deque;
-        deck = deque(me[slice_start:slice_end]) #type: deque[QModEntry]
-
-        # rotate the deck in the opposite direction and voila!
-        # its like we shifted everything.
-        deck.rotate(count * uvector)
-
-        # pop em back in, replacing the ordinal to reflect
-        # the mod's new position
-        for i in range(slice_start, slice_end):
-            me[i]=deck.popleft()
-            me[i].ordinal = i+1
-
-    def _check_dirty_status(self):
-        """
-        Checks whether the table has just gone from a saved to an unsaved state, or vice-versa, and sends a notification signal iff there is a state change.
-        """
-
-        # if signals are blocked, there's no reason to continue (this
-        # probably means we're in a 'revert'/undo-all command, and this
-        # method will be called again at the end of that
-        if self.signalsBlocked(): return
-
-        if self._datahaschanged is None \
-                or stack().haschanged() != self._datahaschanged:
-            # if _datahaschanged is None, then this is the first
-            # time we've changed data this session.
-            # Otherwise, we only want to activate when there is
-            # a difference between the current and cached state
-            self._datahaschanged = stack().haschanged()
-            self.tablehaschanges.emit(self._datahaschanged)
+    # def _check_dirty_status(self):
+    #     """
+    #     Checks whether the table has just gone from a saved to an unsaved state, or vice-versa, and sends a notification signal iff there is a state change.
+    #     """
+    #
+    #     # if signals are blocked, there's no reason to continue (this
+    #     # probably means we're in a 'revert'/undo-all command, and this
+    #     # method will be called again at the end of that
+    #     if self.signalsBlocked(): return
+    #
+    #     if self._datahaschanged is None \
+    #             or stack().haschanged() != self._datahaschanged:
+    #         # if _datahaschanged is None, then this is the first
+    #         # time we've changed data this session.
+    #         # Otherwise, we only want to activate when there is
+    #         # a difference between the current and cached state
+    #         self._datahaschanged = stack().haschanged()
+    #         self.tablehaschanges.emit(self._datahaschanged)
 
     ##===============================================
     ## Getting data from disk into model
@@ -613,9 +745,9 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
         self.beginResetModel()
         self._modifications.clear()
-        self._datahaschanged = None
-        stack().clear()
-        stack().savepoint()
+        # self._datahaschanged = None
+        # stack().clear()
+        # stack().savepoint()
 
         self.mod_entries = [QModEntry(**d) for d in Manager.basic_mod_info()]
 
@@ -676,30 +808,30 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         # for now, let's just reset the undo stack and consider
         # this the new "start" point
-        stack().clear()
-        self._datahaschanged = None
-        stack().savepoint()
+        # stack().clear()
+        # self._datahaschanged = None
+        # stack().savepoint()
 
-        self._undo_event()
+        # self._undo_event()
 
-    def revert_all(self):
-        """
-        Does a 'mass undo' of all changes made to the table so far.
-        :return:
-        """
-        self.beginResetModel()
-        self.blockSignals(True)
-
-        while stack().canundo():
-            stack().undo()
-
-        self.blockSignals(False)
-        self.endResetModel()
-
-        # now call all the signals that were missed
-        # self.notifyViewRowsMoved.emit()
-        self._check_dirty_status()
-        self.undoevent.emit(self.undotext, self.redotext)
+    # def revert_all(self):
+    #     """
+    #     Does a 'mass undo' of all changes made to the table so far.
+    #     :return:
+    #     """
+    #     self.beginResetModel()
+    #     self.blockSignals(True)
+    #
+    #     while stack().canundo():
+    #         stack().undo()
+    #
+    #     self.blockSignals(False)
+    #     self.endResetModel()
+    #
+    #     # now call all the signals that were missed
+    #     # self.notifyViewRowsMoved.emit()
+    #     self._check_dirty_status()
+    #     self.undoevent.emit(self.undotext, self.redotext)
 
     ##===============================================
     ## Drag & Drop

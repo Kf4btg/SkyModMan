@@ -1,10 +1,72 @@
 from collections import deque
-from functools import partial
 
 from PyQt5.QtWidgets import QUndoCommand
 
 
-class ModAttributeChangeCommand(QUndoCommand):
+class UndoCmd(QUndoCommand):
+    """
+    Common base class for an undo commands with callbacks.
+    Deriving classes can simply override _undo_() and _redo_()
+    to define the true functionality of their undo/redo methods
+    and the pre/post callbacks will be made automatically.
+    Alternatively, they could override redo() and undo() themselves
+    to skip the callbacks or make adjustments.
+    """
+
+    def __init__(self,
+                 text="",
+                 *args,
+                 pre_redo_callback = None,
+                 pre_undo_callback = None,
+                 post_redo_callback = None,
+                 post_undo_callback = None,
+                 **kwargs
+                 ):
+        """
+        Any callbacks not provided default to a ``lambda:None`` no-op
+
+        :param str text: optional text that will appear in the
+            Undo/Redo menu items
+
+        :param pre_redo_callback:
+            invoked immediately before the redo action takes place
+            (even the first time)
+        :param pre_undo_callback:
+            invoked immediately before the undo action
+        :param post_redo_callback:
+            invoked immediately after the redo action
+        :param post_undo_callback:
+            invoked immediately after the undo action
+
+        """
+        if text:
+            super().__init__(text, *args, **kwargs)
+        else:
+            super().__init__(*args, **kwargs)
+
+
+        self.pre_redo  = pre_redo_callback  or (lambda:None)
+        self.post_redo = post_redo_callback or (lambda:None)
+        self.pre_undo  = pre_undo_callback  or (lambda:None)
+        self.post_undo = post_undo_callback or (lambda:None)
+
+    def redo(self):
+        self.pre_redo()
+        self._redo_()
+        self.post_redo()
+
+    def _redo_(self):
+        pass
+
+    def undo(self):
+        self.pre_undo()
+        self._undo_()
+        self.post_undo()
+
+    def _undo_(self):
+        pass
+
+class ChangeModAttributeCommand(UndoCmd):
     """
     Used to change a mod attribute *other* than ordinal
     (i.e. do not use this when the mod's install order is
@@ -12,13 +74,13 @@ class ModAttributeChangeCommand(QUndoCommand):
 
 
     """
-    def __init__(self, mod_entry, attribute, value, *args, **kwargs):
+    def __init__(self, mod_entry, attribute, value, text="Change {}", *args, **kwargs):
         """
         :param QModEntry mod_entry: the mod object
         :param str attribute: name of the attribute to change
         :param value: the new value of the attribute
         """
-        super().__init__(*args, **kwargs)
+        super().__init__(text=text.format(attribute), *args, **kwargs)
 
         self.mod = mod_entry
         self.attr = attribute
@@ -26,7 +88,7 @@ class ModAttributeChangeCommand(QUndoCommand):
         self.new_val = value
 
 
-    def redo(self):
+    def _redo_(self):
         """
         Also known as "do". Change to value of the attribute from the
         old value to the new.
@@ -34,107 +96,54 @@ class ModAttributeChangeCommand(QUndoCommand):
 
         setattr(self.mod, self.attr, self.new_val)
 
-    def undo(self):
+    def _undo_(self):
         """
         Restore the original value of the attribute
         """
         setattr(self.mod, self.attr, self.old_val)
 
 
-class ShiftRowsCommand(QUndoCommand):
+class ShiftRowsCommand(UndoCmd):
 
-    def __init__(self, collection, start, end, dest, begin_move_rows, end_move_rows, parent_index, *args, **kwargs):
+    def __init__(self, model,
+                 # start, end, dest, begin_move_rows, end_move_rows, parent_index,
+                 range_start, range_end, count, step,
+                 text="Reorder Mods", *args, **kwargs):
         """
 
-        :param collection: the int-indexable collection of items that
-            is the target of this shift operation.
+        :param model: the TreeModel for the mods table
 
-        :param int start: initial starting row of the range of items
-        :param int end: final row of the range
-        :param int dest: destination row (where `start` should end up)
+        :param int range_start: initial starting row of the range of items
+        :param int range_end: final row of the range
+        :param int count: how many rows are being moved
 
-        :param begin_move_rows: the beginMoveRows(...) method of the
-            model creating this command; called immediately
-            before the shift operation
-        :param end_move_rows: the endMoveRows() method of the
-            model creating this command; called immediately
-            after the shift operation
+        :param int step: either 1 or -1, depending on whether we're
+            shifting up or down, respectively
+        :param str text: optional text that will appear in the
+            Undo/Redo menu items
 
-        :param parent_index: the QModelIndex of the parent item in the
-            model.
-
-        :param args:
-        :param kwargs:
         """
-        super().__init__(*args, **kwargs)
+        super().__init__(text=text, *args, **kwargs)
 
-        self.list = collection
-
-        self.start = start
-        self.end = end
-        self.dest = dest
-
-        self.count = 1 + end - start
-
-        # shift distance, could be positive or negative
-        delta_shift = dest - start
-
-        # this is actually the inverse step (normal vector)
-        # will be +1 for up, -1 for down
-        self.step = -(delta_shift//abs(delta_shift))
-
-        # will be needed later to prevent overshooting the end
-        end_offset = 0
-
-        if dest < start:
-            # means we're moving items UP
-
-            # get a slice from smallest index...
-            self.slice_start = dest_item = dest
-
-            # ...to the end of the rows to displace
-            self.slice_end = 1 + end
-
-        else:
-            # we're moving down
-            self.slice_start = start
-
-            self.slice_end = dest + self.count
-            # we want to make sure we don't try to move past the end;
-            # if we would, change the slice end to the max row number,
-            # but save the amount we would have gone over for later
-            # reference
-            end_offset = max(0, self.slice_end - len(collection))
-            if end_offset > 0:
-                self.slice_end -= end_offset
-            dest_item = self.slice_end
+        # self.list = collection
+        # to simplify things, we're just going to grab a reference to
+        # the model itself. It may not be the most correct thing to do,
+        # but I like it better than exceedingly complex callbacks or
+        # passing two dozen different parameters
+        self._model = model
 
 
-        ## callbacks
-        ## TODO: will the parent_index become invalid? Does it need to be a persistentModelIndex??
-
-        # arguments for [re]do
-        self.begin_move_rows_redo = partial(begin_move_rows, parent_index, start, end, parent_index, dest_item)
-
-        # arguments for undo
-        # here's where we use that offset we saved;
-        # have to subtract it from both start and end to make sure
-        # we're referencing the right block of rows when
-        # calling beginMoveRows
-        self.begin_move_rows_undo = partial(begin_move_rows,
-                                            parent_index,
-                                            dest - end_offset,
-                                            end + delta_shift - end_offset,
-                                            parent_index,
-                                            self.slice_end
-                                                if dest < start
-                                                else self.slice_start)
-        self.end_move_rows = end_move_rows
+        self.range_start = range_start
+        self.range_end = range_end
+        self.count = count
+        self.step = step
 
     def _do_shift(self, slice_start, slice_end, count, vector):
 
+        modlist = self._model.mod_entries
+
         # copy the slice into a deque;
-        deck = deque(self.list[slice_start:slice_end])
+        deck = deque(modlist[slice_start:slice_end])
 
         # rotate the deck in the opposite direction and voila!
         # its like we shifted everything.
@@ -145,22 +154,28 @@ class ShiftRowsCommand(QUndoCommand):
         for i in range(slice_start, slice_end):
             mod = deck.popleft()
             mod.ordinal = i+1
-            self.list[i] = mod
+            modlist[i] = mod
             # self.list[i] = deck.popleft()
             # self.list[i].ordinal = i+1
 
-    def redo(self):
-        self.begin_move_rows_redo()
+    def _redo_(self):
         # call shift with the regular step value
-        self._do_shift(self.slice_start, self.slice_end,
-                       self.count, self.step)
-        self.end_move_rows()
+        self._do_shift(self.range_start, self.range_end, self.count,
+                       self.step)
 
+        self._model.endMoveRows()
+        # add the indices of each shifted row to the model's modified-
+        # rows tracker
+        self._model.mark_modified(range(self.range_start, self.range_end))
 
-    def undo(self):
-        self.begin_move_rows_undo()
+    def _undo_(self):
         # undo just involves rotating in the opposite direction
-        self._do_shift(self.slice_start, self.slice_end,
-                      self.count, -self.step)
-        self.end_move_rows()
+        self._do_shift(self.range_start, self.range_end, self.count,
+                       -self.step)
+
+        self._model.endMoveRows()
+        # chop the most recent entries off the model's modifed-rows
+        # tracker
+        self._model.unmark_modified(self.range_end - self.range_start)
+
 
