@@ -272,7 +272,19 @@ class ModTable_TreeModel(QAbstractItemModel):
             if role == Qt_CheckStateRole:
                 return self.mod_entries[index.row()].checkState
 
+        # just display the row number here;
+        # this allows us to manipulate the ordinal number a bit more
+        # freely behind the scenes
+        elif col == COL_ORDER:
+            if role == Qt_DisplayRole:
+                return index.row() + 1
+
         else:
+            # if col == COL_ORDER and role == Qt_DisplayRole:
+            #     m = self.mod_entries[index.row()]
+            #     print("col_order,", m.name, ":", getattr(m, col2field[col]))
+            # for every other column, return the stored value as the
+            # display role
             if role==Qt_DisplayRole:
                 return getattr(self.mod_entries[index.row()], col2field[col])
             if col == COL_NAME:
@@ -507,55 +519,87 @@ class ModTable_TreeModel(QAbstractItemModel):
         :param str undotext: optional text that will appear in the Undo/Redo menu items
         """
         # push a new shift-command to the undo stack
-        count = 1 + end_row - start_row
 
-        # shift distance; could be pos/neg
-        d_shift = move_to_row - start_row
-
-        # get inverse step (normal vector);
-        # this will be +1 for up, -1 for down
-        rstep = -(d_shift // abs(d_shift))
-
-        _end_offset = 0  # need this later
-        if move_to_row < start_row:  # If we're moving UP:
-
-            # get a slice from smallest index...
-            slice_start = dest_child = move_to_row
-            # ...to the end of the rows to displace
-            slice_end = 1 + end_row
-
-        else:  # moving DOWN:
-            slice_start = start_row
-
-            slice_end = move_to_row + count
-            # we want to make sure we don't try to move past the end;
-            # if we would, change the slice end to the max row number,
-            # but save the amount we would have gone over for later reference
-            _end_offset = max(0, slice_end - self.rowCount())
-            if _end_offset > 0:
-                slice_end -= _end_offset
-            dest_child = slice_end
-
-        pre_redo=partial(self.beginMoveRows, parent, start_row, end_row, parent,
-                           dest_child)
-
-        # here's where we use that offset we saved;
-        # have to subtract it from both start and end to make sure
-        # we're referencing the right block of rows when
-        # calling beginMoveRows
-        pre_undo = partial(self.beginMoveRows, parent,
-                      move_to_row - _end_offset,
-                      end_row + d_shift - _end_offset, parent,
-                      slice_end if move_to_row < start_row else slice_start)
-
-        self._push_command(ShiftRowsCommand(
-            self, slice_start, slice_end, count, rstep,
+        scmd = ShiftRowsCommand(
+            self, start_row, end_row, move_to_row,
             text=undotext,
-            pre_redo_callback=pre_redo,
             post_redo_callback=self.notifyViewRowsMoved.emit,
-            pre_undo_callback=pre_undo,
             post_undo_callback=self.notifyViewRowsMoved.emit
-        ))
+        )
+
+        # get the shifter object from the command
+        shifter = scmd.shifter
+        # and use it to build the beginMoveRows args
+        scmd.pre_redo_callback = partial(
+            self.beginMoveRows, parent,
+            start_row,
+            end_row,
+            parent,
+            shifter.block_dest())
+
+        # get the values for the reverse operation
+        scmd.pre_undo_callback = partial(
+            self.beginMoveRows, parent,
+            shifter.block_start(True),
+            shifter.block_end(True),
+            parent,
+            shifter.block_dest(True)
+        )
+
+        self._push_command(scmd)
+
+
+
+
+        # count = 1 + end_row - start_row
+        #
+        # # shift distance; could be pos/neg
+        # d_shift = move_to_row - start_row
+        #
+        # # get inverse step (normal vector);
+        # # this will be +1 for up, -1 for down
+        # rstep = -(d_shift // abs(d_shift))
+        #
+        # _end_offset = 0  # need this later
+        # if move_to_row < start_row:  # If we're moving UP:
+        #
+        #     # get a slice from smallest index...
+        #     slice_start = dest_child = move_to_row
+        #     # ...to the end of the rows to displace
+        #     slice_end = 1 + end_row
+        #
+        # else:  # moving DOWN:
+        #     slice_start = start_row
+        #
+        #     slice_end = move_to_row + count
+        #     # we want to make sure we don't try to move past the end;
+        #     # if we would, change the slice end to the max row number,
+        #     # but save the amount we would have gone over for later reference
+        #     _end_offset = max(0, slice_end - self.rowCount())
+        #     if _end_offset > 0:
+        #         slice_end -= _end_offset
+        #     dest_child = slice_end
+        #
+        # pre_redo=partial(self.beginMoveRows, parent, start_row, end_row, parent,
+        #                    dest_child)
+        #
+        # # here's where we use that offset we saved;
+        # # have to subtract it from both start and end to make sure
+        # # we're referencing the right block of rows when
+        # # calling beginMoveRows
+        # pre_undo = partial(self.beginMoveRows, parent,
+        #               move_to_row - _end_offset,
+        #               end_row + d_shift - _end_offset, parent,
+        #               slice_end if move_to_row < start_row else slice_start)
+        #
+        # self._push_command(ShiftRowsCommand(
+        #     self, slice_start, slice_end, count, rstep,
+        #     text=undotext,
+        #     pre_redo_callback=pre_redo,
+        #     post_redo_callback=self.notifyViewRowsMoved.emit,
+        #     pre_undo_callback=pre_undo,
+        #     post_undo_callback=self.notifyViewRowsMoved.emit
+        # ))
 
 
     # let's try it a smarter way
@@ -747,7 +791,7 @@ class ModTable_TreeModel(QAbstractItemModel):
     def dropMimeData(self, data, action, row, column, parent):
         """
 
-        :param QMimeData data:
+        :param QMimeData data: contains a string that is 2 ints separated by whitespace, e.g.:  '4 8' This string corresponds to the first and last row in the block of rows being dragged
         :param Qt.DropAction action:
         :param int row:
         :param int column:
@@ -759,6 +803,7 @@ class ModTable_TreeModel(QAbstractItemModel):
             return False
         p = parent.internalPointer() #type: QModEntry
 
+        # drop above the hovered item
         dest = p.ordinal - 1
         start, end = [int(r) for r in data.text().split()]
 
@@ -768,7 +813,7 @@ class ModTable_TreeModel(QAbstractItemModel):
     ##===============================================
     ## Adding and Removing Rows/Columns (may need later)
     ##===============================================
-
+    #
     # def removeRows(self, row, count, parent=QModelIndex()):
     #     """
     #

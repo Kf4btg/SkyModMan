@@ -2,6 +2,8 @@ from collections import deque
 
 from PyQt5.QtWidgets import QUndoCommand
 
+from skymodman.utils import shifter
+
 
 class UndoCmd(QUndoCommand):
     """
@@ -45,23 +47,38 @@ class UndoCmd(QUndoCommand):
             super().__init__(*args, **kwargs)
 
 
-        self.pre_redo  = pre_redo_callback  or (lambda:None)
-        self.post_redo = post_redo_callback or (lambda:None)
-        self.pre_undo  = pre_undo_callback  or (lambda:None)
-        self.post_undo = post_undo_callback or (lambda:None)
+        self._pre_redo  = pre_redo_callback  or (lambda:None)
+        self._post_redo = post_redo_callback or (lambda:None)
+        self._pre_undo  = pre_undo_callback  or (lambda:None)
+        self._post_undo = post_undo_callback or (lambda:None)
+
+    def _set_pre_redo(self, func):
+        self._pre_redo = func
+    def _set_post_redo(self, func):
+        self._post_redo = func
+    def _set_pre_undo(self, func):
+        self._pre_undo = func
+    def _set_post_undo(self, func):
+        self._post_undo = func
+
+    # create write-only properties for the callbacks
+    pre_redo_callback = property(fset = _set_pre_redo)
+    pre_undo_callback = property(fset = _set_pre_undo)
+    post_redo_callback = property(fset = _set_post_redo)
+    post_undo_callback = property(fset = _set_post_undo)
 
     def redo(self):
-        self.pre_redo()
+        self._pre_redo()
         self._redo_()
-        self.post_redo()
+        self._post_redo()
 
     def _redo_(self):
         pass
 
     def undo(self):
-        self.pre_undo()
+        self._pre_undo()
         self._undo_()
-        self.post_undo()
+        self._post_undo()
 
     def _undo_(self):
         pass
@@ -106,8 +123,8 @@ class ChangeModAttributeCommand(UndoCmd):
 class ShiftRowsCommand(UndoCmd):
 
     def __init__(self, model,
-                 # start, end, dest, begin_move_rows, end_move_rows, parent_index,
-                 range_start, range_end, count, step,
+                 start, end, dest, # begin_move_rows, end_move_rows, parent_index,
+                 # range_start, range_end, count, step,
                  text="Reorder Mods", *args, **kwargs):
         """
 
@@ -124,6 +141,8 @@ class ShiftRowsCommand(UndoCmd):
 
         """
         super().__init__(text=text, *args, **kwargs)
+        self._start = start
+        self._end = end
 
         # self.list = collection
         # to simplify things, we're just going to grab a reference to
@@ -132,50 +151,86 @@ class ShiftRowsCommand(UndoCmd):
         # passing two dozen different parameters
         self._model = model
 
+        self._shift = shifter(model.mod_entries, start, end, dest)
 
-        self.range_start = range_start
-        self.range_end = range_end
-        self.count = count
-        self.step = step
 
-    def _do_shift(self, slice_start, slice_end, count, vector):
+        # self.range_start = range_start
+        # self.range_end = range_end
+        # self.count = count
+        # self.step = step
 
-        modlist = self._model.mod_entries
+    @property
+    def shifter(self):
+        return self._shift
 
-        # copy the slice into a deque;
-        deck = deque(modlist[slice_start:slice_end])
 
-        # rotate the deck in the opposite direction and voila!
-        # its like we shifted everything.
-        deck.rotate(count * vector)
-
-        # pop em back in, replacing the entry's ordinal to reflect
-        # the mod's new position
-        for i in range(slice_start, slice_end):
-            mod = deck.popleft()
-            mod.ordinal = i+1
-            modlist[i] = mod
-            # self.list[i] = deck.popleft()
-            # self.list[i].ordinal = i+1
+    # def _do_shift(self, sequence, slice_start, slice_end, count, vector):
+    #
+    #     # modlist = self._model.mod_entries
+    #
+    #     # copy the slice into a deque;
+    #     deck = deque(sequence[slice_start:slice_end])
+    #
+    #     # rotate the deck in the opposite direction and voila!
+    #     # its like we shifted everything.
+    #     deck.rotate(count * vector)
+    #
+    #     # pop em back in, replacing the entry's ordinal to reflect
+    #     # the mod's new position
+    #     for i in range(slice_start, slice_end):
+    #         # mod = deck.popleft()
+    #         # mod.ordinal = i+1
+    #         sequence[i] = deck.popleft()
+    #         # self.list[i] = deck.popleft()
+    #         # self.list[i].ordinal = i+1
 
     def _redo_(self):
         # call shift with the regular step value
-        self._do_shift(self.range_start, self.range_end, self.count,
-                       self.step)
+        # self._do_shift(self._model.mod_entries, self.range_start, self.range_end, self.count,
+        #                self.step)
+
+        self._shift()
 
         self._model.endMoveRows()
         # add the indices of each shifted row to the model's modified-
         # rows tracker
-        self._model.mark_modified(range(self.range_start, self.range_end))
+        self._model.mark_modified(range(self._start, self._end))
 
     def _undo_(self):
         # undo just involves rotating in the opposite direction
-        self._do_shift(self.range_start, self.range_end, self.count,
-                       -self.step)
+        # self._do_shift(self.range_start, self.range_end, self.count,
+        #                -self.step)
+
+        self._shift(True)
 
         self._model.endMoveRows()
         # chop the most recent entries off the model's modifed-rows
         # tracker
-        self._model.unmark_modified(self.range_end - self.range_start)
+        self._model.unmark_modified(self._end - self._start)
+
+
+class RemoveRowsCommand(UndoCmd):
+    
+    def __init__(self, model, start, end, text=None, *args, **kwargs):
+        """
+
+        :param model:
+        :param int start:
+        :param int end:
+        :param text:
+        :param args:
+        :param kwargs:
+        """
+        if text is None:
+            text="Reorder Mod" + ("s" if start != end else "")
+        super().__init__(text=text, *args, **kwargs)
+
+        self._model = model
+        self.start = start
+        self.end = end
+
+        self.removed = []
+
+
 
 
