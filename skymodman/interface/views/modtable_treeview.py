@@ -36,12 +36,6 @@ class ModTable_TreeView(qtW.QTreeView):
         # create an undo stack for the mods tab
         self._undo_stack = qtW.QUndoStack()
 
-        # cache the context menu instance;
-        # the actions must be added later because at this point,
-        # the "main window" isn't fully defined yet
-        # (its actions aren't available)
-        self.ctxmenu = qmenu(self)
-
     @property
     def undo_stack(self):
         return self._undo_stack
@@ -68,13 +62,6 @@ class ModTable_TreeView(qtW.QTreeView):
         # stretch the Name section
         self.header().setSectionResizeMode(Column.NAME,
                                            qtW.QHeaderView.Stretch)
-
-        ## take this moment to construct the context menu
-        mw = self.window()  # mainwindow
-
-        self.ctxmenu.addActions(
-            [mw.action_toggle_mod,
-             mw.action_uninstall_mod])
 
     def loadData(self):
         self._model.loadData()
@@ -197,23 +184,6 @@ class ModTable_TreeView(qtW.QTreeView):
             rows = self._selectedrownumbers()
             self._tellmodelshiftrows(rows[0]+distance, rows=rows)
 
-    # def undo(self):
-    #     # we check the hasSelection() result to see whether
-    #     # whether we want to ignore notifications about row
-    #     # movement sent by the model (which we would only be
-    #     # interested in if the selection were being moved around)
-    #     self.handle_move_signals = self._selection_model.hasSelection()
-    #     self._model.undo()
-    #
-    #     # and reset it afterwards
-    #     self.handle_move_signals = True
-    #
-    # def redo(self):
-    #     # see note above
-    #     self.handle_move_signals = self._selection_model.hasSelection()
-    #     self._model.redo()
-    #     self.handle_move_signals = True
-
     def dragEnterEvent(self, event):
         """ Qt-override.
         Implementation needed for enabling drag and drop within the view.
@@ -234,15 +204,17 @@ class ModTable_TreeView(qtW.QTreeView):
         :param QContextMenuEvent event:
         """
         #
-        # mw = self.window() # mainwindow
-        #
-        # menu = qmenu(self)
-        # menu.addActions([mw.action_toggle_mod,
-        #                  mw.action_uninstall_mod,
-        #                  ])
+        mw = self.window() # mainwindow
 
-        # menu.exec_(event.globalPos())
-        self.ctxmenu.exec_(event.globalPos())
+        menu = qmenu(self)
+        menu.addActions([mw.action_toggle_mod,
+                         mw.action_uninstall_mod,
+                         ])
+
+        if not self.isColumnHidden(Column.ERRORS):
+            menu.addAction(mw.action_clear_missing)
+
+        menu.exec_(event.globalPos())
 
     def toggleSelectionCheckstate(self):
         # to keep things simple, we base the first toggle off of the

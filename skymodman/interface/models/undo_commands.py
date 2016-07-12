@@ -15,6 +15,9 @@ class UndoCmd(QUndoCommand):
     to skip the callbacks or make adjustments.
     """
 
+    # use slots because we can end up with lots of these things...
+    __slots__ = ("_pre_redo", "_post_redo", "_pre_undo", "_post_undo")
+
     def __init__(self,
                  text="",
                  *args,
@@ -91,6 +94,9 @@ class ChangeModAttributeCommand(UndoCmd):
 
 
     """
+
+    __slots__ = ("mod", "attr", "old_val", "new_val")
+
     def __init__(self, mod_entry, attribute, value, text="Change {}", *args, **kwargs):
         """
         :param QModEntry mod_entry: the mod object
@@ -122,20 +128,19 @@ class ChangeModAttributeCommand(UndoCmd):
 
 class ShiftRowsCommand(UndoCmd):
 
+    __slots__ = ("_start", "_end", "_model", "_shift")
+
     def __init__(self, model,
-                 start, end, dest, # begin_move_rows, end_move_rows, parent_index,
-                 # range_start, range_end, count, step,
+                 start, end, dest,
                  text="Reorder Mods", *args, **kwargs):
         """
 
         :param model: the TreeModel for the mods table
 
-        :param int range_start: initial starting row of the range of items
-        :param int range_end: final row of the range
-        :param int count: how many rows are being moved
+        :param int start: initial starting row of the range of items
+        :param int end: final row of the range
+        :param int dest: destination row for the head of the range
 
-        :param int step: either 1 or -1, depending on whether we're
-            shifting up or down, respectively
         :param str text: optional text that will appear in the
             Undo/Redo menu items
 
@@ -153,83 +158,69 @@ class ShiftRowsCommand(UndoCmd):
 
         self._shift = shifter(model.mod_entries, start, end, dest)
 
-
-        # self.range_start = range_start
-        # self.range_end = range_end
-        # self.count = count
-        # self.step = step
-
     @property
     def shifter(self):
         return self._shift
 
-
-    # def _do_shift(self, sequence, slice_start, slice_end, count, vector):
-    #
-    #     # modlist = self._model.mod_entries
-    #
-    #     # copy the slice into a deque;
-    #     deck = deque(sequence[slice_start:slice_end])
-    #
-    #     # rotate the deck in the opposite direction and voila!
-    #     # its like we shifted everything.
-    #     deck.rotate(count * vector)
-    #
-    #     # pop em back in, replacing the entry's ordinal to reflect
-    #     # the mod's new position
-    #     for i in range(slice_start, slice_end):
-    #         # mod = deck.popleft()
-    #         # mod.ordinal = i+1
-    #         sequence[i] = deck.popleft()
-    #         # self.list[i] = deck.popleft()
-    #         # self.list[i].ordinal = i+1
-
     def _redo_(self):
-        # call shift with the regular step value
-        # self._do_shift(self._model.mod_entries, self.range_start, self.range_end, self.count,
-        #                self.step)
-
+        """perform shift in "forward" direction"""
         self._shift()
 
         self._model.endMoveRows()
+
         # add the indices of each shifted row to the model's modified-
         # rows tracker
         self._model.mark_modified(range(self._start, self._end))
 
     def _undo_(self):
-        # undo just involves rotating in the opposite direction
-        # self._do_shift(self.range_start, self.range_end, self.count,
-        #                -self.step)
-
+        # undo just involves rotating in the opposite direction,
+        # so we call shift() with reverse=True
         self._shift(True)
 
         self._model.endMoveRows()
-        # chop the most recent entries off the model's modifed-rows
-        # tracker
+        # chop the most recent entries off the model's
+        # modifed-rows tracker
         self._model.unmark_modified(self._end - self._start)
 
 
 class RemoveRowsCommand(UndoCmd):
+
+    __slots__ = ("_model", "start", "end", "removed")
     
-    def __init__(self, model, start, end, text=None, *args, **kwargs):
+    def __init__(self, model, first, last, text=None, *args, **kwargs):
         """
 
         :param model:
-        :param int start:
-        :param int end:
+        :param int first:
+        :param int last:
         :param text:
         :param args:
         :param kwargs:
         """
         if text is None:
-            text="Reorder Mod" + ("s" if start != end else "")
+            text="Remove Mod" + ("s" if last > first else "")
         super().__init__(text=text, *args, **kwargs)
 
         self._model = model
-        self.start = start
-        self.end = end
+        self.start = first
+        self.end = last+1 # the slice-end
 
-        self.removed = []
+        # keep track of removed entries
+        self.removed = model.mod_entries[self.start:self.end]
+
+
+    def _redo_(self):
+        # just blank out the section
+        self._model.mod_entries[self.start:self.end] = []
+
+    def _undo_(self):
+        # plug the stuff back in, immediately before the index
+        # from where it was removed
+
+        # so, this works...but is it right?
+        self._model.mod_entries[self.start:self.start] = self.removed
+
+
 
 
 

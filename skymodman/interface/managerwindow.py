@@ -597,6 +597,19 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             partial(self.on_table_search, -1))
 
 
+        # ---------------------------------------------------
+        ## Create an action for clearing mods that cannot be found
+        ## from the mods list. Will be shown in the right-click menu
+        ## of the mods table when the errors column is visible.
+        # noinspection PyArgumentList
+        self.action_clear_missing = QtWidgets.QAction(
+            "Remove Missing Mods",
+            self,
+            objectName="action_clear_missing",
+            icon=QtGui.QIcon().fromTheme("edit-clear"),
+            triggered=self.remove_missing)
+
+
     def _setup_button_connections(self):
         """ Make the buttons do stuff
         """
@@ -1609,6 +1622,14 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if row > -1:
             # mod = self.models[M.mod_table][row]
             self.LOGGER << "Here's where we'd uninstall this mod."
+
+    @pyqtSlot()
+    def remove_missing(self):
+        """
+        Remove all mod entries that were not found on disk from the
+        current profile's mod list
+        """
+        print("remove missing")
 
     #</editor-fold>
 

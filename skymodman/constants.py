@@ -1,6 +1,73 @@
 from enum import Enum, IntEnum
-from collections import namedtuple
 
+class BitEnum(Enum):
+    """
+    A type of enum that supports certain binary operations between its
+    instances, namely & (bitwise-and) and | (bitwise-or). It also
+    defines a bool-conversion where the member with value 0 will
+    evaluate False, while all other values evaluate True.
+
+    For this to work properly, the underlying type of the members
+    should be int, and the subclass MUST define a "None"-like member
+    with value 0.
+
+    If a bitwise operation returns a result that is a valid member
+    of the Enum (perhaps a combination you wanted to use often and
+    thus defined within the enum itself), that enum member will be
+    returned. If the result is not a valid member of this enum, then
+    the int result of the operation will be returned instead. This
+    allows saving arbitrary combinations for use as flags.
+
+    These aspects allow for simple, useful statements like:
+
+        >>> if some_combined_MyBitEnum_value & MyBitEnum.memberA:
+        >>>     ...
+
+    to see if 'MyBitEnum.memberA' is present in the bitwise combination
+    'some_combined_MyBitEnum_value'
+    """
+
+
+    def __and__(self, other):
+        try:
+            try:
+                val = other.value
+            except AttributeError:
+                # then see if its an int(able)
+                val = int(other)
+            res = self.value & val
+        except (ValueError, TypeError):
+            return NotImplemented
+
+        try:
+            return type(self)(res)
+        except ValueError:
+            return res
+
+    def __or__(self, other):
+        try:
+            try:
+                val = other.value
+            except AttributeError:
+                # then see if its an int(able)
+                val = int(other)
+            res = self.value | val
+        except (ValueError, TypeError):
+            return NotImplemented
+
+        try:
+            return type(self)(res)
+        except ValueError:
+            return res
+        # try:
+        #     return type(self)(self.value | other.value)
+        # except ValueError:
+        #     return type(self)(0)
+        # except AttributeError:
+        #     return NotImplemented
+
+    def __bool__(self):
+        return self.value != 0
 
 # using IntEnums here because they are interacting with code I can't change (Qt)
 # which sends ints around quite a bit. Rather than having to look up the enum
@@ -23,7 +90,13 @@ class qFilters(Enum):
     mod_list, file_viewer, mod_table = range(3)
 
 class SyncError(Enum):
-    NOTFOUND, NOTLISTED = range(2)
+    NONE, NOTFOUND, NOTLISTED = range(2)
+
+class ModError(BitEnum):
+    NONE = 0
+    DIR_NOT_FOUND = 1
+    NOTLISTED = 2
+
 
 class EnvVars(str, Enum):
     MOD_DIR = "SMM_MODDIR"
@@ -132,40 +205,6 @@ DisplayNames = {
     KeyStr.UI.RESTORE_WINPOS: "Restore Window Position",
 }
 
-# class INIKey(str, Enum):
-#
-#     ## main INI
-#     LASTPROFILE = "lastprofile"         # name of last loaded profile
-#
-#     ## main and profile INIs
-#     ## these have their own section now, so we can probably be more concise
-#     # SKYRIMDIR   = "skyriminstalldir"    # location of base skyrim install
-#     SKYRIMDIR   = "skyrim"    # location of base skyrim install
-#
-#     # MODDIR      = "modsdirectory"       # location of mod storage
-#     MODDIR      = "mods"       # location of mod storage
-#
-#     # VFSMOUNT    = "virtualfsmountpoint" # mount point for "virtual" skyrim install
-#     VFSMOUNT    = "vfs" # mount point for "virtual" skyrim install
-#
-#     ## profiles only
-#     ACTIVEONLY = "activeonly"
-#
-# class DataDir:
-#     SKYRIM = "dir_skyrim" # location of base skyrim install
-#     MODS = "dir_mods" # location of mod storage
-#     VFS = "dir_vfs" # mount point for "virtual" skyrim install
-#
-# class UI_Pref:
-#     RESTORE_WINSIZE = "restore_window_size"
-#     RESTORE_WINPOS = "restore_window_pos"
-#
-#     PROFILE_LOAD_POLICY = "load_profile_on_start"
-#
-#     LOAD_LAST_PROFILE = "load_last_profile"
-#     LOAD_DEFAULT_PROFILE = "load_default_profile"
-#     LOAD_NO_PROFILE = "load_no_profile"
-
 class ProfileLoadPolicy(Enum):
     last, default, none = range(3)
 
@@ -232,4 +271,3 @@ TopLevelDirs_Bain = TopLevelDirs | {"docs", "ini tweaks"}
 
 TopLevelSuffixes = {"esp", "esm", "bsa"}
 
-## PS: It was also the first time I realized that MO was already written in Qt...

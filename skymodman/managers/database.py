@@ -11,7 +11,7 @@ from skymodman.constants import db_fields, SyncError
 from skymodman.utils import withlogger, tree
 from skymodman.managers import modmanager as Manager
 
-mcount = count()
+_mcount = count()
 
 # from skymodman.utils import humanizer
 # @humanizer.humanize
@@ -164,10 +164,12 @@ class DBManager:
         populate the in-memory database
         :param str|Path json_source: path to modinfo.json file
         """
-        global mcount
+        global _mcount
         # reset counter so that mod-ordinal is determined by the order
         # in which the entries are read from the file
-        mcount = count()
+        _mcount = count()
+        # but we want to start at 1
+        next(_mcount)
 
         # self.LOGGER.debug("loading mod db from file")
 
@@ -719,7 +721,7 @@ class DBManager:
         :return: Tuple containing just the values of the fields
         """
 
-        return (next(mcount), ) + tuple(s[1] for s in sorted(pairs, key=lambda p: db_fields.index(p[0])))
+        return (next(_mcount),) + tuple(s[1] for s in sorted(pairs, key=lambda p: db_fields.index(p[0])))
 
 
 if __name__ == '__main__':

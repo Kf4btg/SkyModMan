@@ -237,7 +237,8 @@ class ProfileManager:
 
         # make sure directory exists
         if not self._profiles_dir.exists():
-            raise FileNotFoundError("Profile directory not found: {}".format(self._profiles_dir))
+            raise FileNotFoundError("Profile directory not found: {}"
+                                    .format(self._profiles_dir))
 
         ## load profile names from folders in profiles-dir
         self.LOGGER.info("loading profiles from {}".format(self._profiles_dir))
@@ -251,7 +252,6 @@ class ProfileManager:
         if len(self._profile_names) == 0:
             self.LOGGER.warning("No profiles found. Creating default profile.")
             self._profile_names.append(FALLBACK_PROFILE)
-            # self._current_profile = self.loadProfile("default")
             self.loadProfile(FALLBACK_PROFILE)
 
     ################
@@ -272,9 +272,10 @@ class ProfileManager:
 
     def __getitem__(self, profilename):
         """
-        Provides mapping-like access to profiles: use ``profmanager['my_profile']``
-        to retrieve the Profile object for the profile named 'my_profile'
-        (loading it from disk if not cached).
+        Provides mapping-like access to profiles: use
+        ``profmanager['my_profile']`` to retrieve the Profile object for
+        the profile named 'my_profile' (loading it from disk if not
+        cached).
 
         Unlike the default behavior of 'loadProfile', this will NOT
         create a new profile if one by the given name can't be found.
@@ -294,17 +295,28 @@ class ProfileManager:
         :param str profilename:
             name of profile to load.
         :param Profile copy_from:
-            If `copy_from` is specified and is the name of a currently existing profile, settings will be copied from that profile to the new one rather than creating the typical default configuration files.
+            If `copy_from` is specified and is the name of a currently
+            existing profile, settings will be copied from that profile
+            to the new one rather than creating the typical default
+            configuration files.
         :param create:
-            If True, and no profile by the given name exists, a new one with that name will be created and returned, copying configuration from `copy_from` if specified. If False and the profile does not exist, a ProfileError will be raised.
+            If True, and no profile by the given name exists, a new one
+            with that name will be created and returned, copying
+            configuration from `copy_from` if specified. If False and
+            the profile does not exist, a ProfileError will be raised.
         :return: loaded or created Profile object
         """
         # self.LOGGER.info("Loading profile '{}'.".format(profilename))
 
         if profilename in self.__cache:
-            self.LOGGER.info("Profile {} found in cache; returning cached object.".format(profilename))
+            self.LOGGER.info("Profile {} found in cache;"
+                             " returning cached object.".format(
+                profilename))
         else:
-            self.__cache.append(profilename, Profile(self._profiles_dir, profilename, copy_profile=copy_from, create_on_enoent=create))
+            self.__cache.append(profilename,
+                                Profile(self._profiles_dir, profilename,
+                                        copy_profile=copy_from,
+                                        create_on_enoent=create))
 
 
         return self.__cache[profilename]
@@ -337,7 +349,8 @@ class ProfileManager:
         """
         self._profile_names = sorted(self._profile_names)
         yield from zip(self._profile_names,
-                       (self.loadProfile(p) for p in self._profile_names))
+                       (self.loadProfile(p)
+                            for p in self._profile_names))
 
 
     #####################
@@ -346,15 +359,18 @@ class ProfileManager:
 
     def newProfile(self, profile_name, copy_from = None) -> Profile:
         """
-        Create a new folder in the configured profiles directory and generate
-        empty placeholder config-files within it. If an existing Profile is
-        specified in `copy_from`, config files are duplicated from that
-        Profile directory into the the new one, rather than being created empty.
+        Create a new folder in the configured profiles directory and
+        generate empty placeholder config-files within it. If an
+        existing Profile is specified in `copy_from`, config files are
+        duplicated from that Profile directory into the the new one,
+        rather than being created empty.
 
         :param str profile_name:
-            name of new profile. Must not already exist or an Exception will be raised
+            name of new profile. Must not already exist or an Exception
+            will be raised
         :param Profile copy_from:
-            if not None, copy settings from the specified pre-existing profile to the newly created one
+            if not None, copy settings from the specified pre-existing
+            profile to the newly created one
         :return: the Profile object for the newly created profile
         """
         new_pdir = self._profiles_dir / profile_name
@@ -378,9 +394,9 @@ class ProfileManager:
         :param profile:
             either a Profile object or the name of an existing profile
         :param confirm:
-            must pass true for this to work. This option will likely be removed;
-            it's mainly to prevent me from doing stupid things during development
-        :return:
+            must pass true for this to work. This option will likely be
+            removed; it's mainly to prevent me from doing stupid things
+            during development
         """
 
         assert confirm

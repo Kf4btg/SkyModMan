@@ -3,13 +3,10 @@ from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeD
 
 from skymodman import ModEntry
 from skymodman.managers import modmanager as Manager
-from skymodman.constants import (Column as COL, SyncError)
-# , DBLCLICK_COLS, VISIBLE_COLS)
+from skymodman.constants import (Column as COL, SyncError, ModError)
 from skymodman.utils import withlogger
-# from skymodman.thirdparty.undo import undoable #, group #,stack
-# from skymodman.utils.timedundo import stack
 from skymodman.interface.models.undo_commands import (
-    ChangeModAttributeCommand, ShiftRowsCommand)
+    ChangeModAttributeCommand, ShiftRowsCommand, RemoveRowsCommand)
 
 from functools import total_ordering, partial
 from collections import deque
@@ -18,7 +15,8 @@ import re
 
 # <editor-fold desc="ModuleConstants">
 
-# VISIBLE_COLS  = [COL.ORDER, COL.ENABLED, COL.NAME, COL.MODID, COL.VERSION, COL.ERRORS]
+# VISIBLE_COLS  = [COL.ORDER, COL.ENABLED, COL.NAME, COL.MODID,
+#                  COL.VERSION, COL.ERRORS]
 # DBLCLICK_COLS = {COL.MODID, COL.VERSION}
 
 # Locally binding some names to improve resolution speed in some of
@@ -72,11 +70,14 @@ class QModEntry(ModEntry):
     """
     Namedtuple subclass that eases accessing derived properties for displaying in the Qt GUI
     """
-    # from the python docs: [Set] __slots__ to an empty tuple. This helps keep memory requirements low by preventing the creation of instance dictionaries.
-    __slots__=()
+    # from the python docs: [Set] __slots__ to an empty tuple. This
+    # helps keep memory requirements low by preventing the creation of
+    # instance dictionaries.
+    __slots__=("errors", )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.errors = SyncError.NONE
 
     @property
     def checkState(self):
@@ -89,7 +90,8 @@ class QModEntry(ModEntry):
 
 
     def __eq__(self, other):
-        """This is for checking if two mods are are equal with regards to their **editable** fields"""
+        """This is for checking if two mods are are equal with regards
+        to their **editable** fields"""
         return self.name == other.name \
                and self.enabled == other.enabled \
                and self.ordinal == other.ordinal
@@ -100,7 +102,10 @@ class ModTable_TreeModel(QAbstractItemModel):
 
     tablehaschanges = pyqtSignal(bool)
     # undoevent = pyqtSignal(str, str) # undotext, redotext
-    notifyViewRowsMoved = pyqtSignal() # let view know selection may have moved
+
+    # let view know selection may have moved
+    notifyViewRowsMoved = pyqtSignal()
+
     hideErrorColumn = pyqtSignal(bool)
 
     def __init__(self, parent, **kwargs):
@@ -120,9 +125,6 @@ class ModTable_TreeModel(QAbstractItemModel):
         self.missing_mods = self.errors.keys()
 
         self.vheader_field = COL_ORDER
-        # self.visible_columns = [COL.ENABLED, COL.ORDER, COL.NAME, COL.MODID, COL.VERSION]
-
-        # self._datahaschanged = None # placeholder for first start
 
         # track the row numbers of every mod in the table that is
         # changed in any way. Every time a change is made, the row
@@ -251,18 +253,24 @@ class ModTable_TreeModel(QAbstractItemModel):
         if col == COL_ERRORS:
             try:
                 err = self.errors[self.mod_entries[index.row()].directory]
-                for case, choices in [(lambda r: role == r, lambda d: d[err])]:
+                for case, choices in [(lambda r: role == r,
+                                       lambda d: d[err])]:
 
                     if case(Qt_DecorationRole): return QtGui.QIcon.fromTheme(
-                            choices({SyncError.NOTFOUND: 'dialog-error',
-                                     SyncError.NOTLISTED: 'dialog-warning'}))
+                            choices({SyncError.NOTFOUND:
+                                         'dialog-error',
+                                     SyncError.NOTLISTED:
+                                         'dialog-warning'}))
 
                     if case(Qt_ToolTipRole): return choices(
-                            {SyncError.NOTFOUND: "Mod directory not found.",
-                             SyncError.NOTLISTED: "This mod was found in the mods directory"
-                                                  "but has not previously been seen my this"
-                                                  "profile. Be sure that it is either set up"
-                                                  "correctly or disabled before running any tools."
+                            {SyncError.NOTFOUND:
+                                 "Mod data not found.",
+                             SyncError.NOTLISTED:
+                                 "This mod was found in the mods "
+                                 "directory but has not previously "
+                                 "been seen my this profile. Be sure "
+                                 "that it is either set up correctly "
+                                 "or disabled before running any tools."
                              })
             except KeyError:
                 # no errors for this mod
@@ -313,12 +321,16 @@ class ModTable_TreeModel(QAbstractItemModel):
 
     def flags(self, index):
         """
-        For the cell specified by `index`, return the appropriate flag value:
+        For the cell specified by `index`, return the appropriate
+        flag value:
 
             * Invalid Index: enabled
-            * 'Enabled' column: enabled, selectable, draggable, droppable, checkable
-            * 'Name' column: enabled, selectable, draggable, droppable, editable
-            * Any other column: enabled, selectable, draggable, droppable
+            * 'Enabled' column: enabled, selectable, draggable,
+              droppable, checkable
+            * 'Name' column: enabled, selectable, draggable, droppable,
+              editable
+            * Any other column: enabled, selectable, draggable,
+              droppable
 
         :param QModelIndex index:
         """
@@ -326,7 +338,8 @@ class ModTable_TreeModel(QAbstractItemModel):
             return Qt_ItemIsEnabled
         col = index.column()
 
-        _flags = Qt_ItemIsEnabled | Qt_ItemIsSelectable | Qt_ItemIsDragEnabled | Qt_ItemIsDropEnabled
+        _flags = Qt_ItemIsEnabled | Qt_ItemIsSelectable | \
+                 Qt_ItemIsDragEnabled | Qt_ItemIsDropEnabled
 
         if col == COL_ENABLED:
             return _flags | Qt_ItemIsUserCheckable
@@ -342,8 +355,10 @@ class ModTable_TreeModel(QAbstractItemModel):
         and return the model index of the first or next matching entry.
 
         :param str text: search text
-        :param QModelIndex start_index: the currently selected index; search will begin here and search down the table
-        :param int direction: if negative, search backwards from current location
+        :param QModelIndex start_index: the currently selected index;
+            search will begin here and search down the table
+        :param int direction: if negative, search backwards from
+            current location
         :return: QModelIndex
         """
         # an invalid index will have row==-1
@@ -375,9 +390,9 @@ class ModTable_TreeModel(QAbstractItemModel):
                     start=current_row+1)
 
         except StopIteration:
-            # we've reached one end of the list, so wrap search to the opposite
-            # end and continue until we either find a match or return to the
-            # starting point.
+            # we've reached one end of the list, so wrap search
+            # to the opposite end and continue until we either find a
+            # match or return to the starting point.
             try:
                 next_result = searcher(end=current_row-1, step=-1) \
                               if reverse \
@@ -408,7 +423,8 @@ class ModTable_TreeModel(QAbstractItemModel):
 
     def setData(self, index, value, role=None):
         """
-        Currently, the only editable fields are the enabled column (checkbox) and the name field (lineedit)
+        Currently, the only editable fields are the enabled column
+        (checkbox) and the name field (lineedit)
 
         :param QModelIndex index:
         :param value:
@@ -420,7 +436,7 @@ class ModTable_TreeModel(QAbstractItemModel):
             if index.column() == COL_ENABLED:
                 row = index.row()
 
-                # callbacks for changing (1) or reverting (2)
+                # callbacks for updating (1) or reverting (2)
                 cb1 = partial(self._post_change_mod_attr, index, row)
                 cb2 = partial(self._post_change_mod_attr, index)
 
@@ -453,7 +469,9 @@ class ModTable_TreeModel(QAbstractItemModel):
         else:
             return super().setData(index, value, role)
 
-        return False # if role was checkstate or edit, but column was not enabled/name, just ret false
+        # if role was checkstate or edit, but column was not
+        # enabled/name, just ret false
+        return False
 
     def _post_change_mod_attr(self, index, row=-1):
         """
@@ -470,42 +488,6 @@ class ModTable_TreeModel(QAbstractItemModel):
             self._modifications.append(row)
         self.dataChanged.emit(index, index)
 
-    # noinspection PyUnresolvedReferences
-    # @undoable
-    # def changeModField(self, index, row, mod, field, value):
-    #     """
-    #     Used to change a mod attribute *other* than ordinal
-    #     (i.e. do not use this when the mod's install order is
-    #     being changed)
-    #
-    #     :param QModelIndex index: QMI object for this mod
-    #     :param int row: current row number of the mod in the table
-    #     :param QModEntry mod: the mod's entry
-    #     :param str field: name of the attribute to change
-    #     :param value: the new value of the attribute
-    #     :return:
-    #     """
-    #     # this is for changing a mod attribute *other* than ordinal
-    #     # (i.e. do not use this when the mod's install order is being changed)
-    #
-    #     #do/redo code:
-    #     old_value = getattr(mod, field)
-    #     setattr(mod, field, value)
-    #
-    #     # record this row number in the modified rows stack
-    #     self._modifications.append(row)
-    #
-    #     self.dataChanged.emit(index, index)
-    #
-    #     yield "Change {}".format(field)
-    #
-    #     # undo code:
-    #     setattr(mod,field, old_value)
-    #     # remove this row number from the modified rows stack
-    #     self._modifications.pop()
-    #
-    #     self.dataChanged.emit(index, index)
-
     ##===============================================
     ## Modifying Row Position
     ##===============================================
@@ -514,11 +496,13 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
         :param int start_row: start of shifted block
         :param int end_row: end of shifted block
-        :param int move_to_row: destination row; where the `start_row` should end up
+        :param int move_to_row: destination row; where the
+            `start_row` should end up
         :param QModelIndex parent:
-        :param str undotext: optional text that will appear in the Undo/Redo menu items
+        :param str undotext: optional text that will appear in
+            the Undo/Redo menu items
         """
-        # push a new shift-command to the undo stack
+        # create a new shift-command
 
         scmd = ShiftRowsCommand(
             self, start_row, end_row, move_to_row,
@@ -546,155 +530,8 @@ class ModTable_TreeModel(QAbstractItemModel):
             shifter.block_dest(True)
         )
 
+        # push to the undo stack
         self._push_command(scmd)
-
-
-
-
-        # count = 1 + end_row - start_row
-        #
-        # # shift distance; could be pos/neg
-        # d_shift = move_to_row - start_row
-        #
-        # # get inverse step (normal vector);
-        # # this will be +1 for up, -1 for down
-        # rstep = -(d_shift // abs(d_shift))
-        #
-        # _end_offset = 0  # need this later
-        # if move_to_row < start_row:  # If we're moving UP:
-        #
-        #     # get a slice from smallest index...
-        #     slice_start = dest_child = move_to_row
-        #     # ...to the end of the rows to displace
-        #     slice_end = 1 + end_row
-        #
-        # else:  # moving DOWN:
-        #     slice_start = start_row
-        #
-        #     slice_end = move_to_row + count
-        #     # we want to make sure we don't try to move past the end;
-        #     # if we would, change the slice end to the max row number,
-        #     # but save the amount we would have gone over for later reference
-        #     _end_offset = max(0, slice_end - self.rowCount())
-        #     if _end_offset > 0:
-        #         slice_end -= _end_offset
-        #     dest_child = slice_end
-        #
-        # pre_redo=partial(self.beginMoveRows, parent, start_row, end_row, parent,
-        #                    dest_child)
-        #
-        # # here's where we use that offset we saved;
-        # # have to subtract it from both start and end to make sure
-        # # we're referencing the right block of rows when
-        # # calling beginMoveRows
-        # pre_undo = partial(self.beginMoveRows, parent,
-        #               move_to_row - _end_offset,
-        #               end_row + d_shift - _end_offset, parent,
-        #               slice_end if move_to_row < start_row else slice_start)
-        #
-        # self._push_command(ShiftRowsCommand(
-        #     self, slice_start, slice_end, count, rstep,
-        #     text=undotext,
-        #     pre_redo_callback=pre_redo,
-        #     post_redo_callback=self.notifyViewRowsMoved.emit,
-        #     pre_undo_callback=pre_undo,
-        #     post_undo_callback=self.notifyViewRowsMoved.emit
-        # ))
-
-
-    # let's try it a smarter way
-    # @undoable
-    # def _shiftRows(self, start_row, end_row, move_to_row, parent=QModelIndex(), undotext="Reorder Mods"):
-    #     """
-    #     :param int start_row: start of shifted block
-    #     :param int end_row: end of shifted block
-    #     :param int move_to_row: destination row; where the `start_row` should end up
-    #     :param QModelIndex parent:
-    #     :param str undotext: optional text that will appear in the Undo/Redo menu items
-    #     """
-    #     # self.LOGGER << "Moving rows {}-{} to row {}.".format(start_row, end_row, move_to_row)
-    #
-    #     count = 1 + end_row - start_row
-    #
-    #     # shift distance; could be pos/neg
-    #     d_shift = move_to_row - start_row
-    #
-    #     # get inverse step (normal vector);
-    #     # this will be +1 for up, -1 for down
-    #     rstep = -(d_shift//abs(d_shift))
-    #
-    #     _end_offset = 0 # need this later
-    #     if move_to_row < start_row: # If we're moving UP:
-    #
-    #         # get a slice from smallest index...
-    #         slice_start = dest_child = move_to_row
-    #         # ...to the end of the rows to displace
-    #         slice_end   = 1 + end_row
-    #
-    #     else: # moving DOWN:
-    #         slice_start = start_row
-    #
-    #         slice_end   = move_to_row + count
-    #         # we want to make sure we don't try to move past the end;
-    #         # if we would, change the slice end to the max row number,
-    #         # but save the amount we would have gone over for later reference
-    #         _end_offset = max(0, slice_end - self.rowCount())
-    #         if _end_offset > 0:
-    #             slice_end -= _end_offset
-    #         dest_child = slice_end
-    #
-    #
-    #     self.beginMoveRows(parent, start_row, end_row, parent, dest_child)
-    #     self._doshift(slice_start, slice_end, count, rstep)
-    #     self.endMoveRows()
-    #
-    #     # track all modified rows
-    #     self._modifications.extend(range(slice_start, slice_end))
-    #
-    #     self.notifyViewRowsMoved.emit()
-    #
-    #     yield undotext
-    #
-    #     # here's where we use that offset we saved;
-    #     # have to subtract it from both start and end to make sure
-    #     # we're referencing the right block of rows when
-    #     # calling beginMoveRows
-    #     self.beginMoveRows(parent,
-    #                   move_to_row - _end_offset,
-    #                   end_row + d_shift - _end_offset, parent,
-    #                   slice_end if move_to_row < start_row else slice_start)
-    #
-    #     # the internal undo just involves rotating in the opposite direction
-    #     self._doshift(slice_start, slice_end, count, -rstep)
-    #     self.endMoveRows()
-    #
-    #     # remove all de-modified row numbers
-    #     for _ in range(slice_end-slice_start):
-    #         self._modifications.pop()
-    #
-    #     self.notifyViewRowsMoved.emit()
-    #
-    # def _doshift(self, slice_start, slice_end, count, uvector):
-    #     # self.LOGGER << "Rotating [{}:{}] by {}.".format(
-    #     #     slice_start, slice_end, count*uvector)
-    #
-    #     # copy the slice for reference afterwards
-    #     # s_copy = self.mod_entries[slice_start:slice_end]
-    #     me = self.mod_entries
-    #
-    #     # now copy the slice into a deque;
-    #     deck = deque(me[slice_start:slice_end]) #type: deque[QModEntry]
-    #
-    #     # rotate the deck in the opposite direction and voila!
-    #     # its like we shifted everything.
-    #     deck.rotate(count * uvector)
-    #
-    #     # pop em back in, replacing the ordinal to reflect
-    #     # the mod's new position
-    #     for i in range(slice_start, slice_end):
-    #         me[i]=deck.popleft()
-    #         me[i].ordinal = i+1
-
 
     ##===============================================
     ## Getting data from disk into model
@@ -708,7 +545,8 @@ class ModTable_TreeModel(QAbstractItemModel):
         self.beginResetModel()
         self._modifications.clear()
 
-        self.mod_entries = [QModEntry(**d) for d in Manager.basic_mod_info()]
+        self.mod_entries = [QModEntry(**d) for d
+                            in Manager.basic_mod_info()]
 
         self.checkForModLoadErrors()
 
@@ -717,20 +555,25 @@ class ModTable_TreeModel(QAbstractItemModel):
 
     def checkForModLoadErrors(self):
         """
-        query the manager for any errors that were encountered while loading
-        the modlist for the current profile. The two error types are:
+        query the manager for any errors that were encountered while
+        loading the modlist for the current profile. The two error
+        types are:
 
-            * SyncError.NOTFOUND: Mod listed in the profile's saved list is not present on disk
-            * SyncError.NOTLISTED: Mod found on disk is not in the profile's modlist
+            * SyncError.NOTFOUND: Mod listed in the profile's saved
+              list is not present on disk
+            * SyncError.NOTLISTED: Mod found on disk is not in the
+              profile's modlist
 
-        The model's ``errors`` property (a str=>int dictionary) is populated with the
-        results of this query; each key in the dict is the name of a mod (directory),
-        and the value is the int-enum value of the type of error it encountered.
-        If a mod is not present in this collection, then no error was encountered.
+        The model's ``errors`` property (a str=>int dictionary) is
+        populated with the results of this query; each key in the dict
+        is the name of a mod (directory), and the value is the int-enum
+        value of the type of error it encountered. If a mod is not
+        present in this collection, then no error was encountered.
 
-        Ideally, ``errors`` will be empty after this method is called. In this case, the
-        model will notify the view to hide the Errors column of the table. If ``errors`` is not
-        empty, then the Errors column will be shown and an icon indicating the type of error
+        Ideally, ``errors`` will be empty after this method is called.
+        In this case, the model will notify the view to hide the Errors
+        column of the table. If ``errors`` is not empty, then the Errors
+        column will be shown and an icon indicating the type of error
         will be appear there in the row(s) of the problematic mod(s).
         """
         # self.errors = {}  # type: dict[str, int]
@@ -764,6 +607,33 @@ class ModTable_TreeModel(QAbstractItemModel):
                    for row in set(self._modifications)]
 
         Manager.save_user_edits(to_save)
+
+    def clear_missing(self):
+        """
+        Remove all mods that are marked with the NOT FOUND error
+        from the current profile's modlist
+
+        :return:
+        """
+
+        ## options here:
+        # 1) find each row that contains an errored mod and call
+        # RemoveRows on it. could be sped up by finding ranges.
+        # Will need to emit dataChanged and possibly shift stuff
+        # around.
+        # 2) just remove them from the mod_entries list and reset the
+        # model.
+        # ...
+        # 2 is much simpler. And if they user is doing this, there's
+        # likely a lot of things to remove.
+
+        self.beginResetModel()
+        #
+        # for m in self.mod_entries:
+        #     try:
+        #         if self.errors[m.directory] == SyncError.NOTFOUND:
+
+
 
 
     ##===============================================
@@ -813,23 +683,32 @@ class ModTable_TreeModel(QAbstractItemModel):
     ##===============================================
     ## Adding and Removing Rows/Columns (may need later)
     ##===============================================
-    #
-    # def removeRows(self, row, count, parent=QModelIndex()):
-    #     """
-    #
-    #     :param int row:
-    #     :param int count:
-    #     :param QModelIndex parent:
-    #     :return:
-    #     """
-    #
-    #     self.beginRemoveRows(parent, row, row + count - 1)
-    #
-    #     self.removed = self.mod_entries[row:row+count]
-    #     self.mod_entries[row:row+count] = []
-    #
-    #     self.endRemoveRows()
-    #     return True
+
+    def removeRows(self, row, count, parent=QModelIndex(), *args, **kwargs):
+        """
+        Remove mod[s] (row[s]) from the model. Undoable action
+
+        :param int row:
+        :param int count:
+        :param QModelIndex parent:
+        :return:
+        """
+
+        end = row+count-1
+
+        self._push_command(
+            RemoveRowsCommand(
+                self, row, end,
+                pre_redo_callback  = partial(self.beginRemoveRows,
+                                             parent, row, end),
+                post_redo_callback = self.endRemoveRows,
+                pre_undo_callback  = partial(self.beginInsertRows,
+                                             parent, row, end),
+                post_undo_callback = self.endInsertRows
+            )
+        )
+
+        return True
     #
     #
     # def insertRows(self, row, count, parent = QModelIndex()):

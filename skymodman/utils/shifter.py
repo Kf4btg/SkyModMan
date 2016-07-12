@@ -11,9 +11,10 @@ class shifter:
         """
 
         :param sequence:
-        :param idx_block_start:
-        :param idx_block_end:
-        :param idx_dest:
+        :param idx_block_start: start of shifted block
+        :param idx_block_end: end of shifted block
+        :param idx_dest: destination index; where the starting item
+            should end up after the shift
         """
 
         self.list = sequence
@@ -43,7 +44,8 @@ class shifter:
             dest_child = idx_dest + self._count
             # we want to make sure we don't try to move past the end;
             # if we would, change the slice end to the max row number,
-            # but save the amount we would have gone over for later reference
+            # but save the amount we would have gone over for
+            # later reference
             end_offset = max(0, dest_child - len(sequence))
             if end_offset > 0:
                 dest_child -= end_offset
@@ -54,6 +56,11 @@ class shifter:
         # the variables that start with '_r' are the "reverse" version
         # of the variable; i.e. the value when shifting in the opposite
         # direction of that defined by the step
+
+        # here's where we use that offset we saved;
+        # have to subtract it from both start and end when performing
+        # the reverse operation to make sure we're referencing the
+        # right block of rows when calling beginMoveRows
 
         # first index of the block
         self._bstart = idx_block_start
@@ -91,9 +98,18 @@ class shifter:
             ("undo" the shift, assuming it was has already been
             performed once in the forward direction)
         """
+
+        # copy the slice into a deque
         deck = deque(self.list[self._slice_start:self._slice_end])
 
+        # then just rotate the deck in the opposite direction and voila!
+        # its like we shifted everything.
         deck.rotate(self._count * (-self._step if reverse else self._step))
 
+        # pop the items back in to the original sequence in their
+        # new locations
         for i in range(self._slice_start, self._slice_end):
             self.list[i] = deck.popleft()
+
+            # the ordinal-updating will be handled elsewhere, now
+            # self.list[i].ordinal = i + 1
