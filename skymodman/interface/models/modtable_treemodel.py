@@ -73,13 +73,11 @@ class QModEntry(ModEntry):
     # from the python docs: [Set] __slots__ to an empty tuple. This
     # helps keep memory requirements low by preventing the creation of
     # instance dictionaries.
-    __slots__=("errors", )
+    __slots__=()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # Errors is a bitwise-combination of MOD_ERROR types
-        self.errors = ModError.NONE
 
     @property
     def checkState(self):
@@ -120,11 +118,11 @@ class ModTable_TreeModel(QAbstractItemModel):
         self.mod_entries = [] #type: list[QModEntry]
 
         # noinspection PyUnresolvedReferences
-        self.errors = {}  # type: dict[str, int]
+        self.errors = {}  # type: # dict[str, int]
                           #  of {mod_directory_name: err_type}
         # keep a reference to the keys() dictview (which will
         # dynamically update itself)
-        self.missing_mods = self.errors.keys()
+        # self.missing_mods = self.errors.keys()
 
         self.vheader_field = COL_ORDER
 
@@ -180,7 +178,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         :param QModEntry mod_entry:
         :return:
         """
-        return mod_entry.directory in self.missing_mods
+        return mod_entry.error == ModError.DIR_NOT_FOUND
 
     def mark_modified(self, iterable):
         """
@@ -251,60 +249,51 @@ class ModTable_TreeModel(QAbstractItemModel):
     def data(self, index, role=Qt_DisplayRole):
         col = index.column()
 
-        # handle errors first
-        if col == COL_ERRORS:
-            if self.mod_entries[index.row()].errors:
-                # FIXME EEEEEEEEEEEEEEEEEEEEEEEEEEE
-                pass
-            try:
-                err = self.errors[self.mod_entries[index.row()].directory]
-                for case, choices in [(lambda r: role == r,
-                                       lambda d: d[err])]:
-
-                    if case(Qt_DecorationRole): return QtGui.QIcon.fromTheme(
-                            choices({SyncError.NOTFOUND:
-                                         'dialog-error',
-                                     SyncError.NOTLISTED:
-                                         'dialog-warning'}))
-
-                    if case(Qt_ToolTipRole): return choices(
-                            {SyncError.NOTFOUND:
-                                 "Mod data not found.",
-                             SyncError.NOTLISTED:
-                                 "This mod was found in the mods "
-                                 "directory but has not previously "
-                                 "been seen my this profile. Be sure "
-                                 "that it is either set up correctly "
-                                 "or disabled before running any tools."
-                             })
-            except KeyError:
-                # no errors for this mod
-                return
-
-        elif col == COL_ENABLED:
-            if role == Qt_CheckStateRole:
-                return self.mod_entries[index.row()].checkState
-
-        # just display the row number here;
+        # just display the row number in the "order" column.
         # this allows us to manipulate the ordinal number a bit more
         # freely behind the scenes
-        elif col == COL_ORDER:
-            if role == Qt_DisplayRole:
-                return index.row() + 1
+        if col == COL_ORDER:
+            return index.row() + 1 if role == Qt_DisplayRole else None
 
-        else:
+        mod = self.mod_entries[index.row()]
+
+        # handle errors first
+        if col == COL_ERRORS:
+            if not mod.error: return
+
+            if mod.error & ModError.DIR_NOT_FOUND:
+                return (QtGui.QIcon.fromTheme('dialog-error')
+                            if role == Qt_DecorationRole
+                        else "Mod data not found."
+                            if role == Qt_ToolTipRole
+                        else None)
+
+            if mod.error & ModError.MOD_NOT_LISTED:
+                return (QtGui.QIcon.fromTheme('dialog-warning')
+                            if role == Qt_DecorationRole
+                        else "This mod was found in the mods "
+                             "directory but has not previously "
+                             "been seen my this profile. Be sure "
+                             "that it is either set up correctly "
+                             "or disabled before running any tools."
+                            if role == Qt_ToolTipRole
+                        else None)
+
+        elif col == COL_ENABLED:
+            return mod.checkState if role == Qt_CheckStateRole else None
+        # else:
             # if col == COL_ORDER and role == Qt_DisplayRole:
             #     m = self.mod_entries[index.row()]
             #     print("col_order,", m.name, ":", getattr(m, col2field[col]))
             # for every other column, return the stored value as the
             # display role
-            if role==Qt_DisplayRole:
-                return getattr(self.mod_entries[index.row()], col2field[col])
-            if col == COL_NAME:
-                if role == Qt_EditRole:
-                    return self.mod_entries[index.row()].name
-                if role == Qt_ToolTipRole:
-                    return self.mod_entries[index.row()].directory
+        elif role == Qt_DisplayRole:
+            return getattr(mod, col2field[col])
+        elif col == COL_NAME:
+            if role == Qt_EditRole:
+                return mod.name
+            if role == Qt_ToolTipRole:
+                return mod.directory
 
     def headerData(self, section, orientation, role=Qt.DisplayRole):
         """
@@ -314,7 +303,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         :param role:
         :return: column header for the specified section (column) number.
         """
-        if role == Qt.DisplayRole:
+        if role == Qt_DisplayRole:
 
             if orientation == Qt.Horizontal:
                 return col2Header[section]
@@ -558,7 +547,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         self.endResetModel()
         self.tablehaschanges.emit(False)
 
-    def checkForModLoadErrors(self):
+    def checkForModLoadErrors(self, query_db = False):
         """
         query the manager for any errors that were encountered while
         loading the modlist for the current profile. The two error
@@ -583,24 +572,60 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
         # self.errors = {}  # type: dict[str, int]
         # reset
-        self.errors.clear()
-        for err_mod in Manager.get_errors(SyncError.NOTFOUND): # type: str
-            self.errors[err_mod] = SyncError.NOTFOUND
 
-        for err_mod in Manager.get_errors(SyncError.NOTLISTED): # type: str
-            self.errors[err_mod] = SyncError.NOTLISTED
+        """
+        Get a mapping of all mods (by directory name) to the value of
+        their error-type (ModError.* -- hopefully NONE). Then go through
+        the model's list of modentries and update the error value of
+        each to the value found in the mapping. After this is done,
+        hide or show the Errors column based on whether any of the mods
+        have a non-zero error type
+        """
 
-        # only show error column when they are errors to report
-        if self.errors:
+        show_errcol = False
+
+        if query_db:
+            # if we need to query the database to refresh the errors,
+            # do that here:
+            errors = Manager.get_errors2()
+
+            # update the "error" field of each modentry
+            for m in self.mod_entries:
+                m.error = errors[m.directory]
+                if m.error:
+                    show_errcol = True
+        else:
+            # otherwise, we're just checking for any errors in any mod
+            for m in self.mod_entries:
+                if m.error:
+                    show_errcol = True
+                    break
+
+        if show_errcol:
             self.logger << "show error column"
             self.hideErrorColumn.emit(False)
         else:
             self.logger << "hide error column"
             self.hideErrorColumn.emit(True)
 
+        # self.errors.clear()
+        # for err_mod in Manager.get_errors(SyncError.NOTFOUND): # type: str
+        #     self.errors[err_mod] = SyncError.NOTFOUND
+        #
+        # for err_mod in Manager.get_errors(SyncError.NOTLISTED): # type: str
+        #     self.errors[err_mod] = SyncError.NOTLISTED
+        #
+        # # only show error column when they are errors to report
+        # if self.errors:
+        #     self.logger << "show error column"
+        #     self.hideErrorColumn.emit(False)
+        # else:
+        #     self.logger << "hide error column"
+        #     self.hideErrorColumn.emit(True)
+
     def reloadErrorsOnly(self):
         self.beginResetModel()
-        self.checkForModLoadErrors()
+        self.checkForModLoadErrors(True)
         self.endResetModel()
 
     ##===============================================
@@ -632,7 +657,27 @@ class ModTable_TreeModel(QAbstractItemModel):
         # 2 is much simpler. And if they user is doing this, there's
         # likely a lot of things to remove.
 
+        remaining = []
+        removed = []
         self.beginResetModel()
+        for m in self.mod_entries:
+            if self.mod_missing(m):
+                removed.append(m)
+            else:
+                remaining.append(m)
+
+        # re-assign the backing store to be just those mods that
+        # had no errors
+        self.mod_entries = remaining
+
+        self.endResetModel()
+
+        ## TODO: make this undoable. Maybe. If not, update the db with the new mod ordinals
+
+
+
+
+
         #
         # for m in self.mod_entries:
         #     try:

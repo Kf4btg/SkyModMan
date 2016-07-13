@@ -240,6 +240,18 @@ def get_errors(error_type):
     yield from (r['mod'] for r in
                 _dataman.execute_(q, (error_type.value,)))
 
+def get_errors2():
+    """
+
+    :rtype: dict[str, int]
+    :return: a dictionary of mod-directory:error-type for every mod in
+        the database
+    """
+
+
+    return {r['directory']:r['error'] for r in
+                _dataman.execute_("SELECT directory, error FROM mods")}
+
 #</editor-fold>
 
 ##=============================================

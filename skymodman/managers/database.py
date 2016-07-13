@@ -7,7 +7,7 @@ import functools
 from itertools import count, repeat
 from collections import defaultdict
 
-from skymodman.constants import db_fields, SyncError
+from skymodman.constants import db_fields, SyncError, ModError
 from skymodman.utils import withlogger, tree
 from skymodman.managers import modmanager as Manager
 
@@ -25,7 +25,8 @@ class DBManager:
             name      TEXT,           --user-editable label for mod
             modid     INTEGER,        --nexus id, or 0 if none
             version   TEXT,           --arbitrary, set by mod author
-            enabled   INTEGER default 1  --effectively a boolean value (0,1)
+            enabled   INTEGER default 1,  --effectively a boolean value (0,1)
+            error     INTEGER default 0 -- Type code for errors encountered during load
         );
         CREATE TABLE moderrors(
             --records any errors encountered when loading the modlist
@@ -58,6 +59,7 @@ class DBManager:
         "version": lambda v: "",
         "enabled": lambda v: 1,
     }
+        # "error": lambda v: ModError.NONE
 
     def __init__(self):
         """
@@ -152,6 +154,15 @@ class DBManager:
 
     resetErrors = functools.partialmethod(resetTable, "moderrors")
 
+    def reset_errors(self):
+        """
+        Reset the "error" column for each mod to ModError.None
+
+        :return: the number of rows affected
+        """
+
+        with self._con:
+            return self._con.execute("UPDATE mods SET error = 0 WHERE error != 0").rowcount
 
 
     ##################
@@ -162,6 +173,7 @@ class DBManager:
         """
         read the saved mod information from a json file and
         populate the in-memory database
+
         :param str|Path json_source: path to modinfo.json file
         """
         global _mcount
@@ -286,8 +298,11 @@ class DBManager:
 
         :param Iterable[tuple] mod_list:
         """
-        query = "INSERT INTO mods(" + ", ".join(db_fields) + ") VALUES ("
-        query += ", ".join("?" * len(db_fields)) + ")"
+
+        # db_fields[:-1] to ignore the error field for now (leave it at
+        # its default of 0)
+        query = "INSERT INTO mods(" + ", ".join(db_fields[:-1]) + ") VALUES ("
+        query += ", ".join("?" * len(db_fields[:-1])) + ")"
         #
         # if doprint:
         #     print(query)
@@ -383,7 +398,7 @@ class DBManager:
         # we don't save the ordinal rank, so we need to get a list (set) of the
         # fields without "ordinal"
         # Using sets here is OK because field order doesn't matter when saving
-        noord_fields = set(db_fields) ^ {"ordinal"}
+        noord_fields = set(db_fields) ^ {"ordinal", "error"}
 
         # select (all fields other than ordinal)...
         query="Select " + ", ".join(noord_fields)
@@ -427,6 +442,17 @@ class DBManager:
         else:
             yield from self._con.execute("select * from mods where enabled = 0")
 
+    def mods_with_error(self, error_type):
+        """
+        Fetches all mods from the db with the given ModError type
+
+        :param error_type:
+        :return:
+        """
+
+        yield from self._con.execute("SELECT * FROM mods WHERE error = ?", (error_type, ))
+
+
     def getModInfo(self, raw_cursor = False) :
         """
         Yields Row objects containing all information about installed mods
@@ -448,8 +474,12 @@ class DBManager:
 
     def getModDataFromModDirectory(self, mods_dir):
         """
-        scan the actual mods-directory and populate the database from there instead of a cached json file.
-        Will need to do this on first run and periodically to make sure cache is in sync.
+        scan the actual mods-directory and populate the database from
+        there instead of a cached json file.
+
+        Will need to do this on first run and periodically to make sure
+        cache is in sync.
+
         :param Path mods_dir:
         """
         # TODO: Perhaps this should be run on every startup? At least to make sure it matches the stored data.
@@ -464,8 +494,9 @@ class DBManager:
             # skip any non-directories
             if not moddir.is_dir(): continue
 
-            # since this is the creation of the mods list, we just derive the ordinal from
-            # order in which the mod-folders are encountered (likely alphabetical)
+            # since this is the creation of the mods list, we just
+            # derive the ordinal from order in which the mod-folders
+            # are encountered (likely alphabetical)
             order = len(mods_list)+1
             dirname = moddir.name
 
@@ -490,65 +521,43 @@ class DBManager:
 
     def loadAllModFiles(self, directory):
         """
-        Here's an experiment to load ALL files from disk when the program starts up...let's see how long it takes
+        Here's an experiment to load ALL files from disk when the
+        program starts up...let's see how long it takes
 
-        Update: about 12 seconds to load info for 223 mods from an ntfs-3g partition on a 7200rpm WD-Black...
-            not the horriblest, but still likely needs to be shunted to another thread.  Especially since that was
-            pretty much just reading file names; no operations such as checking for conflicts was done
+        Update: about 12 seconds to load info for 223 mods from an
+        ntfs-3g partition on a 7200rpm WD-Black...
+        not the horriblest, but still likely needs to be shunted to
+        another thread.  Especially since that was pretty much just
+        reading file names; no operations such as checking for conflicts
+        was done Also, dumping the db to disk (in txt form) made a
+        2.7 MB file.
 
-            Also, dumping the db to disk (in txt form) made a 2.7 MB file.
-
-        Update to update: 2nd time around, didn't even take 2 seconds. I did make some tweaks to the code, but still...I'm guessing the files were still in the system RAM?
+        Update to update: 2nd time around, didn't even take 2 seconds. I
+        did make some tweaks to the code, but still...I'm guessing the
+        files were still in the system RAM?
 
         :return:
         :param Path directory:
         # :param int ordinal: ?? what was i going to use this for?
         """
-        # dname = directory.name
-        # dpath = str(directory)
-        # modfiles=[]
-
-        # relpath = os.path.relpath
-        # join = os.path.join
-        # listdir = os.listdir
 
         # go through each folder indivually
         for modfolder in directory.iterdir():
             if not modfolder.is_dir(): continue
             self.add_files_from_dir(modfolder.name, str(modfolder))
-            # name=modfolder.name
-            # modroot = str(modfolder) # the abs path for this mod's folder
-            #
-            # mfiles = []
-            # for root, dirs, files in os.walk(modroot):
-            #     # this gets the lowercase path to each file, starting at the
-            #     # root of this mod folder. So:
-            #     #   '/path/to/modstorage/CoolMod42/Meshes/WhatEver.NIF'
-            #     # becomes:
-            #     #   'meshes/whatever.nif'
-            #     mfiles.extend(relpath(join(root, f), modroot).lower() for f in files)
-            #
-            # # put the mod's files in the db, with the mod name as the first
-            # # field (e.g. 'CoolMod42'), and the filepath as the second (e.g.
-            # # 'meshes/whatever.nif')
-            # if mfiles:
-            #     self._con.executemany(
-            #         "INSERT into modfiles values (?, ?)",
-            #         ((name, p) for p in mfiles))
-
-
-            # try: mfiles.remove('meta.ini') #don't care about these
-            # except ValueError: pass
 
         # self.LOGGER << "dumping db contents to disk"
         # with open('res/test2.dump.sql', 'w') as f:
         #     for l in self._con.iterdump():
         #         f.write(l+'\n')
 
-
-    def add_files_from_dir(self, mod_name, mod_root, *, relpath = os.path.relpath, join = os.path.join):
+    # noinspection PyIncorrectDocstring
+    def add_files_from_dir(self, mod_name, mod_root, *,
+                           relpath = os.path.relpath,
+                           join = os.path.join):
         """
         Given a directory `mod_root` containing files for a mod named `mod_name`, add those files to the modfiles table.
+        :param mod_name:
         :param str mod_root:
         :return:
         """
@@ -570,7 +579,9 @@ class DBManager:
         if mfiles:
             self._con.executemany(
                 "INSERT into modfiles values (?, ?)", zip(repeat(mod_name), mfiles))
-                # ((mod_name, p) for p in mfiles))
+
+        # try: mfiles.remove('meta.ini') #don't care about these
+        # except ValueError: pass
 
     def detectFileConflicts(self):
         """
@@ -631,23 +642,27 @@ class DBManager:
         """generates a tuple representing a mod-entry by supplementing a possibly-incomplete mapping of keywords (`kwargs`) with default values for any missing fields"""
         row = []
 
-        for f in db_fields:
-            row.append(kwargs.get(f,
-                                self.__defaults.get(f, lambda v: "")(kwargs)
+        for field in db_fields[:-1]:
+            row.append(kwargs.get(field, self.__defaults
+                                  .get(field, lambda v: "")(kwargs)
                                 )
                      )
         return tuple(row)
 
     def validateModsList(self, installed_mods):
         """
-        Compare the database's list of mods against a list of the folders in the installed-mods directory.
-        Handle discrepancies by raising an Exception object containing two separate lists:
+        Compare the database's list of mods against a list of the
+        folders in the installed-mods directory. Handle discrepancies by
+        raising an Exception object containing two separate lists:
 
-            * Mods Not Listed: for mod directories found on disk but not previously listed in the user's list of installed mods
-            * Mods Not Found: for mods listed in the list of installed mods whose installation folders were not found on disk.
+            * Mods Not Listed: for mod directories found on disk but not
+              previously listed in the user's list of installed mods
+            * Mods Not Found: for mods listed in the list of installed
+              mods whose installation folders were not found on disk.
 
         :param collections.abc.MutableSequence[str] installed_mods:
-        :return:
+        :return: True if no errors and table unchanged. False if errors
+            encountered and/or removed from table
         """
         # I wish there were a...lighter way to do this, but I
         # believe only directly comparing dirnames will allow
@@ -655,8 +670,12 @@ class DBManager:
         # problems with the mod installation
 
         # first, reset the errors table
-        num_removed = self.resetTable("moderrors")
-        self.logger.debug("Resetting mod errors table: {} entries removed".format(num_removed))
+        # num_removed = self.resetTable("moderrors")
+
+        num_removed = self.reset_errors()
+
+        # self.logger.debug("Resetting mod errors table: {} entries removed".format(num_removed))
+        self.logger.debug("Resetting mod errors: {} entries affected".format(num_removed))
 
         dblist = [t["directory"] for t in self._con.execute("Select directory from mods")]
         not_found = []
@@ -682,20 +701,55 @@ class DBManager:
             not_listed = installed_mods
 
 
-        # i think inserting into the database is faster when done in large chunks,
-        # so we accumulated the errors above and will insert them all at once
+        # i think inserting into the database is faster when done in
+        # large chunks, so we accumulated the errors above and will
+        # insert them all at once
         if not_listed:
             with self._con:
-                self._con.executemany("INSERT INTO moderrors(mod, errortype) VALUES (?, ?)",
-                                      map(lambda v: (v, SyncError.NOTLISTED.value), not_listed)
-                                      )
+                ## for each mod-directory name in not_listed, update
+                ## the 'error' field for that mod's db-entry to be
+                ## ModError.MOD_NOT_LISTED
+                query = "UPDATE mods SET error = {} " \
+                        "WHERE directory IN (".format(
+                    # use int() for a bit of added security
+                    int(ModError.MOD_NOT_LISTED))
+
+                # get the appropriate number of ?
+                query += ", ".join("?" * len(not_listed)) + ")"
+
+                # make it so.
+                self._con.execute(query, not_listed)
+
+                # self._con.executemany(
+                #     "INSERT INTO moderrors(mod, errortype) VALUES (?, ?)",
+                #     map(lambda v: (v, ModError.MOD_NOT_LISTED),
+                #         not_listed))
         if not_found:
             with self._con:
-                self._con.executemany("INSERT INTO moderrors(mod, errortype) VALUES (?, ?)",
-                                     map(lambda v: (v, SyncError.NOTFOUND.value), not_found))
+                ## for each mod-directory name in not_found, update
+                ## the 'error' field for that mod's db-entry to be
+                ## ModError.DIR_NOT_FOUND
+                query = "UPDATE mods SET error = {} " \
+                        "WHERE directory IN (".format(
+                    # use int() for a bit of added security
+                    int(ModError.DIR_NOT_FOUND))
+
+                # get the appropriate number of ?
+                query += ", ".join("?" * len(not_found)) + ")"
+
+                # make it so.
+                self._con.execute(query, not_found)
+
+
+
+                # self._con.executemany(
+                #     "INSERT INTO moderrors(mod, errortype) VALUES (?, ?)",
+                #     map(lambda v: (v, ModError.DIR_NOT_FOUND),
+                #         not_found))
 
         # return true only if all 3 are empty/0;
-        # we return false on num_removed so that the GUI will still update its contents
+        # we return false on num_removed so that the GUI will
+        # still update its contents
         return not (not_listed or not_found or num_removed)
 
     @staticmethod

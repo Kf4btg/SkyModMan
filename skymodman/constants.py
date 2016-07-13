@@ -90,7 +90,7 @@ class qFilters(Enum):
     mod_list, file_viewer, mod_table = range(3)
 
 class SyncError(Enum):
-    NONE, NOTFOUND, NOTLISTED = range(2)
+    NONE, NOTFOUND, NOTLISTED = range(3)
 
 class ModError:
     NONE = 0
@@ -253,12 +253,12 @@ class OverwriteMode(Enum):
 FALLBACK_PROFILE = "default"
 
 # defines the names and order of fields in the database
-db_fields = ["ordinal", "directory", "name", "modid", "version", "enabled"]
+db_fields = ["ordinal", "directory", "name", "modid", "version", "enabled", "error"]
 
-# a tuple of the db fields without the ordinal field;
-# simply for convenience. As it constructed from a set, it
+# a tuple of the db fields without the ordinal or error field;
+# simply for convenience. As it is constructed from a set, it
 # Should only be used where the order of the fields doesn't matter
-noordinal_dbfields = tuple(set(db_fields) ^ {"ordinal"})
+noordinal_dbfields = tuple(set(db_fields) ^ {"ordinal", "error"})
 
 ## After about two months of working on this, this was my first time diving into the ModOrganizer code to search for the answer to a question I couldn't otherwise figure out. Specifically: "What constitutes 'proper' mod structure?" As I expected, the answer was pretty specific.
 
