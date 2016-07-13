@@ -1,8 +1,8 @@
 from PyQt5 import QtWidgets as qtW
 
-from PyQt5.QtCore import Qt, pyqtSignal, QItemSelectionModel as qISM
+from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot, QItemSelectionModel as qISM
 
-from skymodman.constants import Column
+from skymodman.constants import Column, ModError
 from skymodman.utils import withlogger
 
 from skymodman.interface.models import ModTable_TreeModel
@@ -24,6 +24,9 @@ class ModTable_TreeView(qtW.QTreeView):
 
     canMoveItems = pyqtSignal(bool, bool)
 
+    # TODO: this could likely be more generic; it's meant to inform the main window to reanalyze which actions are active (in particular, the clear_missing_mods action)
+    errorsChanged = pyqtSignal(int)
+
     def __init__(self, parent, *args, **kwargs):
         # noinspection PyArgumentList
         super().__init__(parent, *args, **kwargs)
@@ -33,6 +36,10 @@ class ModTable_TreeView(qtW.QTreeView):
         self.handle_move_signals = True
         # self.LOGGER << "Init ModTable_TreeView"
 
+        # a bitwise-OR combination of the types of errors currently
+        # found in the table
+        self._err_types = ModError.NONE
+
         # create an undo stack for the mods tab
         self._undo_stack = qtW.QUndoStack()
 
@@ -40,10 +47,30 @@ class ModTable_TreeView(qtW.QTreeView):
     def undo_stack(self):
         return self._undo_stack
 
-    def _hideErrorColumn(self, hide):
-        self.setColumnHidden(Column.ERRORS, hide)
-        if not hide:
+    @property
+    def errors_present(self):
+        return self._err_types
+
+    # def _hideErrorColumn(self, hide):
+    @pyqtSlot(int)
+    def _hideErrorColumn(self, err_types):
+        # self.setColumnHidden(Column.ERRORS, hide)
+        # if not hide:
+        #     self.resizeColumnToContents(Column.ERRORS)
+
+        old_err_types = self._err_types
+
+        if err_types:
+            self.setColumnHidden(Column.ERRORS, False)
             self.resizeColumnToContents(Column.ERRORS)
+        else:
+            self.setColumnHidden(Column.ERRORS, True)
+
+        self._err_types = err_types
+
+        if old_err_types != err_types:
+            self.errorsChanged.emit(err_types)
+
 
     def setModel(self, model):
         super().setModel(model)
@@ -53,7 +80,9 @@ class ModTable_TreeView(qtW.QTreeView):
         # called from model's shiftrows() method
         self._model.notifyViewRowsMoved.connect(self.selectionChanged)
         # only show error col if there are errors
-        self._model.hideErrorColumn.connect(self._hideErrorColumn)
+        # self._model.hideErrorColumn.connect(self._hideErrorColumn)
+
+        self._model.errorsAnalyzed.connect(self._hideErrorColumn)
 
         ## some final UI adjustments ##
 

@@ -615,6 +615,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.movement_toolbar.addSeparator()
         self.movement_toolbar.addAction(self.action_clear_missing)
 
+        self.mod_table.errorsChanged.connect(lambda e: self.action_clear_missing.setEnabled(bool(e & constants.ModError.DIR_NOT_FOUND)))
+
 
     def _setup_button_connections(self):
         """ Make the buttons do stuff
@@ -1102,6 +1104,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
             # block signals from the model so we don't
             # overwhelm the user's processor with gatling-gun commands
+            ## FIXME: unsurprisingly, this causes some problems: for example, if the Errors column was hidden by an operation, then, while a normal undo would show it again, this reset op will not. There are likely other similar scenarios that can happen, too.
             with ui_utils.blocked_signals(m):
                 while (self.undoManager.canUndo()
                        and not self.undoManager.isClean()):
@@ -1321,7 +1324,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             s["mmg"] = s["atm"] = s["aum"] = self.mod_table.selectionModel().hasSelection()
             s["asc"] = s["arc"] = not self.undoManager.isClean()
             s["afn"] = s["afp"] = bool(self._search_text)
-            s["acm"] = not self.mod_table.isColumnHidden(constants.Column.ERRORS)
+            s["acm"] = bool(self.mod_table.errors_present & constants.ModError.DIR_NOT_FOUND)
         elif self.current_tab == TAB.FILETREE:
             s["asc"] = s["arc"] = self.models[M.file_viewer].has_unsaved_changes
 
@@ -1637,7 +1640,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         Remove all mod entries that were not found on disk from the
         current profile's mod list
         """
-        ## FIXME: only enable the action for this when a mod actually has the 'missing' error-type; this will likely require a signal of some sort. Also, make this undoable. Also, make sure the mod-count on the file tree mods-list is updated correctly to show the correct new value for the number of known mods
+        ## FIXME: make this undoable. Also, make sure the mod-count on the file tree mods-list is updated correctly to show the correct new value for the number of known mods
         self.LOGGER << "Clear missing mods"
 
         self.models[M.mod_table].clear_missing()

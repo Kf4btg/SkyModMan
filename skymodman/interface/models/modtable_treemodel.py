@@ -6,7 +6,11 @@ from skymodman.managers import modmanager as Manager
 from skymodman.constants import (Column as COL, ModError)
 from skymodman.utils import withlogger
 from skymodman.interface.models.undo_commands import (
-    ChangeModAttributeCommand, ShiftRowsCommand, RemoveRowsCommand)
+    ChangeModAttributeCommand,
+    ShiftRowsCommand,
+    RemoveRowsCommand,
+    ClearMissingModsCommand
+)
 
 from functools import total_ordering, partial
 from collections import deque
@@ -107,6 +111,8 @@ class ModTable_TreeModel(QAbstractItemModel):
     notifyViewRowsMoved = pyqtSignal()
 
     hideErrorColumn = pyqtSignal(bool)
+
+    errorsAnalyzed = pyqtSignal(int)
 
     def __init__(self, parent, **kwargs):
         """
@@ -578,7 +584,8 @@ class ModTable_TreeModel(QAbstractItemModel):
         # self.errors = {}  # type: dict[str, int]
         # reset
 
-        show_errcol = False
+        # show_errcol = False
+        err_types = ModError.NONE
 
         if query_db:
             # if we need to query the database to refresh the errors,
@@ -589,20 +596,24 @@ class ModTable_TreeModel(QAbstractItemModel):
             for m in self.mod_entries:
                 m.error = errors[m.directory]
                 if m.error:
-                    show_errcol = True
+                    err_types |= m.error
+                    # show_errcol = True
         else:
             # otherwise, we're just checking for any errors in any mod
             for m in self.mod_entries:
                 if m.error:
-                    show_errcol = True
-                    break
+                    err_types |= m.error
+                    # show_errcol = True
+                    # break
 
-        if show_errcol:
-            self.logger << "show error column"
-            self.hideErrorColumn.emit(False)
-        else:
-            self.logger << "hide error column"
-            self.hideErrorColumn.emit(True)
+        self.errorsAnalyzed.emit(err_types)
+
+        # if show_errcol:
+        #     self.logger << "show error column"
+        #     self.hideErrorColumn.emit(False)
+        # else:
+        #     self.logger << "hide error column"
+        #     self.hideErrorColumn.emit(True)
 
     def reloadErrorsOnly(self):
         self.beginResetModel()
@@ -638,20 +649,35 @@ class ModTable_TreeModel(QAbstractItemModel):
         # 2 is much simpler. And if they user is doing this, there's
         # likely a lot of things to remove.
 
-        remaining = []
-        removed = []
-        self.beginResetModel()
-        for m in self.mod_entries:
-            if self.mod_missing(m):
-                removed.append(m)
-            else:
-                remaining.append(m)
+        def post_op():
+            self.checkForModLoadErrors()
+            self.endResetModel()
 
-        # re-assign the backing store to be just those mods that
-        # had no errors
-        self.mod_entries = remaining
+        self._push_command(
+            ClearMissingModsCommand(
+                self,
+                pre_redo_callback=self.beginResetModel,
+                pre_undo_callback=self.beginResetModel,
+                post_redo_callback=post_op,
+                post_undo_callback=post_op,
+            )
+        )
 
-        self.endResetModel()
+
+        # remaining = []
+        # removed = []
+        # self.beginResetModel()
+        # for m in self.mod_entries:
+        #     if self.mod_missing(m):
+        #         removed.append(m)
+        #     else:
+        #         remaining.append(m)
+        #
+        # # re-assign the backing store to be just those mods that
+        # # had no errors
+        # self.mod_entries = remaining
+        #
+        # self.endResetModel()
 
         ## TODO: make this undoable. Maybe. If not, update the db with the new mod ordinals
 
