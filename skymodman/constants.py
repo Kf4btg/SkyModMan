@@ -92,10 +92,11 @@ class qFilters(Enum):
 class SyncError(Enum):
     NONE, NOTFOUND, NOTLISTED = range(2)
 
-class ModError(BitEnum):
+class ModError:
     NONE = 0
     DIR_NOT_FOUND = 1
-    NOTLISTED = 2
+    MOD_NOT_LISTED = 2
+    MISSING_FILES = 4
 
 
 class EnvVars(str, Enum):

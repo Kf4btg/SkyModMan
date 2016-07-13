@@ -77,7 +77,9 @@ class QModEntry(ModEntry):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.errors = SyncError.NONE
+
+        # Errors is a bitwise-combination of MOD_ERROR types
+        self.errors = ModError.NONE
 
     @property
     def checkState(self):
@@ -251,6 +253,9 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         # handle errors first
         if col == COL_ERRORS:
+            if self.mod_entries[index.row()].errors:
+                # FIXME EEEEEEEEEEEEEEEEEEEEEEEEEEE
+                pass
             try:
                 err = self.errors[self.mod_entries[index.row()].directory]
                 for case, choices in [(lambda r: role == r,
