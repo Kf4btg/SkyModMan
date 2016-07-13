@@ -3,7 +3,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeD
 
 from skymodman import ModEntry
 from skymodman.managers import modmanager as Manager
-from skymodman.constants import (Column as COL, SyncError, ModError)
+from skymodman.constants import (Column as COL, ModError)
 from skymodman.utils import withlogger
 from skymodman.interface.models.undo_commands import (
     ChangeModAttributeCommand, ShiftRowsCommand, RemoveRowsCommand)
@@ -116,13 +116,6 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         # noinspection PyUnresolvedReferences
         self.mod_entries = [] #type: list[QModEntry]
-
-        # noinspection PyUnresolvedReferences
-        self.errors = {}  # type: # dict[str, int]
-                          #  of {mod_directory_name: err_type}
-        # keep a reference to the keys() dictview (which will
-        # dynamically update itself)
-        # self.missing_mods = self.errors.keys()
 
         self.vheader_field = COL_ORDER
 
@@ -549,45 +542,48 @@ class ModTable_TreeModel(QAbstractItemModel):
 
     def checkForModLoadErrors(self, query_db = False):
         """
-        query the manager for any errors that were encountered while
-        loading the modlist for the current profile. The two error
-        types are:
+        Check which mods, if any, encountered errors during load and
+        show or hide the Errors column appropriately.
 
-            * SyncError.NOTFOUND: Mod listed in the profile's saved
-              list is not present on disk
-            * SyncError.NOTLISTED: Mod found on disk is not in the
-              profile's modlist
-
-        The model's ``errors`` property (a str=>int dictionary) is
-        populated with the results of this query; each key in the dict
-        is the name of a mod (directory), and the value is the int-enum
-        value of the type of error it encountered. If a mod is not
-        present in this collection, then no error was encountered.
-
-        Ideally, ``errors`` will be empty after this method is called.
-        In this case, the model will notify the view to hide the Errors
-        column of the table. If ``errors`` is not empty, then the Errors
-        column will be shown and an icon indicating the type of error
-        will be appear there in the row(s) of the problematic mod(s).
-        """
-        # self.errors = {}  # type: dict[str, int]
-        # reset
-
-        """
-        Get a mapping of all mods (by directory name) to the value of
+        If query_db is True, ask the manager to query the database and
+        return a mapping of all mods (by directory name) to the value of
         their error-type (ModError.* -- hopefully NONE). Then go through
         the model's list of modentries and update the error value of
         each to the value found in the mapping. After this is done,
         hide or show the Errors column based on whether any of the mods
         have a non-zero error type
         """
+        # """
+        # query the manager for any errors that were encountered while
+        # loading the modlist for the current profile. The two error
+        # types are:
+        #
+        #     * SyncError.NOTFOUND: Mod listed in the profile's saved
+        #       list is not present on disk
+        #     * SyncError.NOTLISTED: Mod found on disk is not in the
+        #       profile's modlist
+        #
+        # The model's ``errors`` property (a str=>int dictionary) is
+        # populated with the results of this query; each key in the dict
+        # is the name of a mod (directory), and the value is the int-enum
+        # value of the type of error it encountered. If a mod is not
+        # present in this collection, then no error was encountered.
+        #
+        # Ideally, ``errors`` will be empty after this method is called.
+        # In this case, the model will notify the view to hide the Errors
+        # column of the table. If ``errors`` is not empty, then the Errors
+        # column will be shown and an icon indicating the type of error
+        # will be appear there in the row(s) of the problematic mod(s).
+        # """
+        # self.errors = {}  # type: dict[str, int]
+        # reset
 
         show_errcol = False
 
         if query_db:
             # if we need to query the database to refresh the errors,
             # do that here:
-            errors = Manager.get_errors2()
+            errors = Manager.get_errors()
 
             # update the "error" field of each modentry
             for m in self.mod_entries:
@@ -607,21 +603,6 @@ class ModTable_TreeModel(QAbstractItemModel):
         else:
             self.logger << "hide error column"
             self.hideErrorColumn.emit(True)
-
-        # self.errors.clear()
-        # for err_mod in Manager.get_errors(SyncError.NOTFOUND): # type: str
-        #     self.errors[err_mod] = SyncError.NOTFOUND
-        #
-        # for err_mod in Manager.get_errors(SyncError.NOTLISTED): # type: str
-        #     self.errors[err_mod] = SyncError.NOTLISTED
-        #
-        # # only show error column when they are errors to report
-        # if self.errors:
-        #     self.logger << "show error column"
-        #     self.hideErrorColumn.emit(False)
-        # else:
-        #     self.logger << "hide error column"
-        #     self.hideErrorColumn.emit(True)
 
     def reloadErrorsOnly(self):
         self.beginResetModel()
@@ -673,17 +654,6 @@ class ModTable_TreeModel(QAbstractItemModel):
         self.endResetModel()
 
         ## TODO: make this undoable. Maybe. If not, update the db with the new mod ordinals
-
-
-
-
-
-        #
-        # for m in self.mod_entries:
-        #     try:
-        #         if self.errors[m.directory] == SyncError.NOTFOUND:
-
-
 
 
     ##===============================================

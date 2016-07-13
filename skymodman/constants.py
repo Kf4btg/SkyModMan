@@ -89,9 +89,6 @@ class qModels(Enum):
 class qFilters(Enum):
     mod_list, file_viewer, mod_table = range(3)
 
-class SyncError(Enum):
-    NONE, NOTFOUND, NOTLISTED = range(3)
-
 class ModError:
     NONE = 0
     DIR_NOT_FOUND = 1

@@ -258,6 +258,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.installed_mods_layout.addWidget(movement_toolbar, 1, self.installed_mods_layout.columnCount(), -1, 1)
         movement_toolbar.addActions(macts)
 
+        self.movement_toolbar = movement_toolbar
+
 
 
         ## This is for testing the progress indicator::
@@ -608,6 +610,10 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             objectName="action_clear_missing",
             icon=QtGui.QIcon().fromTheme("edit-clear"),
             triggered=self.remove_missing)
+
+        # add to movement toolbar
+        self.movement_toolbar.addSeparator()
+        self.movement_toolbar.addAction(self.action_clear_missing)
 
 
     def _setup_button_connections(self):
@@ -1300,6 +1306,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             "afn": self.action_find_next,       # 4
             "afp": self.action_find_previous,   # 5
             "aum": self.action_uninstall_mod,   # 6
+            "acm": self.action_clear_missing,
         }
 
         # this is a selector that, depending on how it is
@@ -1314,6 +1321,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             s["mmg"] = s["atm"] = s["aum"] = self.mod_table.selectionModel().hasSelection()
             s["asc"] = s["arc"] = not self.undoManager.isClean()
             s["afn"] = s["afp"] = bool(self._search_text)
+            s["acm"] = not self.mod_table.isColumnHidden(constants.Column.ERRORS)
         elif self.current_tab == TAB.FILETREE:
             s["asc"] = s["arc"] = self.models[M.file_viewer].has_unsaved_changes
 
@@ -1629,7 +1637,10 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         Remove all mod entries that were not found on disk from the
         current profile's mod list
         """
-        print("remove missing")
+        ## FIXME: only enable the action for this when a mod actually has the 'missing' error-type; this will likely require a signal of some sort. Also, make this undoable. Also, make sure the mod-count on the file tree mods-list is updated correctly to show the correct new value for the number of known mods
+        self.LOGGER << "Clear missing mods"
+
+        self.models[M.mod_table].clear_missing()
 
     #</editor-fold>
 

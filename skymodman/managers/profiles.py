@@ -2,7 +2,7 @@ from pathlib import Path
 from configparser import ConfigParser as confparser
 
 from skymodman import exceptions
-from skymodman.constants import SyncError as SE, FALLBACK_PROFILE, KeyStr
+from skymodman.constants import FALLBACK_PROFILE, KeyStr
 from skymodman.utils import withlogger, diqt, open_for_safe_write
 
 
@@ -80,8 +80,8 @@ class Profile:
 
         # create a container to hold any issues found during
         # validation of this profile's mod list
-        self.syncErrors = {SE.NOTFOUND: [],
-                           SE.NOTLISTED: []}
+        # self.syncErrors = {SE.NOTFOUND: [],
+        #                    SE.NOTLISTED: []}
 
     @property
     def Config(self):
@@ -154,17 +154,17 @@ class Profile:
 
 
 
-    def recordErrors(self, error_type, errors):
-        """
-        Save any disk-sync errors discovered with the profile
-        to be retrieved and handled at the appropriate time.
-        Note that this method overwrites the list of errors
-        for the given type; it does not append to it.
-
-        :param error_type: either constants.SyncError.NOTFOUND or constants.SE.NOTLISTED
-        :param errors: a list of the errors encountered
-        """
-        self.syncErrors[error_type] = errors
+    # def recordErrors(self, error_type, errors):
+    #     """
+    #     Save any disk-sync errors discovered with the profile
+    #     to be retrieved and handled at the appropriate time.
+    #     Note that this method overwrites the list of errors
+    #     for the given type; it does not append to it.
+    #
+    #     :param error_type: either constants.SyncError.NOTFOUND or constants.SE.NOTLISTED
+    #     :param errors: a list of the errors encountered
+    #     """
+    #     self.syncErrors[error_type] = errors
 
     def load_profile_settings(self):
         config = confparser()

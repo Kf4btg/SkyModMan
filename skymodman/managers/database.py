@@ -7,7 +7,7 @@ import functools
 from itertools import count, repeat
 from collections import defaultdict
 
-from skymodman.constants import db_fields, SyncError, ModError
+from skymodman.constants import db_fields, ModError
 from skymodman.utils import withlogger, tree
 from skymodman.managers import modmanager as Manager
 
@@ -28,13 +28,6 @@ class DBManager:
             enabled   INTEGER default 1,  --effectively a boolean value (0,1)
             error     INTEGER default 0 -- Type code for errors encountered during load
         );
-        CREATE TABLE moderrors(
-            --records any errors encountered when loading the modlist
-            mod         TEXT REFERENCES mods(directory) DEFERRABLE INITIALLY DEFERRED,
-            errortype   INT -- should be a number corresponding to the values in constants.SyncError:
-                                -- 0=not-found: mod was in list of installed mods but not found on disk
-                                -- 1=not-listed: mod was found on disk but not in installed list
-        );
         CREATE TABLE hiddenfiles (
             directory TEXT REFERENCES mods(directory) DEFERRABLE INITIALLY DEFERRED,
                                 -- the mod directory under which this file resides
@@ -49,9 +42,8 @@ class DBManager:
 
     # having the foreign key deferrable should prevent the db freaking out when we temporarily delete entries in 'mods' to modify the install order.
 
-    _tablenames = ("modfiles", "hiddenfiles", "moderrors", "mods")
+    _tablenames = ("modfiles", "hiddenfiles", "mods")
     _profile_reset_tables = ("hiddenfiles", "mods") # which tables need to be reset when profile changes
-                                                    # (moderrors is reset every time validation is run)
 
     __defaults = {
         "name": lambda v: v["directory"],
@@ -152,8 +144,6 @@ class DBManager:
             return self._con.execute(q).rowcount
 
 
-    resetErrors = functools.partialmethod(resetTable, "moderrors")
-
     def reset_errors(self):
         """
         Reset the "error" column for each mod to ModError.None
@@ -181,7 +171,7 @@ class DBManager:
         # in which the entries are read from the file
         _mcount = count()
         # but we want to start at 1
-        next(_mcount)
+        # next(_mcount) # no we don't
 
         # self.LOGGER.debug("loading mod db from file")
 
@@ -669,12 +659,10 @@ class DBManager:
         # us to provide useful feedback to the user about
         # problems with the mod installation
 
-        # first, reset the errors table
-        # num_removed = self.resetTable("moderrors")
+        # first, reset the errors column
 
         num_removed = self.reset_errors()
 
-        # self.logger.debug("Resetting mod errors table: {} entries removed".format(num_removed))
         self.logger.debug("Resetting mod errors: {} entries affected".format(num_removed))
 
         dblist = [t["directory"] for t in self._con.execute("Select directory from mods")]
@@ -720,32 +708,17 @@ class DBManager:
                 # make it so.
                 self._con.execute(query, not_listed)
 
-                # self._con.executemany(
-                #     "INSERT INTO moderrors(mod, errortype) VALUES (?, ?)",
-                #     map(lambda v: (v, ModError.MOD_NOT_LISTED),
-                #         not_listed))
         if not_found:
+            ## same as above, but for DIR_NOT_FOUND
+
             with self._con:
-                ## for each mod-directory name in not_found, update
-                ## the 'error' field for that mod's db-entry to be
-                ## ModError.DIR_NOT_FOUND
                 query = "UPDATE mods SET error = {} " \
                         "WHERE directory IN (".format(
-                    # use int() for a bit of added security
                     int(ModError.DIR_NOT_FOUND))
 
-                # get the appropriate number of ?
                 query += ", ".join("?" * len(not_found)) + ")"
 
-                # make it so.
                 self._con.execute(query, not_found)
-
-
-
-                # self._con.executemany(
-                #     "INSERT INTO moderrors(mod, errortype) VALUES (?, ?)",
-                #     map(lambda v: (v, ModError.DIR_NOT_FOUND),
-                #         not_found))
 
         # return true only if all 3 are empty/0;
         # we return false on num_removed so that the GUI will

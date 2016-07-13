@@ -213,41 +213,40 @@ def hidden_files(for_mod=None):
             "Select filepath from hiddenfiles where directory=?",
             (for_mod, )))
 
-def get_errors(error_type):
-    """
-    Yields any recorded errors of the specified type from the active
-    profile. 'Not Found' means that a mod was in the profile's list of
-    installed mods, but could not be found on disk. 'Not Listed' means
-    that a mod was found on disk that was not previously in the list of
-    installed mods.
+# def get_errors(error_type):
+#     """
+#     Yields any recorded errors of the specified type from the active
+#     profile. 'Not Found' means that a mod was in the profile's list of
+#     installed mods, but could not be found on disk. 'Not Listed' means
+#     that a mod was found on disk that was not previously in the list of
+#     installed mods.
+#
+#     :param error_type: constants.SyncError
+#     :yieldtype: str
+#     :yield: names of mods that encountered the specified error_type
+#         during load
+#     """
+#
+#     q = """SELECT mod, ordinal from (
+#         SELECT moderrors.mod as mod,
+#             moderrors.errortype as etype,
+#             mods.ordinal as ordinal
+#         FROM moderrors INNER JOIN mods
+#         ON mod = mods.directory
+#         WHERE etype = ?)
+#         ORDER BY ordinal
+#     """
+#
+#     yield from (r['mod'] for r in
+#                 _dataman.execute_(q, (error_type.value,)))
 
-    :param error_type: constants.SyncError
-    :yieldtype: str
-    :yield: names of mods that encountered the specified error_type
-        during load
-    """
-
-    q = """SELECT mod, ordinal from (
-        SELECT moderrors.mod as mod,
-            moderrors.errortype as etype,
-            mods.ordinal as ordinal
-        FROM moderrors INNER JOIN mods
-        ON mod = mods.directory
-        WHERE etype = ?)
-        ORDER BY ordinal
-    """
-
-    yield from (r['mod'] for r in
-                _dataman.execute_(q, (error_type.value,)))
-
-def get_errors2():
+def get_errors():
     """
 
     :rtype: dict[str, int]
     :return: a dictionary of mod-directory:error-type for every mod in
         the database
     """
-
 
     return {r['directory']:r['error'] for r in
                 _dataman.execute_("SELECT directory, error FROM mods")}
