@@ -4,7 +4,7 @@ import os
 from PyQt5.QtWidgets import QDialog, QFileDialog, QDialogButtonBox
 from PyQt5.QtCore import pyqtSlot, pyqtSignal #QStringListModel, Qt
 
-from skymodman.managers import modmanager as Manager
+from skymodman.managers import modmanager
 from skymodman.interface import app_settings, ui_utils
 from skymodman.interface.dialogs import message, checkbox_message
 from skymodman.interface.designer.uic.preferences_dialog_ui import \
@@ -14,8 +14,10 @@ from skymodman.utils.fsutils import check_path, create_dir
 from skymodman import constants, exceptions
 
 
+
+Manager = modmanager.Manager()
 # ref to the ConfigManager
-Config = Manager.conf
+Config = Manager.Config
 
 ## text and style sheets for indicator labels
 _invalid_path_str = "Path not found"

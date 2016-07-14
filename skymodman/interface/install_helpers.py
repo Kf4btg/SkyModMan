@@ -4,9 +4,11 @@ from tempfile import TemporaryDirectory
 
 import quamash
 
-from skymodman.managers import modmanager as Manager
+from skymodman.managers import modmanager
 from skymodman.interface.dialogs import message
 from skymodman.utils import withlogger
+
+Manager = modmanager.Manager()
 
 @withlogger
 class InstallerUI:

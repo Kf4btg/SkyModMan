@@ -2,7 +2,7 @@ from PyQt5 import QtGui
 from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData
 
 from skymodman import ModEntry
-from skymodman.managers import modmanager as Manager
+from skymodman.managers import modmanager
 from skymodman.constants import (Column as COL, ModError)
 from skymodman.utils import withlogger
 from skymodman.interface.models.undo_commands import (
@@ -15,6 +15,8 @@ from skymodman.interface.models.undo_commands import (
 from functools import total_ordering, partial
 from collections import deque
 import re
+
+Manager = modmanager.Manager()
 
 
 # <editor-fold desc="ModuleConstants">

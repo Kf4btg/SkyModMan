@@ -8,8 +8,10 @@ from pathlib import Path
 
 from skymodman.utils import withlogger #, tree
 from skymodman.utils.fsutils import check_path
-from skymodman.managers import modmanager as Manager
+from skymodman.managers import modmanager
 # from skymodman.utils import humanizer
+
+Manager = modmanager.Manager()
 
 # actually provides a slight (but noticeable) speedup
 Qt_Checked = Qt.Checked

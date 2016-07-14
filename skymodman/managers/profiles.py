@@ -387,19 +387,14 @@ class ProfileManager:
         return new_prof
 
 
-    def delete_profile(self, profile, confirm = False):
+    def delete_profile(self, profile):
         """
         Removes the folder and all config files for the specified profile.
 
         :param profile:
             either a Profile object or the name of an existing profile
-        :param confirm:
-            must pass true for this to work. This option will likely be
-            removed; it's mainly to prevent me from doing stupid things
-            during development
-        """
 
-        assert confirm
+        """
 
         # if the profile name was passed, get its Profile object
         if isinstance(profile, str):

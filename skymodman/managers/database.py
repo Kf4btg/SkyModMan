@@ -153,6 +153,26 @@ class DBManager:
         with self._con:
             return self._con.execute("UPDATE mods SET error = 0 WHERE error != 0").rowcount
 
+    def commit(self):
+        """
+        Commit the current transaction. Logs a warning if there is no
+        active transaction to commit
+        """
+        if not self._con.in_transaction:
+            self.LOGGER.warning("Database not currently in transaction. Committing anyway.")
+
+        self._con.commit()
+
+    def rollback(self):
+        if self._con.in_transaction:
+            self._con.rollback()
+        else:
+            # i'm aware that a rollback without transaction isn't
+            # an error or anything; but if there's nothing to rollback
+            # and rollback() is called, then I likely did something
+            # wrong and I want to know that
+            self.LOGGER.warning("nothing to rollback")
+
 
     ##################
     ## DATA LOADING ##
@@ -638,7 +658,7 @@ class DBManager:
                      )
         return tuple(row)
 
-    def validate_mods_list(self, installed_mods):
+    def validate_mods_list(self, ignored):
         """
         Compare the database's list of mods against a list of the
         folders in the installed-mods directory. Handle discrepancies by
@@ -657,6 +677,9 @@ class DBManager:
         # believe only directly comparing dirnames will allow
         # us to provide useful feedback to the user about
         # problems with the mod installation
+
+        # list of all the installed mods
+        installed_mods = os.listdir(Manager.conf['dir_mods'])
 
         # first, reset the errors column
 

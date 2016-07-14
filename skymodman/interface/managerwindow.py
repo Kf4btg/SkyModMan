@@ -8,8 +8,8 @@ from PyQt5.QtWidgets import QMessageBox
 
 from skymodman import exceptions
 from skymodman import constants
-from skymodman.managers import modmanager as Manager
-from skymodman.interface import models, app_settings, ui_utils
+from skymodman.managers import modmanager
+from skymodman.interface import models, app_settings #, ui_utils
 from skymodman.interface.dialogs import message
 from skymodman.interface.install_helpers import InstallerUI
 from skymodman.utils import withlogger #, icons
@@ -21,6 +21,8 @@ M = constants.qModels
 F = constants.qFilters
 TAB = constants.Tab
 KeyStr = constants.KeyStr
+
+Manager = modmanager.Manager()
 
 ## Interestingly, using the icon font as a font works just fine;
 ## One can do things like:
@@ -866,8 +868,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
             # if no active profile, just load the selected one.
             # if somehow selected the same profile, do nothing
-            if Manager.active_profile() is None or \
-                            new_profile != Manager.active_profile().name:
+            if Manager.profile is None or \
+                            new_profile != Manager.profile.name:
                 # check for unsaved changes to the mod-list
                 reply = self.table_prompt_if_unsaved()
 
@@ -898,7 +900,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                         "Activating profile '{}'".format(
                             new_profile))
 
-                    Manager.set_active_profile(new_profile)
+                    Manager.activate_profile(new_profile)
 
                     self.logger << "Resetting views for new profile"
 
@@ -959,7 +961,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         the user accept the warning, proceed to delete the profile from
         disk and remove its entry from the profile selector.
         """
-        profile = Manager.active_profile()
+        profile = Manager.profile
 
         if message('warning', 'Confirm Delete Profile',
                    'Delete "' + profile.name + '"?',
@@ -1066,7 +1068,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if not text:
             self.filters[F.file_viewer].setFilterWildcard(text)
         else:
-            db = Manager.db._con
+            db = Manager.DB._con
 
             sqlexpr = r'%' + text.replace('?', '_').replace('*',
                                                             r'%') + r'%'
@@ -1444,7 +1446,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             was not shown
         """
         # check for unsaved changes to the mod-list
-        if Manager.active_profile() is not None \
+        if Manager.profile is not None \
                 and not self.mod_table.undo_stack.isClean():
                 # and self.mod_table.model().is_dirty:
             ok = QMessageBox(QMessageBox.Warning, 'Unsaved Changes',
@@ -1486,8 +1488,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def load_profile_by_name(self, name):
         """
-        Have the profile selector show and activate the profile with
-        the given name
+        Programatically update the profile selector to select the
+        profile given by `name`, triggering the ``on_profile_select``
+        slot.
 
         :param name:
         """

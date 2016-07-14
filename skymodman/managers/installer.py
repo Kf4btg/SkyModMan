@@ -11,7 +11,7 @@ from skymodman.utils.fsutils import dir_move_merge
 from skymodman.managers.archive_7z import ArchiveHandler
 from skymodman.installer.fomod import Fomod
 from skymodman.installer import common
-from skymodman.managers import modmanager as Manager
+from skymodman.managers import modmanager
 from skymodman.constants import TopLevelDirs_Bain, TopLevelSuffixes
 
 ## todo: clean this thing up
@@ -33,6 +33,10 @@ class InstallManager:
 
     # noinspection PyArgumentList
     def __init__(self, mod_archive, *args, **kwargs):
+
+        # get this reference here to prevent circular import issues
+        self.Manager = modmanager.Manager()
+
         super().__init__(*args, **kwargs)
         self.archiver = ArchiveHandler()
 
@@ -57,7 +61,7 @@ class InstallManager:
         # for display with the Fomod-installer)
         self.normalized_imgpaths = {}
 
-        self.install_dir = Manager.conf.paths.dir_mods / self.arc_path.stem.lower()
+        self.install_dir = self.Manager.conf.paths.dir_mods / self.arc_path.stem.lower()
         # Used to track state during installation
         self.files_to_install = []
         self.files_installed = deque()
@@ -328,7 +332,7 @@ class InstallManager:
 
     @lru_cache(256)
     def check_file(self, file, state):
-        return Manager.checkFileState(file, state)
+        return self.Manager.checkFileState(file, state)
 
     def check_flag(self, flag, value):
         return flag in self.flags \

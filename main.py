@@ -37,15 +37,22 @@ if __name__ == '__main__':
     if USE_QT_GUI:
         from PyQt5.QtWidgets import QApplication
         # from PyQt5.QtGui import QGuiApplication
-        from skymodman.interface.managerwindow import ModManagerWindow
         import quamash
 
         app = QApplication(sys.argv)
         loop = quamash.QEventLoop(app)
         asyncio.set_event_loop(loop)
 
-        #initialize the main ModManager
-        modmanager.init()
+        # initialize the main ModManager; this causes the Manager()
+        # method to return the same instance everytime it is invoked
+        # for the rest of the program's run
+        mmanager = modmanager.Manager()
+
+        # import this after the manager invokation to ensure that
+        # the manager is already created at the time the managerwindow
+        # module obtains a reference to it.
+        from skymodman.interface.managerwindow import ModManagerWindow
+
 
         w = ModManagerWindow()
         w.show()
@@ -54,7 +61,7 @@ if __name__ == '__main__':
             with loop:
                 loop.run_forever()
         finally:
-            modmanager.db.shutdown()
+            mmanager.DB.shutdown()
             skylog.stop_listener()
     else:
         main()
