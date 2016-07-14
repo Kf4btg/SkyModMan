@@ -31,7 +31,7 @@ def setupLogListener():
     q = Queue()
 
     console_handler = logging.StreamHandler()
-    detailed_formatter = logging.Formatter('[{asctime}.{msecs:03.0f}] line {lineno:4d} in {funcName:40}: {message}', datefmt='%H:%M:%S', style='{')
+    detailed_formatter = logging.Formatter('\033[1;31m{levelname:7}\033[0m[{asctime}.{msecs:03.0f}] line \033[1m{lineno:4d}\033[0m in \033[1;30m{funcName:40}\033[0m: \033[0;37m{message}\033[0m', datefmt='%H:%M:%S', style='{')
     # detailed_formatter = logging.Formatter('%(asctime)s %(name)-15s %(levelname)-8s %(message)s')
     # plain_formatter = logging.Formatter('%(asctime)s %(message)s')
 
