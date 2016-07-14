@@ -27,6 +27,8 @@ def setupLogListener():
     global __logging_queue
     global __listener
 
+    # rename the log levels with COLORFUL versions of themselves
+    # because COLORS.
     logging.addLevelName(50, "\033[1;31mCRITICAL\033[0m")
     logging.addLevelName(40, "\033[0;31mERROR   \033[0m")
     logging.addLevelName(30, "\033[0;33mWARNING \033[0m")

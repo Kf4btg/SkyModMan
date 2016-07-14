@@ -8,7 +8,7 @@ from collections import defaultdict
 
 from skymodman.constants import db_fields, ModError
 from skymodman.utils import withlogger, tree
-from skymodman.managers import modmanager as Manager
+# from skymodman.managers import modmanager as Manager
 
 _mcount = count()
 
@@ -33,9 +33,8 @@ class DBManager:
             filepath      TEXT      -- path to the file that has been hidden
         );
         CREATE TABLE modfiles (
-                    directory TEXT REFERENCES mods(directory) DEFERRABLE INITIALLY DEFERRED,
-                                        -- the mod directory under which this file resides
-                    filepath      TEXT      -- path to the file
+            directory     TEXT REFERENCES mods(directory) DEFERRABLE INITIALLY DEFERRED, -- the mod directory under which this file resides
+            filepath      TEXT      -- path to the file
         );
         """
 
@@ -62,10 +61,7 @@ class DBManager:
         self._con = sqlite3.connect(":memory:")
 
         # create the mods table
-        # NOTE: `ordinal` (i.e. the mod's place in the "install-order") is not
-        # stored on disk with the rest of the mod info; it is
-        # instead inferred from the order in which the mods
-        # are listed in the config file 
+        # NOTE: `ordinal` (i.e. the mod's place in the "install-order") is not stored on disk with the rest of the mod info; it is instead inferred from the order in which the mods are listed in the config file
         # NOTE2: `directory` is the name of the folder in the
         # mods-directory where the files for this mod are saved.
         # `name` is initially equivalent, but can be changed as
@@ -73,11 +69,19 @@ class DBManager:
         self._con.executescript(self._SCHEMA)
         self._con.row_factory = sqlite3.Row
 
-        # These are created from the database, so it seems like it may be best just to store them in this class:
+        # These are created from the database, so it seems like it may
+        # be best just to store them in this class:
         # actuall no that was confusing. there;d store on the manager now
+        # nope not anymore. i don't know what's happening
 
-        # self.conflicts = defaultdict(list) # filepaths to list of mods containing that file
-        # self.mods_with_conflicts = defaultdict(list) # mods to list of contained files that are in conflict with other mods
+        ## {filepath:[list of mods containing that file]}
+        # self.conflicts = defaultdict(list)
+
+        ## {mod:[contained files that are in conflict with other mods]}
+        # self.mods_with_conflicts = defaultdict(list)
+
+        self.file_conflicts = None
+        self.mods_with_conflicting_files = None
 
 
     ################
@@ -131,8 +135,9 @@ class DBManager:
         :return: Number of rows removed
         """
 
-        # not that I'm worried too much about security with this program...
-        # but let's see if we can't avoid some SQL-injection attacks, just out of principle
+        # not that I'm worried too much about security with this
+        # program... but let's see if we can't avoid some SQL-injection
+        # attacks, just out of principle
 
         if table_name not in self._tablenames:
             # should probably raise an error
@@ -151,7 +156,8 @@ class DBManager:
         """
 
         with self._con:
-            return self._con.execute("UPDATE mods SET error = 0 WHERE error != 0").rowcount
+            return self._con.execute(
+                "UPDATE mods SET error = 0 WHERE error != 0").rowcount
 
     def commit(self):
         """
@@ -159,7 +165,8 @@ class DBManager:
         active transaction to commit
         """
         if not self._con.in_transaction:
-            self.LOGGER.warning("Database not currently in transaction. Committing anyway.")
+            self.LOGGER.warning("Database not currently in transaction."
+                                " Committing anyway.")
 
         self._con.commit()
 
@@ -189,8 +196,6 @@ class DBManager:
         # reset counter so that mod-ordinal is determined by the order
         # in which the entries are read from the file
         _mcount = count()
-        # but we want to start at 1
-        # next(_mcount) # no we don't
 
         # self.LOGGER.debug("loading mod db from file")
 
@@ -206,7 +211,9 @@ class DBManager:
                 self.fill_mods_table(mods)
 
             except json.decoder.JSONDecodeError:
-                self.LOGGER.error("No mod information present in {}, or file is malformed.".format(json_source))
+                self.LOGGER.error("No mod information present in {}, "
+                                  "or file is malformed."
+                                  .format(json_source))
                 success = False
         return success
 
@@ -216,6 +223,9 @@ class DBManager:
         :param str|Path json_source:
         :return: success of operation
         """
+        self.LOGGER.info("Analyzing hidden files")
+
+
         if not isinstance(json_source, Path):
             json_source = Path(json_source)
         success = False
@@ -224,17 +234,23 @@ class DBManager:
             try:
                 hiddenfiles = json.load(f)
                 for mod, files in hiddenfiles.items():
-                    # gethiddenfiles returns a list of 1-tuples, each one with a filepath
+                    # gethiddenfiles returns a list of 1-tuples,
+                    # each one with a filepath
                     hfiles = self._get_hidden_files(files, "", [])
 
                     with self._con:
-                        self._con.executemany('INSERT INTO hiddenfiles VALUES ("'+mod+'", ?)', hfiles)
+                        self._con.executemany(
+                            'INSERT INTO hiddenfiles VALUES ("'
+                            + mod + '", ?)', hfiles)
+
                 # [print(*r, sep="\t|\t") for r in
                 #  self._con.execute("select * from hiddenfiles")]
                 success=True
 
             except json.decoder.JSONDecodeError:
-                self.LOGGER.warning("No hidden files listed in {}, or file is malformed.".format(json_source))
+                self.LOGGER.warning("No hidden files listed in {}, "
+                                    "or file is malformed."
+                                    .format(json_source))
         return success
 
     def _get_hidden_files(self, basedict, currpath, flist, join=os.path.join):
@@ -245,7 +261,7 @@ class DBManager:
         :param currpath:
         :param flist:
         :param join: speed up execution by locally binding os.path.join
-        :return:
+        :return: list of hidden files
         """
         for key, value in basedict.items():
             if isinstance(value, list):
@@ -259,12 +275,18 @@ class DBManager:
 
     def populate_hidden_files_table(self, filelist):
         """
-        :param Iterable[(str, str)] filelist:
-            List of 2-tuples; each tuple is of form (directory:str, filepath:str)
+        :param Iterable[(str, str)] filelist: List of 2-tuples; each
+            tuple is of form (directory:str, filepath:str)
 
-        Here, `directory` is the name of the folder in the configured mods directory that contains the files for the mod in question.  This would be something like 'Big Trees HD_v2', or whatever arbitrary name the mod author gave the folder.
+            Here, `directory` is the name of the folder in the
+            configured mods directory that contains the files for the
+            mod in question.  This would be something like
+            'Big Trees HD_v2', or whatever arbitrary name the mod
+            author gave the folder.
 
-        `filepath` is the relative path from the containing mod directory to the hidden file (something along the lines of "meshes/trees/bigtree.nif").
+            `filepath` is the relative path from the containing mod
+            directory to the hidden file (something along the lines of
+            "meshes/trees/bigtree.nif").
         """
         with self._con:
             self._con.executemany("INSERT INTO hiddenfiles VALUES (?, ?)", filelist)
@@ -284,13 +306,13 @@ class DBManager:
         # build a tree from the database and jsonify it to disk
         htree = tree.Tree()
 
-        for row in self._con.execute("SELECT * FROM hiddenfiles ORDER BY directory, filepath"):
+        for row in self._con.execute(
+            "SELECT * FROM hiddenfiles ORDER BY directory, filepath"):
             # print(*row)
             p = PurePath(row['directory'], row['filepath'])
             pathparts = p.parts[:-1]
 
             htree.insert(pathparts, p.name)
-
 
         with json_target.open('w') as f:
             f.write(str(htree))
@@ -310,7 +332,9 @@ class DBManager:
 
         # db_fields[:-1] to ignore the error field for now (leave it at
         # its default of 0)
-        query = "INSERT INTO mods(" + ", ".join(db_fields[:-1]) + ") VALUES ("
+        query = "INSERT INTO mods(" + \
+                ", ".join(db_fields[:-1]) + \
+                ") VALUES ("
         query += ", ".join("?" * len(db_fields[:-1])) + ")"
         #
         # if doprint:
@@ -335,7 +359,9 @@ class DBManager:
         database connection as a context manager
 
         :param str query: a valid SQL query
-        :param typing.Iterable params: If the `params` keyword is provided with an Iterable object, it will be used as the parameters for a parameterized query.
+        :param typing.Iterable params: If the `params` keyword is
+            provided with an Iterable object, it will be used as the
+            parameters for a parameterized query.
         :rtype: typing.Generator[sqlite3.Row, Any, None]
         """
         with self._con:
@@ -363,7 +389,9 @@ class DBManager:
 
     def update_(self, sql, params=None):
         """
-        As execute_, but for UPDATE, INSERT, DELETE, etc. commands. Returns the cursor object that was created to execute the statement.
+        As execute_, but for UPDATE, INSERT, DELETE, etc. commands.
+        Returns the cursor object that was created to execute the
+        statement.
 
         :param str sql:
         :param typing.Iterable params:
@@ -376,7 +404,8 @@ class DBManager:
 
     def updatemany_(self, sql, params=None):
         """
-        As update_, but for multiple transactions. Returns the cursor object that was created to execute the statement.
+        As update_, but for multiple transactions. Returns the cursor
+        object that was created to execute the statement.
 
         :param str sql:
         :param typing.Iterable params:
@@ -404,20 +433,21 @@ class DBManager:
         if not isinstance(json_target, Path):
             json_target = Path(json_target)
 
-        # we don't save the ordinal rank, so we need to get a list (set) of the
-        # fields without "ordinal"
-        # Using sets here is OK because field order doesn't matter when saving
+        # we don't save the ordinal rank, so we need to get a list (set)
+        # of the fields without "ordinal" Using sets here is OK because
+        # field order doesn't matter when saving
         noord_fields = set(db_fields) ^ {"ordinal", "error"}
 
         # select (all fields other than ordinal)...
-        query="Select " + ", ".join(noord_fields)
+        query="SELECT " + ", ".join(noord_fields)
         # from a subquery of (all fields ordered by ordinal)
         query+=" FROM (SELECT * FROM mods ORDER BY ordinal)"
         modinfo = []
 
         # for each row (mod-entry)
         for row in self._con.execute(query):
-            # zip fields names and values up and convert to dict to create json-able object
+            # zip fields names and values up and convert to dict
+            # to create json-able object
             modinfo.append(dict(zip(noord_fields, row)))
 
         with json_target.open('w') as f:
@@ -434,9 +464,12 @@ class DBManager:
         :rtype: typing.Generator[str|tuple, Any, None]
         """
         if name_only:
-            yield from (t[0] for t in self._con.execute("select name from mods where enabled = 1"))
+            yield from (t[0] for t in
+                        self._con.execute(
+                            "SELECT name FROM mods WHERE enabled = 1"))
         else:
-            yield from self._con.execute("select * from mods where enabled = 1")
+            yield from self._con.execute(
+                "SELECT * FROM mods WHERE enabled = 1")
 
     def disabled_mods(self, name_only = False):
         """
@@ -447,9 +480,12 @@ class DBManager:
         :rtype: typing.Generator[str|tuple, Any, None]
         """
         if name_only:
-            yield from (t[0] for t in self._con.execute("select name from mods where enabled = 0"))
+            yield from (t[0] for t in
+                        self._con.execute(
+                            "SELECT name FROM mods WHERE enabled = 0"))
         else:
-            yield from self._con.execute("select * from mods where enabled = 0")
+            yield from self._con.execute(
+                                "SELECT * FROM mods WHERE enabled = 0")
 
     def mods_with_error(self, error_type):
         """
@@ -459,7 +495,8 @@ class DBManager:
         :return:
         """
 
-        yield from self._con.execute("SELECT * FROM mods WHERE error = ?", (error_type, ))
+        yield from self._con.execute(
+            "SELECT * FROM mods WHERE error = ?", (error_type, ))
 
 
     def get_mod_info(self, raw_cursor = False) :
@@ -470,7 +507,7 @@ class DBManager:
         :return:   Tuple of mod info or sqlite3.cursor
         :rtype: __generator[sqlite3.Row, Any, None]|sqlite3.Cursor
         """
-        cur = self._con.execute("select * from mods")
+        cur = self._con.execute("SELECT * FROM mods")
         if raw_cursor:
             return cur
         yield from cur
@@ -489,7 +526,7 @@ class DBManager:
         Will need to do this on first run and periodically to make sure
         cache is in sync.
 
-        :param Path mods_dir:
+        :param str mods_dir:
         """
         # TODO: Perhaps this should be run on every startup? At least to make sure it matches the stored data.
         import configparser as _config
@@ -499,7 +536,7 @@ class DBManager:
 
 
         mods_list = []
-        for moddir in mods_dir.iterdir():
+        for moddir in Path(mods_dir).iterdir():
             # skip any non-directories
             if not moddir.is_dir(): continue
 
@@ -528,6 +565,8 @@ class DBManager:
 
         self.fill_mods_table(mods_list)
 
+        del _config
+
     def load_all_mod_files(self, directory):
         """
         Here's an experiment to load ALL files from disk when the
@@ -545,13 +584,12 @@ class DBManager:
         did make some tweaks to the code, but still...I'm guessing the
         files were still in the system RAM?
 
+        :param str directory: path to the configured mod-storage dir
         :return:
-        :param Path directory:
-        # :param int ordinal: ?? what was i going to use this for?
         """
 
         # go through each folder indivually
-        for modfolder in directory.iterdir():
+        for modfolder in Path(directory).iterdir():
             if not modfolder.is_dir(): continue
             self.add_files_from_dir(modfolder.name, str(modfolder))
 
@@ -587,18 +625,22 @@ class DBManager:
         # 'meshes/whatever.nif')
         if mfiles:
             self._con.executemany(
-                "INSERT into modfiles values (?, ?)", zip(repeat(mod_name), mfiles))
+                "INSERT INTO modfiles VALUES (?, ?)", zip(repeat(mod_name), mfiles))
 
         # try: mfiles.remove('meta.ini') #don't care about these
         # except ValueError: pass
 
     def detect_file_conflicts(self):
         """
-        Using the data in the 'modfiles' table, detect any file conflicts among the installed mods
-        :return:
+        Using the data in the 'modfiles' table, detect any file
+        conflicts among the installed mods
         """
 
-        # if we're reloading the status of conflicted mods, delete the view if it exists
+        self.LOGGER.info("Detecting file conflicts")
+
+
+        # if we're reloading the status of conflicted mods,
+        # delete the view if it exists
         self._con.execute("DROP VIEW IF EXISTS filesbymodorder")
 
         q="""
@@ -616,7 +658,7 @@ class DBManager:
             SELECT f.filepath, f.ordinal, f.directory
                 FROM filesbymodorder f
                 INNER JOIN (
-                    SELECT filepath, COUNT(*) as C
+                    SELECT filepath, COUNT(*) AS C
                     FROM filesbymodorder
                     GROUP BY filepath
                     HAVING C > 1
@@ -638,8 +680,8 @@ class DBManager:
             # also, a dictionary of mods to a list of conflicting files
             mods_with_conflicts[mod].append(file)
 
-        Manager.file_conflicts = conflicts
-        Manager.mods_with_conflicting_files = mods_with_conflicts
+        self.file_conflicts = conflicts
+        self.mods_with_conflicting_files = mods_with_conflicts
 
         # for c in mods_with_conflicts['Bethesda Hi-Res DLC Optimized']:
         #     print("other mods containing file '%s'" % c)
@@ -658,7 +700,7 @@ class DBManager:
                      )
         return tuple(row)
 
-    def validate_mods_list(self, ignored):
+    def validate_mods_list(self, moddir):
         """
         Compare the database's list of mods against a list of the
         folders in the installed-mods directory. Handle discrepancies by
@@ -669,7 +711,8 @@ class DBManager:
             * Mods Not Found: for mods listed in the list of installed
               mods whose installation folders were not found on disk.
 
-        :param collections.abc.MutableSequence[str] installed_mods:
+        :param str moddir: the path to the mod storage directory
+
         :return: True if no errors and table unchanged. False if errors
             encountered and/or removed from table
         """
@@ -679,7 +722,7 @@ class DBManager:
         # problems with the mod installation
 
         # list of all the installed mods
-        installed_mods = os.listdir(Manager.conf['dir_mods'])
+        installed_mods = os.listdir(moddir)
 
         # first, reset the errors column
 
@@ -687,7 +730,7 @@ class DBManager:
 
         self.logger.debug("Resetting mod errors: {} entries affected".format(num_removed))
 
-        dblist = [t["directory"] for t in self._con.execute("Select directory from mods")]
+        dblist = [t["directory"] for t in self._con.execute("SELECT directory FROM mods")]
         not_found = []
         not_listed = []
 
