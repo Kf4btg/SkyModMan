@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import QDialog, QFileDialog, QDialogButtonBox
 from PyQt5.QtCore import pyqtSlot, pyqtSignal #QStringListModel, Qt
 
 from skymodman.managers import modmanager as Manager
-from skymodman.interface import app_settings, blocked_signals
+from skymodman.interface import app_settings, ui_utils
 from skymodman.interface.dialogs import message, checkbox_message
 from skymodman.interface.designer.uic.preferences_dialog_ui import \
     Ui_Preferences_Dialog
@@ -287,7 +287,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         # make sure we have a valid profile
         if self._selected_profile:
             # don't want unchecking this to trigger changing the default profile
-            with blocked_signals(self.cbox_default):
+            with ui_utils.blocked_signals(self.cbox_default):
                 self.cbox_default.setChecked(self._selected_profile.name == Config.default_profile)
 
 

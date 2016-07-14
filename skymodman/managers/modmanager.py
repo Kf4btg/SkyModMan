@@ -307,16 +307,18 @@ def save_user_edits(changes):
 
     # a generator that creates tuples of values by sorting the values of the
     # modentry according the order defined in constants._db_fields
-    dbrowgen = (tuple([getattr(m, f)
-                       for f in sorted(m._fields,
-                                       key=lambda fld: _db_fields.index(fld)
-                                       ) ] )
-                for m in changes)
+    dbrowgen = (
+        tuple([getattr(mod, field)
+               for field in sorted(mod._fields,
+                                   key=lambda f: _db_fields.index(f))
+             ])
+        for mod in changes)
 
     # using the context manager may allow deferrable foreign
     # to go unsatisfied for a moment
-
     with db.conn:
+        # db.conn.set_trace_callback(print)
+
         # delete the row with the given ordinal
         db.conn.executemany("DELETE FROM mods WHERE ordinal=?", rows_to_delete)
 
@@ -325,6 +327,7 @@ def save_user_edits(changes):
         query += ", ".join("?" * len(_db_fields)) + ")"
 
         db.conn.executemany(query, dbrowgen)
+        # db.conn.set_trace_callback(None)
 
     # And finally save changes to disk
     save_mod_list()

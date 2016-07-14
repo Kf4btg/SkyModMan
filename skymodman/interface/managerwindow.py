@@ -554,7 +554,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # action_toggle_mod
         self.action_toggle_mod.triggered.connect(
-            self.mod_table.toggleSelectionCheckstate)
+            self.mod_table.toggle_selection_checkstate)
 
 
         # --------------------------------------------------
@@ -674,12 +674,12 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # connect the move up/down signal to the appropriate slot on view
         self.moveMods.connect(
-            self.mod_table.onMoveModsAction)
+            self.mod_table.move_selection)
         # same for the move to top/button signals
         self.moveModsToBottom.connect(
-            self.mod_table.onMoveModsToBottomAction)
+            self.mod_table.move_selection_to_bottom)
         self.moveModsToTop.connect(
-            self.mod_table.onMoveModsToTopAction)
+            self.mod_table.move_selection_to_top)
 
 
     def _setup_slot_connections(self):
@@ -1087,8 +1087,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         tab is active.
         """
         if self.current_tab == TAB.MODTABLE:
-            self.mod_table.model.save()
-            # self.mod_table.saveChanges()
+            # self.mod_table.model.save()
+            self.mod_table.save_changes()
         elif self.current_tab == TAB.FILETREE:
             self.models[M.file_viewer].save()
 
@@ -1099,19 +1099,19 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
 
         if self.current_tab == TAB.MODTABLE:
-            m = self.mod_table.model()
-            m.beginResetModel()
+            # m = self.mod_table.model()
+            # m.beginResetModel()
 
             # block signals from the model so we don't
             # overwhelm the user's processor with gatling-gun commands
             ## FIXME: unsurprisingly, this causes some problems: for example, if the Errors column was hidden by an operation, then, while a normal undo would show it again, this reset op will not. There are likely other similar scenarios that can happen, too.
-            with ui_utils.blocked_signals(m):
-                while (self.undoManager.canUndo()
-                       and not self.undoManager.isClean()):
-                    self.undoManager.undo()
-            m.endResetModel()
-            self.mod_table.enableModActions.emit(False)
-            # self.mod_table.revertChanges()
+            # with ui_utils.blocked_signals(m):
+            #     while (self.undoManager.canUndo()
+            #            and not self.undoManager.isClean()):
+            #         self.undoManager.undo()
+            # m.endResetModel()
+            # self.mod_table.enableModActions.emit(False)
+            self.mod_table.revert_changes()
 
         elif self.current_tab == TAB.FILETREE:
             self.models[M.file_viewer].revert()
@@ -1227,7 +1227,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         Called when a new profile is loaded or some other major
         change occurs
         """
-        self.mod_table.loadData()
+        self.mod_table.load_data()
         self.modtable_search_box.clear() # might be good enough
         # self.toggle_search_box(ensure_state=0)
 
@@ -1446,7 +1446,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # check for unsaved changes to the mod-list
         if Manager.active_profile() is not None \
                 and not self.mod_table.undo_stack.isClean():
-                # and self.mod_table.model().isDirty:
+                # and self.mod_table.model().is_dirty:
             ok = QMessageBox(QMessageBox.Warning, 'Unsaved Changes',
                              'Your mod install-order has unsaved '
                              'changes. Would you like to save them '
@@ -1455,7 +1455,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                              QMessageBox.Cancel).exec_()
 
             if ok == QMessageBox.Yes:
-                self.mod_table.saveChanges()
+                self.mod_table.save_changes()
             return ok
         # if clean, return None to indicate that the calling operation
         # may contine as normal
@@ -1548,7 +1548,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
             # reverify and reload the mods.
             if not Manager.validate_mod_installs():
-                self.mod_table.model().reloadErrorsOnly()
+                self.mod_table.model().reload_errors_only()
 
     @pyqtSlot()
     def select_skyrim_dir(self):

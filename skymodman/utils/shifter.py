@@ -75,6 +75,11 @@ class shifter:
         self._newbstart =  dest_child
         self._rnewbstart = rdest_child
 
+        ## this is the totality of the affected indices; includes the
+        ## main block itself and any other items that had to be moved
+        ## to accomodate the shift
+        self.affected_range = range(self._slice_start, self._slice_end)
+
     def block_start(self, reverse=False):
         """The first index of the block to be shifted"""
         return self._rbstart if reverse else self._bstart

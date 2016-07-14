@@ -170,7 +170,7 @@ class ShiftRowsCommand(UndoCmd):
 
         # add the indices of each shifted row to the model's modified-
         # rows tracker
-        self._model.mark_modified(range(self._start, self._end))
+        self._model.mark_modified(self._shift.affected_range)
 
     def _undo_(self):
         # undo just involves rotating in the opposite direction,
@@ -180,7 +180,7 @@ class ShiftRowsCommand(UndoCmd):
         self._model.endMoveRows()
         # chop the most recent entries off the model's
         # modifed-rows tracker
-        self._model.unmark_modified(self._end - self._start)
+        self._model.unmark_modified(len(self._shift.affected_range))
 
 
 class RemoveRowsCommand(UndoCmd):

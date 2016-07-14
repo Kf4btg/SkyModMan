@@ -125,6 +125,13 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         self.vheader_field = COL_ORDER
 
+        ## to speed up drag-n-drop operations, track the start and
+        ## end of the dragged range as ints (so we don't need to split()
+        ## and int() the mimedata multiple times per second)
+        self._drag_start = -1
+        self._drag_end = -1
+
+
         # track the row numbers of every mod in the table that is
         # changed in any way. Every time a change is made, the row
         # number is appended to the end of the deque, even if it
@@ -145,9 +152,9 @@ class ModTable_TreeModel(QAbstractItemModel):
     ## PROPERTIES
     ##===============================================
 
-    @property
-    def isDirty(self) -> bool:
-        return len(self._modifications) > 0
+    # @property
+    # def is_dirty(self) -> bool:
+    #     return len(self._modifications) > 0
 
     def __getitem__(self, row):
         """
@@ -161,7 +168,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         except (TypeError, IndexError):
             return None
 
-    def getModForIndex(self, index):
+    def get_mod_for_index(self, index):
         """
         Return the ModEntry for the row in which `index` appears.
 
@@ -186,6 +193,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         :param iterable: an iterable collection of ints. The values must
             all be valid indices in the model's list of mods
         """
+        # self.LOGGER << iterable
         self._modifications.extend(iterable)
 
     def unmark_modified(self, count):
@@ -196,6 +204,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         :param int count:
         :return:
         """
+        # self.LOGGER << count
         for _ in range(count):
             self._modifications.pop()
 
@@ -244,7 +253,6 @@ class ModTable_TreeModel(QAbstractItemModel):
 
     ## Data Provider
     ##===============================================
-    # noinspection PyArgumentList
     def data(self, index, role=Qt_DisplayRole):
         col = index.column()
 
@@ -261,6 +269,7 @@ class ModTable_TreeModel(QAbstractItemModel):
             if not mod.error: return
 
             if mod.error & ModError.DIR_NOT_FOUND:
+                # noinspection PyArgumentList,PyTypeChecker
                 return (QtGui.QIcon.fromTheme('dialog-error')
                             if role == Qt_DecorationRole
                         else "Mod data not found."
@@ -268,6 +277,7 @@ class ModTable_TreeModel(QAbstractItemModel):
                         else None)
 
             if mod.error & ModError.MOD_NOT_LISTED:
+                # noinspection PyArgumentList,PyTypeChecker
                 return (QtGui.QIcon.fromTheme('dialog-warning')
                             if role == Qt_DecorationRole
                         else "This mod was found in the mods "
@@ -280,12 +290,9 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         elif col == COL_ENABLED:
             return mod.checkState if role == Qt_CheckStateRole else None
-        # else:
-            # if col == COL_ORDER and role == Qt_DisplayRole:
-            #     m = self.mod_entries[index.row()]
-            #     print("col_order,", m.name, ":", getattr(m, col2field[col]))
-            # for every other column, return the stored value as the
-            # display role
+
+        # for every other column, return the stored value as the
+        # display role
         elif role == Qt_DisplayRole:
             return getattr(mod, col2field[col])
         elif col == COL_NAME:
@@ -446,7 +453,9 @@ class ModTable_TreeModel(QAbstractItemModel):
             if index.column() == COL_NAME:
                 row = index.row()
                 mod = self.mod_entries[row]
-                new_name = value.strip()  # remove trailing/leading space
+                # remove trailing/leading space
+                new_name = value.strip()
+                # if unchanged or blank, don't update
                 if new_name in [mod.name, ""]: return False
 
                 # callbacks for changing (1) or reverting (2)
@@ -485,7 +494,7 @@ class ModTable_TreeModel(QAbstractItemModel):
     ## Modifying Row Position
     ##===============================================
 
-    def shiftRows(self, start_row, end_row, move_to_row, parent=QModelIndex(), undotext="Reorder Mods"):
+    def shift_rows(self, start_row, end_row, move_to_row, parent=QModelIndex(), undotext="Reorder Mods"):
         """
         :param int start_row: start of shifted block
         :param int end_row: end of shifted block
@@ -530,7 +539,7 @@ class ModTable_TreeModel(QAbstractItemModel):
     ## Getting data from disk into model
     ##===============================================
 
-    def loadData(self):
+    def load_data(self):
         """
         Load fresh data and reset everything. Called when first loaded
         and when something major changes, like the active profile.
@@ -541,12 +550,12 @@ class ModTable_TreeModel(QAbstractItemModel):
         self.mod_entries = [QModEntry(**d) for d
                             in Manager.basic_mod_info()]
 
-        self.checkForModLoadErrors()
+        self.check_mod_errors()
 
         self.endResetModel()
         self.tablehaschanges.emit(False)
 
-    def checkForModLoadErrors(self, query_db = False):
+    def check_mod_errors(self, query_db = False):
         """
         Check which mods, if any, encountered errors during load and
         show or hide the Errors column appropriately.
@@ -581,10 +590,8 @@ class ModTable_TreeModel(QAbstractItemModel):
         # column will be shown and an icon indicating the type of error
         # will be appear there in the row(s) of the problematic mod(s).
         # """
-        # self.errors = {}  # type: dict[str, int]
         # reset
 
-        # show_errcol = False
         err_types = ModError.NONE
 
         if query_db:
@@ -597,27 +604,17 @@ class ModTable_TreeModel(QAbstractItemModel):
                 m.error = errors[m.directory]
                 if m.error:
                     err_types |= m.error
-                    # show_errcol = True
         else:
             # otherwise, we're just checking for any errors in any mod
             for m in self.mod_entries:
                 if m.error:
                     err_types |= m.error
-                    # show_errcol = True
-                    # break
 
         self.errorsAnalyzed.emit(err_types)
 
-        # if show_errcol:
-        #     self.logger << "show error column"
-        #     self.hideErrorColumn.emit(False)
-        # else:
-        #     self.logger << "hide error column"
-        #     self.hideErrorColumn.emit(True)
-
-    def reloadErrorsOnly(self):
+    def reload_errors_only(self):
         self.beginResetModel()
-        self.checkForModLoadErrors(True)
+        self.check_mod_errors(True)
         self.endResetModel()
 
     ##===============================================
@@ -625,8 +622,23 @@ class ModTable_TreeModel(QAbstractItemModel):
     ##===============================================
 
     def save(self):
-        to_save = [self.mod_entries[row]
-                   for row in set(self._modifications)]
+        """
+        Save all changes made to the mod table to disk
+        """
+
+        modified = set(self._modifications)
+        to_save = []
+
+        # first, update ordinals of modified entries to reflect their
+        # (possibly) new position
+        for row in modified:
+            self.mod_entries[row].ordinal = row
+            to_save.append(self.mod_entries[row])
+
+        # print(to_save)
+
+        # to_save = [self.mod_entries[row]
+        #            for row in set(self._modifications)]
 
         Manager.save_user_edits(to_save)
 
@@ -650,7 +662,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         # likely a lot of things to remove.
 
         def post_op():
-            self.checkForModLoadErrors()
+            self.check_mod_errors()
             self.endResetModel()
 
         self._push_command(
@@ -662,25 +674,6 @@ class ModTable_TreeModel(QAbstractItemModel):
                 post_undo_callback=post_op,
             )
         )
-
-
-        # remaining = []
-        # removed = []
-        # self.beginResetModel()
-        # for m in self.mod_entries:
-        #     if self.mod_missing(m):
-        #         removed.append(m)
-        #     else:
-        #         remaining.append(m)
-        #
-        # # re-assign the backing store to be just those mods that
-        # # had no errors
-        # self.mod_entries = remaining
-        #
-        # self.endResetModel()
-
-        ## TODO: make this undoable. Maybe. If not, update the db with the new mod ordinals
-
 
     ##===============================================
     ## Drag & Drop
@@ -700,37 +693,55 @@ class ModTable_TreeModel(QAbstractItemModel):
         :return: A string that is 2 ints separated by whitespace, e.g.:  '4 8' This string corresponds to the first and last row in the block of rows being dragged.
         """
         rows = sorted(set(i.row() for i in indexes))
+
+        # save these as ints to speed up canDropMimeData
+        self._drag_start = rows[0]
+        self._drag_end = rows[-1]
+
         mimedata = QMimeData()
-        mimedata.setText("{} {}".format(rows[0], rows[-1]))
+        mimedata.setText("{0._drag_start} {0._drag_end}".format(self))
         return mimedata
+
+    def canDropMimeData(self, data, action, row, column, parent):
+        """
+        don't allow dropping selection on itself
+        """
+
+        if super().canDropMimeData(data, action, row, column, parent):
+            return row <= self._drag_start or row >= self._drag_end
 
     def dropMimeData(self, data, action, row, column, parent):
         """
 
         :param QMimeData data: contains a string that is 2 ints separated by whitespace, e.g.:  '4 8' This string corresponds to the first and last row in the block of rows being dragged
         :param Qt.DropAction action:
-        :param int row:
-        :param int column:
-        :param QModelIndex parent:
-        :return:
+        :param int row: ignored; always -1
+        :param int column: ignored; always -1
+        :param QModelIndex parent: The hovered item (drop target)
+        :return: True so long as the parent is valid, otherwise False
         """
 
         if not parent.isValid():
             return False
-        p = parent.internalPointer() #type: QModEntry
+        # p = parent.internalPointer() #type: QModEntry
 
-        # drop above the hovered item
-        dest = p.ordinal - 1
+        dest = parent.row()
+
         start, end = [int(r) for r in data.text().split()]
 
-        self.shiftRows(start, end, dest)
+        # print("dropMimeData: dest =", dest, ", start =", start, ", end =", end)
+
+        self.shift_rows(start, end, dest)
         return True
 
     ##===============================================
     ## Adding and Removing Rows/Columns (may need later)
     ##===============================================
 
-    def removeRows(self, row, count, parent=QModelIndex(), *args, **kwargs):
+    # this is not an override of removeRows() because that screws up
+    # our drag-and-drop implementation...even though we don't call
+    # super() during the dropMimeData method...
+    def remove_rows(self, row, count, parent=QModelIndex()):
         """
         Remove mod[s] (row[s]) from the model. Undoable action
 
