@@ -321,16 +321,24 @@ class ProfileManager:
 
         return self.__cache[profilename]
 
-    def set_active_profile(self, profilename):
+    def set_active_profile(self, profilename=None):
         """
 
-        :param str profilename:
+        :param str|None profilename: name of the profile to activate; if it
+            does already exist on disk, it will be created. If this
+            parameter is ``None``, then the ``active_profile`` property
+            will be unset.
         :return: the newly created Profile object
         """
-        if self._current_profile is None or \
-            self._current_profile.name != profilename:
 
-            self._current_profile = self.load_profile(profilename)
+        if profilename is None:
+            # unset the active profile
+            self._current_profile = None
+        else:
+            if self._current_profile is None or \
+                self._current_profile.name != profilename:
+
+                self._current_profile = self.load_profile(profilename)
 
 
         return self._current_profile

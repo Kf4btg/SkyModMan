@@ -697,6 +697,7 @@ class _ModManager:
         # TODO: would it be possible...to make a context manager for profiles? I.e., the entire time a profile is active, we'd be within the "with" statement of a context manager? And when it closes we make sure to write all changed data? Or, it that's not feasible, maybe just the switch mechanics below could be wrapped in one for better error handling.
 
         old_profile = self.profile.name if self.profile else None
+        print(old_profile)
 
         try:
             # make sure we're dealing with just the name
@@ -726,8 +727,18 @@ class _ModManager:
             self.LOGGER << "Error while activating profile. Rolling back."
 
             if old_profile:
+                print(old_profile)
+
                 self._set_profile(old_profile)
+            else:
+                # if we came from no profile, make sure we're back there
+                self._pman.set_active_profile(None)
+
             return False
+
+        # if we successfully made it here, update the config value
+        # for the last-loaded profile and return True
+        self._cman.last_profile = profile
 
         return True
 
@@ -736,7 +747,6 @@ class _ModManager:
 
         self._pman.set_active_profile(profile_name)
 
-        self._cman.last_profile = profile_name
 
         # have to reinitialize the database
         if self._db_initialized:

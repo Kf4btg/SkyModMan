@@ -309,6 +309,10 @@ class ConfigManager:
             for e in self.missing_keys:
                 s, k = e.section, e.key
 
+                # check if the section itself is missing
+                if s not in config:
+                    config[s] = {}
+
                 config[s][k] = self.currentValues[s][k]
 
             with self.paths.file_main.open('w') as f:

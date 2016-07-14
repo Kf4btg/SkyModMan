@@ -550,7 +550,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         self._modifications.clear()
 
         self.mod_entries = [QModEntry(**d) for d
-                            in Manager.basic_mod_info()]
+                            in Manager.allmodinfo()]
 
         self.check_mod_errors()
 

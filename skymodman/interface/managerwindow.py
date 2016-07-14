@@ -886,25 +886,30 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                     # selector)
                     self.profile_selector.setCurrentIndex(old_index)
                 else:
-                    # update our variable which tracks the current index
-                    self.profile_selector_index = index
-                    # No => "Don't save changes, drop them"
-                    if reply == QtWidgets.QMessageBox.No:
-                        # don't bother reverting, mods list is getting
-                        # reset; just disable the buttons
-                        self.mod_table.undo_stack.clear()
-                        # for s in self.undo_stacks:
-                        #     s.clear()
+
 
                     self.LOGGER.info(
                         "Activating profile '{}'".format(
                             new_profile))
 
-                    Manager.activate_profile(new_profile)
+                    if Manager.activate_profile(new_profile):
 
-                    self.logger << "Resetting views for new profile"
+                        self.logger << "Resetting views for new profile"
 
-                    self.newProfileLoaded.emit(new_profile)
+                        # update our variable which tracks the current index
+                        self.profile_selector_index = index
+                        # No => "Don't save changes, drop them"
+                        if reply == QtWidgets.QMessageBox.No:
+                            # don't bother reverting, mods list is getting
+                            # reset; just disable the buttons
+                            self.mod_table.undo_stack.clear()
+                            # for s in self.undo_stacks:
+                            #     s.clear()
+
+                        self.newProfileLoaded.emit(new_profile)
+                    else:
+                        self.LOGGER.error("Profile Activation failed.")
+                        self.profile_selector.setCurrentIndex(old_index)
 
     @pyqtSlot('QString')
     def on_profile_load(self, profile_name):

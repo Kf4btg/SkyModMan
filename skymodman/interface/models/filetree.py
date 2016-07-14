@@ -387,7 +387,7 @@ class ModFileTreeModel(QAbstractItemModel):
         self.rootpath = None #type: str
         self.modname = None #type: str
         self.rootitem = None #type: QFSItem
-        self.dbconn = Manager.db.conn
+        self.dbconn = Manager.DB.conn
         self.cursor = self.dbconn.cursor()
 
     @property
