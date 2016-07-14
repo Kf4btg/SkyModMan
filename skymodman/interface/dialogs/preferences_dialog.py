@@ -10,7 +10,7 @@ from skymodman.interface.dialogs import message, checkbox_message
 from skymodman.interface.designer.uic.preferences_dialog_ui import \
     Ui_Preferences_Dialog
 from skymodman.utils import withlogger
-from skymodman.utils.fsutils import checkPath, create_dir
+from skymodman.utils.fsutils import check_path, create_dir
 from skymodman import constants, exceptions
 
 
@@ -139,7 +139,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                 lbl.setText(_missing_path_str)
                 lbl.setStyleSheet(_missing_path_style)
                 lbl.setVisible(True)
-            elif not checkPath(self.paths[key]):
+            elif not check_path(self.paths[key]):
                 lbl.setText(_invalid_path_str)
                 lbl.setStyleSheet(_invalid_path_style)
                 lbl.setVisible(True)
@@ -379,7 +379,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                                                   "Select directory",
                                                   self.paths[folder] or "")
 
-        if checkPath(chosen):
+        if check_path(chosen):
             self.path_boxes[folder].setText(chosen)
             if folder in self.indicator_labels.keys():
                 self.indicator_labels[folder].setVisible(False)

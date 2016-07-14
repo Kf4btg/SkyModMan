@@ -252,7 +252,7 @@ class ProfileManager:
         if len(self._profile_names) == 0:
             self.LOGGER.warning("No profiles found. Creating default profile.")
             self._profile_names.append(FALLBACK_PROFILE)
-            self.loadProfile(FALLBACK_PROFILE)
+            self.load_profile(FALLBACK_PROFILE)
 
     ################
     ## Properties ##
@@ -277,7 +277,7 @@ class ProfileManager:
         the profile named 'my_profile' (loading it from disk if not
         cached).
 
-        Unlike the default behavior of 'loadProfile', this will NOT
+        Unlike the default behavior of 'load_profile', this will NOT
         create a new profile if one by the given name can't be found.
         A ProfileDoesNotExistError will be raised instead.
 
@@ -285,11 +285,11 @@ class ProfileManager:
         :return: Profile object
         """
 
-        return self.loadProfile(profilename, create=False)
+        return self.load_profile(profilename, create=False)
 
 
 
-    def loadProfile(self, profilename, copy_from = None, create=True) -> Profile:
+    def load_profile(self, profilename, copy_from = None, create=True) -> Profile:
         """
 
         :param str profilename:
@@ -321,7 +321,7 @@ class ProfileManager:
 
         return self.__cache[profilename]
 
-    def setActiveProfile(self, profilename):
+    def set_active_profile(self, profilename):
         """
 
         :param str profilename:
@@ -330,7 +330,7 @@ class ProfileManager:
         if self._current_profile is None or \
             self._current_profile.name != profilename:
 
-            self._current_profile = self.loadProfile(profilename)
+            self._current_profile = self.load_profile(profilename)
 
 
         return self._current_profile
@@ -339,17 +339,17 @@ class ProfileManager:
     ## Iterating over Profiles ##
     #############################
 
-    def iterProfiles(self):
+    def iter_profiles(self):
         """Iterate over the list of known profiles"""
         yield from self._profile_names
 
-    def profilesByName(self):
+    def profiles_by_name(self):
         """
         iterator of (name, Profile) pairs, sorted by name
         """
         self._profile_names = sorted(self._profile_names)
         yield from zip(self._profile_names,
-                       (self.loadProfile(p)
+                       (self.load_profile(p)
                             for p in self._profile_names))
 
 
@@ -357,7 +357,7 @@ class ProfileManager:
     ## Adding/Removing ##
     #####################
 
-    def newProfile(self, profile_name, copy_from = None) -> Profile:
+    def new_profile(self, profile_name, copy_from = None) -> Profile:
         """
         Create a new folder in the configured profiles directory and
         generate empty placeholder config-files within it. If an
@@ -379,7 +379,7 @@ class ProfileManager:
             raise exceptions.ProfileExistsError(profile_name)
 
         try:
-            new_prof = self.loadProfile(profile_name, copy_from)
+            new_prof = self.load_profile(profile_name, copy_from)
         except exceptions.ProfileError:
             raise
 
@@ -387,7 +387,7 @@ class ProfileManager:
         return new_prof
 
 
-    def deleteProfile(self, profile, confirm = False):
+    def delete_profile(self, profile, confirm = False):
         """
         Removes the folder and all config files for the specified profile.
 

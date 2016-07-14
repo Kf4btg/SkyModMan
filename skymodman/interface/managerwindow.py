@@ -13,7 +13,7 @@ from skymodman.interface import models, app_settings, ui_utils
 from skymodman.interface.dialogs import message
 from skymodman.interface.install_helpers import InstallerUI
 from skymodman.utils import withlogger #, icons
-from skymodman.utils.fsutils import checkPath, join_path
+from skymodman.utils.fsutils import check_path, join_path
 
 from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow
 
@@ -1543,7 +1543,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         )
 
         # update config with new path
-        if checkPath(moddir):
+        if check_path(moddir):
             Manager.set_directory(KeyStr.Dirs.MODS, moddir)
 
             # reverify and reload the mods.
@@ -1563,7 +1563,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             Manager.get_directory(KeyStr.Dirs.SKYRIM) or "")
 
         # update config with new path
-        if checkPath(skydir):
+        if check_path(skydir):
             Manager.set_directory(KeyStr.Dirs.SKYRIM, skydir)
         else:
             self.safe_quit()

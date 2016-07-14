@@ -162,7 +162,7 @@ class KeyStr:
         """
         __slots__=()
         ## main INI
-        LASTPROFILE = "lastprofile"  # name of last loaded profile
+        LASTPROFILE = "last_profile"  # name of last loaded profile
         DEFAULT_PROFILE = "defaultprofile"
 
         ## profiles only

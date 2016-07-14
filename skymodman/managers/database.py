@@ -3,7 +3,6 @@ import json.decoder
 import os
 import sqlite3
 from pathlib import Path, PurePath
-import functools
 from itertools import count, repeat
 from collections import defaultdict
 
@@ -99,7 +98,7 @@ class DBManager:
         :return: list of all mods from the mod db
         :rtype: list[sqlite3.Row]
         """
-        return self.getModInfo(True).fetchall()
+        return self.get_mod_info(True).fetchall()
 
     ######################
     ## Table management ##
@@ -124,7 +123,7 @@ class DBManager:
 
             # self._con.executescript(self._SCHEMA)
 
-    def resetTable(self, table_name):
+    def reset_table(self, table_name):
         """
         Remove all rows from specified table
 
@@ -159,7 +158,7 @@ class DBManager:
     ## DATA LOADING ##
     ##################
 
-    def loadModDB(self, json_source) -> bool:
+    def load_mod_info(self, json_source) -> bool:
         """
         read the saved mod information from a json file and
         populate the in-memory database
@@ -183,15 +182,15 @@ class DBManager:
             # read from json file and convert mappings
             # to ordered tuples for sending to sqlite
             try:
-                mods = json.load(f, object_pairs_hook=DBManager.toRowTuple)
-                self.fillTable(mods)
+                mods = json.load(f, object_pairs_hook=DBManager.to_row_tuple)
+                self.fill_mods_table(mods)
 
             except json.decoder.JSONDecodeError:
                 self.LOGGER.error("No mod information present in {}, or file is malformed.".format(json_source))
                 success = False
         return success
 
-    def loadHiddenFiles(self, json_source) -> bool:
+    def load_hidden_files(self, json_source) -> bool:
         """
 
         :param str|Path json_source:
@@ -206,7 +205,7 @@ class DBManager:
                 hiddenfiles = json.load(f)
                 for mod, files in hiddenfiles.items():
                     # gethiddenfiles returns a list of 1-tuples, each one with a filepath
-                    hfiles = self._gethiddenfiles(files, "", [])
+                    hfiles = self._get_hidden_files(files, "", [])
 
                     with self._con:
                         self._con.executemany('INSERT INTO hiddenfiles VALUES ("'+mod+'", ?)', hfiles)
@@ -218,7 +217,7 @@ class DBManager:
                 self.LOGGER.warning("No hidden files listed in {}, or file is malformed.".format(json_source))
         return success
 
-    def _gethiddenfiles(self, basedict, currpath, flist, join=os.path.join):
+    def _get_hidden_files(self, basedict, currpath, flist, join=os.path.join):
         """
         Recursive helper for loading the list of hiddenfiles from disk
 
@@ -233,12 +232,12 @@ class DBManager:
                 # have to add each filepath as 1-tuple to keep sqlite happy
                 flist.extend((join(currpath, fname), ) for fname in value)
             else:
-                flist = self._gethiddenfiles(value, join(currpath, key), flist)
+                flist = self._get_hidden_files(value, join(currpath, key), flist)
 
         return flist
     ###################################
 
-    def populateHiddenFilesTable(self, filelist):
+    def populate_hidden_files_table(self, filelist):
         """
         :param Iterable[(str, str)] filelist:
             List of 2-tuples; each tuple is of form (directory:str, filepath:str)
@@ -250,7 +249,7 @@ class DBManager:
         with self._con:
             self._con.executemany("INSERT INTO hiddenfiles VALUES (?, ?)", filelist)
 
-    def saveHiddenFiles(self, json_target):
+    def save_hidden_files(self, json_target):
         """
 
         Note: I notice ModOrganizer adds a '.mohidden' extension to every file it hides (or to the parent directory);
@@ -280,8 +279,8 @@ class DBManager:
         # print(tree.to_string(2))
 
 
-    # def fillTable(self, mod_list, doprint=False):
-    def fillTable(self, mod_list):
+    # def fill_mods_table(self, mod_list, doprint=False):
+    def fill_mods_table(self, mod_list):
         """
         Dynamically build the INSERT statement from the list of fields, then insert
         the values from mod_list (a list of tuples) into the database
@@ -325,7 +324,7 @@ class DBManager:
             else:
                 yield from self._con.execute(query)
 
-    def getOne(self, query, params=None):
+    def getone(self, query, params=None):
         """
         Like execute_, but just returns the first result
 
@@ -373,7 +372,7 @@ class DBManager:
     ## Saving ##
     ############
 
-    def saveModDB(self, json_target):
+    def save_mod_info(self, json_target):
         """
         Write the data from the in-memory database to a
         json file on disk. The file will be overwritten, or
@@ -406,7 +405,7 @@ class DBManager:
 
 
     # db-query convenience methods
-    def enabledMods(self, name_only = False):
+    def enabled_mods(self, name_only = False):
         """
         Fetches all mods from the mod database that are marked as enabled.
 
@@ -419,7 +418,7 @@ class DBManager:
         else:
             yield from self._con.execute("select * from mods where enabled = 1")
 
-    def disabledMods(self, name_only = False):
+    def disabled_mods(self, name_only = False):
         """
         Fetches all mods from the mod database that are marked as disabled.
 
@@ -443,7 +442,7 @@ class DBManager:
         yield from self._con.execute("SELECT * FROM mods WHERE error = ?", (error_type, ))
 
 
-    def getModInfo(self, raw_cursor = False) :
+    def get_mod_info(self, raw_cursor = False) :
         """
         Yields Row objects containing all information about installed mods
 
@@ -462,7 +461,7 @@ class DBManager:
         """
         self._con.close()
 
-    def getModDataFromModDirectory(self, mods_dir):
+    def get_mod_data_from_directory(self, mods_dir):
         """
         scan the actual mods-directory and populate the database from
         there instead of a cached json file.
@@ -490,26 +489,26 @@ class DBManager:
             order = len(mods_list)+1
             dirname = moddir.name
 
-            # self.loadAllModFiles(moddir, order)
+            # self.load_all_mod_files(moddir, order)
 
             inipath = moddir / "meta.ini"
             if inipath.exists():
                 # read info from meta.ini (ModOrganizer) file
                 configP.read(str(inipath))
                 mods_list.append(
-                    self.makeModEntry(ordinal = order,
-                                      directory = dirname,
-                                      modid = configP['General']['modid'],
-                                      version = configP['General']['version']
-                                     )
+                    self.make_mod_entry(ordinal = order,
+                                        directory = dirname,
+                                        modid = configP['General']['modid'],
+                                        version = configP['General']['version']
+                                        )
                                 )
             else:
                 mods_list.append(
-                    self.makeModEntry(ordinal = order, directory=dirname))
+                    self.make_mod_entry(ordinal = order, directory=dirname))
 
-        self.fillTable(mods_list)
+        self.fill_mods_table(mods_list)
 
-    def loadAllModFiles(self, directory):
+    def load_all_mod_files(self, directory):
         """
         Here's an experiment to load ALL files from disk when the
         program starts up...let's see how long it takes
@@ -573,7 +572,7 @@ class DBManager:
         # try: mfiles.remove('meta.ini') #don't care about these
         # except ValueError: pass
 
-    def detectFileConflicts(self):
+    def detect_file_conflicts(self):
         """
         Using the data in the 'modfiles' table, detect any file conflicts among the installed mods
         :return:
@@ -628,7 +627,7 @@ class DBManager:
         #         if m!='Bethesda Hi-Res DLC Optimized':
         #             print('\t', m)
 
-    def makeModEntry(self, **kwargs):
+    def make_mod_entry(self, **kwargs):
         """generates a tuple representing a mod-entry by supplementing a possibly-incomplete mapping of keywords (`kwargs`) with default values for any missing fields"""
         row = []
 
@@ -639,7 +638,7 @@ class DBManager:
                      )
         return tuple(row)
 
-    def validateModsList(self, installed_mods):
+    def validate_mods_list(self, installed_mods):
         """
         Compare the database's list of mods against a list of the
         folders in the installed-mods directory. Handle discrepancies by
@@ -726,7 +725,7 @@ class DBManager:
         return not (not_listed or not_found or num_removed)
 
     @staticmethod
-    def jsonWrite(json_target, pyobject):
+    def json_write(json_target, pyobject):
         """Dump the given object to a json file specified by the given Path object.
 
         :param Path json_target:
@@ -737,7 +736,7 @@ class DBManager:
 
 
     @staticmethod
-    def toRowTuple(pairs):
+    def to_row_tuple(pairs):
         """
         Used as object_pair_hook for json.load(). Takes the mod
         information loaded from the json file and converts it
@@ -751,40 +750,40 @@ class DBManager:
         return (next(_mcount),) + tuple(s[1] for s in sorted(pairs, key=lambda p: db_fields.index(p[0])))
 
 
-if __name__ == '__main__':
-    # from skymodman.managers import ModManager
-
-    DB = DBManager()
-    DB._con.row_factory = sqlite3.Row
-
-    DB.loadModDB(Path(os.path.expanduser("~/.config/skymodman/profiles/default/modinfo.json")))
-
-    c= DB.conn.execute("select * from mods")
-
-    print (c.description)
-
-    r=c.fetchone() #type: sqlite3.Row
-
-    print(type(r))
-
-    print(r.keys())
-    print(r['directory'])
-
-    print(dict(zip(r.keys(), r)))
-
-
-
-
-
-    # print(DB.getOne("Select * from mods where ordinal = 22"))
-    # [ print(r) for r in DB.execute_("Select * from mods where ordinal BETWEEN 20 AND 24")]
-    #
-    # DB.conn.execute("DELETE FROM mods WHERE ordinal = 22")
-    # [ print(r) for r in DB.execute_("Select * from mods where ordinal BETWEEN 20 AND 24")]
-    #
-    # DB.conn.execute("INSERT into mods (name, directory, ordinal) VALUES ('boogawooga', 'boogawoogadir', 22)")
-    #
-    # [ print(r) for r in DB.execute_("Select * from mods where ordinal BETWEEN 20 AND 24")]
-
-    DB.shutdown()
+# if __name__ == '__main__':
+#     # from skymodman.managers import ModManager
+#
+#     DB = DBManager()
+#     DB._con.row_factory = sqlite3.Row
+#
+#     DB.load_mod_info(Path(os.path.expanduser("~/.config/skymodman/profiles/default/modinfo.json")))
+#
+#     c= DB.conn.execute("select * from mods")
+#
+#     print (c.description)
+#
+#     r=c.fetchone() #type: sqlite3.Row
+#
+#     print(type(r))
+#
+#     print(r.keys())
+#     print(r['directory'])
+#
+#     print(dict(zip(r.keys(), r)))
+#
+#
+#
+#
+#
+#     # print(DB.getone("Select * from mods where ordinal = 22"))
+#     # [ print(r) for r in DB.execute_("Select * from mods where ordinal BETWEEN 20 AND 24")]
+#     #
+#     # DB.conn.execute("DELETE FROM mods WHERE ordinal = 22")
+#     # [ print(r) for r in DB.execute_("Select * from mods where ordinal BETWEEN 20 AND 24")]
+#     #
+#     # DB.conn.execute("INSERT into mods (name, directory, ordinal) VALUES ('boogawooga', 'boogawoogadir', 22)")
+#     #
+#     # [ print(r) for r in DB.execute_("Select * from mods where ordinal BETWEEN 20 AND 24")]
+#
+#     DB.shutdown()
 

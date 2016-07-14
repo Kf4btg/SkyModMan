@@ -8,7 +8,7 @@ import appdirs
 
 from skymodman import exceptions
 from skymodman.utils import withlogger, fsutils
-from skymodman.utils.fsutils import checkPath
+from skymodman.utils.fsutils import check_path
 from skymodman.constants import EnvVars, KeyStr, FALLBACK_PROFILE
 
 # for convenience and quicker lookup
@@ -127,7 +127,7 @@ class ConfigManager:
         self._environment = {k:os.getenv(k, "") for k in EnvVars}
 
         # read config file, make sure all required data is present or at default
-        self.ensureDefaultSetup()
+        self.ensure_default_setup()
 
     @property
     def paths(self) -> ConfigPaths:
@@ -143,7 +143,7 @@ class ConfigManager:
 
         >>> config['dir_mods']
         '/path/to/mod/install/directory'
-        >>> config['lastprofile']
+        >>> config['last_profile']
         'default'
 
         :param str config_var:
@@ -163,14 +163,14 @@ class ConfigManager:
         return None
 
     @property
-    def lastprofile(self) -> str:
+    def last_profile(self) -> str:
         """
         :return: Name of most recently active profile
         """
         return self.currentValues[_SECTION_GENERAL][_KEY_LASTPRO]
 
-    @lastprofile.setter
-    def lastprofile(self, name):
+    @last_profile.setter
+    def last_profile(self, name):
         """
         Set `name` as the value of the 'lastproifile;' cobfig key
         and write the change to the configuration file
@@ -217,7 +217,7 @@ class ConfigManager:
     ## Setup and Sanity Checks
     ##=============================================
 
-    def ensureDefaultSetup(self):
+    def ensure_default_setup(self):
         """
         Make sure that all the required files and directories exist,
         creating them if not.
@@ -400,7 +400,7 @@ class ConfigManager:
             # first, check if the user has specified an environment variable
             envval = self._environment[evar]
             if envval:
-                if checkPath(envval):
+                if check_path(envval):
                     p = Path(envval)
                 else:
                     self.path_errors[path_key].append(envval)
@@ -412,7 +412,7 @@ class ConfigManager:
                 except exceptions.MissingConfigKeyError as e:
                     self.missing_keys.append(e)
                 else:
-                    if checkPath(config_val):
+                    if check_path(config_val):
                         p = Path(config_val)
                     else:
                         self.path_errors[path_key].append(config_val)
@@ -428,7 +428,7 @@ class ConfigManager:
                 # if we have a default and it exists, use that.
                 # otherwise log the error
                 # noinspection PyTypeChecker
-                if checkPath(def_path):
+                if check_path(def_path):
                     p = Path(def_path)
                 else:
                     # noinspection PyTypeChecker
@@ -458,7 +458,7 @@ class ConfigManager:
 
         # check to see if the given path is a valid mount point
         # todo: this is assuming that the vfs has already been mounted manually; I'd much rather do it automatically, so I really should just check that the given directory is empty
-        # if checkPath(env_vfs) and os.path.ismount(env_vfs):
+        # if check_path(env_vfs) and os.path.ismount(env_vfs):
         #     self.paths.dir_vfs = Path(env_vfs)
         # else:
         #     self.paths.dir_vfs = Path(config[_SECTION_GENERAL][_KEY_VFSMNT])
@@ -497,7 +497,7 @@ class ConfigManager:
         with self.paths.file_main.open('w') as configfile:
             config.write(configfile)
 
-    def updateConfig(self, key, section, value):
+    def update_config(self, key, section, value):
         """
         Update saved configuration file
 
@@ -528,7 +528,7 @@ class ConfigManager:
             p=Path(value) if value else None
 
             # leave verification to someone else...
-            # if checkPath(str(p)):
+            # if check_path(str(p)):
 
             # update the ConfigPaths object
             for case in [key.__eq__]:
@@ -547,7 +547,7 @@ class ConfigManager:
 
             # elif case(_KEY_LASTPRO) or case(_KEY_DEFPRO):
             #     self.currentValues[_SECTION_GENERAL][key] = value
-                # self.lastprofile = value
+                # self.last_profile = value
 
         # else: # should always run since we didn't use 'break' above
 
@@ -657,7 +657,7 @@ class ConfigManager:
             raise exceptions.MultiFileError(errors, "Errors occurred during move operation.")
 
 
-    def listModFolders(self):
+    def list_mod_folders(self):
         """
         Just get a list of all mods installed in the mod directory
         (i.e. a list of folder names)

@@ -9,10 +9,10 @@ from os.path import (exists as _exists,
 
 from skymodman.exceptions import FileAccessError
 
-__all__ = ["checkPath", "join_path", "change_dir", "dir_move_merge"]
+__all__ = ["check_path", "join_path", "change_dir", "dir_move_merge"]
 
 
-def checkPath(path, exp_user=False):
+def check_path(path, exp_user=False):
     """
     Verifies that path is not None or an empty string, then returns
     whether the path exists on the filesystem.

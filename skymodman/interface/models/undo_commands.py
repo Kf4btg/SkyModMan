@@ -1,5 +1,3 @@
-from collections import deque
-
 from PyQt5.QtWidgets import QUndoCommand
 
 from skymodman.utils import shifter

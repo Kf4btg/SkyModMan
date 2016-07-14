@@ -39,7 +39,7 @@ def init():
     _profileman = profiles = ProfileManager(
         _configman.paths.dir_profiles)
     # set the most-recently loaded profile as active.
-    # _profileman.setActiveProfile(_configman.lastprofile)
+    # _profileman.set_active_profile(_configman.last_profile)
 
     # Prepare the database, but do not load any information
     # until it is requested.
@@ -80,9 +80,9 @@ def set_active_profile(profile):
     if isinstance(profile, Profile):
         profile = profile.name
     assert isinstance(profile, str)
-    _profileman.setActiveProfile(profile)
+    _profileman.set_active_profile(profile)
 
-    _configman.lastprofile = profile
+    _configman.last_profile = profile
 
     global _database_initialized
 
@@ -104,7 +104,7 @@ def get_profiles(names_only = True):
     if names_only:
         yield from (n for n in _profileman.profile_names)
     else:
-        yield from _profileman.profilesByName()
+        yield from _profileman.profiles_by_name()
 
 def new_profile(name, copy_from = None):
     """
@@ -115,7 +115,7 @@ def new_profile(name, copy_from = None):
     :param profiles.Profile copy_from:
     :return: new Profile object
     """
-    return _profileman.newProfile(name, copy_from)
+    return _profileman.new_profile(name, copy_from)
 
 def rename_profile(new_name, current=None):
     """
@@ -136,12 +136,12 @@ def rename_profile(new_name, current=None):
     _profileman.rename_profile(current, new_name)
 
     if current is active_profile():
-        _configman.updateConfig(KeyStr.INI.LASTPROFILE,
-                                KeyStr.Section.GENERAL, current.name)
+        _configman.update_config(KeyStr.INI.LASTPROFILE,
+                                 KeyStr.Section.GENERAL, current.name)
 
 
 def delete_profile(profile):
-    _profileman.deleteProfile(profile, True)
+    _profileman.delete_profile(profile, True)
 
 def load_active_profile_data():
     """
@@ -151,7 +151,7 @@ def load_active_profile_data():
     """
     _logger << "loading data for active profile: " + active_profile().name
     # try to read modinfo file
-    if _dataman.loadModDB(active_profile().modinfo):
+    if _dataman.load_mod_info(active_profile().modinfo):
         _logger << "validating installed mods"
         # if successful, validate modinfo
         validate_mod_installs()
@@ -161,7 +161,7 @@ def load_active_profile_data():
                    "from configured mods directory: " \
                    + _configman['dir_mods']
         # if it fails, re-read mod data from disk
-        _dataman.getModDataFromModDirectory(_configman.paths.dir_mods)
+        _dataman.get_mod_data_from_directory(_configman.paths.dir_mods)
         # and [re]create the cache file
         save_mod_list()
 
@@ -169,7 +169,7 @@ def load_active_profile_data():
     # _logger << "Loading list of all Mod Files on disk"
     _logger.info("Detecting file conflicts")
 
-    _dataman.loadAllModFiles(_configman.paths.dir_mods)
+    _dataman.load_all_mod_files(_configman.paths.dir_mods)
     # let's also add the files from the base Skyrim Data folder to the db
 
     sky_dir = _configman.paths.dir_skyrim
@@ -190,10 +190,10 @@ def load_active_profile_data():
 
     # _logger << "Finished loading list of all Mod Files on disk"
 
-    _dataman.detectFileConflicts()
+    _dataman.detect_file_conflicts()
 
     _logger.info("Analyzing hidden files")
-    _dataman.loadHiddenFiles(active_profile().hidden_files)
+    _dataman.load_hidden_files(active_profile().hidden_files)
 
 def hidden_files(for_mod=None):
     """
@@ -267,7 +267,7 @@ def validate_mod_installs():
 
     :return: True if no errors encountered, False otherwise
     """
-    return _dataman.validateModsList(_configman.listModFolders())
+    return _dataman.validate_mods_list(_configman.list_mod_folders())
 
 def basic_mod_info():
     """
@@ -278,17 +278,17 @@ def basic_mod_info():
     :rtype: __generator[dict[str, sqlite3.Row], Any, None]
     """
     #TODO: rename this.
-    for row in _dataman.getModInfo():
+    for row in _dataman.get_mod_info():
         yield dict(zip(row.keys(), row))
 
 def enabled_mods():
     """
     yields the names of enabled mods for the currently active profile
     """
-    yield from _dataman.enabledMods(True)
+    yield from _dataman.enabled_mods(True)
 
 def disabled_mods():
-    yield from _dataman.disabledMods(True)
+    yield from _dataman.disabled_mods(True)
 
 #</editor-fold>
 
@@ -334,13 +334,13 @@ def save_user_edits(changes):
 
 def save_mod_list():
     """Request that database manager save modinfo to disk"""
-    _dataman.saveModDB(active_profile().modinfo)
+    _dataman.save_mod_info(active_profile().modinfo)
     global __enabled_mods
     # reset so that next install will reflect the new state
     __enabled_mods = None
 
 def save_hidden_files():
-    _dataman.saveHiddenFiles(active_profile().hidden_files)
+    _dataman.save_hidden_files(active_profile().hidden_files)
 
 
 #</editor-fold>
@@ -410,7 +410,7 @@ def set_config_value(name, section, value, set_profile_override=True):
                                 active_profile() is not None)
 
     elif section == KeyStr.Section.GENERAL:
-        conf.updateConfig(name, section, value)
+        conf.update_config(name, section, value)
 
 
 def _change_configured_path(directory, new_path, profile_override):
@@ -418,7 +418,7 @@ def _change_configured_path(directory, new_path, profile_override):
     if profile_override:
         set_profile_setting(directory, KeyStr.Section.OVERRIDES, new_path)
     else:
-        conf.updateConfig(directory, KeyStr.Section.DIRECTORIES, new_path)
+        conf.update_config(directory, KeyStr.Section.DIRECTORIES, new_path)
 
 
 def set_directory(key, path, profile_override=True):
