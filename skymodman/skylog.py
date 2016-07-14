@@ -1,6 +1,5 @@
 import logging
-from logging import handlers
-from logging import config
+from logging import handlers, config
 from queue import Queue
 
 import sys
@@ -28,10 +27,18 @@ def setupLogListener():
     global __logging_queue
     global __listener
 
+    logging.addLevelName(50, "\033[1;31mCRITICAL\033[0m")
+    logging.addLevelName(40, "\033[0;31mERROR   \033[0m")
+    logging.addLevelName(30, "\033[0;33mWARNING \033[0m")
+    logging.addLevelName(20, "\033[0;37mINFO    \033[0m")
+    logging.addLevelName(10, "\033[0;34mDEBUG   \033[0m")
+
+
     q = Queue()
 
     console_handler = logging.StreamHandler()
-    detailed_formatter = logging.Formatter('\033[1;31m{levelname:7}\033[0m[{asctime}.{msecs:03.0f}] line \033[1m{lineno:4d}\033[0m in \033[1;30m{funcName:40}\033[0m: \033[0;37m{message}\033[0m', datefmt='%H:%M:%S', style='{')
+    # includes terminfo color codes for easier visual grepping
+    detailed_formatter = logging.Formatter('{levelname}[{asctime}.{msecs:03.0f}] line \033[1m{lineno:4d}\033[0m in \033[1;30m{funcName:40}\033[0m: \033[0;37m{message}\033[0m', datefmt='%H:%M:%S', style='{')
     # detailed_formatter = logging.Formatter('%(asctime)s %(name)-15s %(levelname)-8s %(message)s')
     # plain_formatter = logging.Formatter('%(asctime)s %(message)s')
 
@@ -46,13 +53,14 @@ def setupLogListener():
 
     q_listener.start()
 
-def newLogger(name, configuration=None, level="DEBUG"):
+# def newLogger(name, configuration=None, level="DEBUG"):
+def newLogger(name, configuration=None, level=10):
     """
     Create and return a new logger connected to the main logging queue.
 
     :param name: Name (preferably of the calling module) that will show in the log records
     :param configuration: a dict configuration for the logger, or None to use the basic config
-    :param str level: log message level
+    :param level: log message level; default is 10 (DEBUG)
     :return: logger object
     """
 
@@ -68,7 +76,8 @@ def newLogger(name, configuration=None, level="DEBUG"):
     logger = logging.getLogger(name)
 
     try:
-        logger.setLevel(level.upper())
+        # logger.setLevel(level.upper())
+        logger.setLevel(level)
     except ValueError:
         pass # let it default to warning
 
