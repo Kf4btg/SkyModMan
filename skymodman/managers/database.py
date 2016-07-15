@@ -9,9 +9,11 @@ from collections import defaultdict
 from skymodman import exceptions
 from skymodman.constants import db_fields, ModError
 from skymodman.utils import withlogger, tree
-# from skymodman.managers import modmanager as Manager
 
 _mcount = count()
+
+# max number of vars for sqlite query is 999
+_SQLMAX=900
 
 # from skymodman.utils import humanizer
 # @humanizer.humanize
@@ -39,10 +41,15 @@ class DBManager:
         );
         """
 
-    # having the foreign key deferrable should prevent the db freaking out when we temporarily delete entries in 'mods' to modify the install order.
+    # having the foreign key deferrable should prevent the db freaking
+    # out when we temporarily delete entries in 'mods' to modify the
+    # install order.
 
+    # names of all tables
     _tablenames = ("modfiles", "hiddenfiles", "mods")
-    _profile_reset_tables = ("hiddenfiles", "mods") # which tables need to be reset when profile changes
+
+    # which tables need to be reset when profile changes
+    _profile_reset_tables = ("hiddenfiles", "mods")
 
     __defaults = {
         "name": lambda v: v["directory"],
@@ -72,16 +79,10 @@ class DBManager:
 
         # These are created from the database, so it seems like it may
         # be best just to store them in this class:
-        # actuall no that was confusing. there;d store on the manager now
-        # nope not anymore. i don't know what's happening
 
         ## {filepath:[list of mods containing that file]}
-        # self.conflicts = defaultdict(list)
-
-        ## {mod:[contained files that are in conflict with other mods]}
-        # self.mods_with_conflicts = defaultdict(list)
-
         self.file_conflicts = defaultdict(list)
+        ## {mod:[contained files that are in conflict with other mods]}
         self.mods_with_conflicting_files = defaultdict(list)
 
 
@@ -127,11 +128,6 @@ class DBManager:
             # Apparently you can't use ? parameters for table names??!?!?
             for n in self._tablenames:
                 self._con.execute("DELETE FROM {table}".format(table=n))
-
-
-            # self._con.execute("DROP TABLE hiddenfiles, mods")
-
-            # self._con.executescript(self._SCHEMA)
 
     def reset_table(self, table_name):
         """
@@ -233,23 +229,6 @@ class DBManager:
         return self._con.execute(_q, params)
 
 
-    # def execute_(self, query, params=()):
-    #     """
-    #     Execute an arbitrary SQL-query using this object's
-    #     database connection as a context manager
-    #
-    #     :param str query: a valid SQL query
-    #     :param typing.Iterable params: If the `params` keyword is
-    #         provided with an Iterable object, it will be used as the
-    #         parameters for a parameterized query.
-    #     :rtype: typing.Generator[sqlite3.Row, Any, None]
-    #     """
-    #     with self._con:
-    #         # if params:
-    #             yield from self._con.execute(query, params)
-    #         # else:
-    #         #     yield from self._con.execute(query)
-
     def selectone(self, table, *fields, where="", params=()):
         """
         Like ``select()``, but just returns the first row from the result
@@ -258,23 +237,6 @@ class DBManager:
         return self.select(table, *fields,
                            where=where,
                            params=params).fetchone()
-
-    # def getone(self, query, params=()):
-    #     """
-    #     Like execute_, but just returns the first result
-    #
-    #     :param str query:
-    #     :param typing.Iterable params:
-    #     :return: The first row obtained
-    #     :rtype: sqlite3.Row
-    #     """
-    #     with self._con:
-    #         # if params:
-    #         cur=self._con.execute(query, params)
-    #         # else:
-    #         #     cur=self._con.execute(query)
-    #
-    #         return cur.fetchone()
 
     def update(self, sql, params=()):
         """
@@ -285,14 +247,10 @@ class DBManager:
         using the connection as a context manager) to make sure they're
         saved.
 
-        :param str sql:
+        :param str sql: a valid sql query
         :param typing.Iterable params:
         """
-        # with self._con:
-            # if params:
         return self._con.execute(sql, params)
-            # else:
-            #     return self._con.execute(sql)
 
     def updatemany(self, sql, params=None):
         """
@@ -309,12 +267,44 @@ class DBManager:
 
         return self._con.executemany(sql, params)
 
-        # with self._con:
-        #     if params:
-        #         return self._con.executemany(sql, params)
-        #     else:
-        #         return self._con.executemany(sql)
+    def delete(self, from_table, where="", params=()):
+        """
 
+        :param from_table:
+        :param where: if this string contains the format() code
+            '{qmarks}', then the correct number of "?" placeholders will
+             be determined from the length of params() and generated
+             automatically. This will also split the query up if needed
+             to ensure that the number of parameters supplied to sqlite
+             does not exceed the max number of allowed params per query.
+
+        :param params:
+        :return:
+        """
+
+        _q="DELETE FROM {}".format(from_table)
+
+        c = self._con.cursor()
+
+        if where:
+            _q+=" WHERE "
+            if "{qmarks}" in where:
+                if len(params) <= _SQLMAX:
+                    # nothing special
+                    _q+=where.format(qmarks=", ".join("?" * len(params)))
+                    c.execute(_q, params)
+                else:
+                    # something special
+                    _q += where
+                    sections, remainder = divmod(len(params), _SQLMAX)
+                    for i in range(sections):
+                        s = _SQLMAX * i
+                        query = _q.format(qmarks=", ".join('?' * _SQLMAX))
+                        c.execute(query, params[s:s + _SQLMAX])
+                    if remainder:
+                        query = _q.format(
+                            qmarks=", ".join('?' * remainder))
+                        c.execute(query, params[sections*_SQLMAX:])
 
     ##################
     ## DATA LOADING ##
@@ -395,7 +385,6 @@ class DBManager:
                                     "or file is malformed."
                                     .format(json_source))
 
-
         return success
 
     def _gethiddenfiles(self, basedict, currpath, flist, join=os.path.join):
@@ -444,8 +433,45 @@ class DBManager:
         with json_target.open('w') as f:
             f.write(str(htree))
 
-
         # print(tree.to_string(2))
+
+    def remove_hidden_files(self, mod_dir, filelist):
+        """
+        Remove the items (filepaths) in file list from the hiddenfiles
+        db table. If the filelist contains more than 900 items, the
+        files will be deleted in batches of 900 (999 is parameter
+        limit in sqlite)
+
+        :param mod_dir: directory name of the mod from which to delete
+        :param filelist: list of files
+        """
+
+        _q = """DELETE FROM hiddenfiles
+            WHERE directory = "{0}"
+            AND filepath IN ({1})"""
+
+        c = self._con.cursor()
+
+        if len(filelist) <= _SQLMAX:
+            # nothing special
+            _q.format(mod_dir,
+                      ", ".join("?" * len(filelist)))
+            c.execute(_q, filelist)
+        else:
+            # something special
+            sections, remainder = divmod(len(filelist), _SQLMAX)
+            for i in range(sections):
+                s = _SQLMAX * i
+                query = _q.format(mod_dir,
+                                  ", ".join('?' * _SQLMAX))
+                c.execute(query, filelist[s:s + _SQLMAX])
+            if remainder:
+                query = _q.format(mod_dir,
+                                  ", ".join('?' * remainder))
+                c.execute(query, filelist[sections * _SQLMAX:])
+
+        return c
+
 
     def files_hidden(self, for_mod):
         """
@@ -472,25 +498,10 @@ class DBManager:
         :param Iterable[tuple] mod_list:
         """
 
-        # db_fields[:-1] to ignore the error field for now (leave it at
-        # its default of 0)
+        # db_fields[:-1] to ignore the error field for now
+        # (leave it at its default of 0)
         dbfields_ = db_fields[:-1]
 
-        # query = "INSERT INTO mods({}) VALUES ({})".format(
-        #     ", ".join(dbfields_),
-        #     ", ".join("?" *len(dbfields_))
-        # )
-        # query = "INSERT INTO mods(" + ", ".join(db_fields[:-1]) + \
-        #         ") VALUES ("
-        # query += ", ".join("?" * len(db_fields[:-1])) + ")"
-        #
-        # if doprint:
-        #     print(query)
-        #     # print(list(mod_list))
-        #     for m in mod_list:
-        #         print(m)
-
-        # self.LOGGER.debug(query)
         with self._con:
             # insert the list of row-tuples into the in-memory db
             self._con.executemany(
@@ -522,13 +533,6 @@ class DBManager:
         # field order doesn't matter when saving
         noord_fields = set(db_fields) ^ {"ordinal", "error"}
 
-
-
-        # query = "SELECT {} FROM (SELECT * FROM mods ORDER BY ordinal)"
-        # query.format(", ".join(noord_fields))
-
-        # query="SELECT " + ", ".join(noord_fields)
-        # query+=" FROM (SELECT * FROM mods ORDER BY ordinal)"
         modinfo = []
 
         # select (all fields other than ordinal & error)
@@ -674,7 +678,6 @@ class DBManager:
         files were still in the system RAM?
 
         :param str directory: path to the configured mod-storage dir
-        :return:
         """
 
         # go through each folder indivually
@@ -697,7 +700,6 @@ class DBManager:
         :param str mod_root:
         :return:
         """
-        # modroot = str(directory)  # the abs path for this mod's folder
 
         mfiles = []
         for root, dirs, files in os.walk(mod_root):
@@ -733,14 +735,6 @@ class DBManager:
         # delete the view if it exists
         self._con.execute("DROP VIEW IF EXISTS filesbymodorder")
 
-        # q="""
-        # CREATE VIEW filesbymodorder AS
-        #     SELECT ordinal, f.directory, filepath
-        #     FROM modfiles f, mods m
-        #     WHERE f.directory=m.directory
-        #     ORDER BY ordinal
-        # """
-
         # create the view
         with self._con:
             # self._con.execute(q)
@@ -751,18 +745,6 @@ class DBManager:
                     WHERE f.directory=m.directory
                     ORDER BY ordinal
                 """)
-
-        # detect_dupes_query = """
-        #     SELECT f.filepath, f.ordinal, f.directory
-        #         FROM filesbymodorder f
-        #         INNER JOIN (
-        #             SELECT filepath, COUNT(*) AS C
-        #             FROM filesbymodorder
-        #             GROUP BY filepath
-        #             HAVING C > 1
-        #         ) dups ON f.filepath=dups.filepath
-        #         ORDER BY f.filepath, f.ordinal
-        #         """
 
         file=''
         conflicts = defaultdict(list)

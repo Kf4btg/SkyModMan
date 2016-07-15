@@ -155,7 +155,6 @@ class _ModManager:
 
         self._pman.set_active_profile(profile_name)
 
-
         # have to reinitialize the database
         if self._db_initialized:
             self._dman.reinit()
@@ -261,8 +260,6 @@ class _ModManager:
             self.LOGGER << "Could not load mod info, reading " \
                        "from configured mods directory."
 
-            # self._dman.get_mod_data_from_directory(
-            #     self._cman.paths.dir_mods)
             self._dman.get_mod_data_from_directory(
                 self.get_directory(KeyStr.Dirs.MODS))
 
@@ -272,8 +269,6 @@ class _ModManager:
         # FIXME: avoid doing this on profile change
         # _logger << "Loading list of all Mod Files on disk"
 
-        # self._dman.load_all_mod_files(self._cman.paths.dir_mods)
-
         # make sure we use the profile override if there is one
         self._dman.load_all_mod_files(
             self.get_directory(KeyStr.Dirs.MODS))
@@ -281,7 +276,6 @@ class _ModManager:
         # let's also add the files from the base
         # Skyrim Data folder to the db
 
-        # sky_dir = self._cman.paths.dir_skyrim
         sky_dir = self.get_directory(KeyStr.Dirs.SKYRIM)
 
         if sky_dir is None:
@@ -295,8 +289,6 @@ class _ModManager:
 
         # [print(*r) for r in _dataman._con.execute("select *
         # from modfiles where directory='Skyrim'")]
-
-
 
         # _logger << "Finished loading list of all Mod Files on disk"
 
@@ -319,15 +311,11 @@ class _ModManager:
         """
         if for_mod is None:
             yield from self._dman.select("hiddenfiles")
-            # yield from self._dman.execute_("Select * from hiddenfiles")
         else:
             yield from (r['filepath'] for r in self._dman.select(
                 "hiddenfiles", "filepath",
                 where="directory = ?", params=(for_mod, )
             ))
-            # yield from (t[0] for t in self._dman.execute_(
-            #     "Select filepath from hiddenfiles where directory=?",
-            #     (for_mod,)))
 
     ##=============================================
     ## Mod Information
@@ -343,7 +331,6 @@ class _ModManager:
 
         return {r['directory']: r['error'] for r in
                 self._dman.select("mods", "directory", "error")}
-                # self._dman.execute_("SELECT directory, error FROM mods")}
 
     def allmodinfo(self):
         """
@@ -373,7 +360,6 @@ class _ModManager:
 
         :return: True if no errors encountered, False otherwise
         """
-        # return self._dman.validate_mods_list(self.Config['dir_mods'])
         return self._dman.validate_mods_list(
             self.get_directory(KeyStr.Dirs.MODS))
 
@@ -389,8 +375,9 @@ class _ModManager:
 
         rows_to_delete = [(m.ordinal,) for m in changes]
 
-        # a generator that creates tuples of values by sorting the values of the
-        # modentry according the order defined in constants._db_fields
+        # a generator that creates tuples of values by sorting the
+        # values of the modentry according the order defined in
+        # constants._db_fields
         dbrowgen = (
             tuple([getattr(mod, field)
                    for field in sorted(mod._fields,
@@ -402,24 +389,18 @@ class _ModManager:
         # using the context manager may allow deferrable foreign
         # to go unsatisfied for a moment
 
-        # con = self._dman.conn
         with self._dman.conn:
-            # con.set_trace_callback(print)
-
             # delete the row with the given ordinal
             cur = self.DB.updatemany("DELETE FROM mods WHERE ordinal=?",
                                 rows_to_delete)
 
-            # and reinsert
-            query = "INSERT INTO mods(" + ", ".join(
-                _db_fields) + ") VALUES ("
-            query += ", ".join("?" * len(_db_fields)) + ")"
-
             # reuse the same cursor
-            cur.executemany(query, dbrowgen)
-
-            # self.DB.updatemany(query, dbrowgen)
-            # con.set_trace_callback(None)
+            # and reinsert
+            cur.executemany(
+                "INSERT INTO mods({}) VALUES ({})".format(
+                    ", ".join(_db_fields),
+                    ", ".join("?" * len(_db_fields))
+                ), dbrowgen)
 
         # And finally save changes to disk
         self.save_mod_list()
@@ -634,8 +615,6 @@ class _ModManager:
                                          where="filepath = ?",
                                          params=(file.lower(), )
                        ))
-            #            self._dman.execute_(
-            # "SELECT directory FROM modfiles WHERE filepath=?",
 
         if matches:
             if any(m == 'Skyrim'
