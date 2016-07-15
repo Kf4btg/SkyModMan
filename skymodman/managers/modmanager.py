@@ -114,10 +114,10 @@ class _ModManager:
         Set the active profile to the profile given by `profile_name`
         :param profile:
         """
-        # save this in case of a rollback
 
         # TODO: would it be possible...to make a context manager for profiles? I.e., the entire time a profile is active, we'd be within the "with" statement of a context manager? And when it closes we make sure to write all changed data? Or, it that's not feasible, maybe just the switch mechanics below could be wrapped in one for better error handling.
 
+        # save this in case of a rollback
         old_profile = self.profile.name if self.profile else None
 
         try:
@@ -245,8 +245,8 @@ class _ModManager:
         on disk for the given profile into an in-memory database
         that will be used to provide data to the rest of the app.
         """
-        self.LOGGER << "loading data for active profile: " + \
-                       self.profile.name
+        self.LOGGER << "loading data for active profile: {}".format(
+                       self.profile.name)
 
         # try to read modinfo file
         if self._dman.load_mod_info(self.profile.modinfo):
@@ -257,7 +257,7 @@ class _ModManager:
 
         else:
             # if it fails, re-read mod data from disk
-            self.LOGGER << "Could not load mod info, reading " \
+            self.LOGGER << "Could not load mod info; reading " \
                        "from configured mods directory."
 
             self._dman.get_mod_data_from_directory(
@@ -298,24 +298,24 @@ class _ModManager:
         # load set of files hidden by user
         self._dman.load_hidden_files(self.profile.hidden_files)
 
-    def hidden_files(self, for_mod=None):
-        """
-
-        :param str for_mod: If specified, must be the directory name of an
-            installed mod; will yield only the files marked as hidden for
-            that particular mod.
-        :return: a generator over the Rows (basically a dict with keys
-            'directory' and 'filepath') of hiddenfiles; if 'for_mod' was
-            given, will instead return a generator over just the hidden
-            filepaths (generator of strings)
-        """
-        if for_mod is None:
-            yield from self._dman.select("hiddenfiles")
-        else:
-            yield from (r['filepath'] for r in self._dman.select(
-                "hiddenfiles", "filepath",
-                where="directory = ?", params=(for_mod, )
-            ))
+    # def hidden_files(self, for_mod=None):
+    #     """
+    #
+    #     :param str for_mod: If specified, must be the directory name of an
+    #         installed mod; will yield only the files marked as hidden for
+    #         that particular mod.
+    #     :return: a generator over the Rows (basically a dict with keys
+    #         'directory' and 'filepath') of hiddenfiles; if 'for_mod' was
+    #         given, will instead return a generator over just the hidden
+    #         filepaths (generator of strings)
+    #     """
+    #     if for_mod is None:
+    #         yield from self._dman.select("hiddenfiles")
+    #     else:
+    #         yield from (r['filepath'] for r in self._dman.select(
+    #             "hiddenfiles", "filepath",
+    #             where="directory = ?", params=(for_mod, )
+    #         ))
 
     ##=============================================
     ## Mod Information

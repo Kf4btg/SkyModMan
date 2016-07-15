@@ -16,7 +16,7 @@ from functools import total_ordering, partial
 from collections import deque
 import re
 
-Manager = modmanager.Manager()
+Manager = None
 
 
 # <editor-fold desc="ModuleConstants">
@@ -121,6 +121,9 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
         super().__init__(**kwargs)
         self._parent = parent
+
+        global Manager
+        Manager = modmanager.Manager()
 
         # noinspection PyUnresolvedReferences
         self.mod_entries = [] #type: list[QModEntry]

@@ -22,7 +22,7 @@ F = constants.qFilters
 TAB = constants.Tab
 KeyStr = constants.KeyStr
 
-Manager = modmanager.Manager()
+Manager = None
 
 ## Interestingly, using the icon font as a font works just fine;
 ## One can do things like:
@@ -54,6 +54,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         :param kwargs: anything to pass on the the base class constructors
         """
         super().__init__(**kwargs)
+
+        global Manager
+        Manager = modmanager.Manager()
 
         self.LOGGER.info("Initializing ModManager Window")
         ModManagerWindow.instance = self

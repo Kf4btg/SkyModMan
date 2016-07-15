@@ -10,8 +10,8 @@ from skymodman.utils import withlogger #, tree
 from skymodman.utils.fsutils import check_path
 from skymodman.managers import modmanager
 # from skymodman.utils import humanizer
-
-Manager = modmanager.Manager()
+Manager = None
+# Manager = modmanager.Manager()
 
 # actually provides a slight (but noticeable) speedup
 Qt_Checked = Qt.Checked
@@ -275,6 +275,7 @@ class QFSItem(FSItem):
 
     @property
     def checkState(self):
+        ## XXX: This is not a trivial operation (for directories--it is for files), so it likely shouldn't be a property
         # if not self.isdir:
         if self.isdir and self.child_count>0:
             return self.children_checkState()
@@ -385,6 +386,10 @@ class ModFileTreeModel(QAbstractItemModel):
         :param kwargs: anything to pass on to base class
         :return:
         """
+
+        global Manager
+        Manager = modmanager.Manager()
+
         # noinspection PyArgumentList
         super().__init__(parent=parent,**kwargs)
         self._parent = parent
@@ -392,7 +397,7 @@ class ModFileTreeModel(QAbstractItemModel):
         self.modname = None #type: str
         self.rootitem = None #type: QFSItem
         # self.dbconn = Manager.DB.conn
-        self.cursor = Manager.getdbcursor()
+        # self.cursor = Manager.getdbcursor()
 
     @property
     def root_path(self):
@@ -449,7 +454,7 @@ class ModFileTreeModel(QAbstractItemModel):
             self.endResetModel()
 
             # reset cursor
-            self.cursor = Manager.getdbcursor()
+            # self.cursor = Manager.getdbcursor()
 
             # emit notifier signal
             self.rootPathChanged.emit(path)
@@ -477,7 +482,15 @@ class ModFileTreeModel(QAbstractItemModel):
             n: n.lower() == 'meta.ini')
 
     def _mark_hidden_files(self):
-        hfiles = list(Manager.hidden_files(for_mod=self.modname))
+
+
+        hfiles = list(r['filepath'] for r in Manager.DB.select(
+            "hiddenfiles",
+            "filepath",
+            where="directory = ?",
+            params=(self.modname,)
+        ))
+
         # only files (with their full paths relative to the root of
         # the mod directory) are in the hidden files list; thus we
         # need only compare files and not dirs to the list. As usual,
@@ -686,7 +699,7 @@ class ModFileTreeModel(QAbstractItemModel):
             Manager.DB.commit()
             Manager.save_hidden_files()
             # afterwards, refresh cursor
-            self.cursor = Manager.getdbcursor()
+            # self.cursor = Manager.getdbcursor()
             self.hasUnsavedChanges.emit(False)
 
     def revert(self):
@@ -697,7 +710,7 @@ class ModFileTreeModel(QAbstractItemModel):
         Manager.DB.rollback()
         self._setup_or_reload_tree()
         # afterwards, refresh cursor
-        self.cursor = Manager.getdbcursor()
+        # self.cursor = Manager.getdbcursor()
 
         self.endResetModel()
         self.hasUnsavedChanges.emit(False)

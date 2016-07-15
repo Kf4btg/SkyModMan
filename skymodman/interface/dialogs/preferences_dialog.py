@@ -50,11 +50,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         PLP = constants.ProfileLoadPolicy
 
         ## Default Path values ##
-        # pass false for `use_profile_override` to get the default value;
-        # make sure that we have an empty string if get_directory
-        # returns None.
-        # self.paths={p:Manager.get_directory(p, False) or "" for p in KeyStr.Dirs}
-
+        # returns empty strings for unset paths
         self.paths={p:Config.paths[p] for p in D}
 
         ## associate text boxes with directories ##
@@ -148,12 +144,14 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             else:
                 lbl.hide()
 
-        # have the line edits with an indicator label emit a signal when editing is finished
+        # have the line edits with an indicator label emit a signal
+        # when editing is finished that contains their key-string
         for k,b in self.path_boxes.items():
             if k in self.indicator_labels.keys():
                 b.editingFinished.connect(
                     partial(self.pathEditFinished.emit, k))
 
+        # and connect that signal to our validation handler
         self.pathEditFinished.connect(self.on_path_edit)
 
         ##=================================
@@ -168,7 +166,10 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         self._selected_profile = self.combo_profiles.currentData()
         self.check_default()
 
-        self.combo_profiles.currentTextChanged.connect(self.change_profile)
+        # we don't care about the value it sends, so we just as easily
+        # could have used 'textchanged' rather than index, but this
+        # seems lighter/more appropriate
+        self.combo_profiles.currentIndexChanged.connect(self.change_profile)
 
         self.cbox_default.toggled.connect(self.set_default_profile)
 
@@ -189,8 +190,9 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             partial(self.choose_directory, D.VFS))
 
         ## apply button ##
-        btn_apply = self.prefs_btnbox.button(QDialogButtonBox.Apply)
-        self.prefs_btnbox.button(QDialogButtonBox.Apply).clicked.connect(self.apply_changes)
+        # btn_apply = self.prefs_btnbox.button(QDialogButtonBox.Apply)
+        self.prefs_btnbox.button(QDialogButtonBox.Apply
+                                 ).clicked.connect(self.apply_changes)
 
         # also apply changes when clicking OK
         self.accepted.connect(self.apply_changes)
@@ -264,16 +266,19 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
     @pyqtSlot()
     def change_profile(self):
-        """Update the data on the profiles tab to reflect the data from the selected profile."""
+        """
+        Update the data on the profiles tab to reflect the data from
+        the selected profile.
+        """
         self._selected_profile = self.combo_profiles.currentData()
         self.check_default()
 
     @pyqtSlot(bool)
     def set_default_profile(self, checked):
         """
-        When the user checks the "default" box next to the profile selector,
-        update the config to mark the current profile as default.
-        If they uncheck it, mark 'default' as default...
+        When the user checks the "default" box next to the profile
+        selector, update the config to mark the current profile as
+        default. If they uncheck it, mark 'default' as default...
         """
         if checked:
             if self._selected_profile:
@@ -283,8 +288,8 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
     def check_default(self):
         """
-        If the active profile is marked as default, check the "is_default" checkbox.
-        Otherwise, uncheck it.
+        If the active profile is marked as default, check the
+        "is_default" checkbox. Otherwise, uncheck it.
         """
         # make sure we have a valid profile
         if self._selected_profile:
@@ -314,49 +319,52 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         for key, path in self.paths.items():
             newpath = self.path_boxes[key].text()
 
-            if path != newpath:
-                # allow changing if the path is valid or cleared
+            # skip if unchanged
+            if path == newpath: continue
 
-                if not newpath:
-                    # if they unset the path, just change it
+            # allow changing if the path is valid or cleared
+
+            if not newpath:
+                # if they unset the path, just change it
+                self._update_path(key, newpath)
+
+            # if they set a valid new path, ask if they want to copy
+            # their existing data (assuming there is any)
+            # TODO: remember choice. Also for everything else in app
+            elif os.path.isabs(newpath) and os.path.exists(newpath):
+                if not path:
+                    # if the path is currently unset, nothing to move
                     self._update_path(key, newpath)
-
-                # if they set a valid new path, ask if they want to copy
-                # their existing data (assuming there is any)
-                elif os.path.isabs(newpath) and os.path.exists(newpath):
-                    if not path:
-                        # if the path is currently unset, nothing to move
-                        self._update_path(key, newpath)
-                    else:
-                        do_move, remove_old = checkbox_message(
-                            title="Transfer {} Data?".format(
-                                constants.DisplayNames[key]),
-                            text="Would you like to move your existing "
-                                 "data to the new location?",
-                            checkbox_text="Also remove original directory",
-                            checkbox_checked=True)
-                        if do_move:
-                            try:
-                                Config.move_dir(key, newpath, remove_old)
-                            except exceptions.FileAccessError as e:
-                                message('critical',
-                                        "Cannot perform move operation.",
-                                        "The following error occurred:",
-                                        str(e), buttons='ok',
-                                        default_button='ok')
-                            except exceptions.MultiFileError as mfe:
-                                s=""
-                                for file, exc in mfe.errors:
-                                    s+="{0}: {1}\n".format(file, exc)
-                                message('critical',
-                                        title="Errors during move operation",
-                                        text="The move operation may not have fully completed. The following errors were encountered: ",
-                                        info_text=s,
-                                        buttons='ok', default_button='ok')
-                            else:
-                                self._update_path(key, newpath)
+                else:
+                    do_move, remove_old = checkbox_message(
+                        title="Transfer {} Data?".format(
+                            constants.DisplayNames[key]),
+                        text="Would you like to move your existing "
+                             "data to the new location?",
+                        checkbox_text="Also remove original directory",
+                        checkbox_checked=True)
+                    if do_move:
+                        try:
+                            Config.move_dir(key, newpath, remove_old)
+                        except exceptions.FileAccessError as e:
+                            message('critical',
+                                    "Cannot perform move operation.",
+                                    "The following error occurred:",
+                                    str(e), buttons='ok',
+                                    default_button='ok')
+                        except exceptions.MultiFileError as mfe:
+                            s=""
+                            for file, exc in mfe.errors:
+                                s+="{0}: {1}\n".format(file, exc)
+                            message('critical',
+                                    title="Errors during move operation",
+                                    text="The move operation may not have fully completed. The following errors were encountered: ",
+                                    info_text=s,
+                                    buttons='ok', default_button='ok')
                         else:
                             self._update_path(key, newpath)
+                    else:
+                        self._update_path(key, newpath)
 
 
     def _update_path(self, key, newpath):
