@@ -96,7 +96,7 @@
                 <string>Profile marked as Default on the Profiles tab</string>
                </property>
                <property name="text">
-                <string>&amp;Default profile</string>
+                <string>Defa&amp;ult profile</string>
                </property>
               </widget>
              </item>
@@ -436,7 +436,7 @@
            </widget>
           </item>
           <item row="0" column="2">
-           <widget class="QToolButton" name="btn_skydir_override">
+           <widget class="QToolButton" name="btn_choose_skydir_override">
             <property name="enabled">
              <bool>false</bool>
             </property>
@@ -460,7 +460,7 @@
            </widget>
           </item>
           <item row="1" column="2">
-           <widget class="QToolButton" name="btn_moddir_override">
+           <widget class="QToolButton" name="btn_choose_moddir_override">
             <property name="enabled">
              <bool>false</bool>
             </property>
@@ -484,7 +484,7 @@
            </widget>
           </item>
           <item row="2" column="2">
-           <widget class="QToolButton" name="btn_vfsdir_override">
+           <widget class="QToolButton" name="btn_choose_vfsdir_override">
             <property name="enabled">
              <bool>false</bool>
             </property>
@@ -636,7 +636,7 @@
   <connection>
    <sender>btn_enable_skydir_override</sender>
    <signal>toggled(bool)</signal>
-   <receiver>btn_skydir_override</receiver>
+   <receiver>btn_choose_skydir_override</receiver>
    <slot>setEnabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">
@@ -668,7 +668,7 @@
   <connection>
    <sender>btn_enable_moddir_override</sender>
    <signal>toggled(bool)</signal>
-   <receiver>btn_moddir_override</receiver>
+   <receiver>btn_choose_moddir_override</receiver>
    <slot>setEnabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">
@@ -700,7 +700,7 @@
   <connection>
    <sender>btn_enable_vfsdir_override</sender>
    <signal>toggled(bool)</signal>
-   <receiver>btn_vfsdir_override</receiver>
+   <receiver>btn_choose_vfsdir_override</receiver>
    <slot>setEnabled(bool)</slot>
    <hints>
     <hint type="sourcelabel">

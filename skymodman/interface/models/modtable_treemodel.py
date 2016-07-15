@@ -125,8 +125,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         global Manager
         Manager = modmanager.Manager()
 
-        # noinspection PyUnresolvedReferences
-        self.mod_entries = [] #type: list[QModEntry]
+        self.mod_entries = [] #type: list [QModEntry]
 
         self.vheader_field = COL_ORDER
 

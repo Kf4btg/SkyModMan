@@ -57,8 +57,7 @@ class FSItem:
             self._children = []
             self._childnames = []
         else:
-            # noinspection PyUnresolvedReferences
-            self._children = None #type: list[FSItem]
+            self._children = None #type: list [FSItem]
             self._childnames = None
 
         self._row=0

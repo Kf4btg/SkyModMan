@@ -279,8 +279,8 @@ class _ModManager:
         sky_dir = self.get_directory(KeyStr.Dirs.SKYRIM)
 
         if sky_dir is None:
-            self.LOGGER << "The main Skyrim folder could not be " \
-                           "found. That's going to be a problem."
+            self.LOGGER.warning("The main Skyrim folder could not be "
+                           "found. That's going to be a problem.")
         else:
             for f in Path(sky_dir).iterdir():
                 if f.name.lower() == "data":
@@ -436,12 +436,14 @@ class _ModManager:
 
         # IF there is an active profile, AND we happen to be asking for
         # a directory, AND use_profile_override is True, AND the active
-        # profile actually contains an override for this directory:
-        # return that override
+        # profile actually contains an override for this directory AND
+        # that override is currently enabled............:
+        #   return that override
         if ap and section == KeyStr.Section.DIRECTORIES \
                 and use_profile_override \
-                and ap.Config[KeyStr.Section.OVERRIDES][name]:
-            val = ap.Config[KeyStr.Section.OVERRIDES][name]
+                and ap.override_enabled(name) \
+                and ap.diroverride(name):
+            val = ap.diroverride(name)
         else:
             # in all other situations, just
             # return the stored config value

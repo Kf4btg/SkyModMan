@@ -413,7 +413,6 @@ class ArchiveFS:
 
     ROOT_INODE=0
 
-    # noinspection PyUnresolvedReferences
     def __init__(self):
 
         # create a 'custom' subclass of CIPath that associates all its instances
@@ -426,7 +425,7 @@ class ArchiveFS:
         """:type: list[InodeRecord|None]"""
 
         # mapping of directory-inodes to set of inodes they contain
-        self.directories = dict() # type: dict[int, set[int]]
+        self.directories = dict() # type: dict [int, set [int]]
         # inode -> {inode, ...}
 
         # create root of filesystem
@@ -921,6 +920,7 @@ class ArchiveFS:
         Create a file.
         By default, any parents of `path` that do not exist will be created. If `path` already exists, this function does nothing.
 
+        :param path:
         :param name: if given, path is assumed to be the path to the directory that will contain the file named 'name'. If absent or None, `path` itself is considered to be the full path to the new file.
         """
         if name:
@@ -938,6 +938,7 @@ class ArchiveFS:
         """
         By default, any parents of `path` that do not exist will be created.
 
+        :param path:
         :param exist_ok: if True, an error will not be raised when the directory already exists
         """
         path = PureCIPath(path)
@@ -1252,6 +1253,7 @@ class ArchiveFS:
                     self.rmdir(dest)  # just let the error propagate
                 else:
                     e = Error_ENOTDIR(src)
+                    # noinspection PyUnresolvedReferences
                     e.msg = "Will not overwrite directory '{dest}' with non-directory '{path}'".format(
                         dest=dest)
                     raise e

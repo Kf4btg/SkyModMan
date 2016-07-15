@@ -15,6 +15,11 @@ from skymodman import constants, exceptions
 
 
 
+# because I'm lazy
+D = constants.KeyStr.Dirs
+UI = constants.KeyStr.UI
+PLP = constants.ProfileLoadPolicy
+
 Manager = modmanager.Manager()
 # ref to the ConfigManager
 Config = Manager.Config
@@ -42,28 +47,30 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
     def __init__(self, profilebox_model, profilebox_index, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # setup initial UI
         self.setupUi(self)
 
-        # because I'm lazy
-        D = constants.KeyStr.Dirs
-        UI = constants.KeyStr.UI
-        PLP = constants.ProfileLoadPolicy
+        ## create mappings for all the component groups using ##
+        ## our constant key-strings ##
 
-        ## Default Path values ##
+        ## Default Path values
         # returns empty strings for unset paths
         self.paths={p:Config.paths[p] for p in D}
 
-        ## associate text boxes with directories ##
+        ## associate text boxes with directories
         self.path_boxes = {
             D.PROFILES: self.le_profdir,
-            D.SKYRIM: self.le_dirskyrim,
-            D.MODS:   self.le_dirmods,
-            D.VFS:    self.le_dirvfs
+            D.SKYRIM:   self.le_dirskyrim,
+            D.MODS:     self.le_dirmods,
+            D.VFS:      self.le_dirvfs
         }
 
-        ##=================================
-        ## Tab 1: General/App dirs
-        ##---------------------------------
+        self.path_choosers = {
+            D.PROFILES: self.btn_choosedir_profiles,
+            D.SKYRIM:   self.btn_choosedir_skyrim,
+            D.MODS:     self.btn_choosedir_mods,
+            D.VFS:      self.btn_choosedir_vfs
+        }
 
         ## associate checkboxes w/ preference names
         self.checkboxes = {
@@ -71,25 +78,75 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             UI.RESTORE_WINPOS: self.cbox_restore_pos
         }
 
-        ## Set UI to reflect current preferences ##
-
-        # -- checkboxes
-        self.cbox_restore_size.setChecked(
-            app_settings.Get(UI.RESTORE_WINSIZE))
-
-        self.cbox_restore_pos.setChecked(
-            app_settings.Get(UI.RESTORE_WINPOS))
-
-        ## Setup Profile Load Policy radiobuttons ##
+        ## Setup Profile Load Policy radiobuttons
         self.radios = {
             PLP.last: self.rad_load_last_profile,
             PLP.default: self.rad_load_default_profile,
             PLP.none: self.rad_load_no_profile
         }
 
+        #-- "path is valid" indicator labels
+
+        self.indicator_labels = {
+            D.SKYRIM: self.lbl_skydir_status,
+            D.MODS:   self.lbl_moddir_status,
+            D.VFS:    self.lbl_vfsdir_status
+        }
+
+        ## dir-override boxes
+
+        self.override_buttons = {
+            D.SKYRIM: self.btn_enable_skydir_override,
+            D.MODS:   self.btn_enable_moddir_override,
+            D.VFS:    self.btn_enable_vfsdir_override
+        }
+
+        self.override_boxes = {
+            D.SKYRIM: self.le_skydir_override,
+            D.MODS:   self.le_moddir_override,
+            D.VFS:    self.le_vfsdir_override
+        }
+
+        self.override_choosers = {
+            D.SKYRIM: self.btn_choose_skydir_override,
+            D.MODS:   self.btn_choose_moddir_override,
+            D.VFS:    self.btn_choose_vfsdir_override
+        }
+
+        ##-- some data associations --##
+
         # load and store the current policy
         self._active_plp = self._selected_plp = app_settings.Get(
                              UI.PROFILE_LOAD_POLICY)
+
+        # reuse the main profile-combobox-model for this one here
+        self.combo_profiles.setModel(profilebox_model)
+        self.combo_profiles.setCurrentIndex(profilebox_index)
+
+        # store the currently-selected Profile object
+        self._selected_profile = self.combo_profiles.currentData()
+        """:type: skymodman.managers.profiles.Profile"""
+
+        ## and now finish setting up the UI
+        self.setupMoreUI()
+
+    def setupMoreUI(self):
+        """More adjustments to the UI"""
+
+        # make sure the General tab is showing
+        self.prefs_tabwidget.setCurrentIndex(0)
+
+
+        ##=================================
+        ## Tab 1: General/App dirs
+        ##---------------------------------
+
+        # -- checkboxes should reflect current settings
+        self.cbox_restore_size.setChecked(
+            app_settings.Get(UI.RESTORE_WINSIZE))
+
+        self.cbox_restore_pos.setChecked(
+            app_settings.Get(UI.RESTORE_WINPOS))
 
         # check the appropriate radio button based on current policy;
         # associate a change in the radio selection with updating
@@ -104,90 +161,93 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             rb.toggled.connect(partial(self.profilePolicyChanged.emit,
                                        plp.value))
 
-        # and connect this signal to the handler which updates
-        # _selected_plp
+        # noinspection PyUnresolvedReferences
+        # and connect this signal to the handler
+        # which updates _selected_plp
         self.profilePolicyChanged.connect(
             self.on_profile_policy_changed)
 
-
-        ## setup profiles-dir selector
-        self.le_profdir.setText(self.paths[D.PROFILES])
-
-
-        ##=================================
-        ## Tab 2: Default Data Directories
-        ##---------------------------------
-
-        #-- line-edit text displays
-        self.le_dirskyrim.setText(self.paths[D.SKYRIM])
-        self.le_dirmods.setText(self.paths[D.MODS])
-        self.le_dirvfs.setText(self.paths[D.VFS])
-
-        #-- "path is valid" indicator labels
-
-        self.indicator_labels = {
-            D.SKYRIM: self.lbl_skydir_status,
-            D.MODS: self.lbl_moddir_status,
-            D.VFS: self.lbl_vfsdir_status
-        }
-
-        # hide the label for valid paths
-        for key, lbl in self.indicator_labels.items():
-            if not self.paths[key]:
-                lbl.setText(_missing_path_str)
-                lbl.setStyleSheet(_missing_path_style)
-                lbl.setVisible(True)
-            elif not check_path(self.paths[key]):
-                lbl.setText(_invalid_path_str)
-                lbl.setStyleSheet(_invalid_path_style)
-                lbl.setVisible(True)
-            else:
-                lbl.hide()
-
-        # have the line edits with an indicator label emit a signal
-        # when editing is finished that contains their key-string
-        for k,b in self.path_boxes.items():
-            if k in self.indicator_labels.keys():
-                b.editingFinished.connect(
-                    partial(self.pathEditFinished.emit, k))
-
-        # and connect that signal to our validation handler
-        self.pathEditFinished.connect(self.on_path_edit)
 
         ##=================================
         ## Tab 3: Profiles
         ##---------------------------------
 
-        # reuse the main profile-combobox-model for this one here
-        self.combo_profiles.setModel(profilebox_model)
-        self.combo_profiles.setCurrentIndex(profilebox_index)
-
-        # store the currently-selected Profile object
-        self._selected_profile = self.combo_profiles.currentData()
+        # make sure to check the 'default' box if necessary
         self.check_default()
 
         # we don't care about the value it sends, so we just as easily
         # could have used 'textchanged' rather than index, but this
         # seems lighter/more appropriate
-        self.combo_profiles.currentIndexChanged.connect(self.change_profile)
+        self.combo_profiles.currentIndexChanged.connect(
+            self.change_profile)
 
         self.cbox_default.toggled.connect(self.set_default_profile)
 
         ##=================================
-        ## Connect Buttons
+        ## The Big Loop
         ##---------------------------------
+        ## for each of the application-directories,
+        ## setup any UI-element associated with it to
+        ## the correct initial status.
 
-        self.btn_choosedir_profiles.clicked.connect(
-            partial(self.choose_directory, D.PROFILES))
+        # game-related
+        gdirs = (D.SKYRIM, D.MODS, D.VFS)
 
-        self.btn_choosedir_skyrim.clicked.connect(
-            partial(self.choose_directory, D.SKYRIM))
+        # so many things are keyed with the app directory
+        for d in D:
+            dpath = self.paths[d]
+            # show path text
+            self.path_boxes[d].setText(dpath)
 
-        self.btn_choosedir_mods.clicked.connect(
-            partial(self.choose_directory, D.MODS))
+            # connect dir-chooser btns
+            self.path_choosers[d].clicked.connect(
+                partial(self.choose_directory, d))
 
-        self.btn_choosedir_vfs.clicked.connect(
-            partial(self.choose_directory, D.VFS))
+            # essentially all but the Profiles dir
+            if d in gdirs:
+
+                # handle indicator labels
+                lbl = self.indicator_labels[d]
+                if not dpath:
+                    self._mark_missing_path(lbl)
+                elif not check_path(dpath):
+                    self._mark_invalid_path(lbl)
+                elif not os.path.isabs(dpath):
+                    self._mark_nonabs_path(lbl)
+                else:
+                    # hide the label for valid paths
+                    lbl.hide()
+
+                # have the line edits with an indicator label emit a signal
+                # when editing is finished that contains their key-string
+                self.path_boxes[d].editingFinished.connect(
+                    partial(self.pathEditFinished.emit, d))
+
+                ##---------------------##
+                # override buttons/choosers
+                self.override_boxes[d].setText(self._selected_profile.diroverride(d))
+
+                obtn = self.override_buttons[d]
+                # if override is enabled in profile, check the button
+                obtn.setChecked(self._selected_profile.override_enabled(d))
+
+                # connect toggle signal to profile-config-updater
+                obtn.toggled.connect(partial(self.on_override_toggled, d))
+
+                # the buttons are already set to toggle the enable status of
+                # the entry field/dir chooser when pressed, so make sure those
+                # are in the correct enable state to begin with
+                self.override_boxes[d].setEnabled(obtn.isChecked())
+                self.override_choosers[d].setEnabled(obtn.isChecked())
+
+                # connect override chooser buttons to file dialog
+                self.override_choosers[d].clicked.connect(
+                    partial(self.choose_override_dir, d))
+
+
+        # connect pathEditFinished signal to our validation handler
+        # noinspection PyUnresolvedReferences
+        self.pathEditFinished.connect(self.on_path_edit)
 
         ## apply button ##
         # btn_apply = self.prefs_btnbox.button(QDialogButtonBox.Apply)
@@ -195,6 +255,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                                  ).clicked.connect(self.apply_changes)
 
         # also apply changes when clicking OK
+        # noinspection PyUnresolvedReferences
         self.accepted.connect(self.apply_changes)
 
     @pyqtSlot(int, bool)
@@ -247,22 +308,6 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             else:
                 self._mark_invalid_path(label)
 
-    def _mark_invalid_path(self, qlabel):
-        # takes given indicator label and sets it to 'invalid' status
-        qlabel.setText(_invalid_path_str)
-        qlabel.setStyleSheet(_invalid_path_style)
-        qlabel.setVisible(True)
-    def _mark_missing_path(self, qlabel):
-        # takes given indicator label and sets it to 'missing' status
-        qlabel.setText(_missing_path_str)
-        qlabel.setStyleSheet(_missing_path_style)
-        qlabel.setVisible(True)
-    def _mark_nonabs_path(self, qlabel):
-        # takes given indicator label and sets it to 'not absolute' status
-        qlabel.setText(_notabs_path_str)
-        qlabel.setStyleSheet(_invalid_path_style)
-        qlabel.setVisible(True)
-
 
     @pyqtSlot()
     def change_profile(self):
@@ -298,6 +343,18 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                 self.cbox_default.setChecked(self._selected_profile.name == Config.default_profile)
 
 
+    @pyqtSlot(str, bool)
+    def on_override_toggled(self, dirkey, enabled):
+        """
+        Update the profile to save the enabled status of the override
+
+        :param dirkey:
+        :param enabled:
+        """
+        ## XXX: should we wait until Apply to save this? or do it immediately like this?
+        self._selected_profile.override_enabled(dirkey, enabled)
+
+
     @pyqtSlot()
     def apply_changes(self):
         """
@@ -312,7 +369,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         # check for a change in the profile-load-policy
         if self._active_plp != self._selected_plp:
             app_settings.Set(
-                constants.KeyStr.UI.PROFILE_LOAD_POLICY,
+                UI.PROFILE_LOAD_POLICY,
                 self._selected_plp)
 
         # check if any of the paths have changed and update accordingly
@@ -323,7 +380,6 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             if path == newpath: continue
 
             # allow changing if the path is valid or cleared
-
             if not newpath:
                 # if they unset the path, just change it
                 self._update_path(key, newpath)
@@ -366,6 +422,17 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                     else:
                         self._update_path(key, newpath)
 
+        # and now let's do it again for the overrides
+        sp = self._selected_profile
+        for d, box in self.override_boxes.items():
+            newovrd = box.text()
+
+            if newovrd == sp.diroverride(d):
+                continue
+
+            if not newovrd or (os.path.isabs(newovrd)
+                               and os.path.exists(newovrd)):
+                sp.setoverride(d, newovrd)
 
     def _update_path(self, key, newpath):
         Manager.set_directory(key, newpath, False)
@@ -373,23 +440,56 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
 
     @pyqtSlot(str)
-    def choose_directory(self, folder):
+    def choose_override_dir(self, folder):
+        self.choose_directory(folder, True)
+
+    @pyqtSlot(str)
+    def choose_directory(self, folder, override=False):
         """
         Open the file dialog to allow the user to select a path for
         the given folder.
 
         :param folder:
+        :param override: set to True if this is for a profile
+            dir-override
         :return:
         """
 
         # fixme: this doesn't seem to actually show the current folder if there
         # is one...maybe that's a Qt bug, though. Or maybe it's because of the
         # hidden folder in the path?
+
+        start = self._selected_profile.diroverride(folder) if override else self.paths[folder]
+
+        # noinspection PyTypeChecker
         chosen = QFileDialog.getExistingDirectory(self,
                                                   "Select directory",
-                                                  self.paths[folder] or "")
+                                                  start or "")
 
         if check_path(chosen):
-            self.path_boxes[folder].setText(chosen)
-            if folder in self.indicator_labels.keys():
-                self.indicator_labels[folder].setVisible(False)
+
+            if override:
+                self.override_boxes[folder].setText(chosen)
+            else:
+                self.path_boxes[folder].setText(chosen)
+                if folder in self.indicator_labels.keys():
+                    self.indicator_labels[folder].setVisible(False)
+
+
+
+    def _mark_invalid_path(self, qlabel):
+        # takes given indicator label and sets it to 'invalid' status
+        qlabel.setText(_invalid_path_str)
+        qlabel.setStyleSheet(_invalid_path_style)
+        qlabel.setVisible(True)
+    def _mark_missing_path(self, qlabel):
+        # takes given indicator label and sets it to 'missing' status
+        qlabel.setText(_missing_path_str)
+        qlabel.setStyleSheet(_missing_path_style)
+        qlabel.setVisible(True)
+    def _mark_nonabs_path(self, qlabel):
+        # takes given indicator label and sets it to 'not absolute' status
+        qlabel.setText(_notabs_path_str)
+        qlabel.setStyleSheet(_invalid_path_style)
+        qlabel.setVisible(True)
+

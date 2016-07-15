@@ -148,6 +148,7 @@ class KeyStr:
 
         # profile INIs
         OVERRIDES = "Directory Overrides"
+        OVR_ENABLED = "Enabled Overrides"
         FILEVIEWER = "File Viewer"
 
 

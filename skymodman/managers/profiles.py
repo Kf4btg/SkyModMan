@@ -26,6 +26,12 @@ class Profile:
             KeyStr.Dirs.SKYRIM: "",
             KeyStr.Dirs.MODS: "",
             KeyStr.Dirs.VFS: "",
+        },
+        # whether a listed override is currently active
+        KeyStr.Section.OVR_ENABLED: {
+            KeyStr.Dirs.SKYRIM: False,
+            KeyStr.Dirs.MODS:   False,
+            KeyStr.Dirs.VFS:    False,
         }
     }
 
@@ -78,10 +84,6 @@ class Profile:
         self._config = self.load_profile_settings()
         # self.LOGGER << "Loaded profile-specific settings: {}".format(self.settings)
 
-        # create a container to hold any issues found during
-        # validation of this profile's mod list
-        # self.syncErrors = {SE.NOTFOUND: [],
-        #                    SE.NOTLISTED: []}
 
     @property
     def Config(self):
@@ -112,7 +114,41 @@ class Profile:
     def settings(self):
         return self.folder / SETTINGS
 
+    def diroverride(self, dirkey):
+        """Return the value of the profile's override for the given
+        directory. If no override has been made or `dir_key` cannot
+        be found in the profile's config, return an empty string.
+        """
+        return self.get_setting(KeyStr.Section.OVERRIDES, dirkey) or ""
 
+    def setoverride(self, dirkey, path):
+        """
+        Set a path override. Note that no path verification is performed
+        here.
+
+        :param dirkey: From constants.KeyStr.Dirs
+        :param path: should refer to a real path on the filesystem
+        """
+
+        self.save_setting(KeyStr.Section.OVERRIDES, dirkey, path)
+
+    def override_enabled(self, dirkey, setenabled=None):
+        """
+
+        :param dirkey:
+        :param setenabled: If omitted, return the current enabled
+            status of the given override. if True or False, update the
+            enabled status to that value and return it.
+        :return:
+        """
+
+        if setenabled is None:
+            return self.get_setting(KeyStr.Section.OVR_ENABLED, dirkey)
+        elif setenabled:
+            self.save_setting(KeyStr.Section.OVR_ENABLED, dirkey, True)
+        else:
+            self.save_setting(KeyStr.Section.OVR_ENABLED, dirkey, False)
+        return self.get_setting(KeyStr.Section.OVR_ENABLED, dirkey)
 
     def rename(self, new_name):
         """
@@ -136,8 +172,10 @@ class Profile:
 
         ## verify that rename happened successfully
         if not new_dir.exists() or self.folder.exists():
-            raise exceptions.ProfileError(self.name,
-                                          "Error while renaming profile '{name}' to '{new_name}'".format(name=self.name, new_name=new_name))
+            raise exceptions.ProfileError(
+                self.name,
+                "Error while renaming profile '{name}' to '{new_name}'"
+                    .format(name=self.name, new_name=new_name))
 
         ## update reference
         self.folder = new_dir
@@ -150,21 +188,6 @@ class Profile:
         for f in [self.folder / p for p in ProfileFiles]:
             if f.exists():
                 f.unlink()
-
-
-
-
-    # def recordErrors(self, error_type, errors):
-    #     """
-    #     Save any disk-sync errors discovered with the profile
-    #     to be retrieved and handled at the appropriate time.
-    #     Note that this method overwrites the list of errors
-    #     for the given type; it does not append to it.
-    #
-    #     :param error_type: either constants.SyncError.NOTFOUND or constants.SE.NOTLISTED
-    #     :param errors: a list of the errors encountered
-    #     """
-    #     self.syncErrors[error_type] = errors
 
     def load_profile_settings(self):
         config = confparser()
@@ -185,8 +208,25 @@ class Profile:
                 elif isinstance(v, float):
                     sett[sec][k] = config.getfloat(sec, k, fallback=v)
                 else:
-                    sett[sec][k] = v # strings for everyone else
+                    # strings for everyone else
+                    sett[sec][k] = config.get(sec, k, fallback=v)
         return  sett
+
+    def get_setting(self, section, name):
+        """
+        Get a config setting from the profile
+
+        :param section:
+        :param name:
+        :return: value of the setting or None if the section or name
+            was not present in the config
+        """
+
+        try:
+            return self._config[section][name]
+        except KeyError as e:
+            self.LOGGER.exception(e)
+            return None
 
     def save_setting(self, section, name, value):
         """Change a setting value and write the updated values to disk"""
@@ -220,7 +260,6 @@ class ProfileManager:
     # requested that has already been created, simply return that
     # profile from the cache.
     # TODO: since all profiles are loaded by the profile selector at app start, we'll need to make sure that this doesn't take too much memory (the Profile objects are pretty small) or take too long to start
-    # __cache = {} # type: Dict[str, Profile]
 
     # only hold the 5 most recently loaded profiles (this session)
     __cache = diqt(maxlen_=5)
@@ -242,11 +281,10 @@ class ProfileManager:
 
         ## load profile names from folders in profiles-dir
         self.LOGGER.info("loading profiles from {}".format(self._profiles_dir))
-        self._profile_names = [] # type: List[str]
+        self._profile_names = [] # type: list [str]
 
         for p in self._profiles_dir.iterdir():
             if p.is_dir():
-                # self.LOGGER.debug("Found profile {}: appending to profiles list.".format(p.name))
                 self._profile_names.append(p.name)
 
         if len(self._profile_names) == 0:
@@ -431,11 +469,6 @@ class ProfileManager:
             self.LOGGER.error(e)
             raise exceptions.ProfileDeletionError(profile.name) from e
 
-
-        # for f in profile.localfiles.values():
-        #     if f.exists(): f.unlink()
-
-
     def rename_profile(self, profile, new_name):
         """
         Moves the directory containing the configuration files for Profile `profile` to a new directory with the name `new_name`, and updates all occurrences of the old name to the new.
@@ -456,7 +489,3 @@ class ProfileManager:
 
         self.__cache.append(profile.name, profile)
 
-
-
-if __name__ == '__main__':
-    from typing import List

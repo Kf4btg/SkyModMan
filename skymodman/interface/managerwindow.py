@@ -68,10 +68,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.task = None
 
         # setup trackers for all of our models and proxies
-        # noinspection PyUnresolvedReferences
-        self.models  = {} #type: dict[M,QtCore.QAbstractItemModel]
-        # noinspection PyUnresolvedReferences
-        self.filters = {} #type: dict[F,QtCore.QSortFilterProxyModel]
+        self.models  = {} #type: dict [M,QtCore.QAbstractItemModel]
+        self.filters = {} #type: dict [F,QtCore.QSortFilterProxyModel]
 
         # setup the base ui
         self.setupUi(self)

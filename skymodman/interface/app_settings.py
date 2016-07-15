@@ -36,8 +36,7 @@ _qs_group="ManagerWindow"
 # _preferences = {}
 # """Dict containing static application settings (e.g. toggleable booleans and other explicitly-set parameters)"""
 #
-# # noinspection PyUnresolvedReferences
-# _properties = [] # type: list[QS_Property]
+# _properties = [] # type: list [QS_Property]
 # """List of ``QS_Property`` objects containing all defined properties, with default values, accessor functions, and associated callbacks."""
 
 
@@ -52,8 +51,7 @@ class _AppSettings:
 
         self.preferences = {}
 
-        # noinspection PyUnresolvedReferences
-        self.properties = [] # type: list[QS_Property]
+        self.properties = [] # type: list [QS_Property]
 
     def get_pref_val(self, pref_name):
         """
