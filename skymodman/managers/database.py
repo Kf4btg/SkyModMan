@@ -6,6 +6,7 @@ from pathlib import Path, PurePath
 from itertools import count, repeat
 from collections import defaultdict
 
+from skymodman import exceptions
 from skymodman.constants import db_fields, ModError
 from skymodman.utils import withlogger, tree
 # from skymodman.managers import modmanager as Manager
@@ -80,8 +81,8 @@ class DBManager:
         ## {mod:[contained files that are in conflict with other mods]}
         # self.mods_with_conflicts = defaultdict(list)
 
-        self.file_conflicts = None
-        self.mods_with_conflicting_files = None
+        self.file_conflicts = defaultdict(list)
+        self.mods_with_conflicting_files = defaultdict(list)
 
 
     ################
@@ -97,12 +98,17 @@ class DBManager:
         return self._con
 
     @property
+    def in_transaction(self):
+        return self._con.in_transaction
+
+    @property
     def mods(self):
         """
         :return: list of all mods from the mod db
         :rtype: list[sqlite3.Row]
         """
         return self.get_mod_info(True).fetchall()
+
 
     ######################
     ## Table management ##
@@ -140,8 +146,8 @@ class DBManager:
         # attacks, just out of principle
 
         if table_name not in self._tablenames:
-            # should probably raise an error
-            return 0
+            raise exceptions.DatabaseError(
+                "'{}' is not a valid table name".format(table_name))
 
         q="DELETE FROM {table}".format(table=table_name)
         with self._con:
@@ -151,6 +157,7 @@ class DBManager:
     def reset_errors(self):
         """
         Reset the "error" column for each mod to ModError.None
+        and commit the changes
 
         :return: the number of rows affected
         """
@@ -158,6 +165,10 @@ class DBManager:
         with self._con:
             return self._con.execute(
                 "UPDATE mods SET error = 0 WHERE error != 0").rowcount
+
+    ##############
+    ## wrappers ##
+    ##############
 
     def commit(self):
         """
@@ -179,6 +190,130 @@ class DBManager:
             # and rollback() is called, then I likely did something
             # wrong and I want to know that
             self.LOGGER.warning("nothing to rollback")
+
+    def shutdown(self):
+        """
+        Close the db connection
+        """
+        self._con.close()
+
+    def select(self, table, *fields, where="", params=()):
+        """
+        Execute a SELECT statement for the specified fields from
+        the named table, optionally using a WHERE constraint and
+        parameters sequences. This method returns the cursor object
+        used to execute the statment (which can then be used in a
+        "yield from" statement or e.g. turned into a sequence
+        with fetchall() )
+
+        :param table: name of the database table to select from
+        :param fields: columns/fields to choose from each matching row.
+            If none are provided, then "*" will be used to select all
+            columns
+        :param where: a SQL 'WHERE' constraint, minus the "WHERE"
+        :param params: parameter sequence to match any "?" in the query
+
+        :rtype: sqlite3.Cursor
+
+        """
+
+        if table not in self._tablenames:
+            raise exceptions.DatabaseError(
+                "'{}' is not a valid table name".format(table))
+
+        if not fields:
+            fields = ("*", )
+
+        _q = "SELECT {flds} FROM {tbl}".format(
+            flds = ", ".join(fields), tbl=table)
+
+        if where:
+            _q += " WHERE {}".format(where)
+
+        return self._con.execute(_q, params)
+
+
+    # def execute_(self, query, params=()):
+    #     """
+    #     Execute an arbitrary SQL-query using this object's
+    #     database connection as a context manager
+    #
+    #     :param str query: a valid SQL query
+    #     :param typing.Iterable params: If the `params` keyword is
+    #         provided with an Iterable object, it will be used as the
+    #         parameters for a parameterized query.
+    #     :rtype: typing.Generator[sqlite3.Row, Any, None]
+    #     """
+    #     with self._con:
+    #         # if params:
+    #             yield from self._con.execute(query, params)
+    #         # else:
+    #         #     yield from self._con.execute(query)
+
+    def selectone(self, table, *fields, where="", params=()):
+        """
+        Like ``select()``, but just returns the first row from the result
+        of the query
+        """
+        return self.select(table, *fields,
+                           where=where,
+                           params=params).fetchone()
+
+    # def getone(self, query, params=()):
+    #     """
+    #     Like execute_, but just returns the first result
+    #
+    #     :param str query:
+    #     :param typing.Iterable params:
+    #     :return: The first row obtained
+    #     :rtype: sqlite3.Row
+    #     """
+    #     with self._con:
+    #         # if params:
+    #         cur=self._con.execute(query, params)
+    #         # else:
+    #         #     cur=self._con.execute(query)
+    #
+    #         return cur.fetchone()
+
+    def update(self, sql, params=()):
+        """
+        Like select(), but for UPDATE, INSERT, DELETE, etc. commands.
+        Returns the cursor object that was created to execute the
+        statement. The changes made are NOT committed before this
+        method returns; call commit() (or call this method while
+        using the connection as a context manager) to make sure they're
+        saved.
+
+        :param str sql:
+        :param typing.Iterable params:
+        """
+        # with self._con:
+            # if params:
+        return self._con.execute(sql, params)
+            # else:
+            #     return self._con.execute(sql)
+
+    def updatemany(self, sql, params=None):
+        """
+        As update(), but for multiple transactions. Returns the cursor
+        object that was created to execute the statement. The changes
+        made are NOT committed before this method returns; call
+        commit() (or call this method while using the connection as a
+        context manager) to make sure they're saved.
+
+        :param str sql:
+        :param typing.Iterable params:
+        :return: the cursor object that executed the query
+        """
+
+        return self._con.executemany(sql, params)
+
+        # with self._con:
+        #     if params:
+        #         return self._con.executemany(sql, params)
+        #     else:
+        #         return self._con.executemany(sql)
 
 
     ##################
@@ -230,18 +365,26 @@ class DBManager:
             json_source = Path(json_source)
         success = False
 
+
         with json_source.open('r') as f:
             try:
                 hiddenfiles = json.load(f)
                 for mod, files in hiddenfiles.items():
                     # gethiddenfiles returns a list of 1-tuples,
                     # each one with a filepath
-                    hfiles = self._get_hidden_files(files, "", [])
+                    hfiles = self._gethiddenfiles(files, "", [])
 
+                    # we're committing to the db after each mod is
+                    # handled; waiting until the end might speed things
+                    # up, but doing it this way means that if there's a
+                    # problem with one of the mods, we only rollback
+                    # that one transaction instead of losing the info
+                    # for EVERY mod. Savepoints may be another approach.
                     with self._con:
                         self._con.executemany(
-                            'INSERT INTO hiddenfiles VALUES ("'
-                            + mod + '", ?)', hfiles)
+                            "INSERT INTO hiddenfiles VALUES (?, ?)",
+                            zip(repeat(mod), hfiles)
+                        )
 
                 # [print(*r, sep="\t|\t") for r in
                 #  self._con.execute("select * from hiddenfiles")]
@@ -251,9 +394,11 @@ class DBManager:
                 self.LOGGER.warning("No hidden files listed in {}, "
                                     "or file is malformed."
                                     .format(json_source))
+
+
         return success
 
-    def _get_hidden_files(self, basedict, currpath, flist, join=os.path.join):
+    def _gethiddenfiles(self, basedict, currpath, flist, join=os.path.join):
         """
         Recursive helper for loading the list of hiddenfiles from disk
 
@@ -265,40 +410,22 @@ class DBManager:
         """
         for key, value in basedict.items():
             if isinstance(value, list):
-                # have to add each filepath as 1-tuple to keep sqlite happy
-                flist.extend((join(currpath, fname), ) for fname in value)
+                flist.extend(join(currpath, fname) for fname in value)
             else:
-                flist = self._get_hidden_files(value, join(currpath, key), flist)
+                flist = self._gethiddenfiles(value, join(currpath, key), flist)
 
         return flist
     ###################################
 
-    def populate_hidden_files_table(self, filelist):
-        """
-        :param Iterable[(str, str)] filelist: List of 2-tuples; each
-            tuple is of form (directory:str, filepath:str)
-
-            Here, `directory` is the name of the folder in the
-            configured mods directory that contains the files for the
-            mod in question.  This would be something like
-            'Big Trees HD_v2', or whatever arbitrary name the mod
-            author gave the folder.
-
-            `filepath` is the relative path from the containing mod
-            directory to the hidden file (something along the lines of
-            "meshes/trees/bigtree.nif").
-        """
-        with self._con:
-            self._con.executemany("INSERT INTO hiddenfiles VALUES (?, ?)", filelist)
-
     def save_hidden_files(self, json_target):
         """
-
-        Note: I notice ModOrganizer adds a '.mohidden' extension to every file it hides (or to the parent directory);
-        hmm...I'd like to avoid changing the files on disk if possible
+        Serialize the contents of the hiddenfiles table to a file in
+        json format
 
         :param str|Path json_target: path to hiddenfiles.json file for current profile
         """
+
+        # Note: I notice ModOrganizer adds a '.mohidden' extension to every file it hides (or to the parent directory); hmm...I'd like to avoid changing the files on disk if possible
 
         if not isinstance(json_target, Path):
             json_target = Path(json_target)
@@ -320,22 +447,42 @@ class DBManager:
 
         # print(tree.to_string(2))
 
+    def files_hidden(self, for_mod):
+        """
+        Yield paths of currently hidden files for the given mod
+
+        :param for_mod: directory name of the mod
+        """
+
+        yield from (r["filepath"]
+                    for r in self._con.execute(
+            "SELECT * FROM hiddenfiles WHERE directory = ?",
+            (for_mod, )
+        ))
+
 
     # def fill_mods_table(self, mod_list, doprint=False):
     def fill_mods_table(self, mod_list):
         """
-        Dynamically build the INSERT statement from the list of fields, then insert
-        the values from mod_list (a list of tuples) into the database
+        Dynamically build the INSERT statement from the list of fields,
+        then insert the values from mod_list (a list of tuples) into
+        the database. The changes are committed after all values have
+        been insterted
 
         :param Iterable[tuple] mod_list:
         """
 
         # db_fields[:-1] to ignore the error field for now (leave it at
         # its default of 0)
-        query = "INSERT INTO mods(" + \
-                ", ".join(db_fields[:-1]) + \
-                ") VALUES ("
-        query += ", ".join("?" * len(db_fields[:-1])) + ")"
+        dbfields_ = db_fields[:-1]
+
+        # query = "INSERT INTO mods({}) VALUES ({})".format(
+        #     ", ".join(dbfields_),
+        #     ", ".join("?" *len(dbfields_))
+        # )
+        # query = "INSERT INTO mods(" + ", ".join(db_fields[:-1]) + \
+        #         ") VALUES ("
+        # query += ", ".join("?" * len(db_fields[:-1])) + ")"
         #
         # if doprint:
         #     print(query)
@@ -346,76 +493,13 @@ class DBManager:
         # self.LOGGER.debug(query)
         with self._con:
             # insert the list of row-tuples into the in-memory db
-            self._con.executemany(query, mod_list)
+            self._con.executemany(
+                "INSERT INTO mods({}) VALUES ({})".format(
+                    ", ".join(dbfields_),
+                    ", ".join("?" * len(dbfields_))
+                ),
+                mod_list)
 
-
-    ##############
-    ## wrappers ##
-    ##############
-
-    def execute_(self, query, params=None):
-        """
-        Execute an arbitrary SQL-query using this object's
-        database connection as a context manager
-
-        :param str query: a valid SQL query
-        :param typing.Iterable params: If the `params` keyword is
-            provided with an Iterable object, it will be used as the
-            parameters for a parameterized query.
-        :rtype: typing.Generator[sqlite3.Row, Any, None]
-        """
-        with self._con:
-            if params:
-                yield from self._con.execute(query, params)
-            else:
-                yield from self._con.execute(query)
-
-    def getone(self, query, params=None):
-        """
-        Like execute_, but just returns the first result
-
-        :param str query:
-        :param typing.Iterable params:
-        :return: The first row obtained
-        :rtype: sqlite3.Row
-        """
-        with self._con:
-            if params:
-                cur=self._con.execute(query, params)
-            else:
-                cur=self._con.execute(query)
-
-            return cur.fetchone()
-
-    def update_(self, sql, params=None):
-        """
-        As execute_, but for UPDATE, INSERT, DELETE, etc. commands.
-        Returns the cursor object that was created to execute the
-        statement.
-
-        :param str sql:
-        :param typing.Iterable params:
-        """
-        with self._con:
-            if params:
-                return self._con.execute(sql, params)
-            else:
-                return self._con.execute(sql)
-
-    def updatemany_(self, sql, params=None):
-        """
-        As update_, but for multiple transactions. Returns the cursor
-        object that was created to execute the statement.
-
-        :param str sql:
-        :param typing.Iterable params:
-        :return: the cursor object that executed the query
-        """
-        with self._con:
-            if params:
-                return self._con.executemany(sql, params)
-            else:
-                return self._con.executemany(sql)
 
     ############
     ## Saving ##
@@ -438,14 +522,22 @@ class DBManager:
         # field order doesn't matter when saving
         noord_fields = set(db_fields) ^ {"ordinal", "error"}
 
-        # select (all fields other than ordinal)...
-        query="SELECT " + ", ".join(noord_fields)
-        # from a subquery of (all fields ordered by ordinal)
-        query+=" FROM (SELECT * FROM mods ORDER BY ordinal)"
+
+
+        # query = "SELECT {} FROM (SELECT * FROM mods ORDER BY ordinal)"
+        # query.format(", ".join(noord_fields))
+
+        # query="SELECT " + ", ".join(noord_fields)
+        # query+=" FROM (SELECT * FROM mods ORDER BY ordinal)"
         modinfo = []
 
-        # for each row (mod-entry)
-        for row in self._con.execute(query):
+        # select (all fields other than ordinal & error)
+        # from a subquery of (all fields ordered by ordinal).
+        for row in self._con.execute(
+                "SELECT {} FROM (SELECT * FROM mods ORDER BY ordinal)"
+                        .format(", ".join(noord_fields))):
+
+            # then, for each row (mod entry),
             # zip fields names and values up and convert to dict
             # to create json-able object
             modinfo.append(dict(zip(noord_fields, row)))
@@ -512,11 +604,6 @@ class DBManager:
             return cur
         yield from cur
 
-    def shutdown(self):
-        """
-        Close the db connection
-        """
-        self._con.close()
 
     def get_mod_data_from_directory(self, mods_dir):
         """
@@ -548,20 +635,22 @@ class DBManager:
 
             # self.load_all_mod_files(moddir, order)
 
+            # support loading information
+            # read from meta.ini (ModOrganizer) file, if present
             inipath = moddir / "meta.ini"
             if inipath.exists():
-                # read info from meta.ini (ModOrganizer) file
                 configP.read(str(inipath))
                 mods_list.append(
-                    self.make_mod_entry(ordinal = order,
-                                        directory = dirname,
-                                        modid = configP['General']['modid'],
-                                        version = configP['General']['version']
-                                        )
-                                )
+                    self.make_mod_entry(
+                        ordinal = order,
+                        directory=dirname,
+                        modid=configP['General']['modid'],
+                        version=configP['General']['version']
+                    ))
             else:
                 mods_list.append(
-                    self.make_mod_entry(ordinal = order, directory=dirname))
+                    self.make_mod_entry(ordinal = order,
+                                        directory=dirname))
 
         self.fill_mods_table(mods_list)
 
@@ -625,7 +714,8 @@ class DBManager:
         # 'meshes/whatever.nif')
         if mfiles:
             self._con.executemany(
-                "INSERT INTO modfiles VALUES (?, ?)", zip(repeat(mod_name), mfiles))
+                "INSERT INTO modfiles VALUES (?, ?)",
+                zip(repeat(mod_name), mfiles))
 
         # try: mfiles.remove('meta.ini') #don't care about these
         # except ValueError: pass
@@ -643,18 +733,46 @@ class DBManager:
         # delete the view if it exists
         self._con.execute("DROP VIEW IF EXISTS filesbymodorder")
 
-        q="""
-        CREATE VIEW filesbymodorder AS
-            SELECT ordinal, f.directory, filepath
-            FROM modfiles f, mods m
-            WHERE f.directory=m.directory
-            ORDER BY ordinal
-        """
+        # q="""
+        # CREATE VIEW filesbymodorder AS
+        #     SELECT ordinal, f.directory, filepath
+        #     FROM modfiles f, mods m
+        #     WHERE f.directory=m.directory
+        #     ORDER BY ordinal
+        # """
 
+        # create the view
         with self._con:
-            self._con.execute(q)
+            # self._con.execute(q)
+            self._con.execute("""
+                CREATE VIEW filesbymodorder AS
+                    SELECT ordinal, f.directory, filepath
+                    FROM modfiles f, mods m
+                    WHERE f.directory=m.directory
+                    ORDER BY ordinal
+                """)
 
-        detect_dupes_query = """
+        # detect_dupes_query = """
+        #     SELECT f.filepath, f.ordinal, f.directory
+        #         FROM filesbymodorder f
+        #         INNER JOIN (
+        #             SELECT filepath, COUNT(*) AS C
+        #             FROM filesbymodorder
+        #             GROUP BY filepath
+        #             HAVING C > 1
+        #         ) dups ON f.filepath=dups.filepath
+        #         ORDER BY f.filepath, f.ordinal
+        #         """
+
+        file=''
+        conflicts = defaultdict(list)
+        mods_with_conflicts = defaultdict(list)
+
+        # [print(*r) for r in self._con.execute(detect_dupes_query)]
+        # for r in self._con.execute(detect_dupes_query):
+
+        # query view to detect duplicates
+        for r in self._con.execute("""
             SELECT f.filepath, f.ordinal, f.directory
                 FROM filesbymodorder f
                 INNER JOIN (
@@ -664,18 +782,13 @@ class DBManager:
                     HAVING C > 1
                 ) dups ON f.filepath=dups.filepath
                 ORDER BY f.filepath, f.ordinal
-                """
-
-        file=''
-        conflicts = defaultdict(list)
-        mods_with_conflicts = defaultdict(list)
-
-        # [print(*r) for r in self._con.execute(detect_dupes_query)]
-        for r in self._con.execute(detect_dupes_query):
+                """):
             if r['filepath'] != file:
                 file=r['filepath']
             mod=r['directory']
-            # a dictionary of file conflicts to an ordered list of mods which contain them
+
+            # a dictionary of file conflicts to an ordered
+            #  list of mods which contain them
             conflicts[file].append(mod)
             # also, a dictionary of mods to a list of conflicting files
             mods_with_conflicts[mod].append(file)
@@ -728,9 +841,12 @@ class DBManager:
 
         num_removed = self.reset_errors()
 
-        self.logger.debug("Resetting mod errors: {} entries affected".format(num_removed))
+        self.logger.debug("Resetting mod errors: {} entries affected"
+                          .format(num_removed))
 
-        dblist = [t["directory"] for t in self._con.execute("SELECT directory FROM mods")]
+        dblist = [t["directory"] for t in
+                  self._con.execute("SELECT directory FROM mods")]
+
         not_found = []
         not_listed = []
 
@@ -813,7 +929,9 @@ class DBManager:
         :return: Tuple containing just the values of the fields
         """
 
-        return (next(_mcount),) + tuple(s[1] for s in sorted(pairs, key=lambda p: db_fields.index(p[0])))
+        return (next(_mcount),) + tuple(
+            s[1] for s in sorted(pairs,
+                                 key=lambda p: db_fields.index(p[0])))
 
 
 # if __name__ == '__main__':

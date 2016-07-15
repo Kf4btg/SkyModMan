@@ -14,6 +14,11 @@ class GeneralError(Error):
         return self.msg
 
 #----------------------------
+
+class DatabaseError(GeneralError):
+    """Use for errors encountered during database interaction"""
+
+#----------------------------
 class ConfigError(Error):
     def __init__(self, key, section):
         self.section = section

@@ -1,10 +1,10 @@
-from PyQt5.QtCore import Qt, QModelIndex, QAbstractItemModel, pyqtSignal, pyqtSlot
-from PyQt5.QtGui import QIcon
-from typing import List
-import itertools
-
 import os
 from pathlib import Path
+from itertools import repeat, filterfalse
+
+from PyQt5.QtCore import Qt, QModelIndex, QAbstractItemModel, pyqtSignal, pyqtSlot
+from PyQt5.QtGui import QIcon
+
 
 from skymodman.utils import withlogger #, tree
 from skymodman.utils.fsutils import check_path
@@ -19,6 +19,9 @@ Qt_Unchecked = Qt.Unchecked
 Qt_PartiallyChecked = Qt.PartiallyChecked
 Qt_ItemIsTristate = Qt.ItemIsTristate
 Qt_CheckStateRole = Qt.CheckStateRole
+
+COLUMNS = (COL_NAME, COL_PATH, COL_CONFLICTS) = range(3)
+ColHeaders = ("Name", "Path", "Conflicts")
 
 
 # @withlogger
@@ -54,7 +57,8 @@ class FSItem:
             self._children = []
             self._childnames = []
         else:
-            self._children = None #type: List[FSItem]
+            # noinspection PyUnresolvedReferences
+            self._children = None #type: list[FSItem]
             self._childnames = None
 
         self._row=0
@@ -387,8 +391,8 @@ class ModFileTreeModel(QAbstractItemModel):
         self.rootpath = None #type: str
         self.modname = None #type: str
         self.rootitem = None #type: QFSItem
-        self.dbconn = Manager.DB.conn
-        self.cursor = self.dbconn.cursor()
+        # self.dbconn = Manager.DB.conn
+        self.cursor = Manager.getdbcursor()
 
     @property
     def root_path(self):
@@ -404,7 +408,7 @@ class ModFileTreeModel(QAbstractItemModel):
 
     @property
     def has_unsaved_changes(self):
-        return self.dbconn.in_transaction
+        return Manager.DB.in_transaction
 
     def setRootPath(self, path=None):
         """
@@ -445,7 +449,7 @@ class ModFileTreeModel(QAbstractItemModel):
             self.endResetModel()
 
             # reset cursor
-            self.cursor = self.dbconn.cursor()
+            self.cursor = Manager.getdbcursor()
 
             # emit notifier signal
             self.rootPathChanged.emit(path)
@@ -508,7 +512,7 @@ class ModFileTreeModel(QAbstractItemModel):
     def columnCount(self, *args, **kwargs) -> int:
         """Dir/File Name(+checkbox), path to file, file conflicts """
         # return 2
-        return 3
+        return len(COLUMNS)
 
     def rowCount(self, index=QModelIndex(), *args, **kwargs) -> int:
         """Number of children contained by the item referenced by `index`
@@ -527,7 +531,7 @@ class ModFileTreeModel(QAbstractItemModel):
         :param role:
         """
         if orient == Qt.Horizontal and role==Qt.DisplayRole:
-            return ["Name", "Path", "Conflicts"][section]
+            return ColHeaders[section]
             # return "Name"
         return super().headerData(section, orient, role)
 
@@ -596,19 +600,20 @@ class ModFileTreeModel(QAbstractItemModel):
         """
 
         item = self.getitem(index)
+        col = index.column()
 
-        if index.column() == 1:
+        if col == COL_PATH:
             if role == Qt.DisplayRole: #second column is path
                 return item.parent.path + "/"
 
-        elif index.column()==2: # third column is conflicts
-            if role == Qt.DisplayRole \
-                    and self.modname in Manager.mods_with_conflicting_files \
+        elif col == COL_CONFLICTS: # third column is conflicts
+            if role == Qt.DisplayRole and \
+                self.modname in Manager.mods_with_conflicting_files \
                     and item.lpath in Manager.file_conflicts:
                 return "Yes"
 
 
-        else:
+        else: # column must be Name
             if role == Qt.DisplayRole:
                 return item.name
             elif role == Qt_CheckStateRole:
@@ -677,11 +682,11 @@ class ModFileTreeModel(QAbstractItemModel):
         Commit any unsaved changes (currenlty just to hidden files) to
         the db and save the updated db state to disk
         """
-        if self.dbconn.in_transaction:
-            self.dbconn.commit()
+        if Manager.DB.in_transaction:
+            Manager.DB.commit()
             Manager.save_hidden_files()
             # afterwards, refresh cursor
-            self.cursor = self.dbconn.cursor()
+            self.cursor = Manager.getdbcursor()
             self.hasUnsavedChanges.emit(False)
 
     def revert(self):
@@ -689,10 +694,10 @@ class ModFileTreeModel(QAbstractItemModel):
         Undo all changes made to the tree since the last save.
         """
         self.beginResetModel()
-        self.dbconn.rollback()
+        Manager.DB.rollback()
         self._setup_or_reload_tree()
         # afterwards, refresh cursor
-        self.cursor = self.dbconn.cursor()
+        self.cursor = Manager.getdbcursor()
 
         self.endResetModel()
         self.hasUnsavedChanges.emit(False)
@@ -701,14 +706,15 @@ class ModFileTreeModel(QAbstractItemModel):
         """Make  changes to database.
         NOTE: this does not commit them! That must be done separately"""
         directory = os.path.basename(self.rootpath)
-        ffalse = itertools.filterfalse
 
         # here's a list of the CURRENTLY hidden filepaths for this mod,
         # as known to the database
-        nowhiddens = [r["filepath"] for r in
-                      self.cursor.execute(
-                          "SELECT * FROM hiddenfiles WHERE directory=?",
-                          (directory,))]
+        # nowhiddens = [r["filepath"] for r in
+        #               self.cursor.execute(
+        #                   "SELECT * FROM hiddenfiles WHERE directory=?",
+        #                   (directory,))]
+
+        nowhiddens = list(Manager.DB.files_hidden(directory))
 
         # let's forget all that silly complicated stuff and do this:
         hiddens, unhiddens = self._get_hidden_states(len(nowhiddens) > 0)
@@ -720,7 +726,7 @@ class ModFileTreeModel(QAbstractItemModel):
             # don't want to add items twice, so remove any already in db
             # (not quite sure how that would happen...but let's play it
             # safe for now)
-            toadd = list(ffalse(nowhiddens.__contains__, hiddens))
+            toadd = list(filterfalse(nowhiddens.__contains__, hiddens))
         else:
             toremove = []
             toadd = hiddens
@@ -748,7 +754,8 @@ class ModFileTreeModel(QAbstractItemModel):
         if toadd:
             self.cursor.executemany(
                 "INSERT INTO hiddenfiles values (?, ?)",
-                ((directory,a) for a in toadd))
+                zip(repeat(directory), toadd))
+                # ((directory,a) for a in toadd))
 
         self.hasUnsavedChanges.emit(True)
 

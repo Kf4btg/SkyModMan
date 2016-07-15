@@ -1106,18 +1106,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
 
         if self.current_tab == TAB.MODTABLE:
-            # m = self.mod_table.model()
-            # m.beginResetModel()
-
-            # block signals from the model so we don't
-            # overwhelm the user's processor with gatling-gun commands
-            ## FIXME: unsurprisingly, this causes some problems: for example, if the Errors column was hidden by an operation, then, while a normal undo would show it again, this reset op will not. There are likely other similar scenarios that can happen, too.
-            # with ui_utils.blocked_signals(m):
-            #     while (self.undoManager.canUndo()
-            #            and not self.undoManager.isClean()):
-            #         self.undoManager.undo()
-            # m.endResetModel()
-            # self.mod_table.enableModActions.emit(False)
             self.mod_table.revert_changes()
 
         elif self.current_tab == TAB.FILETREE:
@@ -1128,12 +1116,10 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # calls undo() on the current undoStack
         self.undoManager.undo()
-        # if self.current_tab == TAB.MODTABLE:
 
     @pyqtSlot()
     def on_redo(self):
         self.undoManager.redo()
-
 
     def on_table_search(self, direction=1):
         """

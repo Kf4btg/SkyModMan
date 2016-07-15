@@ -71,7 +71,13 @@ FlagDep = namedtuple("flagdep", "flag value")
 class Dependencies:
     __slots__ = "operator", "fileDependency", "flagDependency", "gameDependency", "fommDependency"
 
-    def __init__(self, operator=Operator.AND, fileDependency=None, flagDependency=None, gameDependency=None, fommDependency=None):
+    def __init__(self,
+                 operator=Operator.AND,
+                 fileDependency=None,
+                 flagDependency=None,
+                 gameDependency=None,
+                 fommDependency=None):
+
         self.operator = operator
         self.fileDependency = [] if fileDependency is None else fileDependency
         self.flagDependency = [] if flagDependency is None else flagDependency
@@ -86,10 +92,14 @@ class Dependencies:
 
         :yields: tuple[str, FileDep|FlagDep|str]
         """
-        yield from chain(zip(repeat("fileDependency"), self.fileDependency),
-                         zip(repeat("flagDependency"), self.flagDependency))
-        if self.gameDependency: yield ("gameDependency", self.gameDependency)
-        if self.fommDependency: yield ("fommDependency", self.fommDependency)
+        yield from chain(
+            zip(repeat("fileDependency"), self.fileDependency),
+            zip(repeat("flagDependency"), self.flagDependency))
+
+        if self.gameDependency:
+            yield ("gameDependency", self.gameDependency)
+        if self.fommDependency:
+            yield ("fommDependency", self.fommDependency)
 
     def __len__(self):
         return len(self.fileDependency) + len(self.flagDependency) + bool(self.gameDependency) + bool(self.fommDependency)
