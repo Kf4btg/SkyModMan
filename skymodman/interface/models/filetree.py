@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from functools import partial
 from itertools import repeat, filterfalse
 
 from PyQt5.QtCore import Qt, QModelIndex, QAbstractItemModel, pyqtSignal, pyqtSlot
@@ -674,12 +675,12 @@ class ModFileTreeModel(QAbstractItemModel):
             # "bottom-right" child that was just changed--to feed to
             # datachanged saves a lot of individual calls. Hopefully there
             # won't be any concurrency issues to worry about later on.
-            self._send_data_through_proxy(
-                index1, self.getIndexFromItem(QFSItem.last_child_seen))
+            # self._send_data_through_proxy(
+            #     index1, self.getIndexFromItem(QFSItem.last_child_seen))
             # self.logger << "Last row touched: {}".format(QFSItem.last_row_touched)
 
             # self.dumpsHidden()
-            self.update_db() # update the db with which files are now hidden
+            self.update_db(index1, self.getIndexFromItem(QFSItem.last_child_seen)) # update the db with which files are now hidden
 
             return True
         return super().setData(index, value, role)
@@ -721,39 +722,52 @@ class ModFileTreeModel(QAbstractItemModel):
         self.endResetModel()
         self.hasUnsavedChanges.emit(False)
 
-    def update_db(self):
-
-        self.undostack.push(TestSavepointCmd())
-
-    def update_db2(self):
+    def update_db(self, start_index, final_index):
         """Make  changes to database.
-        NOTE: this does not commit them! That must be done separately"""
-        directory = os.path.basename(self.rootpath)
+        NOTE: this does not commit them! That must be done separately
 
-        # here's a list of the CURRENTLY hidden filepaths for this mod,
-        # as known to the database
-        nowhiddens = list(Manager.DB.files_hidden(directory))
+        :param start_index: index of the "top-left" affected item
+        :param final_index: index of the "bottom-right" affected item
 
-        # let's forget all that silly complicated stuff and do this:
-        hiddens, unhiddens = self._get_hidden_states(len(nowhiddens) > 0)
 
-        if nowhiddens:
-            # to remove will be empty if either of now/un-hiddens is empty
-            toremove = list(filter(unhiddens.__contains__, nowhiddens))
+        """
+        cb = partial(self._send_data_through_proxy,
+                     start_index, final_index)
 
-            # don't want to add items twice, so remove any already in db
-            # (not quite sure how that would happen...but let's play it
-            # safe for now)
-            toadd = list(filterfalse(nowhiddens.__contains__, hiddens))
-        else:
-            toremove = []
-            toadd = hiddens
+        self.undostack.push(
+            ChangeHiddenFilesCommand(self.rootitem,
+                                     os.path.basename(self.rootpath),
+                                     post_redo_callback=cb,
+                                     post_undo_callback=cb
+                                     ))
 
-        if toremove:
-            Manager.DB.remove_hidden_files(directory, toremove)
-        if toadd:
-            Manager.DB.insert(2, "hiddenfiles",
-                              params=zip(repeat(directory), toadd))
+
+        # directory = os.path.basename(self.rootpath)
+        #
+        # # here's a list of the CURRENTLY hidden filepaths for this mod,
+        # # as known to the database
+        # nowhiddens = list(Manager.DB.files_hidden(directory))
+        #
+        # # let's forget all that silly complicated stuff and do this:
+        # hiddens, unhiddens = self._get_hidden_states(len(nowhiddens) > 0)
+        #
+        # if nowhiddens:
+        #     # to remove will be empty if either of now/un-hiddens is empty
+        #     toremove = list(filter(unhiddens.__contains__, nowhiddens))
+        #
+        #     # don't want to add items twice, so remove any already in db
+        #     # (not quite sure how that would happen...but let's play it
+        #     # safe for now)
+        #     toadd = list(filterfalse(nowhiddens.__contains__, hiddens))
+        # else:
+        #     toremove = []
+        #     toadd = hiddens
+        #
+        # if toremove:
+        #     Manager.DB.remove_hidden_files(directory, toremove)
+        # if toadd:
+        #     Manager.DB.insert(2, "hiddenfiles",
+        #                       params=zip(repeat(directory), toadd))
 
         self.hasUnsavedChanges.emit(True)
 
@@ -797,61 +811,44 @@ class ModFileTreeModel(QAbstractItemModel):
         _(self.root_item)
         return hBasket, uhBasket
 
-class TestSavepointCmd(UndoCmd):
-    def __init__(self):
-        super().__init__(text="test savepoint")
 
-        Manager.DB.conn.set_trace_callback(print)
-
-        self.cur = None
-
-
-    def _redo_(self):
-        [print("PREREDO>>>",*r) for r in Manager.DB.select("hiddenfiles")]
-
-        Manager.DB.savepoint("test")
-        self.cur = Manager.DB.insert(2, "hiddenfiles", params=("testmod", "testfile"), many=False)
-
-        [print("POSTREDO>>>",*r) for r in Manager.DB.select("hiddenfiles")]
-
-    def _undo_(self):
-
-        [print("PREUNDO>>>",*r) for r in Manager.DB.select("hiddenfiles")]
-        Manager.DB.rollback("test")
-        # self.cur.execute("ROLLBACK TO test")
-        # self.cur.execute("ROLLBACK")
-
-        [print("POSTUNDO>>>",*r) for r in Manager.DB.select("hiddenfiles")]
 
 
 class ChangeHiddenFilesCommand(UndoCmd):
 
 
-    def __init__(self, mod_root, check_unhide, text="", *args,
+    def __init__(self, mod_root_item, mod_dir_name, text="", *args,
                  **kwargs):
         """
 
-        :param mod_root:
+        :param QFSItem mod_root:
         :param text:
         :param args:
         :param kwargs:
         """
-        super().__init__(text=text, *args, **kwargs)
 
-        self.root = mod_root
+        self.root_item = mod_root_item
+        self.mod_dir = mod_dir_name
+
+        # these two track the actual QFSItem's that were modified
         self.checked = []
         self.unchecked = []
+
+        # these hold just the paths (in all lowercase)
+        # XXX: should these be saved? or referenced each time we update
+        # the DB? It'll be a tradeoff between memory and performance...
         self.tohide = []
         self.tounhide = []
 
         # get currently hidden files from db
-        currhidden = list(Manager.DB.files_hidden(self.root))
+        currhidden = list(Manager.DB.files_hidden(self.mod_dir))
 
         self.check_unhide = len(currhidden) > 0
 
         # analyze checkstates
-        self._get_checkstates(self.root)
+        self._get_checkstates(self.root_item)
 
+        # now filter the lists of qfsitems down to subsets:
         # if any items were previously hidden, determine which need
         # to be un-hidden and which can remain, as well as any newly-
         # hidden files
@@ -859,37 +856,92 @@ class ChangeHiddenFilesCommand(UndoCmd):
             # filter the list of currently hidden items by those are
             # now checked; this will need to be "un"-hidden
             # self.tounhide = list(filter(self.checked.__contains__, currhidden))
-            self.tounhide = [c for c in self.checked if c in currhidden]
+            self.checked = [c for c in self.checked if c.lpath in currhidden]
+            # self.tounhide = [c.lpath for c in self.checked if c in currhidden]
+            self.tounhide = [c.lpath for c in self.checked]
 
             # and make sure we're not trying to "re"-hide any items that
             # are already hidden.
-            self.tohide = [u for u in self.unchecked if u not in currhidden]
+            self.unchecked = [u for u in self.unchecked if u.lpath not in currhidden]
+            # self.tohide = [u.lpath for u in self.unchecked if u not in currhidden]
         else:
             # if we're here, then no items were previously hidden
             self.tounhide = []
             # everything unchecked should be hidden
-            self.tohide = self.unchecked
+            # self.tohide = self.unchecked
+            # self.tohide = [u.lpath for u in self.unchecked]
+
+        self.tohide = [u.lpath for u in self.unchecked]
+
+        if self.tohide:
+            text = "Hide Files"
+        elif self.tounhide:
+            text = "Unhide Files"
+        else:
+            text = "Modify Hidden Files"
+
+
+        # FINALLY call the super() init
+        super().__init__(text=text, *args, **kwargs)
+
+        #track the first run
+        self._first_do = True
+
 
         # and now get rid of these:
-        del self.checked
-        del self.unchecked
+        # del self.check_unhide
+        # del self.checked
+        # del self.unchecked
 
 
-    def _do(self, hide, unhide):
-        if unhide:
-            Manager.DB.remove_hidden_files(self.root, unhide)
-        if hide:
-            Manager.DB.insert(2, "hiddenfiles",
-                              params=zip(repeat(self.root),
-                                         hide))
+    # def _do(self, hide, unhide):
+    #     if unhide:
+    #         Manager.DB.remove_hidden_files(self.mod_dir, unhide)
+    #     if hide:
+    #         Manager.DB.insert(2, "hiddenfiles",
+    #                           params=zip(repeat(self.mod_dir),
+    #                                      hide))
 
     def _redo_(self):
         """hide the visible, reveal the hidden"""
-        self._do(self.tohide, self.tounhide)
+
+        # create a savepoint immediately before we change the db
+        Manager.DB.savepoint("changehidden")
+        # self._do(self.tohide, self.tounhide)
+        if self.tounhide:
+            Manager.DB.remove_hidden_files(self.mod_dir, self.tounhide)
+        if self.tohide:
+            Manager.DB.insert(2, "hiddenfiles",
+                              params=zip(repeat(self.mod_dir),
+                                         self.tohide))
+
+        if self._first_do:
+            self._first_do = False
+        else:
+            self._modify_checkstates(False)
+
 
     def _undo_(self):
         """hide the hidden, visibilate the shown"""
-        self._do(self.tounhide, self.tohide)
+        # if all goes well, we should just have to rollback to the
+        # savepoint we made earlier
+        # self._do(self.tounhide, self.tohide)
+        Manager.DB.rollback("changehidden")
+
+        self._modify_checkstates(True)
+
+    def _modify_checkstates(self, undo=False, _checked=Qt.Checked,
+                            _unchecked=Qt.Unchecked):
+        """
+        After the first "do", we'll need to check/uncheck items
+        programatically.
+        """
+
+        for c in self.checked: #type: QFSItem
+            c.checkState = _unchecked if undo else _checked
+        for u in self.unchecked:
+            u.checkState = _checked if undo else _unchecked
+
 
     def _get_checkstates(self, base,
                           unchecked=Qt.Unchecked,
@@ -913,19 +965,49 @@ class ChangeHiddenFilesCommand(UndoCmd):
                 if child.isdir:
                     # if we found an unchecked folder, just add
                     # all its children
-                    self.unchecked.extend(c.lpath
+                    # self.unchecked.extend(c.lpath
+                    self.unchecked.extend(c
                                        for c in child.iterchildren(True)
                                        if not c.isdir)
                 else:
-                    self.unchecked.append(child.lpath)
+                    self.unchecked.append(child)
+                    # self.unchecked.append(child.lpath)
 
             elif self.check_unhide:
                 if child.isdir:
-                    self.checked.extend(c.lpath for c
+                    # self.checked.extend(c.lpath for c
+                    self.checked.extend(c for c
                                          in child.iterchildren(True)
                                          if not c.isdir)
                 else:
-                    self.checked.append(child.lpath)
+                    self.checked.append(child)
+                    # self.checked.append(child.lpath)
+
+# class TestSavepointCmd(UndoCmd):
+#     def __init__(self):
+#         super().__init__(text="test savepoint")
+#
+#         Manager.DB.conn.set_trace_callback(print)
+#
+#         self.cur = None
+#
+#
+#     def _redo_(self):
+#         [print("PREREDO>>>",*r) for r in Manager.DB.select("hiddenfiles")]
+#
+#         Manager.DB.savepoint("test")
+#         self.cur = Manager.DB.insert(2, "hiddenfiles", params=("testmod", "testfile"), many=False)
+#
+#         [print("POSTREDO>>>",*r) for r in Manager.DB.select("hiddenfiles")]
+#
+#     def _undo_(self):
+#
+#         [print("PREUNDO>>>",*r) for r in Manager.DB.select("hiddenfiles")]
+#         Manager.DB.rollback("test")
+#         # self.cur.execute("ROLLBACK TO test")
+#         # self.cur.execute("ROLLBACK")
+#
+#         [print("POSTUNDO>>>",*r) for r in Manager.DB.select("hiddenfiles")]
 
 
 if __name__ == '__main__':

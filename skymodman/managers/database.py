@@ -556,6 +556,8 @@ class DBManager:
         :param filelist: list of files
         """
 
+        self.checktx()
+
         _q = "DELETE FROM hiddenfiles" \
              " WHERE directory = '{mdir}'" \
              " AND filepath IN ({paths})"
