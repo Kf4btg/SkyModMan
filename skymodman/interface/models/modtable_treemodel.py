@@ -5,19 +5,27 @@ from skymodman import ModEntry
 from skymodman.managers import modmanager
 from skymodman.constants import (Column as COL, ModError)
 from skymodman.utils import withlogger
-from skymodman.interface.models.undo_commands import (
-    ChangeModAttributeCommand,
-    ShiftRowsCommand,
-    RemoveRowsCommand,
-    ClearMissingModsCommand
+# from skymodman.interface.models.undo_commands import (
+#     ChangeModAttributeCommand,
+#     ShiftRowsCommand,
+#     RemoveRowsCommand,
+#     ClearMissingModsCommand
+# )
+
+# sometimes...the import system makes me very angry
+from skymodman.interface.qundo.commands import (
+    change_mod_attribute,
+    shift_rows,
+    remove_rows,
+    clear_missing_mods
 )
+
 
 from functools import total_ordering, partial
 from collections import deque
 import re
 
 Manager = None
-
 
 # <editor-fold desc="ModuleConstants">
 
@@ -444,7 +452,7 @@ class ModTable_TreeModel(QAbstractItemModel):
                 cb1 = partial(self._post_change_mod_attr, index, row)
                 cb2 = partial(self._post_change_mod_attr, index)
 
-                self._push_command(ChangeModAttributeCommand(
+                self._push_command(change_mod_attribute.cmd(
                     self.mod_entries[row],
                     "enabled",
                     int(value == Qt_Checked),
@@ -465,7 +473,7 @@ class ModTable_TreeModel(QAbstractItemModel):
                 # callbacks for changing (1) or reverting (2)
                 cb1 = partial(self._post_change_mod_attr, index, row)
                 cb2 = partial(self._post_change_mod_attr, index)
-                self._push_command(ChangeModAttributeCommand(
+                self._push_command(change_mod_attribute.cmd(
                     mod, "name", new_name,
                     post_redo_callback = cb1,
                     post_undo_callback = cb2)
@@ -510,7 +518,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
         # create a new shift-command
 
-        scmd = ShiftRowsCommand(
+        scmd = shift_rows.cmd(
             self, start_row, end_row, move_to_row,
             text=undotext,
             post_redo_callback=self.notifyViewRowsMoved.emit,
@@ -670,7 +678,7 @@ class ModTable_TreeModel(QAbstractItemModel):
             self.endResetModel()
 
         self._push_command(
-            ClearMissingModsCommand(
+            clear_missing_mods.cmd(
                 self,
                 pre_redo_callback=self.beginResetModel,
                 pre_undo_callback=self.beginResetModel,
@@ -758,7 +766,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         end = row+count-1
 
         self._push_command(
-            RemoveRowsCommand(
+            remove_rows.cmd(
                 self, row, end,
                 pre_redo_callback  = partial(self.beginRemoveRows,
                                              parent, row, end),
