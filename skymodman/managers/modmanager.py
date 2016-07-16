@@ -391,16 +391,22 @@ class _ModManager:
 
         with self._dman.conn:
             # delete the row with the given ordinal
-            cur = self.DB.updatemany("DELETE FROM mods WHERE ordinal=?",
-                                rows_to_delete)
+            self._dman.delete("mods", "ordinal=?", rows_to_delete, True)
+
+            # cur = self.DB.updatemany("DELETE FROM mods WHERE ordinal=?",
+            #                     rows_to_delete)
 
             # reuse the same cursor
             # and reinsert
-            cur.executemany(
-                "INSERT INTO mods({}) VALUES ({})".format(
-                    ", ".join(_db_fields),
-                    ", ".join("?" * len(_db_fields))
-                ), dbrowgen)
+
+            self._dman.insert(len(_db_fields), "mods", *_db_fields,
+                              params=dbrowgen)
+
+            # cur.executemany(
+            #     "INSERT INTO mods({}) VALUES ({})".format(
+            #         ", ".join(_db_fields),
+            #         ", ".join("?" * len(_db_fields))
+            #     ), dbrowgen)
 
         # And finally save changes to disk
         self.save_mod_list()

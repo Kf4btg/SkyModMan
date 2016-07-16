@@ -217,14 +217,11 @@ class DBManager:
             raise exceptions.DatabaseError(
                 "'{}' is not a valid table name".format(table))
 
-        if not fields:
-            fields = ("*", )
-
-        _q = "SELECT {flds} FROM {tbl}".format(
-            flds = ", ".join(fields), tbl=table)
-
-        if where:
-            _q += " WHERE {}".format(where)
+        _q = "SELECT {flds} FROM {tbl}{whr}".format(
+            flds = ", ".join(fields) if fields else "*",
+            tbl=table,
+            whr = " WHERE {}".format(where) if where else ""
+        )
 
         return self._con.execute(_q, params)
 
@@ -267,44 +264,59 @@ class DBManager:
 
         return self._con.executemany(sql, params)
 
-    def delete(self, from_table, where="", params=()):
+    def delete(self, table, where="", params=(), many=False):
+        """
+        Delete entries from a database table.
+
+        :param table:
+        :param where: if omitted, ALL rows in the table will be reomved
+        :param params:
+        :param many: is this an ``executemany`` situation?
+        :return: cursor object
         """
 
-        :param from_table:
-        :param where: if this string contains the format() code
-            '{qmarks}', then the correct number of "?" placeholders will
-             be determined from the length of params() and generated
-             automatically. This will also split the query up if needed
-             to ensure that the number of parameters supplied to sqlite
-             does not exceed the max number of allowed params per query.
+        cmd = self._con.executemany if many else self._con.execute
 
+        # print("DELETE FROM {tbl}{whr}".format(
+        #     tbl=table,
+        #     whr=(" WHERE %s" % where) if where else ""
+        # ))
+
+        return cmd("DELETE FROM {tbl}{whr}".format(
+            tbl=table,
+            whr=(" WHERE %s" % where) if where else ""
+        ), params)
+
+
+    def insert(self, values_count, table, *fields, params=(), many=True):
+        """
+        e.g.:
+
+            >>> insert(2, "datatable", "firstname", "address", params=ftuple_list)
+            executemany('INSERT INTO datatable(firstname, address) VALUES (?, ?)', ftuple_list)
+
+        :param int values_count: number of ? to use for the values
+        :param str table: name of table
+        :param fields: optional field names for table
         :param params:
+        :param many:
         :return:
         """
 
-        _q="DELETE FROM {}".format(from_table)
+        cmd = self._con.executemany if many else self._con.execute
 
-        c = self._con.cursor()
+        # print("INSERT INTO {tbl}{flds} VALUES {vals}".format(
+        #     tbl=table,
+        #     flds= ('(%s)' % ", ".join(fields)) if fields else "",
+        #     vals= '?' if values_count == 1
+        #         else '({})'.format(", ".join('?' * values_count))))
 
-        if where:
-            _q+=" WHERE "
-            if "{qmarks}" in where:
-                if len(params) <= _SQLMAX:
-                    # nothing special
-                    _q+=where.format(qmarks=", ".join("?" * len(params)))
-                    c.execute(_q, params)
-                else:
-                    # something special
-                    _q += where
-                    sections, remainder = divmod(len(params), _SQLMAX)
-                    for i in range(sections):
-                        s = _SQLMAX * i
-                        query = _q.format(qmarks=", ".join('?' * _SQLMAX))
-                        c.execute(query, params[s:s + _SQLMAX])
-                    if remainder:
-                        query = _q.format(
-                            qmarks=", ".join('?' * remainder))
-                        c.execute(query, params[sections*_SQLMAX:])
+        return cmd("INSERT INTO {tbl}{flds} VALUES {vals}".format(
+            tbl=table,
+            flds= ('(%s)' % ", ".join(fields)) if fields else "",
+            vals= '?' if values_count == 1
+                else '({})'.format(", ".join('?' * values_count))
+        ), params)
 
     ##################
     ## DATA LOADING ##
@@ -446,28 +458,28 @@ class DBManager:
         :param filelist: list of files
         """
 
-        _q = """DELETE FROM hiddenfiles
-            WHERE directory = "{0}"
-            AND filepath IN ({1})"""
+        _q = "DELETE FROM hiddenfiles" \
+             " WHERE directory = '{mdir}'" \
+             " AND filepath IN ({paths})"
 
         c = self._con.cursor()
 
         if len(filelist) <= _SQLMAX:
             # nothing special
-            _q.format(mod_dir,
-                      ", ".join("?" * len(filelist)))
+            _q=_q.format(mdir=mod_dir,
+                      paths=", ".join("?" * len(filelist)))
             c.execute(_q, filelist)
         else:
             # something special
             sections, remainder = divmod(len(filelist), _SQLMAX)
             for i in range(sections):
                 s = _SQLMAX * i
-                query = _q.format(mod_dir,
-                                  ", ".join('?' * _SQLMAX))
+                query = _q.format(mdir=mod_dir,
+                                  paths=", ".join('?' * _SQLMAX))
                 c.execute(query, filelist[s:s + _SQLMAX])
             if remainder:
-                query = _q.format(mod_dir,
-                                  ", ".join('?' * remainder))
+                query = _q.format(mdir=mod_dir,
+                                  paths=", ".join('?' * remainder))
                 c.execute(query, filelist[sections * _SQLMAX:])
 
         return c

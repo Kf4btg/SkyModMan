@@ -10,7 +10,7 @@ from skymodman.utils import withlogger #, tree
 from skymodman.utils.fsutils import check_path
 from skymodman.managers import modmanager
 # from skymodman.utils import humanizer
-Manager = None
+Manager = None # type: modmanager._ModManager
 # Manager = modmanager.Manager()
 
 # actually provides a slight (but noticeable) speedup
@@ -743,35 +743,14 @@ class ModFileTreeModel(QAbstractItemModel):
             toremove = []
             toadd = hiddens
 
-        # self.LOGGER << len(toremove)
-        # limit the size of the query strings we send to the DB
-        # maxatonce=900 # max number of vars for sqlite query is 999
         if toremove:
-
             Manager.DB.remove_hidden_files(directory, toremove)
-
-            # q = """DELETE FROM hiddenfiles
-            #     WHERE directory = "{}"
-            #     AND filepath IN ({})"""
-            #
-            # sections, remainder = divmod(len(toremove),maxatonce)
-            # for i in range(sections):
-            #     s=maxatonce*i
-            #     query = q.format(directory, ", ".join(['?']*maxatonce))
-            #
-            #     self.cursor.execute(query,toremove[s:s+maxatonce])
-            #
-            # if remainder:
-            #     query = q.format(directory, ", ".join(['?']*remainder))
-            #
-            #     self.cursor.execute(query, toremove[sections*maxatonce:])
-
         if toadd:
-            Manager.DB.updatemany(
-            # self.cursor.executemany(
-                "INSERT INTO hiddenfiles VALUES (?, ?)",
-                zip(repeat(directory), toadd))
-                # ((directory,a) for a in toadd))
+            Manager.DB.insert(2, "hiddenfiles",
+                              params=zip(repeat(directory), toadd))
+            # Manager.DB.updatemany(
+            #     "INSERT INTO hiddenfiles VALUES (?, ?)",
+            #     zip(repeat(directory), toadd))
 
         self.hasUnsavedChanges.emit(True)
 
