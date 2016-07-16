@@ -722,6 +722,10 @@ class ModFileTreeModel(QAbstractItemModel):
         self.hasUnsavedChanges.emit(False)
 
     def update_db(self):
+
+        self.undostack.push(TestSavepointCmd())
+
+    def update_db2(self):
         """Make  changes to database.
         NOTE: this does not commit them! That must be done separately"""
         directory = os.path.basename(self.rootpath)
@@ -793,6 +797,32 @@ class ModFileTreeModel(QAbstractItemModel):
         _(self.root_item)
         return hBasket, uhBasket
 
+class TestSavepointCmd(UndoCmd):
+    def __init__(self):
+        super().__init__(text="test savepoint")
+
+        Manager.DB.conn.set_trace_callback(print)
+
+        self.cur = None
+
+
+    def _redo_(self):
+        [print("PREREDO>>>",*r) for r in Manager.DB.select("hiddenfiles")]
+
+        Manager.DB.savepoint("test")
+        self.cur = Manager.DB.insert(2, "hiddenfiles", params=("testmod", "testfile"), many=False)
+
+        [print("POSTREDO>>>",*r) for r in Manager.DB.select("hiddenfiles")]
+
+    def _undo_(self):
+
+        [print("PREUNDO>>>",*r) for r in Manager.DB.select("hiddenfiles")]
+        Manager.DB.rollback("test")
+        # self.cur.execute("ROLLBACK TO test")
+        # self.cur.execute("ROLLBACK")
+
+        [print("POSTUNDO>>>",*r) for r in Manager.DB.select("hiddenfiles")]
+
 
 class ChangeHiddenFilesCommand(UndoCmd):
 
@@ -839,6 +869,10 @@ class ChangeHiddenFilesCommand(UndoCmd):
             self.tounhide = []
             # everything unchecked should be hidden
             self.tohide = self.unchecked
+
+        # and now get rid of these:
+        del self.checked
+        del self.unchecked
 
 
     def _do(self, hide, unhide):

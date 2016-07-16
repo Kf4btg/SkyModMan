@@ -836,8 +836,12 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self._update_enabled_actions()
 
         # also change the current undo stack
+        # self.LOGGER << "change undo stack"
         self.undoManager.setActiveStack(
             self.undo_stacks[self.current_tab])
+        # self.LOGGER << self.undo_stacks[self.current_tab]
+
+
 
     @pyqtSlot(int)
     def on_profile_select(self, index):
