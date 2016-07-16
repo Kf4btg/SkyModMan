@@ -15,6 +15,39 @@ _mcount = count()
 # max number of vars for sqlite query is 999
 _SQLMAX=900
 
+# this Connection subclass courtesy of Ryan Kelly:
+# http://code.activestate.com/lists/python-list/189197/
+# during a discussion of the problems with savepoints
+# and the mystery of python's isolation-levels
+class HappyConn(sqlite3.Connection):
+    def __enter__(self):
+        self.execute("BEGIN")
+        return self
+    def __exit__(self, exc_type, exc_info, traceback):
+        if exc_type is None:
+            self.execute("COMMIT")
+        else:
+            self.execute("ROLLBACK")
+
+def getconn(path):
+    """
+    return a modified Connection with its isolation level set to
+    ``None`` and sensible commit/rollback policies when used as a
+    context manager.
+    """
+    conn = sqlite3.connect(path, factory=HappyConn)
+    # "isolation_level = None" seems like a simple-enough thing
+    # to understand, but in truth it replaces the dark magic
+    # of pysqlite's auto-transactions with a new kind of dark
+    # magic that, at the least, allows us to avoid spurious
+    # auto-commits and enables savepoints (which are totally
+    # broken under the default isolation level). It requires
+    # paying a bit of extra attention and making sure to issue
+    # the appropriate BEGIN, ROLLBACK, and COMMIT commands.
+    conn.isolation_level = None
+    return conn
+
+
 # from skymodman.utils import humanizer
 # @humanizer.humanize
 @withlogger
@@ -66,7 +99,11 @@ class DBManager:
         super().__init__()
 
         # create db in memory
-        self._con = sqlite3.connect(":memory:")
+        self._con = getconn(":memory:")
+        # self._con.set_trace_callback(print)
+
+        # self._con = sqlite3.connect(":memory:",
+        #                             isolation_level=None)
 
         # create the mods table
         # NOTE: `ordinal` (i.e. the mod's place in the "install-order") is not stored on disk with the rest of the mod info; it is instead inferred from the order in which the mods are listed in the config file
@@ -74,6 +111,11 @@ class DBManager:
         # mods-directory where the files for this mod are saved.
         # `name` is initially equivalent, but can be changed as
         # desired by the user.
+
+        # with self._con as conn:
+        # GRRRR even with isolation_level=None, this STILL
+        # auto-commits before executing the script if we're currently
+        # within a transaction!!
         self._con.executescript(self._SCHEMA)
         self._con.row_factory = sqlite3.Row
 
@@ -126,28 +168,33 @@ class DBManager:
 
             # self._con.execute("DELETE FROM ?", self._tablenames)
             # Apparently you can't use ? parameters for table names??!?!?
-            for n in self._tablenames:
-                self._con.execute("DELETE FROM {table}".format(table=n))
+            # for n in self._tablenames:
+            #     self._con.execute("DELETE FROM {table}".format(table=n))
 
-    def reset_table(self, table_name):
-        """
-        Remove all rows from specified table
+            # security???
+            self._con.execute("DELETE FROM mods")
+            self._con.execute("DELETE FROM modfiles")
+            self._con.execute("DELETE FROM hiddenfiles")
 
-        :param table_name: Jim.
-        :return: Number of rows removed
-        """
-
-        # not that I'm worried too much about security with this
-        # program... but let's see if we can't avoid some SQL-injection
-        # attacks, just out of principle
-
-        if table_name not in self._tablenames:
-            raise exceptions.DatabaseError(
-                "'{}' is not a valid table name".format(table_name))
-
-        q="DELETE FROM {table}".format(table=table_name)
-        with self._con:
-            return self._con.execute(q).rowcount
+    # def reset_table(self, table_name):
+    #     """
+    #     Remove all rows from specified table
+    #
+    #     :param table_name: Jim.
+    #     :return: Number of rows removed
+    #     """
+    #
+    #     # not that I'm worried too much about security with this
+    #     # program... but let's see if we can't avoid some SQL-injection
+    #     # attacks, just out of principle
+    #
+    #     if table_name not in self._tablenames:
+    #         raise exceptions.DatabaseError(
+    #             "'{}' is not a valid table name".format(table_name))
+    #
+    #     q="DELETE FROM {table}".format(table=table_name)
+    #     with self._con:
+    #         return self._con.execute(q).rowcount
 
 
     def reset_errors(self):
@@ -162,6 +209,41 @@ class DBManager:
             return self._con.execute(
                 "UPDATE mods SET error = 0 WHERE error != 0").rowcount
 
+    ##=============================================
+    ## Transaction Management
+    ##=============================================
+
+    def checktx(self):
+        """Check if the connection is in a transaction. If not, begin one"""
+        if not self._con.in_transaction:
+            self._con.execute("BEGIN")
+
+    def savepoint(self, name="last"):
+        """
+        Create a savepoint in the database with name `name`. If, later,
+        ``rollback()`` is called with the same name as a parameter, the
+        database will revert to the state it was in when the savepoint
+        was created, rather than all the way to the beginning of the
+        transaction.
+
+        :param name: name of the savepoint; does not need to be unique.
+            If not provided, the name 'last' will be used.
+            ``rollback("last")`` will then return to the most recent
+            time checkpoint() was called.
+        :return:
+        """
+
+        self.checktx()
+
+        self._con.execute("SAVEPOINT {}".format(
+            # don't allow whitespace;
+            # take the first element of name split on ws
+            # to enforce this
+            name.split()[0])
+        )
+
+
+
     ##############
     ## wrappers ##
     ##############
@@ -175,11 +257,19 @@ class DBManager:
             self.LOGGER.warning("Database not currently in transaction."
                                 " Committing anyway.")
 
-        self._con.commit()
+        self._con.execute("COMMIT")
 
-    def rollback(self):
+    def rollback(self, savepoint=None):
+        """Rollback the current transaction. If a savepoint name is
+        provided, rollback to that savepoint"""
+
         if self._con.in_transaction:
-            self._con.rollback()
+            if savepoint:
+                self._con.execute("ROLLBACK TO {}".format(
+                    savepoint.split()[0]))
+            else:
+                self._con.execute("ROLLBACK")
+                # self._con.rollback()
         else:
             # i'm aware that a rollback without transaction isn't
             # an error or anything; but if there's nothing to rollback
@@ -235,7 +325,7 @@ class DBManager:
                            where=where,
                            params=params).fetchone()
 
-    def update(self, sql, params=()):
+    def update(self, sql, params=(), many=False):
         """
         Like select(), but for UPDATE, INSERT, DELETE, etc. commands.
         Returns the cursor object that was created to execute the
@@ -245,24 +335,30 @@ class DBManager:
         saved.
 
         :param str sql: a valid sql query
+        :param many: is this an ``executemany`` scenario?
         :param typing.Iterable params:
         """
-        return self._con.execute(sql, params)
+        self.checktx()
 
-    def updatemany(self, sql, params=None):
-        """
-        As update(), but for multiple transactions. Returns the cursor
-        object that was created to execute the statement. The changes
-        made are NOT committed before this method returns; call
-        commit() (or call this method while using the connection as a
-        context manager) to make sure they're saved.
+        cmd = self._con.executemany if many else self._con.execute
+        # return self._con.execute(sql, params)
+        return cmd(sql, params)
 
-        :param str sql:
-        :param typing.Iterable params:
-        :return: the cursor object that executed the query
-        """
-
-        return self._con.executemany(sql, params)
+    # def updatemany(self, sql, params=None):
+    #     """
+    #     As update(), but for multiple transactions. Returns the cursor
+    #     object that was created to execute the statement. The changes
+    #     made are NOT committed before this method returns; call
+    #     commit() (or call this method while using the connection as a
+    #     context manager) to make sure they're saved.
+    #
+    #     :param str sql:
+    #     :param typing.Iterable params:
+    #     :return: the cursor object that executed the query
+    #     """
+    #     self.checktx()
+    #
+    #     return self._con.executemany(sql, params)
 
     def delete(self, table, where="", params=(), many=False):
         """
@@ -274,6 +370,7 @@ class DBManager:
         :param many: is this an ``executemany`` situation?
         :return: cursor object
         """
+        self.checktx()
 
         cmd = self._con.executemany if many else self._con.execute
 
@@ -302,6 +399,7 @@ class DBManager:
         :param many:
         :return:
         """
+        self.checktx()
 
         cmd = self._con.executemany if many else self._con.execute
 
@@ -693,9 +791,10 @@ class DBManager:
         """
 
         # go through each folder indivually
-        for modfolder in Path(directory).iterdir():
-            if not modfolder.is_dir(): continue
-            self.add_files_from_dir(modfolder.name, str(modfolder))
+        with self._con:
+            for modfolder in Path(directory).iterdir():
+                if not modfolder.is_dir(): continue
+                self.add_files_from_dir(modfolder.name, str(modfolder))
 
         # self.LOGGER << "dumping db contents to disk"
         # with open('res/test2.dump.sql', 'w') as f:
@@ -731,6 +830,7 @@ class DBManager:
                 "INSERT INTO modfiles VALUES (?, ?)",
                 zip(repeat(mod_name), mfiles))
 
+
         # try: mfiles.remove('meta.ini') #don't care about these
         # except ValueError: pass
 
@@ -738,6 +838,11 @@ class DBManager:
         """
         Using the data in the 'modfiles' table, detect any file
         conflicts among the installed mods
+
+        Note: this method causes an implicit COMMIT in the database.
+        This is unlikely to be an issue, though, since we only call
+        this before the user has actually had a chance to make any
+        changes (or immediately after they've saved them)
         """
 
         self.LOGGER.info("Detecting file conflicts")
@@ -745,10 +850,11 @@ class DBManager:
 
         # if we're reloading the status of conflicted mods,
         # delete the view if it exists
-        self._con.execute("DROP VIEW IF EXISTS filesbymodorder")
 
         # create the view
         with self._con:
+            self._con.execute("DROP VIEW IF EXISTS filesbymodorder")
+
             # self._con.execute(q)
             self._con.execute("""
                 CREATE VIEW filesbymodorder AS
