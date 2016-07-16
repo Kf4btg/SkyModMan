@@ -803,8 +803,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.undoManager.addStack(self.mod_table.undo_stack)
         self.undo_stacks[TAB.MODTABLE] = self.mod_table.undo_stack
 
-        # add a dummy stack for the filetree tab, for now
-        self.undo_stacks[TAB.FILETREE] = QtWidgets.QUndoStack()
+        self.undo_stacks[TAB.FILETREE] = self.models[M.file_viewer].undostack
         self.undoManager.addStack(self.undo_stacks[TAB.FILETREE])
 
         # noinspection PyUnresolvedReferences

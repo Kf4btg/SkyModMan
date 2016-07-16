@@ -3,12 +3,14 @@ from pathlib import Path
 from itertools import repeat, filterfalse
 
 from PyQt5.QtCore import Qt, QModelIndex, QAbstractItemModel, pyqtSignal, pyqtSlot
+from PyQt5.QtWidgets import QUndoStack
 from PyQt5.QtGui import QIcon
 
 
 from skymodman.utils import withlogger #, tree
 from skymodman.utils.fsutils import check_path
 from skymodman.managers import modmanager
+from skymodman.interface.qundo import UndoCmd
 # from skymodman.utils import humanizer
 Manager = None # type: modmanager._ModManager
 # Manager = modmanager.Manager()
@@ -398,6 +400,10 @@ class ModFileTreeModel(QAbstractItemModel):
         # self.dbconn = Manager.DB.conn
         # self.cursor = Manager.getdbcursor()
 
+        # the mod table has this stored on the custom view,
+        # but we have no custom view for the file tree, soo...here it is
+        self.undostack = QUndoStack()
+
     @property
     def root_path(self):
         return self.rootpath
@@ -429,6 +435,9 @@ class ModFileTreeModel(QAbstractItemModel):
 
         # commit any changes we've made so far
         self.save()
+
+        # drop the undo stack
+        self.undostack.clear()
 
         if path is None: # reset Model to show nothing
             self.beginResetModel()
@@ -697,8 +706,6 @@ class ModFileTreeModel(QAbstractItemModel):
         if Manager.DB.in_transaction:
             Manager.DB.commit()
             Manager.save_hidden_files()
-            # afterwards, refresh cursor
-            # self.cursor = Manager.getdbcursor()
             self.hasUnsavedChanges.emit(False)
 
     def revert(self):
@@ -721,11 +728,6 @@ class ModFileTreeModel(QAbstractItemModel):
 
         # here's a list of the CURRENTLY hidden filepaths for this mod,
         # as known to the database
-        # nowhiddens = [r["filepath"] for r in
-        #               self.cursor.execute(
-        #                   "SELECT * FROM hiddenfiles WHERE directory=?",
-        #                   (directory,))]
-
         nowhiddens = list(Manager.DB.files_hidden(directory))
 
         # let's forget all that silly complicated stuff and do this:
@@ -748,9 +750,6 @@ class ModFileTreeModel(QAbstractItemModel):
         if toadd:
             Manager.DB.insert(2, "hiddenfiles",
                               params=zip(repeat(directory), toadd))
-            # Manager.DB.updatemany(
-            #     "INSERT INTO hiddenfiles VALUES (?, ?)",
-            #     zip(repeat(directory), toadd))
 
         self.hasUnsavedChanges.emit(True)
 
@@ -793,6 +792,106 @@ class ModFileTreeModel(QAbstractItemModel):
 
         _(self.root_item)
         return hBasket, uhBasket
+
+
+class ChangeHiddenFilesCommand(UndoCmd):
+
+
+    def __init__(self, mod_root, check_unhide, text="", *args,
+                 **kwargs):
+        """
+
+        :param mod_root:
+        :param text:
+        :param args:
+        :param kwargs:
+        """
+        super().__init__(text=text, *args, **kwargs)
+
+        self.root = mod_root
+        self.checked = []
+        self.unchecked = []
+        self.tohide = []
+        self.tounhide = []
+
+        # get currently hidden files from db
+        currhidden = list(Manager.DB.files_hidden(self.root))
+
+        self.check_unhide = len(currhidden) > 0
+
+        # analyze checkstates
+        self._get_checkstates(self.root)
+
+        # if any items were previously hidden, determine which need
+        # to be un-hidden and which can remain, as well as any newly-
+        # hidden files
+        if currhidden:
+            # filter the list of currently hidden items by those are
+            # now checked; this will need to be "un"-hidden
+            # self.tounhide = list(filter(self.checked.__contains__, currhidden))
+            self.tounhide = [c for c in self.checked if c in currhidden]
+
+            # and make sure we're not trying to "re"-hide any items that
+            # are already hidden.
+            self.tohide = [u for u in self.unchecked if u not in currhidden]
+        else:
+            # if we're here, then no items were previously hidden
+            self.tounhide = []
+            # everything unchecked should be hidden
+            self.tohide = self.unchecked
+
+
+    def _do(self, hide, unhide):
+        if unhide:
+            Manager.DB.remove_hidden_files(self.root, unhide)
+        if hide:
+            Manager.DB.insert(2, "hiddenfiles",
+                              params=zip(repeat(self.root),
+                                         hide))
+
+    def _redo_(self):
+        """hide the visible, reveal the hidden"""
+        self._do(self.tohide, self.tounhide)
+
+    def _undo_(self):
+        """hide the hidden, visibilate the shown"""
+        self._do(self.tounhide, self.tohide)
+
+    def _get_checkstates(self, base,
+                          unchecked=Qt.Unchecked,
+                          pchecked=Qt.PartiallyChecked):
+        """
+        examine state of tree as it appears to user and record each
+        unchecked ("hidden") item and separately (depending on the
+        value of self.check_unhide) each checked ("visible") item
+
+        :param skymodman.interface.models.filetree.QFSItem base:
+        :return:
+        """
+
+        for child in base.iterchildren():
+            cs = child.checkState
+            if cs == pchecked:
+                # this is a directory, we need to go deeper
+                self._get_checkstates(child)
+
+            elif cs == unchecked:
+                if child.isdir:
+                    # if we found an unchecked folder, just add
+                    # all its children
+                    self.unchecked.extend(c.lpath
+                                       for c in child.iterchildren(True)
+                                       if not c.isdir)
+                else:
+                    self.unchecked.append(child.lpath)
+
+            elif self.check_unhide:
+                if child.isdir:
+                    self.checked.extend(c.lpath for c
+                                         in child.iterchildren(True)
+                                         if not c.isdir)
+                else:
+                    self.checked.append(child.lpath)
 
 
 if __name__ == '__main__':

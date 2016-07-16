@@ -298,25 +298,6 @@ class _ModManager:
         # load set of files hidden by user
         self._dman.load_hidden_files(self.profile.hidden_files)
 
-    # def hidden_files(self, for_mod=None):
-    #     """
-    #
-    #     :param str for_mod: If specified, must be the directory name of an
-    #         installed mod; will yield only the files marked as hidden for
-    #         that particular mod.
-    #     :return: a generator over the Rows (basically a dict with keys
-    #         'directory' and 'filepath') of hiddenfiles; if 'for_mod' was
-    #         given, will instead return a generator over just the hidden
-    #         filepaths (generator of strings)
-    #     """
-    #     if for_mod is None:
-    #         yield from self._dman.select("hiddenfiles")
-    #     else:
-    #         yield from (r['filepath'] for r in self._dman.select(
-    #             "hiddenfiles", "filepath",
-    #             where="directory = ?", params=(for_mod, )
-    #         ))
-
     ##=============================================
     ## Mod Information
     ##=============================================
@@ -393,20 +374,10 @@ class _ModManager:
             # delete the row with the given ordinal
             self._dman.delete("mods", "ordinal=?", rows_to_delete, True)
 
-            # cur = self.DB.updatemany("DELETE FROM mods WHERE ordinal=?",
-            #                     rows_to_delete)
-
-            # reuse the same cursor
             # and reinsert
 
             self._dman.insert(len(_db_fields), "mods", *_db_fields,
                               params=dbrowgen)
-
-            # cur.executemany(
-            #     "INSERT INTO mods({}) VALUES ({})".format(
-            #         ", ".join(_db_fields),
-            #         ", ".join("?" * len(_db_fields))
-            #     ), dbrowgen)
 
         # And finally save changes to disk
         self.save_mod_list()
