@@ -376,7 +376,6 @@ class ModFileTreeModel(QAbstractItemModel):
     descendants)
     """
     #TODO: calculate and inform the user of any file-conflicts that will occur in their mod-setup to help them decide what needs to be hidden.
-    # It will probably be necessary to do that asynchronously...somehow...
 
     rootPathChanged = pyqtSignal(str)
     hasUnsavedChanges = pyqtSignal(bool)
@@ -398,11 +397,9 @@ class ModFileTreeModel(QAbstractItemModel):
         self.rootpath = None #type: str
         self.modname = None #type: str
         self.rootitem = None #type: QFSItem
-        # self.dbconn = Manager.DB.conn
-        # self.cursor = Manager.getdbcursor()
 
         # the mod table has this stored on the custom view,
-        # but we have no custom view for the file tree, soo...here it is
+        # but we have no custom view for the file tree, so...here it is
         self.undostack = QUndoStack()
 
     @property
@@ -461,9 +458,6 @@ class ModFileTreeModel(QAbstractItemModel):
             # tells the view it should get new
             # data from model & reset itself
             self.endResetModel()
-
-            # reset cursor
-            # self.cursor = Manager.getdbcursor()
 
             # emit notifier signal
             self.rootPathChanged.emit(path)
@@ -675,17 +669,16 @@ class ModFileTreeModel(QAbstractItemModel):
             # "bottom-right" child that was just changed--to feed to
             # datachanged saves a lot of individual calls. Hopefully there
             # won't be any concurrency issues to worry about later on.
-            # self._send_data_through_proxy(
-            #     index1, self.getIndexFromItem(QFSItem.last_child_seen))
-            # self.logger << "Last row touched: {}".format(QFSItem.last_row_touched)
 
-            # self.dumpsHidden()
-            self.update_db(index1, self.getIndexFromItem(QFSItem.last_child_seen)) # update the db with which files are now hidden
+            # update the db with which files are now hidden
+            self.update_db(index1,
+                           self.getIndexFromItem(QFSItem.last_child_seen))
 
             return True
         return super().setData(index, value, role)
 
     def _get_highest_affected_ancestor(self, item, value):
+        """worst name for a function ever but i can't think of better"""
         if item.parent and item.parent.children_checkState() == value:
             return self._get_highest_affected_ancestor(item.parent, value)
         else:
@@ -693,8 +686,7 @@ class ModFileTreeModel(QAbstractItemModel):
 
     # noinspection PyUnresolvedReferences
     def _send_data_through_proxy(self, index1, index2, *args):
-        proxy = self._parent.model()
-        """:type: PyQt5.QtCore.QSortFilterProxyModel.QSortFilterProxyModel"""
+        proxy = self._parent.model() #QSortFilterProxyModel
 
         proxy.dataChanged.emit(proxy.mapFromSource(index1),
                                proxy.mapFromSource(index2), *args)
@@ -714,10 +706,22 @@ class ModFileTreeModel(QAbstractItemModel):
         Undo all changes made to the tree since the last save.
         """
         self.beginResetModel()
+
+        #SOOOO...
+        # will a rollback/drop-the-undostack work here?
+        # or is individually undoing everything (a bunch of savepoint-
+        # rollbacks) better? I guess it depends on whether we want to
+        # be able to define a "clean" point in the middle of a
+        # transaction...
+
         Manager.DB.rollback()
+        self.undostack.clear()
+
+        # while self.undostack.canUndo() and not self.undostack.isClean():
+        #     self.undostack.undo()
+
+
         self._setup_or_reload_tree()
-        # afterwards, refresh cursor
-        # self.cursor = Manager.getdbcursor()
 
         self.endResetModel()
         self.hasUnsavedChanges.emit(False)
@@ -740,6 +744,175 @@ class ModFileTreeModel(QAbstractItemModel):
                                      post_redo_callback=cb,
                                      post_undo_callback=cb
                                      ))
+        self.hasUnsavedChanges.emit(True)
+
+
+
+class ChangeHiddenFilesCommand(UndoCmd):
+
+
+    def __init__(self, mod_root_item, mod_dir_name, text="", *args,
+                 **kwargs):
+        """
+
+        :param QFSItem mod_root:
+        :param text:
+        :param args:
+        :param kwargs:
+        """
+
+        self.root_item = mod_root_item  # QFSItem
+        self.mod_dir = mod_dir_name     # str
+
+        # these two track the actual QFSItems that were modified
+        self.checked = []
+        self.unchecked = []
+
+        # these hold just the paths (in all lowercase)
+        # XXX: should these be saved? or referenced each time we update
+        # the DB? It'll be a tradeoff between memory and performance...
+        self.tohide = []
+        self.tounhide = []
+
+        # get currently hidden files from db
+        currhidden = list(Manager.DB.files_hidden(self.mod_dir))
+
+        # if nothing was already hidden, we shouldn't waste time
+        # trying to figure out what to un-hide
+        self.check_unhide = len(currhidden) > 0
+
+        # analyze checkstates
+        self._get_checkstates(self.root_item)
+
+        # now filter the lists of qfsitems down to subsets:
+        # if any items were previously hidden, determine which need
+        # to be un-hidden and which can remain, as well as any newly-
+        # hidden files
+        if currhidden:
+            # filter the list of currently hidden items by those are
+            # now checked; this will need to be "un"-hidden
+            self.checked = [c for c in self.checked
+                            if c.lpath in currhidden]
+
+            # keep a record of just the paths to speed up the db-calls
+            self.tounhide = [c.lpath for c in self.checked]
+
+            # and make sure we're not trying to "re"-hide any items that
+            # are already hidden.
+            self.unchecked = [u for u in self.unchecked
+                              if u.lpath not in currhidden]
+        else:
+            # if we're here, then no items were previously hidden
+            self.tounhide = []
+            # everything unchecked should be hidden
+
+        # this is the same no matter if currhidden or not
+        self.tohide = [u.lpath for u in self.unchecked]
+
+        if self.tohide:
+            text = "Hide Files"
+        elif self.tounhide:
+            text = "Unhide Files"
+        else:
+            # this shouldn't really ever happen...but it still
+            # pops up sometimes, even when everything seems to be
+            # working ok...
+            text = "Modify Hidden Files"
+
+        # FINALLY call the super() init
+        super().__init__(text=text, *args, **kwargs)
+
+        #track the first run
+        self._first_do = True
+
+    def _redo_(self):
+        """hide the visible, reveal the hidden"""
+
+        # create a savepoint immediately before we change the db
+        Manager.DB.savepoint("changehidden")
+
+        if self.tounhide:
+            Manager.DB.remove_hidden_files(self.mod_dir, self.tounhide)
+        if self.tohide:
+            Manager.DB.insert(2, "hiddenfiles",
+                              params=zip(repeat(self.mod_dir),
+                                         self.tohide))
+
+        # user changed the checkstates by clicking the first time, so
+        # we only need to do it programatically each time after the first.
+        if self._first_do:
+            self._first_do = False
+        else:
+            self._modify_checkstates(False)
+
+
+    def _undo_(self):
+        """hide the hidden, visibilate the shown"""
+        # if all goes well, we should just have to rollback to the
+        # savepoint we made earlier...
+        Manager.DB.rollback("changehidden")
+
+        # ... and reset the checkstates
+        self._modify_checkstates(True)
+
+    def _modify_checkstates(self, undo=False,
+                            _checked=Qt.Checked,
+                            _unchecked=Qt.Unchecked):
+        """
+        After the first "do", we'll need to check/uncheck items
+        programatically. The post-[re|un]do-callback takes care of
+        emitting the datachanged signal.
+        """
+
+        for c in self.checked: #type: QFSItem
+            c.checkState = _unchecked if undo else _checked
+        for u in self.unchecked:
+            u.checkState = _checked if undo else _unchecked
+
+
+    def _get_checkstates(self, base,
+                          unchecked=Qt.Unchecked,
+                          pchecked=Qt.PartiallyChecked):
+        """
+        examine state of tree as it appears to user and record each
+        unchecked ("hidden") item and separately (depending on the
+        value of self.check_unhide) each checked ("visible") item.
+        These are recorded in self.unchecked and self.checked,
+        respectively.
+
+        :param skymodman.interface.models.filetree.QFSItem base:
+        """
+
+        for child in base.iterchildren():
+            cs = child.checkState
+            if cs == pchecked:
+                # this is a directory, we need to go deeper
+                self._get_checkstates(child)
+
+            elif cs == unchecked:
+                if child.isdir:
+                    # if we found an unchecked folder, just add
+                    # all its children
+                    self.unchecked.extend(c
+                                       for c in child.iterchildren(True)
+                                       if not c.isdir)
+                else:
+                    self.unchecked.append(child)
+
+            elif self.check_unhide:
+                if child.isdir:
+                    self.checked.extend(c for c
+                                         in child.iterchildren(True)
+                                         if not c.isdir)
+                else:
+                    self.checked.append(child)
+
+if __name__ == '__main__':
+    # from skymodman.managers import ModManager
+    # noinspection PyUnresolvedReferences
+    from sqlite3 import Row
+
+
 
 
         # directory = os.path.basename(self.rootpath)
@@ -769,252 +942,46 @@ class ModFileTreeModel(QAbstractItemModel):
         #     Manager.DB.insert(2, "hiddenfiles",
         #                       params=zip(repeat(directory), toadd))
 
-        self.hasUnsavedChanges.emit(True)
 
-    def _get_hidden_states(self, track_unhidden = True):
-        """
-
-        :param bool track_unhidden: whether we care about tracking
-            unhidden files; For example, if the hiddenfiles database
-            table has no entries for this mod, we wouldn't care because
-            there's nothing to reset
-        """
-        hBasket=[]   #holds hidden files
-        uhBasket=[]  #holds non-hidden files
-
-        def _(base):
-            for child in base.iterchildren():
-                cs = child.checkState
-                if cs==Qt_PartiallyChecked:
-                    # this is a directory, we need to go deeper
-                    _(child)
-
-                elif cs==Qt_Unchecked:
-                    if child.isdir:
-                        # if we found an unchecked folder, just add
-                        # all its children
-                        hBasket.extend(c.lpath
-                                       for c in child.iterchildren(True)
-                                       if not c.isdir)
-                    else:
-                        hBasket.append(child.lpath)
-
-                elif track_unhidden:
-                    if child.isdir:
-                        uhBasket.extend(c.lpath for c
-                                        in child.iterchildren(True)
-                                        if not c.isdir)
-                    else:
-                        uhBasket.append(child.lpath)
-
-
-        _(self.root_item)
-        return hBasket, uhBasket
-
-
-
-
-class ChangeHiddenFilesCommand(UndoCmd):
-
-
-    def __init__(self, mod_root_item, mod_dir_name, text="", *args,
-                 **kwargs):
-        """
-
-        :param QFSItem mod_root:
-        :param text:
-        :param args:
-        :param kwargs:
-        """
-
-        self.root_item = mod_root_item
-        self.mod_dir = mod_dir_name
-
-        # these two track the actual QFSItem's that were modified
-        self.checked = []
-        self.unchecked = []
-
-        # these hold just the paths (in all lowercase)
-        # XXX: should these be saved? or referenced each time we update
-        # the DB? It'll be a tradeoff between memory and performance...
-        self.tohide = []
-        self.tounhide = []
-
-        # get currently hidden files from db
-        currhidden = list(Manager.DB.files_hidden(self.mod_dir))
-
-        self.check_unhide = len(currhidden) > 0
-
-        # analyze checkstates
-        self._get_checkstates(self.root_item)
-
-        # now filter the lists of qfsitems down to subsets:
-        # if any items were previously hidden, determine which need
-        # to be un-hidden and which can remain, as well as any newly-
-        # hidden files
-        if currhidden:
-            # filter the list of currently hidden items by those are
-            # now checked; this will need to be "un"-hidden
-            # self.tounhide = list(filter(self.checked.__contains__, currhidden))
-            self.checked = [c for c in self.checked if c.lpath in currhidden]
-            # self.tounhide = [c.lpath for c in self.checked if c in currhidden]
-            self.tounhide = [c.lpath for c in self.checked]
-
-            # and make sure we're not trying to "re"-hide any items that
-            # are already hidden.
-            self.unchecked = [u for u in self.unchecked if u.lpath not in currhidden]
-            # self.tohide = [u.lpath for u in self.unchecked if u not in currhidden]
-        else:
-            # if we're here, then no items were previously hidden
-            self.tounhide = []
-            # everything unchecked should be hidden
-            # self.tohide = self.unchecked
-            # self.tohide = [u.lpath for u in self.unchecked]
-
-        self.tohide = [u.lpath for u in self.unchecked]
-
-        if self.tohide:
-            text = "Hide Files"
-        elif self.tounhide:
-            text = "Unhide Files"
-        else:
-            text = "Modify Hidden Files"
-
-
-        # FINALLY call the super() init
-        super().__init__(text=text, *args, **kwargs)
-
-        #track the first run
-        self._first_do = True
-
-
-        # and now get rid of these:
-        # del self.check_unhide
-        # del self.checked
-        # del self.unchecked
-
-
-    # def _do(self, hide, unhide):
-    #     if unhide:
-    #         Manager.DB.remove_hidden_files(self.mod_dir, unhide)
-    #     if hide:
-    #         Manager.DB.insert(2, "hiddenfiles",
-    #                           params=zip(repeat(self.mod_dir),
-    #                                      hide))
-
-    def _redo_(self):
-        """hide the visible, reveal the hidden"""
-
-        # create a savepoint immediately before we change the db
-        Manager.DB.savepoint("changehidden")
-        # self._do(self.tohide, self.tounhide)
-        if self.tounhide:
-            Manager.DB.remove_hidden_files(self.mod_dir, self.tounhide)
-        if self.tohide:
-            Manager.DB.insert(2, "hiddenfiles",
-                              params=zip(repeat(self.mod_dir),
-                                         self.tohide))
-
-        if self._first_do:
-            self._first_do = False
-        else:
-            self._modify_checkstates(False)
-
-
-    def _undo_(self):
-        """hide the hidden, visibilate the shown"""
-        # if all goes well, we should just have to rollback to the
-        # savepoint we made earlier
-        # self._do(self.tounhide, self.tohide)
-        Manager.DB.rollback("changehidden")
-
-        self._modify_checkstates(True)
-
-    def _modify_checkstates(self, undo=False, _checked=Qt.Checked,
-                            _unchecked=Qt.Unchecked):
-        """
-        After the first "do", we'll need to check/uncheck items
-        programatically.
-        """
-
-        for c in self.checked: #type: QFSItem
-            c.checkState = _unchecked if undo else _checked
-        for u in self.unchecked:
-            u.checkState = _checked if undo else _unchecked
-
-
-    def _get_checkstates(self, base,
-                          unchecked=Qt.Unchecked,
-                          pchecked=Qt.PartiallyChecked):
-        """
-        examine state of tree as it appears to user and record each
-        unchecked ("hidden") item and separately (depending on the
-        value of self.check_unhide) each checked ("visible") item
-
-        :param skymodman.interface.models.filetree.QFSItem base:
-        :return:
-        """
-
-        for child in base.iterchildren():
-            cs = child.checkState
-            if cs == pchecked:
-                # this is a directory, we need to go deeper
-                self._get_checkstates(child)
-
-            elif cs == unchecked:
-                if child.isdir:
-                    # if we found an unchecked folder, just add
-                    # all its children
-                    # self.unchecked.extend(c.lpath
-                    self.unchecked.extend(c
-                                       for c in child.iterchildren(True)
-                                       if not c.isdir)
-                else:
-                    self.unchecked.append(child)
-                    # self.unchecked.append(child.lpath)
-
-            elif self.check_unhide:
-                if child.isdir:
-                    # self.checked.extend(c.lpath for c
-                    self.checked.extend(c for c
-                                         in child.iterchildren(True)
-                                         if not c.isdir)
-                else:
-                    self.checked.append(child)
-                    # self.checked.append(child.lpath)
-
-# class TestSavepointCmd(UndoCmd):
-#     def __init__(self):
-#         super().__init__(text="test savepoint")
-#
-#         Manager.DB.conn.set_trace_callback(print)
-#
-#         self.cur = None
-#
-#
-#     def _redo_(self):
-#         [print("PREREDO>>>",*r) for r in Manager.DB.select("hiddenfiles")]
-#
-#         Manager.DB.savepoint("test")
-#         self.cur = Manager.DB.insert(2, "hiddenfiles", params=("testmod", "testfile"), many=False)
-#
-#         [print("POSTREDO>>>",*r) for r in Manager.DB.select("hiddenfiles")]
-#
-#     def _undo_(self):
-#
-#         [print("PREUNDO>>>",*r) for r in Manager.DB.select("hiddenfiles")]
-#         Manager.DB.rollback("test")
-#         # self.cur.execute("ROLLBACK TO test")
-#         # self.cur.execute("ROLLBACK")
-#
-#         [print("POSTUNDO>>>",*r) for r in Manager.DB.select("hiddenfiles")]
-
-
-if __name__ == '__main__':
-    # from skymodman.managers import ModManager
-    # noinspection PyUnresolvedReferences
-    from sqlite3 import Row
-
+    # def _get_hidden_states(self, track_unhidden = True):
+    #     """
+    #
+    #     :param bool track_unhidden: whether we care about tracking
+    #         unhidden files; For example, if the hiddenfiles database
+    #         table has no entries for this mod, we wouldn't care because
+    #         there's nothing to reset
+    #     """
+    #     hBasket=[]   #holds hidden files
+    #     uhBasket=[]  #holds non-hidden files
+    #
+    #     def _(base):
+    #         for child in base.iterchildren():
+    #             cs = child.checkState
+    #             if cs==Qt_PartiallyChecked:
+    #                 # this is a directory, we need to go deeper
+    #                 _(child)
+    #
+    #             elif cs==Qt_Unchecked:
+    #                 if child.isdir:
+    #                     # if we found an unchecked folder, just add
+    #                     # all its children
+    #                     hBasket.extend(c.lpath
+    #                                    for c in child.iterchildren(True)
+    #                                    if not c.isdir)
+    #                 else:
+    #                     hBasket.append(child.lpath)
+    #
+    #             elif track_unhidden:
+    #                 if child.isdir:
+    #                     uhBasket.extend(c.lpath for c
+    #                                     in child.iterchildren(True)
+    #                                     if not c.isdir)
+    #                 else:
+    #                     uhBasket.append(child.lpath)
+    #
+    #
+    #     _(self.root_item)
+    #     return hBasket, uhBasket
 
 
 
