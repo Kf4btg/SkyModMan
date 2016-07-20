@@ -7,8 +7,7 @@ from pathlib import PurePath, Path
 
 from skymodman.utils import withlogger, tree, archivefs as arcfs
 from skymodman.utils.fsutils import dir_move_merge
-# from skymodman.managers.archive import ArchiveHandler
-from skymodman.managers.archive_7z import ArchiveHandler
+from skymodman.managers.archive import ArchiveHandler
 from skymodman.installer.fomod import Fomod
 from skymodman.installer import common
 from skymodman.managers import modmanager
