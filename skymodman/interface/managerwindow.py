@@ -97,6 +97,18 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             TAB.FILETREE: None  # type: QtWidgets.QUndoStack
         }
 
+        # ---------------------------------------------------
+        ## Create an action for clearing mods that cannot be found
+        ## from the mods list. Will be shown in the right-click menu
+        ## of the mods table when the errors column is visible.
+        # noinspection PyArgumentList
+        self.action_clear_missing = QtWidgets.QAction(
+            "Remove Missing Mods",
+            self,
+            objectName="action_clear_missing",
+            icon=QtGui.QIcon().fromTheme("edit-clear"),
+            triggered=self.remove_missing)
+
         ## Yeah...all that Notifier business was silly. Everything
         ## was still called synchronously (and in the order defined
         ## by the list), so it was just a bunch of sugar and no meat.
@@ -602,23 +614,19 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             partial(self.on_table_search, -1))
 
 
-        # ---------------------------------------------------
-        ## Create an action for clearing mods that cannot be found
-        ## from the mods list. Will be shown in the right-click menu
-        ## of the mods table when the errors column is visible.
-        # noinspection PyArgumentList
-        self.action_clear_missing = QtWidgets.QAction(
-            "Remove Missing Mods",
-            self,
-            objectName="action_clear_missing",
-            icon=QtGui.QIcon().fromTheme("edit-clear"),
-            triggered=self.remove_missing)
+       # --------------------------
 
+        ## clear missing-from-disk mods
         # add to movement toolbar
-        self.movement_toolbar.addSeparator()
-        self.movement_toolbar.addAction(self.action_clear_missing)
+        # self.movement_toolbar.addSeparator()
+        # self.movement_toolbar.addAction(self.action_clear_missing)
 
-        self.mod_table.errorsChanged.connect(lambda e: self.action_clear_missing.setEnabled(bool(e & constants.ModError.DIR_NOT_FOUND)))
+        # should only show when the errors column is visible, but lets
+        # make sure its only active when at least one of the
+        # mods has a DIR_NOT_FOUND error
+        self.mod_table.errorsChanged.connect(
+            lambda e: self.action_clear_missing.setEnabled(
+                bool(e & constants.ModError.DIR_NOT_FOUND)))
 
 
     def _setup_button_connections(self):
