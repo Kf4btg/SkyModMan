@@ -1,8 +1,13 @@
-# https://github.com/Changaco/python-libarchive-c
-python-libarchive-c
-
+### Python Modules
 # http://riverbankcomputing.co.uk/software/pyqt/intro
 pyqt5
 
+# https://github.com/harvimt/quamash
+quamash
+
 # https://github.com/ActiveState/appdirs
 appdirs
+
+### External software
+# http://p7zip.sourceforge.net/
+p7zip
