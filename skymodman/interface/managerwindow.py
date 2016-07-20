@@ -902,13 +902,17 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
                         # update our variable which tracks the current index
                         self.profile_selector_index = index
+
                         # No => "Don't save changes, drop them"
-                        if reply == QtWidgets.QMessageBox.No:
-                            # don't bother reverting, mods list is getting
-                            # reset; just disable the buttons
-                            self.mod_table.undo_stack.clear()
-                            # for s in self.undo_stacks:
-                            #     s.clear()
+                        # if reply == QtWidgets.QMessageBox.No:
+
+                        # Whether they clicked "no" or not, we
+                        # don't bother reverting, mods list is getting
+                        # reset; just disable the buttons
+                        self.mod_table.undo_stack.clear()
+                        # for s in self.undo_stacks:
+                        #     s.clear()
+
 
                         self.newProfileLoaded.emit(new_profile)
                     else:
