@@ -61,11 +61,14 @@ class InstallManager:
         # for display with the Fomod-installer)
         self.normalized_imgpaths = {}
 
-        self.install_dir = self.Manager.conf.paths.dir_mods / self.arc_path.stem.lower()
+        self.install_dir = self.Manager.Config.paths.dir_mods / self.arc_path.stem.lower()
         # Used to track state during installation
         self.files_to_install = []
         self.files_installed = deque()
         self.flags = {}
+
+        self.LOGGER << "Init installer for '{}'".format(self.archive)
+        self.LOGGER << "Install destination: {}".format(self.install_dir)
 
     def init_install_state(self):
         self.files_to_install = []

@@ -72,7 +72,11 @@ class InstallerUI:
                     ## if it's there, install the mod automatically
 
                     # await self.extraction_progress_dialog()
-                    message("information", title="Game Data Found", text="Here's where I'd automatically install the mod for you if I were working correctly. But I won't, because I'm not.")
+                    message("information", title="Game Data Found",
+                            text="Here's where I'd automatically "
+                                 "install the mod for you if I were "
+                                 "working correctly. But I won't, "
+                                 "because I'm not.")
 
 
                     # await installer.extract("/tmp/testinstall",
