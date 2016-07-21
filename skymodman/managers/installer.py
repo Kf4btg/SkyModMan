@@ -1,17 +1,19 @@
-import os
-from functools import lru_cache
-from collections import deque
 import asyncio
+import os
 import re
+from collections import deque
+from functools import lru_cache
 from pathlib import PurePath, Path
 
-from skymodman.utils import withlogger, tree, archivefs as arcfs
-from skymodman.utils.fsutils import dir_move_merge
-from skymodman.managers.archive import ArchiveHandler
-from skymodman.installer.fomod import Fomod
-from skymodman.installer import common
-from skymodman.managers import modmanager
 from skymodman.constants import TopLevelDirs_Bain, TopLevelSuffixes
+from skymodman.installer import common
+from skymodman.installer.fomod import Fomod
+from skymodman.managers import modmanager
+from skymodman.managers.archive import ArchiveHandler
+from skymodman.types.archivefs import archivefs as arcfs
+from skymodman.utils import withlogger, tree
+from skymodman.utils.fsutils import dir_move_merge
+
 
 ## todo: clean this thing up
 

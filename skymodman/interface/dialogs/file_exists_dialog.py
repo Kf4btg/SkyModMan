@@ -4,9 +4,9 @@ from PyQt5.QtCore import QRegularExpression, Qt
 from PyQt5.QtGui import QRegularExpressionValidator
 from PyQt5.QtWidgets import QDialog, QDialogButtonBox
 
-from skymodman.interface.designer.uic.file_exists_dialog_ui import Ui_FileExistsDialog
 from skymodman.constants import OverwriteMode
-from skymodman.utils.archivefs import PureCIPath
+from skymodman.interface.designer.uic.file_exists_dialog_ui import Ui_FileExistsDialog
+from skymodman.types.archivefs.archivefs import PureCIPath
 
 
 class FileExistsDialog(QDialog, Ui_FileExistsDialog):
@@ -178,7 +178,7 @@ class FileExistsDialog(QDialog, Ui_FileExistsDialog):
 
 if __name__ == '__main__':
     from PyQt5.QtWidgets import QApplication
-    from skymodman.utils.archivefs import ArchiveFS
+    from skymodman.types.archivefs.archivefs import ArchiveFS
     from PyQt5.QtWidgets import QPushButton
 
     import sys

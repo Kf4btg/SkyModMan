@@ -5,7 +5,8 @@ from itertools import count
 from pathlib import Path
 
 from skymodman.exceptions import ArchiverError
-from skymodman.utils import withlogger, diqt
+from skymodman.types import diqt
+from skymodman.utils import withlogger
 
 
 @withlogger

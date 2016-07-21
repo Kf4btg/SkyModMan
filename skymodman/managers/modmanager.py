@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from skymodman import ModEntry
+from skymodman.types import ModEntry
 from skymodman.managers import (config as _config,
                                 database as _database,
                                 profiles as _profiles,
@@ -170,7 +170,7 @@ class _ModManager:
         optionally copying config files from the `copy_from` Profile
 
         :param str name:
-        :param profiles.Profile copy_from:
+        :param skymodman.types.Profile copy_from:
         :return: new Profile object
         """
         return self._pman.new_profile(name, copy_from)
@@ -265,6 +265,9 @@ class _ModManager:
 
             # and [re]create the cache file
             self.save_mod_list()
+
+        # clear the "list of enabled mods" cache (used by installer)
+        self._enabledmods = None
 
         # FIXME: avoid doing this on profile change
         # _logger << "Loading list of all Mod Files on disk"
@@ -517,22 +520,31 @@ class _ModManager:
         """
 
         # instantiate a new install manager
-        self._iman = _install.InstallManager(archive)
+        installer = _install.InstallManager(archive)
 
-        fomodpath = await self._iman.get_fomod_path()
+
+        # find the fomod folder, if there is one
+        fomodpath = await installer.get_fomod_path()
 
         self.LOGGER << "fomodpath: {}".format(fomodpath)
 
         if fomodpath is not None:
 
-            await self._iman.extract(extract_dir, [fomodpath])
+            # if we found a fomod folder, extract (only) that
+            # that folder and its contents to a temporary directory
+            await installer.extract(extract_dir, [fomodpath])
             # modconf = os.path.join(extract_dir, fomodpath,
             #                        "ModuleConfig.xml")
 
+            # path to extracted fomod folder
             fdirpath = Path(extract_dir, fomodpath)
             for fpath in fdirpath.iterdir():
+
+                # make sure we have actually have a fomod config script
                 if fpath.name.lower() == 'moduleconfig.xml':
-                    await self._iman.prepare_fomod(str(fpath),
+
+                    # if so, get it ready for the installer
+                    await installer.prepare_fomod(str(fpath),
                                                    extract_dir)
                     break
 
@@ -541,6 +553,9 @@ class _ModManager:
                     # elif os.path.exists(modconf.lower()):
                     #     await installman.prepare_fomod(modconf.lower(), extract_dir)
 
+        # save a reference
+        self._iman = installer
+        # return installer object
         return self._iman
 
     async def get_mod_archive_structure(self, archive=None):

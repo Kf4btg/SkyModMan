@@ -1,16 +1,14 @@
+from functools import partial
+from collections import deque
+import re
+
 from PyQt5 import QtGui
 from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData
 
-from skymodman import ModEntry
+from skymodman.interface.typedefs import QModEntry
 from skymodman.managers import modmanager
 from skymodman.constants import (Column as COL, ModError)
 from skymodman.utils import withlogger
-# from skymodman.interface.models.undo_commands import (
-#     ChangeModAttributeCommand,
-#     ShiftRowsCommand,
-#     RemoveRowsCommand,
-#     ClearMissingModsCommand
-# )
 
 # sometimes...the import system makes me very angry
 from skymodman.interface.qundo.commands import (
@@ -19,11 +17,6 @@ from skymodman.interface.qundo.commands import (
     remove_rows,
     clear_missing_mods
 )
-
-
-from functools import total_ordering, partial
-from collections import deque
-import re
 
 Manager = None
 
@@ -50,7 +43,7 @@ Qt_ToolTipRole    = Qt.ToolTipRole
 Qt_DecorationRole = Qt.DecorationRole
 
 Qt_Checked   = Qt.Checked
-Qt_Unchecked = Qt.Unchecked
+# Qt_Unchecked = Qt.Unchecked
 
 Qt_ItemIsSelectable    = Qt.ItemIsSelectable
 Qt_ItemIsEnabled       = Qt.ItemIsEnabled
@@ -79,43 +72,12 @@ col2Header={
 }
 # </editor-fold>
 
-@total_ordering
-class QModEntry(ModEntry):
-    """
-    Namedtuple subclass that eases accessing derived properties for displaying in the Qt GUI
-    """
-    # from the python docs: [Set] __slots__ to an empty tuple. This
-    # helps keep memory requirements low by preventing the creation of
-    # instance dictionaries.
-    __slots__=()
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-
-    @property
-    def checkState(self):
-        return Qt_Checked if self.enabled else Qt_Unchecked
-
-    def __lt__(self, other):
-        return self.ordinal < other.ordinal #ordinal is unique, but not constant
-    def __gt__(self, other):
-        return self.ordinal > other.ordinal
-
-
-    def __eq__(self, other):
-        """This is for checking if two mods are are equal with regards
-        to their **editable** fields"""
-        return self.name == other.name \
-               and self.enabled == other.enabled \
-               and self.ordinal == other.ordinal
 
 
 @withlogger
 class ModTable_TreeModel(QAbstractItemModel):
 
     tablehaschanges = pyqtSignal(bool)
-    # undoevent = pyqtSignal(str, str) # undotext, redotext
 
     # let view know selection may have moved
     notifyViewRowsMoved = pyqtSignal()
@@ -580,30 +542,8 @@ class ModTable_TreeModel(QAbstractItemModel):
         hide or show the Errors column based on whether any of the mods
         have a non-zero error type
         """
-        # """
-        # query the manager for any errors that were encountered while
-        # loading the modlist for the current profile. The two error
-        # types are:
-        #
-        #     * SyncError.NOTFOUND: Mod listed in the profile's saved
-        #       list is not present on disk
-        #     * SyncError.NOTLISTED: Mod found on disk is not in the
-        #       profile's modlist
-        #
-        # The model's ``errors`` property (a str=>int dictionary) is
-        # populated with the results of this query; each key in the dict
-        # is the name of a mod (directory), and the value is the int-enum
-        # value of the type of error it encountered. If a mod is not
-        # present in this collection, then no error was encountered.
-        #
-        # Ideally, ``errors`` will be empty after this method is called.
-        # In this case, the model will notify the view to hide the Errors
-        # column of the table. If ``errors`` is not empty, then the Errors
-        # column will be shown and an icon indicating the type of error
-        # will be appear there in the row(s) of the problematic mod(s).
-        # """
-        # reset
 
+        # reset
         err_types = ModError.NONE
 
         if query_db:

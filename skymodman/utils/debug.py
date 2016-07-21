@@ -1,7 +1,7 @@
 
 
 
-class Printer:
+class _Printer:
     """
     Because sometimes the log doesn't cut it.
     """
@@ -12,6 +12,8 @@ class Printer:
 
     def __del__(self):
         print()
+
+Printer = _Printer()
 
 def printattrs(obj, name=None, dunder=True, sunder=True):
     """

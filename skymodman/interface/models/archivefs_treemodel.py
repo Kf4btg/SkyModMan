@@ -6,8 +6,9 @@ from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeD
 from skymodman import exceptions
 from skymodman.constants import OverwriteMode
 from skymodman.interface.dialogs.file_exists_dialog import FileExistsDialog
-from skymodman.utils import archivefs, icons, withlogger
-from skymodman.utils.archivefs import ArchiveFS, PureCIPath, CIPath
+from skymodman.types.archivefs import archivefs
+from skymodman.types.archivefs.archivefs import ArchiveFS, PureCIPath, CIPath
+from skymodman.utils import icons, withlogger
 
 
 class UndoCmd(QtWidgets.QUndoCommand):

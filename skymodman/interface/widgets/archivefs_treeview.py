@@ -1,10 +1,14 @@
 from collections import deque
-from PyQt5.QtWidgets import QTreeWidget, QTreeWidgetItem, QAction, QMenu
+
 from PyQt5.QtCore import pyqtSignal, pyqtProperty, Qt
 from PyQt5.QtGui import QBrush, QIcon
+from PyQt5.QtWidgets import QTreeWidget, QTreeWidgetItem, QAction, QMenu
 
+from skymodman.types.archivefs import ArchiveFS
+from skymodman.types.archivefs.cipathlib import PureCIPath
 from skymodman.utils import withlogger
-from skymodman.utils.archivefs import ArchiveFS, PureCIPath
+
+
 # from copy import deepcopy
 
 @withlogger

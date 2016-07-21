@@ -8,7 +8,6 @@ from functools import (singledispatch as _singledispatch,
 from skymodman import skylog as _skylog
 
 from .notifier import Notifier
-from .diqt import diqt
 from .safewrite import open_for_safe_write
 from .shifter import shifter
 

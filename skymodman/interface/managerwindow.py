@@ -6,8 +6,7 @@ from PyQt5 import QtWidgets, QtGui, QtCore
 from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt5.QtWidgets import QMessageBox
 
-from skymodman import exceptions
-from skymodman import constants
+from skymodman import exceptions, constants
 from skymodman.managers import modmanager
 from skymodman.interface import models, app_settings #, ui_utils
 from skymodman.interface.dialogs import message

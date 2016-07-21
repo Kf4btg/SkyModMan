@@ -1,9 +1,8 @@
 from itertools import chain
 
-from skymodman.thirdparty.untangle import untangle
-
-from skymodman.utils.color import Color
 from skymodman.installer.common import *
+from skymodman.thirdparty.untangle import untangle
+from skymodman.types.color import Color
 
 
 class Element(untangle.Element):
