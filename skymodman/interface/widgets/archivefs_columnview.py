@@ -1,6 +1,5 @@
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import pyqtSignal, Qt, QModelIndex, \
-    QItemSelectionModel
+from PyQt5.QtCore import pyqtSignal, Qt, QModelIndex
 from PyQt5.QtGui import QResizeEvent
 from PyQt5.QtWidgets import QStyle, QProxyStyle
 

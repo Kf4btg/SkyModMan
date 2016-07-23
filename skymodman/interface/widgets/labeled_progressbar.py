@@ -1,6 +1,5 @@
-from PyQt5.QtWidgets import QWidget, QLabel, QProgressBar, QHBoxLayout, \
-    QApplication
-from PyQt5.QtCore import Qt, pyqtProperty, QTimer
+from PyQt5.QtWidgets import QWidget, QLabel, QProgressBar, QHBoxLayout
+from PyQt5.QtCore import Qt, pyqtProperty
 
 
 class LabeledProgressBar(QWidget):

@@ -1,8 +1,4 @@
-from PyQt5.QtCore import QSortFilterProxyModel, QModelIndex, Qt
-#(Qt,
-# pyqtSignal,
-# pyqtSlot,
-# QSortFilterProxyModel)
+from PyQt5.QtCore import QSortFilterProxyModel, QModelIndex
 
 
 class ActiveModsListFilter(QSortFilterProxyModel):
