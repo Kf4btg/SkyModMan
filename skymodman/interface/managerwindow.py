@@ -63,15 +63,17 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # verify basic setup
         # self.check_setup()
 
+        # setup the base ui
+        self.setupUi(self)
+
+        self.setWindowTitle(constants.APPTITLE)
+
         # for cancelling asyncio actions
         self.task = None
 
         # setup trackers for all of our models and proxies
         self.models  = {} #type: dict [M,QtCore.QAbstractItemModel]
         self.filters = {} #type: dict [F,QtCore.QSortFilterProxyModel]
-
-        # setup the base ui
-        self.setupUi(self)
 
         self._currtab = TAB.MODTABLE
 

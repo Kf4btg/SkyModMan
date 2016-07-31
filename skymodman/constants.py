@@ -1,5 +1,8 @@
 from enum import Enum, IntEnum
 
+# what to show in the title-bar of the main window and some dialog
+APPTITLE = "SkyModMan"
+
 class BitEnum(Enum):
     """
     A type of enum that supports certain binary operations between its
