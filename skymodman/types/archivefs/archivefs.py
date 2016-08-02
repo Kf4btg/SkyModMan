@@ -3,8 +3,9 @@ from pathlib import PurePath
 
 from skymodman.utils import singledispatch_m
 from skymodman.utils.debug import Printer as PRINT
-from skymodman.constants import TopLevelDirs_Bain, \
-    TopLevelSuffixes, OverwriteMode
+from skymodman.constants import SkyrimGameInfo, OverwriteMode
+    # TopLevelDirs_Bain, \
+    #TopLevelSuffixes, OverwriteMode
 
 from .fserrors import *
 from .cipathlib import PureCIPath, CIPath, cistat, SortFlags
@@ -1073,7 +1074,9 @@ class ArchiveFS:
         return fsck_modfs_quick(self, root)
 
 
-def fsck_modfs(modfs, root="/"):
+def fsck_modfs(modfs, root="/", *,
+               _topdirs=SkyrimGameInfo.TopLevelDirs_Bain,
+               _topsuffixes=SkyrimGameInfo.TopLevelSuffixes):
     """
     Check if the pseudo-filesystem represented by `modfs` contains recognized game-data on its top level.
     Return an object containing the recognized items.
@@ -1103,10 +1106,10 @@ def fsck_modfs(modfs, root="/"):
                            re.IGNORECASE)
 
     for fstat in modfs.iterls(root, verbose=True):
-        if fstat.st_type=="d" and fstat.st_name.lower() in TopLevelDirs_Bain:
+        if fstat.st_type=="d" and fstat.st_name.lower() in _topdirs:
             mod_data["folders"].append(fstat.st_name)
 
-        elif fstat.st_type=="f" and fstat.st_name.rsplit(".", 1)[-1].lower() in TopLevelSuffixes:
+        elif fstat.st_type=="f" and fstat.st_name.rsplit(".", 1)[-1].lower() in _topsuffixes:
         # elif topitem.suffix.lower().lstrip(".") in TopLevelSuffixes:
             mod_data["files"].append(fstat.st_name)
 
@@ -1125,7 +1128,9 @@ def fsck_modfs(modfs, root="/"):
     return len(mod_data["folders"]) + len(
         mod_data["files"]), mod_data, root
 
-def fsck_modfs_quick(modfs, root="/"):
+def fsck_modfs_quick(modfs, root="/", *,
+               _topdirs=SkyrimGameInfo.TopLevelDirs_Bain,
+               _topsuffixes=SkyrimGameInfo.TopLevelSuffixes):
     """
     Check the root directory of the file hierarchy for viable game data.
 
@@ -1137,9 +1142,9 @@ def fsck_modfs_quick(modfs, root="/"):
 
     for topinfo in modfs.iterls(root, verbose=True):
         if (topinfo.st_type == "d" and topinfo.st_name.lower()
-                         in TopLevelDirs_Bain) \
+                         in _topdirs) \
         or (topinfo.st_type == "f" and topinfo.st_name.rsplit(".", 1)[-1].lower()
-                         in TopLevelSuffixes): return True
+                         in _topsuffixes): return True
 
     return False
 
