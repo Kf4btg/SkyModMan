@@ -1342,16 +1342,16 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         for comp, select in s.items():
             all_components[comp].setEnabled(select)
 
-    def update_button_from_action(self, action, button):
-        """
-        Synchronize a button's state with that of a given QAction
-
-        :param QtWidgets.QAction action:
-        :param QtWidgets.QAbstractButton button:
-        """
-        button.setEnabled(action.isEnabled())
-        button.setToolTip(action.toolTip())
-        button.setVisible(action.isVisible())
+    # def update_button_from_action(self, action, button):
+    #     """
+    #     Synchronize a button's state with that of a given QAction
+    #
+    #     :param QtWidgets.QAction action:
+    #     :param QtWidgets.QAbstractButton button:
+    #     """
+    #     button.setEnabled(action.isEnabled())
+    #     button.setToolTip(action.toolTip())
+    #     button.setVisible(action.isVisible())
 
     def _enable_mod_move_actions(self, enable_moveup, enable_movedown):
         """

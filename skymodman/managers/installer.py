@@ -5,7 +5,7 @@ from collections import deque
 from functools import lru_cache
 from pathlib import PurePath, Path
 
-from skymodman.constants import TopLevelDirs_Bain, TopLevelSuffixes
+from skymodman.constants import SkyrimGameInfo # TopLevelDirs_Bain, TopLevelSuffixes
 from skymodman.installer import common
 from skymodman.installer.fomod import Fomod
 from skymodman.managers import modmanager
@@ -177,10 +177,15 @@ class InstallManager:
 
         return modfs
 
-    def analyze_structure_tree(self, mod_tree):
+    def analyze_structure_tree(self, mod_tree, *, topdirs = SkyrimGameInfo.TopLevelDirs_Bain, topsuffixes = SkyrimGameInfo.TopLevelSuffixes):
         """
         check the mod-structure for an already-created tree
+
         :param mod_tree:
+
+        :param topsuffixes:
+        :param topdirs:
+
         :return: a tuple where the first item is the number of recognized
         top-level items found, and the second is a dict with the keys
         "files" and "folders", containing those recognized items, as
@@ -199,7 +204,7 @@ class InstallManager:
         for topdir in mod_tree.keys():
             # grab anything that looks like mod data from the
             # the top level of the tree
-            if topdir.lower() in TopLevelDirs_Bain:
+            if topdir.lower() in topdirs:
                 mod_data["folders"].append(topdir)
 
             elif doc_match.search(topdir):
@@ -208,7 +213,7 @@ class InstallManager:
                 mod_data["fomod_dir"] = topdir
 
         for topfile in mod_tree.leaves:
-            if os.path.splitext(topfile)[-1].lstrip('.').lower() in  TopLevelSuffixes:
+            if os.path.splitext(topfile)[-1].lstrip('.').lower() in  topsuffixes:
                 mod_data["files"].append(topfile)
             elif doc_match.search(topfile):
                 mod_data["docs"].append(topfile)

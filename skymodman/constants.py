@@ -261,15 +261,33 @@ db_fields = ["ordinal", "directory", "name", "modid", "version", "enabled", "err
 # Should only be used where the order of the fields doesn't matter
 noordinal_dbfields = tuple(set(db_fields) ^ {"ordinal", "error"})
 
+class SkyrimGameInfo:
+    """Contains information specific to Skyrim (filenames, ids, etc)
+    that we may need to know"""
+
+    steam_appid = 72850
+    nexus_id = 110
+
+    exe_name = "TESV.exe"
+    game_name = "Skyrim"
+
+    ini_files = ("skyrim.ini", "skyrimprefs.ini")
+
+    masters = ("skyrim.esm", "update.esm")
+    dlc_masters = ("Dawnguagd.esm", "HearthFires.esm", "Dragonborn.esm",
+                   "HighResTexturePack01.esp",
+                   "HighResTexturePack02.esp",
+                   "HighResTexturePack03.esp")
+
 ## After about two months of working on this, this was my first time diving into the ModOrganizer code to search for the answer to a question I couldn't otherwise figure out. Specifically: "What constitutes 'proper' mod structure?" As I expected, the answer was pretty specific.
 
-TopLevelDirs = {"distantlod", "facegen", "fonts", "interface",
-                "menus", "meshes", "music", "scripts", "shaders",
-                "sound", "strings", "textures", "trees", "video",
-                "skse", "obse", "nvse", "fose", "asi", "skyproc patchers"
-                }
+    TopLevelDirs = {"distantlod", "facegen", "fonts", "interface",
+                    "menus", "meshes", "music", "scripts", "shaders",
+                    "sound", "strings", "textures", "trees", "video",
+                    "skse", "obse", "nvse", "fose", "asi", "skyproc patchers"
+                    }
 
-TopLevelDirs_Bain = TopLevelDirs | {"docs", "ini tweaks"}
+    TopLevelDirs_Bain = TopLevelDirs | {"docs", "ini tweaks"}
 
-TopLevelSuffixes = {"esp", "esm", "bsa"}
+    TopLevelSuffixes = {"esp", "esm", "bsa"}
 
