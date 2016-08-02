@@ -546,7 +546,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.install_mod_archive)
 
         self.action_manual_install.triggered.connect(
-            self.manual_install)
+            partial(self.install_mod_archive, True))
 
         # action_reinstall_mod
         self.action_reinstall_mod.triggered.connect(
@@ -1603,27 +1603,28 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             if manual:
                 self.show_statusbar_progress("Loading archive:")
 
-                self.task = asyncio.get_event_loop().create_task(
-                    installui.do_manual_install(
-                        filename, self.hide_statusbar_progress))
+                # self.task = asyncio.get_event_loop().create_task(
+                #     installui.do_manual_install(
+                #         filename, self.hide_statusbar_progress))
 
             else:
                 # show busy indicator while installer loads
                 self.show_statusbar_progress("Preparing installer:")
 
-                self.task = asyncio.get_event_loop().create_task(
-                    installui.do_install(filename,
-                                         self.hide_statusbar_progress))
+            self.task = asyncio.get_event_loop().create_task(
+                installui.do_install(filename,
+                                     self.hide_statusbar_progress,
+                                     manual))
 
                 # todo: add callback to show the new mod if install succeeded
                 # self.task.add_done_callback(self.on_new_mod())
 
-
-    def manual_install(self):
-        """
-        Activate a non-guided install
-        """
-        self.install_mod_archive(manual=True)
+    #
+    # def manual_install(self):
+    #     """
+    #     Activate a non-guided install
+    #     """
+    #     self.install_mod_archive(manual=True)
 
     def reinstall_mod(self):
         """

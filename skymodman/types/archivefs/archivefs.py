@@ -4,8 +4,6 @@ from pathlib import PurePath
 from skymodman.utils import singledispatch_m
 from skymodman.utils.debug import Printer as PRINT
 from skymodman.constants import SkyrimGameInfo, OverwriteMode
-    # TopLevelDirs_Bain, \
-    #TopLevelSuffixes, OverwriteMode
 
 from .fserrors import *
 from .cipathlib import PureCIPath, CIPath, cistat, SortFlags
@@ -1074,6 +1072,7 @@ class ArchiveFS:
         return fsck_modfs_quick(self, root)
 
 
+# TODO: move these elsewhere; this information is too specific for this generic class
 def fsck_modfs(modfs, root="/", *,
                _topdirs=SkyrimGameInfo.TopLevelDirs_Bain,
                _topsuffixes=SkyrimGameInfo.TopLevelSuffixes):

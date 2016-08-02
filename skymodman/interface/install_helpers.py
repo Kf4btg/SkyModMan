@@ -18,88 +18,101 @@ class InstallerUI:
         self.numfiles = 0
 
 
-    async def do_install(self, archive, ready_callback=lambda:None):
+    async def do_install(self, archive, ready_callback=lambda:None, manual=False):
         """
         Determine the type of install (auto, manual, fomod), get the necessary
          info from the ModManager/InstallManager, and launch the necessary
          interface.
 
         :param archive: path to the mod archive to install
+        :param manual: if False, attempt an auto or guided install (may
+            still fall back to manual install); if True, show the
+            manual-installation dialog by default.
         :param ready_callback: called when an installer dialog is about to be shown.
         """
-        with TemporaryDirectory() as tmpdir:
-            self.LOGGER << "Created temporary directory at %s" % tmpdir
 
-            installer = await Manager.get_installer(archive, tmpdir)
+        if manual:
+            self.LOGGER << "initiating installer for manual install"
 
+            installer = await Manager.get_installer(archive)
+            modfs = await installer.mkarchivefs()
             ready_callback()
+            await self._show_manual_install_dialog(modfs)
 
-            # Fomod config was found and prepared
-            if installer.has_fomod:
-                await self.run_fomod_installer(installer, tmpdir)
+        else:
+            with TemporaryDirectory() as tmpdir:
+                self.LOGGER << "Created temporary directory at %s" % tmpdir
 
-            else:
-                self.LOGGER << "No FOMOD config found."
+                installer = await Manager.get_installer(archive, tmpdir)
 
-                # count the files, and get the mod structure
-                # count = await installer.get_file_count()
-                # tree = await installer.mod_structure_tree()
+                ready_callback()
 
+                # Fomod config was found and prepared
+                if installer.has_fomod:
+                    await self.run_fomod_installer(installer, tmpdir)
 
-                # retrieve a view of the archive's contents as a pseudo-filesystem
-                modfs = await installer.mkarchivefs()
-
-                # print("count:", count)
-                # print(tree)
-
-                # dataroot (folder which contains the actual game data) may
-                # be different the current root of the filesystem
-                # count, gamedata, dataroot = self.fsck_modfs(modfs)
-
-                # if dataroot != modfs.root:
-
-
-
-
-                # toplevcount, toplevdata = installer.analyze_structure_tree(tree)
-
-                # print(toplevcount, toplevdata)
-
-                # if count:
-
-                ## check the root of the file hierarchy for usable data
-                if modfs.fsck_quick():
-                    ## if it's there, install the mod automatically
-
-                    # await self.extraction_progress_dialog()
-                    message("information", title="Game Data Found",
-                            text="Here's where I'd automatically "
-                                 "install the mod for you if I were "
-                                 "working correctly. But I won't, "
-                                 "because I'm not.")
-
-
-                    # await installer.extract("/tmp/testinstall",
-                    #                         entries=toplevdata["folders"]
-                    #                                 +toplevdata["files"],
-                    #                         callback=
-                    #              )
                 else:
-                    ## perform one last check if the previous search turned up nothing:
-                    # if there is only one item on the top level
-                    # of the mod and that item is a directory, then check inside that
-                    # directory for the necessary files.
+                    self.LOGGER << "No FOMOD config found."
 
-                    _list = modfs.listdir("/") # list of items in the root
+                    # count the files, and get the mod structure
+                    # count = await installer.get_file_count()
+                    # tree = await installer.mod_structure_tree()
 
-                       ## only 1 item...   ## which is a directory... ## that contains game data
-                    if len(_list) == 1 and modfs.is_dir(_list[0]) and modfs.fsck_quick(_list[0]):
+
+                    # retrieve a view of the archive's contents as a pseudo-filesystem
+                    modfs = await installer.mkarchivefs()
+
+                    # print("count:", count)
+                    # print(tree)
+
+                    # dataroot (folder which contains the actual game data) may
+                    # be different the current root of the filesystem
+                    # count, gamedata, dataroot = self.fsck_modfs(modfs)
+
+                    # if dataroot != modfs.root:
+
+
+
+
+                    # toplevcount, toplevdata = installer.analyze_structure_tree(tree)
+
+                    # print(toplevcount, toplevdata)
+
+                    # if count:
+
+                    ## check the root of the file hierarchy for usable data
+                    if modfs.fsck_quick():
+                        ## if it's there, install the mod automatically
+
+                        # await self.extraction_progress_dialog()
                         message("information", title="Game Data Found",
-                                text="In immediate subdirectory '{}'. Automatic install of this data would be performed now.".format(_list[0]))
+                                text="Here's where I'd automatically "
+                                     "install the mod for you if I were "
+                                     "working correctly. But I won't, "
+                                     "because I'm not.")
 
+
+                        # await installer.extract("/tmp/testinstall",
+                        #                         entries=toplevdata["folders"]
+                        #                                 +toplevdata["files"],
+                        #                         callback=
+                        #              )
                     else:
-                        self.logger.debug("no toplevel items found; showing manual install dialog")
-                        await self._show_manual_install_dialog(modfs)
+                        ## perform one last check if the previous search turned up nothing:
+                        # if there is only one item on the top level
+                        # of the mod and that item is a directory, then check inside that
+                        # directory for the necessary files.
+
+                        _list = modfs.listdir("/") # list of items in the root
+
+                           ## only 1 item...   ## which is a directory... ## that contains game data
+                        if len(_list) == 1 and modfs.is_dir(_list[0]) and modfs.fsck_quick(_list[0]):
+                            message("information", title="Game Data Found",
+                                    text="In immediate subdirectory '{}'. Automatic install of this data would be performed now.".format(_list[0]))
+
+                        else:
+                            self.logger.debug("no toplevel items found; showing manual install dialog")
+                            await self._show_manual_install_dialog(modfs)
 
 
     async def run_fomod_installer(self, installer, tmpdir):
@@ -125,19 +138,19 @@ class InstallerUI:
 
         del FomodInstaller
 
-    async def do_manual_install(self, archive, ready_callback=lambda:None):
-        """
-        Get a tree representing the internal structure of `archive` and launch a dialog
-        allowing the user to determine which of its contents to install.
-
-        :param archive:
-        :param ready_callback: called when the dialog is about to be shown
-        :return:
-        """
-        mod_contents = await Manager.get_mod_archive_structure(archive)
-
-        ready_callback()
-        await self._show_manual_install_dialog(mod_contents)
+    # async def do_manual_install(self, archive, ready_callback=lambda:None):
+    #     """
+    #     Get a tree representing the internal structure of `archive` and launch a dialog
+    #     allowing the user to determine which of its contents to install.
+    #
+    #     :param archive:
+    #     :param ready_callback: called when the dialog is about to be shown
+    #     :return:
+    #     """
+    #     mod_contents = await Manager.get_mod_archive_structure(archive)
+    #
+    #     ready_callback()
+    #     await self._show_manual_install_dialog(mod_contents)
 
     async def _show_manual_install_dialog(self, contents):
 

@@ -4,7 +4,7 @@ from skymodman.types import ModEntry
 from skymodman.managers import (config as _config,
                                 database as _database,
                                 profiles as _profiles,
-                                installer as _install
+                                # installer as _install
                                 )
 from skymodman.constants import (KeyStr, db_fields as _db_fields)
 from skymodman.installer.common import FileState
@@ -54,7 +54,7 @@ class _ModManager:
         self._db_initialized = False
 
         # install manager; instantiated when needed
-        self._iman = None # type: _install.InstallManager
+        # self._iman = None # type: _install.InstallManager
 
         # used when the installer needs to query mod state
         self._enabledmods = None
@@ -509,77 +509,86 @@ class _ModManager:
     ## Methods below are asynchronous
     ##=============================================
 
-    async def get_installer(self, archive, extract_dir):
+    async def get_installer(self, archive, extract_dir=None):
         """
         Generate and return an InstallManager instance for the given
         mod archive.
 
         :param archive:
-        :param extract_dir:
-        :return:
+        :param extract_dir: if provided, the installer will search
+            for a "fomod" directo5ry within the archive and extract
+            its contents to the given directory. If ``None`` or omitted,
+            the archive is not examined before returning
+        :return: the prepared installer
         """
+
+        from skymodman.managers import installer as _install
 
         # instantiate a new install manager
         installer = _install.InstallManager(archive)
 
 
-        # find the fomod folder, if there is one
-        fomodpath = await installer.get_fomod_path()
+        if extract_dir is not None: # we're expecting a fomod
 
-        self.LOGGER << "fomodpath: {}".format(fomodpath)
+            # find the fomod folder, if there is one
+            fomodpath = await installer.get_fomod_path()
 
-        if fomodpath is not None:
+            self.LOGGER << "fomodpath: {}".format(fomodpath)
 
-            # if we found a fomod folder, extract (only) that
-            # that folder and its contents to a temporary directory
-            await installer.extract(extract_dir, [fomodpath])
-            # modconf = os.path.join(extract_dir, fomodpath,
-            #                        "ModuleConfig.xml")
+            if fomodpath is not None:
 
-            # path to extracted fomod folder
-            fdirpath = Path(extract_dir, fomodpath)
-            for fpath in fdirpath.iterdir():
+                # if we found a fomod folder, extract (only) that
+                # that folder and its contents to a temporary directory
+                await installer.extract(extract_dir, [fomodpath])
+                # modconf = os.path.join(extract_dir, fomodpath,
+                #                        "ModuleConfig.xml")
 
-                # make sure we have actually have a fomod config script
-                if fpath.name.lower() == 'moduleconfig.xml':
+                # path to extracted fomod folder
+                fdirpath = Path(extract_dir, fomodpath)
+                for fpath in fdirpath.iterdir():
 
-                    # if so, get it ready for the installer
-                    await installer.prepare_fomod(str(fpath),
-                                                   extract_dir)
-                    break
+                    # make sure we have actually have a fomod config script
+                    if fpath.name.lower() == 'moduleconfig.xml':
 
-                    # if os.path.exists(modconf):
-                    #     await installman.prepare_fomod(modconf, extract_dir)
-                    # elif os.path.exists(modconf.lower()):
-                    #     await installman.prepare_fomod(modconf.lower(), extract_dir)
+                        # if so, get it ready for the installer
+                        await installer.prepare_fomod(str(fpath),
+                                                       extract_dir)
+                        break
 
+                        # if os.path.exists(modconf):
+                        #     await installman.prepare_fomod(modconf, extract_dir)
+                        # elif os.path.exists(modconf.lower()):
+                        #     await installman.prepare_fomod(modconf.lower(), extract_dir)
+
+        del _install
+        return installer
         # save a reference
-        self._iman = installer
+        # self._iman = installer
         # return installer object
-        return self._iman
+        # return self._iman
 
-    async def get_mod_archive_structure(self, archive=None):
-        """
-
-        :param archive:
-        :rtype: skymodman.utils.archivefs.ArchiveFS
-        :return: the internal folder structure of the mod `archive`
-            represented by a Tree structure
-        """
-        if not archive and not self._iman:
-            raise TypeError(
-                "If no InstallManager is active, "
-                "an archive file must be provided.")
-
-        if archive and (
-            not self._iman or self._iman.archive != archive):
-            self._iman = _install.InstallManager(archive)
-
-        # modstruct = await installman.mod_structure_tree()
-        # return modstruct
-
-        modfs = await self._iman.mkarchivefs()
-        return modfs
+    # async def get_mod_archive_structure(self, archive=None):
+    #     """
+    #
+    #     :param archive:
+    #     :rtype: skymodman.utils.archivefs.ArchiveFS
+    #     :return: the internal folder structure of the mod `archive`
+    #         represented by a Tree structure
+    #     """
+    #     if not archive and not self._iman:
+    #         raise TypeError(
+    #             "If no InstallManager is active, "
+    #             "an archive file must be provided.")
+    #
+    #     if archive and (
+    #         not self._iman or self._iman.archive != archive):
+    #         self._iman = _install.InstallManager(archive)
+    #
+    #     # modstruct = await installman.mod_structure_tree()
+    #     # return modstruct
+    #
+    #     modfs = await self._iman.mkarchivefs()
+    #     return modfs
 
     ##=============================================
     ## Installation Helpers
