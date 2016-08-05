@@ -120,6 +120,8 @@ class ModTable_TreeModel(QAbstractItemModel):
         # entries have been modified
         self._modifications = deque()
 
+        self.foreground = QtGui.QBrush(Qt.lightGray)
+
         self.LOGGER << "init ModTable_TreeModel"
 
     ##===============================================
@@ -237,6 +239,25 @@ class ModTable_TreeModel(QAbstractItemModel):
             return index.row() + 1 if role == Qt_DisplayRole else None
 
         mod = self.mod_entries[index.row()]
+
+        # I've heard it a thousand times from a thousand people:
+        # "Don't mix your data provider with styling information!"
+        # Apparently that's amateur and The Wrong Way to do it.
+        # But here's the thing. I tried it The Right Way, and, besides
+        # being supremely over-complicated for my purposes (I just want
+        # to change the text color!), it never, ever worked correctly.
+        # So it involves a custom item delegate--no problem, done.
+        # Within that delegate I was able to change the font style, font
+        # weight, and some other things just fine. But the text color?
+        # No, to get it to look exactly like everything else but JUST
+        # IN A DIFFERENT COLOR would require re-implementing almost
+        # the entire low-level painting code. Which is stupid.
+
+        # But this is simple. And works. You can take your Right Way
+        # and shove it.
+        if role == Qt.ForegroundRole and not mod.enabled:
+            # TODO: change appearance of "unmanaged-mods". This will of course require that we first start tracking unmanaged mods...
+            return self.foreground
 
         # handle errors first
         if col == COL_ERRORS:
