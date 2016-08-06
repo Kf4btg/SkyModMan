@@ -120,7 +120,9 @@ class ModTable_TreeModel(QAbstractItemModel):
         # entries have been modified
         self._modifications = deque()
 
-        self.foreground = QtGui.QBrush(Qt.lightGray)
+        self.disabled_foreground = QtGui.QBrush(
+            QtGui.QPalette().color(QtGui.QPalette.Disabled,
+                                   QtGui.QPalette.Text))
 
         self.LOGGER << "init ModTable_TreeModel"
 
@@ -257,7 +259,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         # and shove it.
         if role == Qt.ForegroundRole and not mod.enabled:
             # TODO: change appearance of "unmanaged-mods". This will of course require that we first start tracking unmanaged mods...
-            return self.foreground
+            return self.disabled_foreground
 
         # handle errors first
         if col == COL_ERRORS:
