@@ -381,10 +381,9 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         try:
             # search backwards if dir<0
-            next_result = searcher(
-                    start=current_row-1, step=-1) \
-                        if reverse else searcher(
-                    start=current_row+1)
+            next_result = searcher(start=current_row-1, step=-1) \
+                        if reverse \
+                        else searcher(start=current_row+1)
 
         except StopIteration:
             # we've reached one end of the list, so wrap search

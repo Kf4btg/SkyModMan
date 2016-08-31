@@ -1,7 +1,7 @@
 import asyncio
-from PyQt5.QtWidgets import QProgressDialog
 from tempfile import TemporaryDirectory
 
+from PyQt5.QtWidgets import QProgressDialog
 import quamash
 
 from skymodman.managers import modmanager
@@ -56,29 +56,9 @@ class InstallerUI:
 
                     # count the files, and get the mod structure
                     # count = await installer.get_file_count()
-                    # tree = await installer.mod_structure_tree()
-
 
                     # retrieve a view of the archive's contents as a pseudo-filesystem
                     modfs = await installer.mkarchivefs()
-
-                    # print("count:", count)
-                    # print(tree)
-
-                    # dataroot (folder which contains the actual game data) may
-                    # be different the current root of the filesystem
-                    # count, gamedata, dataroot = self.fsck_modfs(modfs)
-
-                    # if dataroot != modfs.root:
-
-
-
-
-                    # toplevcount, toplevdata = installer.analyze_structure_tree(tree)
-
-                    # print(toplevcount, toplevdata)
-
-                    # if count:
 
                     ## check the root of the file hierarchy for usable data
                     if modfs.fsck_quick():
@@ -103,12 +83,16 @@ class InstallerUI:
                         # of the mod and that item is a directory, then check inside that
                         # directory for the necessary files.
 
-                        _list = modfs.listdir("/") # list of items in the root
+                        root_items = modfs.listdir("/")
 
-                           ## only 1 item...   ## which is a directory... ## that contains game data
-                        if len(_list) == 1 and modfs.is_dir(_list[0]) and modfs.fsck_quick(_list[0]):
+                        ## only 1 item...
+                        # ## which is a directory...
+                        # ## that contains game data
+                        if len(root_items) == 1 \
+                                and modfs.is_dir(root_items[0]) \
+                                and modfs.fsck_quick(root_items[0]):
                             message("information", title="Game Data Found",
-                                    text="In immediate subdirectory '{}'. Automatic install of this data would be performed now.".format(_list[0]))
+                                    text="In immediate subdirectory '{}'. Automatic install of this data would be performed now.".format(root_items[0]))
 
                         else:
                             self.logger.debug("no toplevel items found; showing manual install dialog")

@@ -32,7 +32,7 @@ class ModTable_TreeView(qtW.QTreeView):
         super().__init__(parent, *args, **kwargs)
 
         self._model  = None  # type: ModTable_TreeModel
-        self._selection_model = None # type: QtCore.QItemSelectionModel
+        self._selection_model = None # type: qISM
         self.handle_move_signals = True
         # self.LOGGER << "Init ModTable_TreeView"
 
@@ -146,8 +146,6 @@ class ModTable_TreeView(qtW.QTreeView):
         # this is the only place we use this, so no need for a method
         for i in range(self._model.columnCount()):
             self.resizeColumnToContents(i)
-
-    # def resize_columns_to_contents(self):
 
     def search(self, text, direction=1):
         """
@@ -300,7 +298,6 @@ class ModTable_TreeView(qtW.QTreeView):
     def _selection_moved(self):
         """
         Determines whether or not to enable the mod move-up/down buttons
-        :return:
         """
         # self.LOGGER << "selection moved"
 
@@ -337,8 +334,4 @@ class ModTable_TreeView(qtW.QTreeView):
                                    dest,
                                    parent=self.rootIndex(),
                                    undotext=text)
-
-
-if __name__ == '__main__':
-    from PyQt5 import QtCore #, QtGui
 
