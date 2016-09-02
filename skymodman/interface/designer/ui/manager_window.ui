@@ -450,6 +450,7 @@
    <addaction name="action_manual_install"/>
    <addaction name="separator"/>
    <addaction name="action_preferences"/>
+   <addaction name="action_show_alerts"/>
   </widget>
   <widget class="QStatusBar" name="status_bar"/>
   <action name="action_install_mod">
@@ -790,6 +791,20 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+Shift+I</string>
+   </property>
+  </action>
+  <action name="action_show_alerts">
+   <property name="icon">
+    <iconset theme="dialog-warning"/>
+   </property>
+   <property name="text">
+    <string>Alerts</string>
+   </property>
+   <property name="toolTip">
+    <string>View Alerts</string>
+   </property>
+   <property name="statusTip">
+    <string>There are issues which require your attention!</string>
    </property>
   </action>
  </widget>

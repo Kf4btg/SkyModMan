@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'skymodman/interface/designer/ui/manager_window.ui'
 #
-# Created by: PyQt5 UI code generator 5.6
+# Created by: PyQt5 UI code generator 5.7
 #
 # WARNING! All changes made in this file will be lost!
 
@@ -283,6 +283,10 @@ class Ui_MainWindow(object):
         icon = QtGui.QIcon.fromTheme("format-justify-left")
         self.action_manual_install.setIcon(icon)
         self.action_manual_install.setObjectName("action_manual_install")
+        self.action_show_alerts = QtWidgets.QAction(MainWindow)
+        icon = QtGui.QIcon.fromTheme("dialog-warning")
+        self.action_show_alerts.setIcon(icon)
+        self.action_show_alerts.setObjectName("action_show_alerts")
         self.menu_profiles.addAction(self.action_new_profile)
         self.menu_profiles.addAction(self.action_delete_profile)
         self.menu_profiles.addAction(self.action_rename_profile)
@@ -319,6 +323,7 @@ class Ui_MainWindow(object):
         self.file_toolBar.addAction(self.action_manual_install)
         self.file_toolBar.addSeparator()
         self.file_toolBar.addAction(self.action_preferences)
+        self.file_toolBar.addAction(self.action_show_alerts)
         self.profile_label.setBuddy(self.profile_selector)
 
         self.retranslateUi(MainWindow)
@@ -413,6 +418,9 @@ class Ui_MainWindow(object):
         self.action_manual_install.setToolTip(_translate("MainWindow", "Manually Install a Mod Archive"))
         self.action_manual_install.setStatusTip(_translate("MainWindow", "Manually define which of the contents from a mod archive to install."))
         self.action_manual_install.setShortcut(_translate("MainWindow", "Ctrl+Shift+I"))
+        self.action_show_alerts.setText(_translate("MainWindow", "Alerts"))
+        self.action_show_alerts.setToolTip(_translate("MainWindow", "View Alerts"))
+        self.action_show_alerts.setStatusTip(_translate("MainWindow", "There are issues which require your attention!"))
 
 from skymodman.interface.designer.plugins.widgets.escapeablelineedit import EscapeableLineEdit
 from skymodman.interface.views.modtable_treeview import ModTable_TreeView

@@ -21,7 +21,7 @@ F = constants.qFilters
 TAB = constants.Tab
 KeyStr = constants.KeyStr
 
-Manager = None
+Manager = None # type: modmanager._ModManager
 
 ## Interestingly, using the icon font as a font works just fine;
 ## One can do things like:
@@ -228,9 +228,11 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         self.LOGGER.debug("_setup_toolbar")
 
+        # show the 'alerts' indicator if there are any active alerts
+        self.action_show_alerts.setVisible(Manager.has_alerts)
+
         # Profile selector and add/remove buttons
         # self.file_toolBar.addSeparator()
-
 
         # since qtoolbars don't allow spacer widgets, we'll "fake" one
         # with a plain old qwidget.
@@ -544,6 +546,11 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # --------------------------------------------------
 
+        # action_show_alerts
+        self.action_show_alerts.triggered.connect(self.on_show_alerts)
+
+        # --------------------------------------------------
+
         # action_install_mod
         self.action_install_mod.triggered.connect(
             self.install_mod_archive)
@@ -686,6 +693,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.LOGGER.debug("_setup_signals")
 
         self.newProfileLoaded.connect(self.on_profile_load)
+
 
         # connect the move up/down signal to the appropriate slot on view
         self.moveMods.connect(
@@ -854,6 +862,16 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # self.LOGGER << self.undo_stacks[self.current_tab]
 
 
+    @pyqtSlot()
+    def on_show_alerts(self):
+        """
+        When there are active alerts and the user clicks the alerts
+        indicator, show a tooltip-like popup listing the current alerts
+        """
+        self.LOGGER << "on_show_alerts"
+
+        for a in Manager.alerts:
+            print(a)
 
     @pyqtSlot(int)
     def on_profile_select(self, index):
@@ -948,6 +966,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self._reset_file_tree()
         self._update_visible_components()
         self._update_enabled_actions()
+
+        # also recheck alerts when loading new profile
+        self.check_alerts()
 
     @pyqtSlot()
     def on_new_profile_action(self):
@@ -1281,6 +1302,15 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.select_skyrim_dir()
             # else:
             #     self.safe_quit()
+
+    def check_alerts(self):
+        """
+        If there are visible alerts, check if they have been resolved
+        and remove those which have. If all have been resolved, hide
+        the alerts indicator.
+        """
+        Manager.check_alerts()
+        self.action_show_alerts.setVisible(Manager.has_alerts)
 
     # def update_UI(self, *args):
     def update_UI(self):
