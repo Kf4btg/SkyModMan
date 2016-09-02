@@ -9,18 +9,18 @@ import appdirs
 from skymodman import exceptions
 from skymodman.utils import withlogger, fsutils
 from skymodman.utils.fsutils import check_path
-from skymodman.constants import EnvVars, KeyStr, FALLBACK_PROFILE
+from skymodman.constants import EnvVars, FALLBACK_PROFILE, keystrings
 
 # for convenience and quicker lookup
-_SECTION_GENERAL = KeyStr.Section.GENERAL
-_SECTION_DIRS = KeyStr.Section.DIRECTORIES
+_SECTION_GENERAL = keystrings.Section.GENERAL
+_SECTION_DIRS = keystrings.Section.DIRECTORIES
 
-_KEY_LASTPRO = KeyStr.INI.LASTPROFILE
-_KEY_DEFPRO  = KeyStr.INI.DEFAULT_PROFILE
-_KEY_PROFDIR = KeyStr.Dirs.PROFILES
-_KEY_MODDIR  = KeyStr.Dirs.MODS
-_KEY_VFSMNT  = KeyStr.Dirs.VFS
-_KEY_SKYDIR  = KeyStr.Dirs.SKYRIM
+_KEY_LASTPRO = keystrings.INI.LASTPROFILE
+_KEY_DEFPRO  = keystrings.INI.DEFAULT_PROFILE
+_KEY_PROFDIR = keystrings.Dirs.PROFILES
+_KEY_MODDIR  = keystrings.Dirs.MODS
+_KEY_VFSMNT  = keystrings.Dirs.VFS
+_KEY_SKYDIR  = keystrings.Dirs.SKYRIM
 
 ## config file schema (and default values) ##
 _MAIN_CONFIG_ = "skymodman.ini"

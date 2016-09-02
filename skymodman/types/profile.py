@@ -2,7 +2,10 @@ from pathlib import Path
 from configparser import ConfigParser as confparser
 
 from skymodman import exceptions
-from skymodman.constants import FALLBACK_PROFILE, KeyStr
+from skymodman.constants import FALLBACK_PROFILE
+from skymodman.constants.keystrings import (Section as kstr_section,
+                                            Dirs as kstr_dirs,
+                                            INI as kstr_ini)
 from skymodman.utils import withlogger, open_for_safe_write
 
 
@@ -19,19 +22,19 @@ class Profile:
     Represents a User profile with customized mod combinations, ini edits, loadorder, etc.
     """
     __default_settings = {
-        KeyStr.Section.FILEVIEWER: {
-            KeyStr.INI.ACTIVEONLY: True,
+        kstr_section.FILEVIEWER: {
+            kstr_ini.ACTIVEONLY: True,
         },
-        KeyStr.Section.OVERRIDES: {
-            KeyStr.Dirs.SKYRIM: "",
-            KeyStr.Dirs.MODS: "",
-            KeyStr.Dirs.VFS: "",
+        kstr_section.OVERRIDES: {
+            kstr_dirs.SKYRIM: "",
+            kstr_dirs.MODS: "",
+            kstr_dirs.VFS: "",
         },
         # whether a listed override is currently active
-        KeyStr.Section.OVR_ENABLED: {
-            KeyStr.Dirs.SKYRIM: False,
-            KeyStr.Dirs.MODS:   False,
-            KeyStr.Dirs.VFS:    False,
+        kstr_section.OVR_ENABLED: {
+            kstr_dirs.SKYRIM: False,
+            kstr_dirs.MODS:   False,
+            kstr_dirs.VFS:    False,
         }
     }
 
@@ -119,18 +122,18 @@ class Profile:
         directory. If no override has been made or `dir_key` cannot
         be found in the profile's config, return an empty string.
         """
-        return self.get_setting(KeyStr.Section.OVERRIDES, dirkey) or ""
+        return self.get_setting(kstr_section.OVERRIDES, dirkey) or ""
 
     def setoverride(self, dirkey, path):
         """
         Set a path override. Note that no path verification is performed
         here.
 
-        :param dirkey: From constants.KeyStr.Dirs
+        :param dirkey: From constants.kstr_dirs
         :param path: should refer to a real path on the filesystem
         """
 
-        self.save_setting(KeyStr.Section.OVERRIDES, dirkey, path)
+        self.save_setting(kstr_section.OVERRIDES, dirkey, path)
 
     def override_enabled(self, dirkey, setenabled=None):
         """
@@ -143,12 +146,12 @@ class Profile:
         """
 
         if setenabled is None:
-            return self.get_setting(KeyStr.Section.OVR_ENABLED, dirkey)
+            return self.get_setting(kstr_section.OVR_ENABLED, dirkey)
         elif setenabled:
-            self.save_setting(KeyStr.Section.OVR_ENABLED, dirkey, True)
+            self.save_setting(kstr_section.OVR_ENABLED, dirkey, True)
         else:
-            self.save_setting(KeyStr.Section.OVR_ENABLED, dirkey, False)
-        return self.get_setting(KeyStr.Section.OVR_ENABLED, dirkey)
+            self.save_setting(kstr_section.OVR_ENABLED, dirkey, False)
+        return self.get_setting(kstr_section.OVR_ENABLED, dirkey)
 
     def rename(self, new_name):
         """

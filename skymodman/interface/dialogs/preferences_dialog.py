@@ -12,12 +12,11 @@ from skymodman.interface.designer.uic.preferences_dialog_ui import \
 from skymodman.utils import withlogger
 from skymodman.utils.fsutils import check_path, create_dir
 from skymodman import constants, exceptions
+from skymodman.constants.keystrings import UI, Dirs as D
 
 
 
 # because I'm lazy
-D = constants.KeyStr.Dirs
-UI = constants.KeyStr.UI
 PLP = constants.ProfileLoadPolicy
 
 Manager = modmanager.Manager()
