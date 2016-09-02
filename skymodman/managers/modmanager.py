@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from skymodman.types import ModEntry
+from skymodman.types import ModEntry, Alert
 from skymodman.managers import (config as _config,
                                 database as _database,
                                 profiles as _profiles,
@@ -59,6 +59,9 @@ class _ModManager:
         # used when the installer needs to query mod state
         self._enabledmods = None
 
+        # set of issues that arise during operation
+        self.alerts = set() # type: Set [Alert]
+
 
     ## Sub-manager access properties ##
 
@@ -103,7 +106,47 @@ class _ModManager:
         :return: sqlite3.Cursor
         """
         return self._dman.conn.cursor()
+    
+    ##=============================================
+    ## Alerts
+    ##=============================================
 
+    @property
+    def has_alerts(self):
+        return len(self.alerts) > 0
+
+    def add_alert(self, alert):
+        """
+        Add an ``Alert`` object to the list of registered alerts
+
+        :param Alert alert:
+        """
+        self.alerts.add(alert)
+
+    def remove_alert(self, alert):
+        """
+        Remove the given Alert object from the list of alerts.
+        :param Alert alert:
+        :return:
+        """
+        try:
+            self.alerts.remove(alert)
+        except ValueError as e:
+            self.LOGGER << "Attempted to remove non-existent alert: "
+            self.LOGGER.exception(e)
+
+    def check_alerts(self):
+        """
+        If there are active alerts, check if they have been resolved
+        and remove those which have.
+        """
+        to_remove = set()
+        for a in self.alerts: # type: Alert
+            if not a.is_active:
+                to_remove.add(a)
+
+        # remove resolved alerts
+        self.alerts -= to_remove
 
     ##=============================================
     ## Profile Management Interface
@@ -281,7 +324,15 @@ class _ModManager:
 
         sky_dir = self.get_directory(KeyStr.Dirs.SKYRIM)
 
+        # first check that we found the Skyrim directory
         if sky_dir is None:
+            ## TODO: store common alerts as constants externally
+            self.add_alert(
+                Alert(level='HIGH', label="Skyrim not found",
+                      desc="The main Skyrim installation folder could not be found or is not defined.",
+                      fix="Choose an existing folder in the Preferences dialog.",
+                      check=lambda: self.get_directory(KeyStr.Dirs.SKYRIM) is None)
+            )
             self.LOGGER.warning("The main Skyrim folder could not be "
                            "found. That's going to be a problem.")
         else:
