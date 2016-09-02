@@ -145,8 +145,11 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         app_settings.add(KeyStr.UI.RESTORE_WINPOS, True)
 
-        ## on_load function for the profile_load_policy pref
+        ## apply() function for the profile_load_policy pref:
+        ## loads either the last-used profile or the default profile,
+        ## based on the stored value of the policy
         def _load_profile(prof_policy):
+            # don't do anything if no policy was stored
             if prof_policy:
                 val = {
                     constants.ProfileLoadPolicy.last:
@@ -174,13 +177,13 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.move(pos)
 
         # add the properties w/ callbacks
-        app_settings.add("size", self.size, on_read=_resize)
-        app_settings.add("pos", self.pos, on_read=_move)
+        app_settings.add("size", self.size, apply=_resize)
+        app_settings.add("pos", self.pos, apply=_move)
 
         # TODO: handle and prioritize the SMM_PROFILE env var
         app_settings.add(KeyStr.UI.PROFILE_LOAD_POLICY,
                          constants.ProfileLoadPolicy.last,
-                         on_read=_load_profile)
+                         apply=_load_profile)
 
         ## ----------------------------------------------------- ##
         ## Now that we've defined them all, time to read them in ##
@@ -190,7 +193,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         #  b) resize the window
         #  c) load data for a specific profile
         #  d) any or none of the above
-        app_settings.read()
+        app_settings.read_and_apply()
 
 
 
