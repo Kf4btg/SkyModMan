@@ -7,6 +7,10 @@ from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt5.QtWidgets import QMessageBox
 
 from skymodman import exceptions, constants
+from skymodman.constants.keystrings import (Section as KeyStr_Section,
+                                            Dirs as KeyStr_Dirs,
+                                            INI as KeyStr_INI,
+                                            UI as KeyStr_UI)
 from skymodman.managers import modmanager
 from skymodman.interface import models, app_settings #, ui_utils
 from skymodman.interface.dialogs import message
@@ -19,7 +23,6 @@ from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow
 M = constants.qModels
 F = constants.qFilters
 TAB = constants.Tab
-KeyStr = constants.KeyStr
 
 Manager = None # type: modmanager._ModManager
 
@@ -141,9 +144,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
 
         ## define the boolean/toggle preferences ##
-        app_settings.add(KeyStr.UI.RESTORE_WINSIZE, True)
+        app_settings.add(KeyStr_UI.RESTORE_WINSIZE, True)
 
-        app_settings.add(KeyStr.UI.RESTORE_WINPOS, True)
+        app_settings.add(KeyStr_UI.RESTORE_WINPOS, True)
 
         ## apply() function for the profile_load_policy pref:
         ## loads either the last-used profile or the default profile,
@@ -153,13 +156,13 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             if prof_policy:
                 val = {
                     constants.ProfileLoadPolicy.last:
-                        KeyStr.INI.LASTPROFILE,
+                        KeyStr_INI.LASTPROFILE,
                     constants.ProfileLoadPolicy.default:
-                        KeyStr.INI.DEFAULT_PROFILE
+                        KeyStr_INI.DEFAULT_PROFILE
                 }[prof_policy]
                 self.load_profile_by_name(
                     Manager.get_config_value(val,
-                                             KeyStr.Section.GENERAL))
+                                             KeyStr_Section.GENERAL))
 
         ## setup window-state prefs ##
 
@@ -168,12 +171,12 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             # noinspection PyArgumentList
             self.resize(size
                         if size and app_settings.Get(
-                                KeyStr.UI.RESTORE_WINSIZE)
+                                KeyStr_UI.RESTORE_WINSIZE)
                         else QtGui.QGuiApplication.primaryScreen()
                                 .availableSize() * 5 / 7)
 
         def _move(pos):
-            if pos and app_settings.Get(KeyStr.UI.RESTORE_WINPOS):
+            if pos and app_settings.Get(KeyStr_UI.RESTORE_WINPOS):
                 self.move(pos)
 
         # add the properties w/ callbacks
@@ -181,7 +184,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         app_settings.add("pos", self.pos, apply=_move)
 
         # TODO: handle and prioritize the SMM_PROFILE env var
-        app_settings.add(KeyStr.UI.PROFILE_LOAD_POLICY,
+        app_settings.add(KeyStr_UI.PROFILE_LOAD_POLICY,
                          constants.ProfileLoadPolicy.last,
                          apply=_load_profile)
 
@@ -207,6 +210,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         Calls all the setup methods
         """
+        self._setup_alerts_button()
         self._setup_toolbar()
         self._setup_statusbar()
         self._setup_profile_selector()
@@ -219,6 +223,58 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self._setup_undo_manager()
 
+
+    def _setup_alerts_button(self):
+        """
+        Adding a drop-down textbox to the toolbar isn't exactly straightforward.
+        We need to create a toolbutton that pops up a menu. That menu
+        then requires a QWidgetAction added to it that itself has the
+        textbox set as its default widget. The toolbutton can then
+        be added to the toolbar.
+        """
+
+        self.alerts_button = QtWidgets.QToolButton(self)
+        self.alerts_button.setObjectName("alerts_button")
+
+        self.alerts_button.setIcon(QtGui.QIcon.fromTheme("dialog-warning"))
+        self.alerts_button.setText("Alerts")
+        self.alerts_button.setToolButtonStyle(Qt.ToolButtonFollowStyle)
+        self.alerts_button.setToolTip("View Alerts")
+        self.alerts_button.setStatusTip(
+            "There are issues which require your attention!")
+        self.alerts_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+
+        self.alerts_button.setMenu(QtWidgets.QMenu(self.alerts_button))
+
+        self.action_show_alerts = QtWidgets.QWidgetAction(self.alerts_button)
+        self.action_show_alerts.setObjectName("action_show_alerts")
+
+
+
+        self.alerts_listview = QtWidgets.QListView(self.alerts_button)
+        self.alerts_listview.setObjectName("alerts_listview")
+
+        self.alerts_data = QtCore.QStringListModel()
+        self.alerts_listview.setModel(self.alerts_data)
+
+        self.action_show_alerts.setDefaultWidget(self.alerts_listview)
+
+
+        # self.alerts_infobox = QtWidgets.QTextBrowser(self.alerts_button)
+        # self.alerts_infobox.setObjectName("alerts_infobox")
+        # self.action_show_alerts.setDefaultWidget(self.alerts_infobox)
+
+        self.alerts_button.menu().addAction(self.action_show_alerts)
+
+        self.file_toolBar.addWidget(self.alerts_button)
+
+        # self.file_toolBar.addAction(self.action_show_alerts)
+
+        # self.alerts_button.clicked.connect(self.alerts_button.showMenu)
+
+        # show the 'alerts' indicator if there are any active alerts
+        self.alerts_button.setVisible(Manager.has_alerts)
+
     def _setup_toolbar(self):
         """We've got a few things to add to the toolbar:
 
@@ -228,8 +284,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         self.LOGGER.debug("_setup_toolbar")
 
-        # show the 'alerts' indicator if there are any active alerts
-        self.action_show_alerts.setVisible(Manager.has_alerts)
+
 
         # Profile selector and add/remove buttons
         # self.file_toolBar.addSeparator()
@@ -287,6 +342,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # show_busybar_action = QAction("busy",self)
         # show_busybar_action.triggered.connect(self.show_statusbar_progress)
         # self.file_toolBar.addAction(show_busybar_action)
+
+
 
 
     def _setup_statusbar(self):
@@ -413,7 +470,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # if the main mods directory is unset, just disable the list
         # until the user corrects this
-        if not Manager.get_directory(KeyStr.Dirs.MODS):
+        if not Manager.get_directory(KeyStr_Dirs.MODS):
             self.filetree_modlist.setEnabled(False)
 
         ##################################
@@ -452,8 +509,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             f.escapeLineEdit.connect(f.clearFocus)
 
     def __init_modlist_filter_state(self, filter_):
-        activeonly = Manager.get_profile_setting(KeyStr.INI.ACTIVEONLY,
-                                            KeyStr.Section.FILEVIEWER)
+        activeonly = Manager.get_profile_setting(KeyStr_INI.ACTIVEONLY,
+                                            KeyStr_Section.FILEVIEWER)
 
         if activeonly is None:
             # if no profile loaded, set it unchecked and disable it
@@ -547,7 +604,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # --------------------------------------------------
 
         # action_show_alerts
-        self.action_show_alerts.triggered.connect(self.on_show_alerts)
+        # self.action_show_alerts.triggered.connect(self.on_show_alerts)
 
         # --------------------------------------------------
 
@@ -787,7 +844,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         Setup the main QUndoGroup that we will use to manage all the
         undo stacks in the app (all TWO of them so far).
 
-        ...actually just one so far...
         """
         # create and configure undo action
         self.action_undo = self.undoManager.createUndoAction(self, "Undo")
@@ -818,6 +874,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.file_toolBar.insertActions(
             self.action_preferences,
             [self.action_undo, self.action_redo])
+        #now add separator between these and the preferences btn
+        self.file_toolBar.insertSeparator(self.action_preferences)
 
         # add stacks
         self.undoManager.addStack(self.mod_table.undo_stack)
@@ -870,8 +928,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         self.LOGGER << "on_show_alerts"
 
-        for a in Manager.alerts:
-            print(a)
+        # for a in Manager.alerts:
+        #     print(a)
 
     @pyqtSlot(int)
     def on_profile_select(self, index):
@@ -1083,8 +1141,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.filters[F.mod_list].setOnlyShowActive(checked)
         self.update_modlist_label(checked)
-        Manager.set_profile_setting(KeyStr.INI.ACTIVEONLY,
-                                    KeyStr.Section.FILEVIEWER,
+        Manager.set_profile_setting(KeyStr_INI.ACTIVEONLY,
+                                    KeyStr_Section.FILEVIEWER,
                                     checked)
 
     @pyqtSlot('QString')
@@ -1292,7 +1350,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
 
         # must have a configured skyrim installation folder
-        skydir = Manager.get_directory(KeyStr.Dirs.SKYRIM)
+        skydir = Manager.get_directory(KeyStr_Dirs.SKYRIM)
         if not skydir:
             if message("information", "Select Skyrim Installation",
                        'Before the manager runs, please take a moment to'
@@ -1311,7 +1369,32 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         the alerts indicator.
         """
         Manager.check_alerts()
-        self.action_show_alerts.setVisible(Manager.has_alerts)
+
+        # this will update/clear the alerts list as appropriate
+        self.alerts_data.setStringList(
+            [a.label + ": " + a.desc for a in Manager.alerts]
+        )
+
+        self.alerts_listview.adjustSize()
+
+        self.alerts_button.setVisible(Manager.has_alerts)
+
+        # if Manager.has_alerts:
+        #     self.alerts_data.setStringList(
+        #         [a.label + ": " + a.desc for a in Manager.alerts]
+        #     )
+        #
+        #
+        #     # text = ""
+        #     # for a in Manager.alerts:
+        #     #     text+=a.label+": "+a.desc+"\n"
+        #     #
+        #     # self.alerts_infobox.setText(text)
+        #
+        #
+        #     self.alerts_button.setVisible(True)
+        # else:
+        #     self.alerts_button.setVisible(False)
 
     # def update_UI(self, *args):
     def update_UI(self):
@@ -1464,9 +1547,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # add the name of the mod directory to the path of the
         # main mods folder
 
-        modstorage = Manager.get_directory(KeyStr.Dirs.MODS)
+        modstorage = Manager.get_directory(KeyStr_Dirs.MODS)
         if modstorage:
-            p = join_path(Manager.get_directory(KeyStr.Dirs.MODS), moddir)
+            p = join_path(Manager.get_directory(KeyStr_Dirs.MODS), moddir)
 
             # self.models[M.file_viewer].setRootPath(str(p))
             self.models[M.file_viewer].setRootPath(p)
@@ -1583,13 +1666,13 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         moddir = QtWidgets.QFileDialog.getExistingDirectory(
             self,
             "Choose Directory Containing Installed Mods",
-            Manager.get_directory(KeyStr.Dirs.MODS)
+            Manager.get_directory(KeyStr_Dirs.MODS)
             # Manager.conf['dir_mods']
         )
 
         # update config with new path
         if check_path(moddir):
-            Manager.set_directory(KeyStr.Dirs.MODS, moddir)
+            Manager.set_directory(KeyStr_Dirs.MODS, moddir)
 
             # reverify and reload the mods.
             if not Manager.validate_mod_installs():
@@ -1605,11 +1688,11 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         skydir = QtWidgets.QFileDialog.getExistingDirectory(
             self,
             "Select Skyrim Installation",
-            Manager.get_directory(KeyStr.Dirs.SKYRIM) or "")
+            Manager.get_directory(KeyStr_Dirs.SKYRIM) or "")
 
         # update config with new path
         if check_path(skydir):
-            Manager.set_directory(KeyStr.Dirs.SKYRIM, skydir)
+            Manager.set_directory(KeyStr_Dirs.SKYRIM, skydir)
         else:
             self.safe_quit()
 
