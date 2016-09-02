@@ -968,6 +968,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self._update_enabled_actions()
 
         # also recheck alerts when loading new profile
+        # Fixme: if any alerts are active, check_alerts() will probably perform some redundant, duplicate work: the Manager queries the check() method of each active alert, but it's quite likely that the same operation was just performed for the alert to have been added to the list of active alerts in the first place! However, since check() methods _should_ be rather lightweight, this may not be a top concern unless there are for some reason a LOT of alerts (which also should not be the case). At the moment, the best idea I can think of is to add some sort of event-registration that will allow an alert to register the action(s) that will trigger it to be reevaluated. Unfortunately I feel this "solution" may turn out to be far worse than the current problem. Perhaps another way may present itself, and I'll continue to think on this initial idea.
         self.check_alerts()
 
     @pyqtSlot()

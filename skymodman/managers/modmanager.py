@@ -140,6 +140,8 @@ class _ModManager:
         If there are active alerts, check if they have been resolved
         and remove those which have.
         """
+        # TODO: figure out the best times to do this. Like...after a new profile is loaded? After the preferences are applied/dialog is closed? When a tab is changed?? When the moon is blue???????
+
         to_remove = set()
         for a in self.alerts: # type: Alert
             if not a.is_active:
