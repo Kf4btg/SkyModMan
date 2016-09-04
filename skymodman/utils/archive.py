@@ -18,6 +18,7 @@ class ArchiveHandler:
     FORMATS = ["zip", "rar", "7z"]
     PROGRAM = "7z"
 
+    # read the 7z manual to figure out what all these switches mean
     TEMPLATES = {
         "extract", "{prog} x -o{dest} {includes} {archive}",
         "list", "{prog} l {archive}",
@@ -25,9 +26,9 @@ class ArchiveHandler:
 
     INCLUDE_FILTER = lambda paths: ["-i!"+p.rstrip('/') for p in paths]
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
+    # def __init__(self, *args, **kwargs):
+    #     super().__init__(*args, **kwargs)
+    def __init__(self):
         self._7z_supports_rar = self._7z_rar_support()
 
     def _7z_rar_support(self):
