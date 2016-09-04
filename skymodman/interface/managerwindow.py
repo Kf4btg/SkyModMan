@@ -63,9 +63,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.LOGGER.info("Initializing ModManager Window")
         ModManagerWindow.instance = self
 
-        # verify basic setup
-        # self.check_setup()
-
         # setup the base ui
         self.setupUi(self)
 
@@ -268,10 +265,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.file_toolBar.addWidget(self.alerts_button)
 
-        # self.file_toolBar.addAction(self.action_show_alerts)
-
-        # self.alerts_button.clicked.connect(self.alerts_button.showMenu)
-
         # show the 'alerts' indicator if there are any active alerts
         self.alerts_button.setVisible(Manager.has_alerts)
 
@@ -284,10 +277,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         self.LOGGER.debug("_setup_toolbar")
 
-
-
         # Profile selector and add/remove buttons
-        # self.file_toolBar.addSeparator()
 
         # since qtoolbars don't allow spacer widgets, we'll "fake" one
         # with a plain old qwidget.
@@ -322,8 +312,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         mmag.setExclusive(False)
         for a in macts: mmag.addAction(a)
 
-        # self.file_toolBar.addActions(macts)
-
         # let's actually make a new, vertical toolbar
         # for these and add it to the side of the mods table.
         movement_toolbar = QtWidgets.QToolBar(self.installed_mods_tab)
@@ -336,15 +324,10 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.movement_toolbar = movement_toolbar
 
-
-
         ## This is for testing the progress indicator::
         # show_busybar_action = QAction("busy",self)
         # show_busybar_action.triggered.connect(self.show_statusbar_progress)
         # self.file_toolBar.addAction(show_busybar_action)
-
-
-
 
     def _setup_statusbar(self):
         """
@@ -528,13 +511,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # and setup label text for first display
         self.update_modlist_label(activeonly)
-        # else:
-        #     # if no profile loaded, set it unchecked and disable it
-        #     self.filetree_activeonlytoggle.setCheckState(Qt.Unchecked)
-        #     filter_.onlyShowActive = False
-        #
-        #     self.update_modlist_label(False)
-        #     self.filetree_activeonlytoggle.setEnabled(False)
 
     def _setup_actions(self):
         """Connect all the actions to their appropriate slots/whatevers
@@ -598,14 +574,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # action_quit
         self.action_quit.setShortcut(QtGui.QKeySequence.Quit)
-        # self.action_quit.triggered.connect(self.safe_quit)
         # connect quit action to close event
         self.action_quit.triggered.connect(self.close)
-
-        # --------------------------------------------------
-
-        # action_show_alerts
-        # self.action_show_alerts.triggered.connect(self.on_show_alerts)
 
         # --------------------------------------------------
 
@@ -781,7 +751,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         self.LOGGER.debug("_setup_slots")
 
-
         ##===================================
         ## General/Main Window
         ##-----------------------------------
@@ -790,24 +759,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.manager_tabs.currentChanged.connect(
             self.on_tab_changed)
 
-        # when new profile is selected
-        # self.profile_selector.currentIndexChanged.connect(
-        #     self.on_profile_select)
-
-        # connect the undo event handler
-        # self.models[M.mod_table].undoevent.connect(
-        #     self.on_undo_redo_event)
-
         ##===================================
         ## Mod Table Tab
         ##-----------------------------------
-
-        # when the user first makes changes to the table or reverts
-        # to a saved state from a modified state,  enable/disable
-        # the save/cancel btns
-        # self.models[M.mod_table
-        # ].tablehaschanges.connect(
-        #     self.on_table_unsaved_change)
 
         # depending on selection in table, the movement actions will be
         # enabled or disabled
@@ -915,10 +869,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self._update_enabled_actions()
 
         # also change the current undo stack
-        # self.LOGGER << "change undo stack"
         self.undoManager.setActiveStack(
             self.undo_stacks[self.current_tab])
-        # self.LOGGER << self.undo_stacks[self.current_tab]
 
 
     @pyqtSlot()
@@ -1053,10 +1005,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
             # set new profile as active and load data
             self.load_profile_by_name(new_profile.name)
-
-            # self.profile_selector.setCurrentIndex(
-            #     self.profile_selector.findText(new_profile.name,
-            #                                    Qt.MatchFixedString))
 
         del NewProfileDialog
 
@@ -1195,7 +1143,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         tab is active.
         """
         if self.current_tab == TAB.MODTABLE:
-            # self.mod_table.model.save()
             self.mod_table.save_changes()
         elif self.current_tab == TAB.FILETREE:
             self.models[M.file_viewer].save()
@@ -1214,8 +1161,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     @pyqtSlot()
     def on_undo(self):
-
-        # calls undo() on the current undoStack
+        """calls undo() on the current undoStack"""
         self.undoManager.undo()
 
     @pyqtSlot()
@@ -1323,7 +1269,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         self.mod_table.load_data()
         self.modtable_search_box.clear() # might be good enough
-        # self.toggle_search_box(ensure_state=0)
 
 
     def _reset_file_tree(self):
@@ -1341,27 +1286,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     ##===============================================
     ## UI Helper Functions
     ##===============================================
-
-    # def check_setup(self):
-    #     """
-    #     Make sure that every absolutely required piece of config
-    #     information is available before everything gets fully loaded.
-    #     So far, this means:
-    #             * Skyrim-installation directory
-    #     """
-    #
-    #     # must have a configured skyrim installation folder
-    #     skydir = Manager.get_directory(KeyStr_Dirs.SKYRIM)
-    #     if not skydir:
-    #         if message("information", "Select Skyrim Installation",
-    #                    'Before the manager runs, please take a moment to'
-    #                    ' specify the folder where Skyrim itself is'
-    #                    ' installed. Click "OK" to show the folder'
-    #                    ' selection dialog.',
-    #                    buttons=('ok', 'cancel'), default_button='ok'):
-    #             self.select_skyrim_dir()
-            # else:
-            #     self.safe_quit()
 
     def check_alerts(self):
         """
@@ -1443,12 +1367,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # this is a selector that, depending on how it is
         # modified below, will allow us to set every
         # component to its appropriate enabled state
-        # s = [False]*len(all_components)
         s = {c:False for c in all_components.keys()}
-        # s = zip(all_components.keys(), repeat(False))
 
         if self.current_tab == TAB.MODTABLE:
-            # tmodel = self.models[M.mod_table]
             s["mmg"] = s["atm"] = s["aum"] = self.mod_table.selectionModel().hasSelection()
             s["asc"] = s["arc"] = not self.undoManager.isClean()
             s["afn"] = s["afp"] = bool(self._search_text)
@@ -1459,17 +1380,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         for comp, select in s.items():
             all_components[comp].setEnabled(select)
-
-    # def update_button_from_action(self, action, button):
-    #     """
-    #     Synchronize a button's state with that of a given QAction
-    #
-    #     :param QtWidgets.QAction action:
-    #     :param QtWidgets.QAbstractButton button:
-    #     """
-    #     button.setEnabled(action.isEnabled())
-    #     button.setToolTip(action.toolTip())
-    #     button.setVisible(action.isVisible())
 
     def _enable_mod_move_actions(self, enable_moveup, enable_movedown):
         """
@@ -1552,7 +1462,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if modstorage:
             p = join_path(Manager.get_directory(KeyStr_Dirs.MODS), moddir)
 
-            # self.models[M.file_viewer].setRootPath(str(p))
             self.models[M.file_viewer].setRootPath(p)
         # if the main mods-storage directory is unset, don't attempt
         # to show anything
@@ -1574,7 +1483,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # check for unsaved changes to the mod-list
         if Manager.profile is not None \
                 and not self.mod_table.undo_stack.isClean():
-                # and self.mod_table.model().is_dirty:
             ok = QMessageBox(QMessageBox.Warning, 'Unsaved Changes',
                              'Your mod install-order has unsaved '
                              'changes. Would you like to save them '
@@ -1674,7 +1582,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self,
             "Choose Directory Containing Installed Mods",
             Manager.get_directory(KeyStr_Dirs.MODS, False)
-            # Manager.conf['dir_mods']
         )
 
         # update config with new path
@@ -1687,23 +1594,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             # reverify and reload the mods.
             if not Manager.validate_mod_installs():
                 self.mod_table.model().reload_errors_only()
-
-    # @pyqtSlot()
-    # def select_skyrim_dir(self):
-    #     """
-    #     Show file selection dialog for user to select the directory
-    #     where Skyrim is installed
-    #     """
-    #     skydir = QtWidgets.QFileDialog.getExistingDirectory(
-    #         self,
-    #         "Select Skyrim Installation",
-    #         Manager.get_directory(KeyStr_Dirs.SKYRIM) or "")
-    #
-    #     # update config with new path
-    #     if check_path(skydir):
-    #         Manager.set_directory(KeyStr_Dirs.SKYRIM, skydir)
-    #     else:
-    #         self.safe_quit()
 
     # noinspection PyTypeChecker,PyArgumentList
     def install_mod_archive(self, manual=False):
@@ -1744,13 +1634,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
                 # todo: add callback to show the new mod if install succeeded
                 # self.task.add_done_callback(self.on_new_mod())
-
-    #
-    # def manual_install(self):
-    #     """
-    #     Activate a non-guided install
-    #     """
-    #     self.install_mod_archive(manual=True)
 
     def reinstall_mod(self):
         """
@@ -1808,18 +1691,3 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             app_settings.write()
             event.accept()
 
-
-# <editor-fold desc="__main__">
-# if __name__ == '__main__':
-#     import sys
-#
-#     app = QApplication(sys.argv)
-#     Manager.init()
-#
-#     w = ModManagerWindow()
-#     # noinspection PyArgumentList
-#     w.resize(QGuiApplication.primaryScreen().availableSize() * 3 / 5)
-#     w.show()
-#
-#     sys.exit(app.exec_())
-# </editor-fold>

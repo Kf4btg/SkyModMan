@@ -10,12 +10,14 @@ from skymodman.constants.keystrings import Dirs as _dirs
 test_alert = None   # type: _alert
 dnf_skyrim = None   # type: _alert
 dnf_mods = None     # type: _alert
+dnf_vfs = None     # type: _alert
+
 
 # guess these aren't really constants so much, are they...
 def init_alerts(manager):
     """Must be called with the main modmanager instance as a
     parameter in order to properly set up the alerts"""
-    global test_alert, dnf_skyrim, dnf_mods
+    global test_alert, dnf_skyrim, dnf_mods, dnf_vfs
 
     test_alert = _alert(level=NORMAL, label='Test Alert',
                       desc="This is a Test alert",
@@ -39,4 +41,12 @@ def init_alerts(manager):
         desc="The mod installation directory could not be found or is not defined.",
         fix="Choose an existing folder in the Preferences dialog.",
         check=lambda: not manager.get_directory(_dirs.MODS)
+    )
+
+    dnf_vfs = _alert(
+        level=HIGH,
+        label="Virtual Filesystem mount not found",
+        desc="The mount point for the virtual filesystem could not be found or is not defined.",
+        fix="Choose an existing folder in the Preferences dialog.",
+        check=lambda: not manager.get_directory(_dirs.VFS)
     )

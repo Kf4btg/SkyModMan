@@ -10,7 +10,7 @@ from skymodman import exceptions
 from skymodman.managers import Submanager
 from skymodman.utils import withlogger, fsutils
 from skymodman.utils.fsutils import check_path
-from skymodman.constants import EnvVars, FALLBACK_PROFILE, keystrings, APPNAME, PROFILES_DIRNAME, MAIN_CONFIG
+from skymodman.constants import EnvVars, FALLBACK_PROFILE, keystrings, APPNAME, MAIN_CONFIG
 
 # for convenience and quicker lookup
 _SECTION_GENERAL = keystrings.Section.GENERAL
@@ -24,10 +24,6 @@ _KEY_VFSMNT  = keystrings.Dirs.VFS
 _KEY_SKYDIR  = keystrings.Dirs.SKYRIM
 
 ## config file schema (and default values) ##
-# MAIN_CONFIG = "skymodman.ini"
-# PROFILES_DIRNAME = "profiles"
-# APPNAME =
-
 _DEFAULT_CONFIG_={
     _SECTION_GENERAL: {
         _KEY_LASTPRO: FALLBACK_PROFILE,
@@ -42,77 +38,12 @@ _DEFAULT_CONFIG_={
 }
 
 
-# _pathvars = ("file_main", "dir_config", "dir_data", "dir_profiles", "dir_mods", "dir_vfs", "dir_skyrim")
-
-# class ConfigPaths:
-#     __slots__=("file_main", "dir_config", "dir_data", "dir_profiles", "dir_mods", "dir_vfs", "dir_skyrim")
-#
-#     def __init__(self, *, file_main=None, dir_config=None, dir_data=None, dir_mods=None, dir_profiles=None, dir_skyrim=None, dir_vfs=None) :
-#         """
-#
-#         :param Path file_main:
-#         :param Path dir_config:
-#         :param Path dir_data:
-#         :param Path dir_mods:
-#         :param Path dir_profiles:
-#         :param Path dir_skyrim:
-#         :param Path dir_vfs:
-#         """
-#
-#         self.file_main    = file_main
-#         self.dir_config   = dir_config
-#         self.dir_data     = dir_data
-#         self.dir_mods     = dir_mods
-#         self.dir_profiles = dir_profiles
-#         self.dir_skyrim   = dir_skyrim
-#         self.dir_vfs      = dir_vfs
-#
-#     def __getitem__(self, config_file_or_dir):
-#         """
-#         Use dict-access to get the string version of a stored path.
-#         E.g.: paths['dir_mods'] -> '/path/to/mod/install/directory'
-#
-#         :param str config_file_or_dir:
-#         :return: the path as a string or "" if the item was not found (or was None)
-#         """
-#
-#         path = self._getpath(config_file_or_dir)
-#         return str(path) if path else ""
-#
-#     def __setitem__(self, key, value):
-#         """
-#         Use dict-like access to update the stored paths. If key is invalid,
-#         no changes will be made
-#
-#         :param str key:
-#         :param Path value:
-#         """
-#
-#         if key in ConfigPaths.__slots__:
-#             if isinstance(value, str):
-#                 setattr(self, key, Path(value))
-#             else:
-#                 setattr(self, key, value)
-#
-#     def _getpath(self, item) -> Path:
-#         """
-#         Get a Path object stored in this instance by property name.
-#         :param str item:
-#         :return: str(path) or "" if not found or None
-#         """
-#         if item in ConfigPaths.__slots__:
-#             return getattr(self, item, None)
-#         return None
-
-
 # @humanize
 @withlogger
 class ConfigManager(Submanager):
 
     def __init__(self, *args):
         super().__init__(*args)
-
-        # self.paths = ConfigPaths()
 
         self.paths = self.mainmanager.Paths
 
@@ -132,14 +63,6 @@ class ConfigManager(Submanager):
         # read config file, make sure all required data is present or at default
         self.ensure_default_setup()
 
-    # @property
-    # def paths(self) -> ConfigPaths:
-    #     """
-    #     :return: object containing Path objects for all the main configuration directories and files
-    #     """
-    #     return self.paths
-
-
     def __getitem__(self, config_var):
         """
         Use dict-access to get the value of any of items in this config instance by property name. E.g:
@@ -152,8 +75,6 @@ class ConfigManager(Submanager):
         :param str config_var:
         :return: the value or None if the value/key cannot be found
         """
-        # if config_var in _pathvars:
-        #     return self.paths[config_var]
 
         # since our keys are (as of right now) all unique (the sections
         # are more of a visual aid than anything else), take advantage
@@ -357,7 +278,7 @@ class ConfigManager(Submanager):
 
         :param which: key string for directory
         :param bool create: if True and the directory does not exist, create it and any required parents dirs
-        :return: True if the directory existed, False if it did not/had to be created, None if it was unset
+        :return: True if the directory existed, False if it did not/had to be created
         """
 
         p = self.paths.path(which)
@@ -366,21 +287,6 @@ class ConfigManager(Submanager):
             return self._check_path_exist(p, create)
         except TypeError:
             raise exceptions.ConfigValueUnsetError(which, _SECTION_DIRS)
-
-        # if path is unset, there's not much we can do
-        # if not p:
-        #     raise exceptions.ConfigValueUnsetError(which, _SECTION_DIRS)
-        #
-        # if not p.exists():
-        #     self.LOGGER.warning("{} not found.".format(which))
-        #
-        #     if create:
-        #         self.LOGGER.info("Creating {} at: {}".format(which, p))
-        #         p.mkdir(parents=True)
-        #
-        #     return False
-        #
-        # return True
 
 
     def _check_main_config(self):
@@ -585,61 +491,6 @@ class ConfigManager(Submanager):
 
         self._update_value(section, key, value)
 
-        # get new configurator
-        # config = configparser.ConfigParser()
-        # populate with current values
-
-        # because we don't want to overwrite saved config values with
-        # session-temporary values (e.g. from ENV vars or cli-options),
-        # we read the saved data from disk again.
-        # config.read(self.paths['file_main'])
-
-        # if section == _SECTION_DIRS:
-        #     # means we're updating a data path
-        #     self.paths[key] = value
-
-            # if value is e.g. an empty string, clear the setting
-            # p=Path(value) if value else None
-
-            # leave verification to someone else...
-            # if check_path(str(p)):
-
-            # self.paths[key] = p
-
-            # update the ConfigPaths object
-            # for case in [key.__eq__]:
-            #     if case(_KEY_MODDIR):
-            #         self.paths.dir_mods = p
-            #     elif case(_KEY_VFSMNT):
-            #         self.paths.dir_vfs = p
-            #     elif case(_KEY_SKYDIR):
-            #         self.paths.dir_skyrim = p
-
-        # elif section == _SECTION_GENERAL:
-            # means we're setting either the default or most-recent profile
-            # p = self.paths.dir_profiles / value
-
-
-
-            # elif case(_KEY_LASTPRO) or case(_KEY_DEFPRO):
-            #     self.currentValues[_SECTION_GENERAL][key] = value
-                # self.last_profile = value
-
-        # else: # should always run since we didn't use 'break' above
-
-        # now insert new value into saved config
-        # config[section][key] = value
-        # self.currentValues[section][key] = value
-        #
-        # # else:
-        # #     raise FileNotFoundError(filename=value)
-        #
-        #
-        # # write the new data to disk
-        # # todo: maybe this operation should be async? Maybe it already is?
-        # with self.paths.file_main.open('w') as f:
-        #     config.write(f)
-
     def _update_value(self, section, key, value):
         """
         Save a value to the config file and also update the local
@@ -656,7 +507,7 @@ class ConfigManager(Submanager):
 
     def _save_value(self, section, key, value):
         """
-        Update thje config file with a single value.
+        Update the config file with a single value.
         Performs no validation or error-handling.
         Only meant to be called internally
 

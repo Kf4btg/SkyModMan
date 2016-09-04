@@ -11,6 +11,9 @@ APPNAME = "skymodman" # mainly for use w/ appdirs
 MAIN_CONFIG = "{}.ini".format(APPNAME)
 PROFILES_DIRNAME = "profiles"
 
+# this profile must exist. If it doesn't, we must create it.
+FALLBACK_PROFILE = "default"
+
 # For things that are going to presented to the user as
 # customizable preferences, we also need a user-friendly
 # display name to plug into labels and messages
@@ -27,10 +30,6 @@ DisplayNames = {
     _keystr.UI.RESTORE_WINSIZE: "Restore Window Size",
     _keystr.UI.RESTORE_WINPOS: "Restore Window Position",
 }
-
-
-# this profile must exist. If it doesn't, we must create it.
-FALLBACK_PROFILE = "default"
 
 # defines the names and order of fields in the database
 db_fields = ("ordinal", "directory", "name", "modid", "version", "enabled", "error")

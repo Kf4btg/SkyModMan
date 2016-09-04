@@ -1,10 +1,7 @@
 from pathlib import Path
 
-import appdirs
-
 from skymodman.managers import Submanager
 from skymodman.utils import withlogger
-from skymodman import constants
 from skymodman.constants import keystrings
 
 _pathvars = ("file_main", "dir_config", "dir_data", "dir_profiles", "dir_mods", "dir_vfs", "dir_skyrim")

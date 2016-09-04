@@ -5,7 +5,6 @@ from skymodman.managers import (config as _config,
                                 database as _database,
                                 profiles as _profiles,
                                 paths as _paths
-                                # installer as _install
                                 )
 from skymodman.constants import alerts, db_fields as _db_fields
 from skymodman.constants.keystrings import (Dirs as ks_dir,
@@ -35,7 +34,6 @@ def Manager():
     return __manager
 
 
-
 @withlogger
 class _ModManager:
     """
@@ -54,14 +52,11 @@ class _ModManager:
         self._pathman = _paths.PathManager(self)
         self._configman = _config.ConfigManager(self)
 
-        self._profileman = _profiles.ProfileManager(self._configman.paths.dir_profiles, self)
+        self._profileman = _profiles.ProfileManager(self._pathman.dir_profiles, self)
 
         # set up db, but do not load info until requested
         self._dbman = _database.DBManager(self)
         self._db_initialized = False
-
-        # install manager; instantiated when needed
-        # self._iman = None # type: _install.InstallManager
 
         # used when the installer needs to query mod state
         self._enabledmods = None
@@ -71,12 +66,6 @@ class _ModManager:
 
         # add a test alert
         self.alerts.add(alerts.test_alert)
-        #     Alert(level='NORMAL', label='Test Alert',
-        #           desc="This is a Test alert",
-        #           fix="You cannot fix this. Ever.",
-        #           check=lambda: True)
-        # )
-
 
     ## Sub-manager access properties ##
 
@@ -265,9 +254,6 @@ class _ModManager:
         if profile is self.profile:
             self._configman.update_genvalue(ks_ini.LASTPROFILE,
                                             profile.name)
-            # self._configman.update_config(ks_ini.LASTPROFILE,
-            #                               ks_sec.GENERAL,
-            #                               profile.name)
 
     def get_profiles(self, names_only=True):
         """
@@ -349,13 +335,7 @@ class _ModManager:
 
         # first check that we found the Skyrim directory
         if not sky_dir:
-            ## TODO: store common alerts as constants externally
             self.add_alert(alerts.dnf_skyrim)
-            #     Alert(level='HIGH', label="Skyrim not found",
-            #           desc="The main Skyrim installation folder could not be found or is not defined.",
-            #           fix="Choose an existing folder in the Preferences dialog.",
-            #           check=lambda: self.get_directory(ks_dir.SKYRIM) is None)
-            # )
             self.LOGGER.warning("The main Skyrim folder could not be "
                            "found. That's going to be a problem.")
         else:
@@ -486,22 +466,9 @@ class _ModManager:
 
         :return:
         """
-        # ap = self.profile
-
-        # IF there is an active profile, AND we happen to be asking for
-        # a directory, AND use_profile_override is True, AND the active
-        # profile actually contains an override for this directory AND
-        # that override is currently enabled............:
-        #   return that override
-
         if section == ks_sec.DIRECTORIES:
-            val = self._pathman.path(name, use_profile_override)
+            val = self.get_directory(name, use_profile_override)
 
-        # if ap and section == ks_sec.DIRECTORIES \
-        #         and use_profile_override \
-        #         and ap.override_enabled(name) \
-        #         and ap.diroverride(name):
-        #     val = ap.diroverride(name)
         else:
             # in all other situations, just
             # return the stored config value
@@ -510,12 +477,6 @@ class _ModManager:
         # if the value stored in config was None (or some other
         # False-like value), return the `default` parameter instead
         return val if val else default
-
-        # assume section is "NONE", meaning this is not a value
-        # from the main config file (but is still tracked by
-        # config manager...TODO: there's probably a better way to do this)
-        # val = conf[name]
-
 
     def set_config_value(self, name, section, value, set_profile_override=True):
         """
@@ -540,22 +501,6 @@ class _ModManager:
 
         elif section == ks_sec.GENERAL:
             self._configman.update_genvalue(name, value)
-            # self._configman.update_config(name, section, value)
-
-
-    # def _change_configured_path(self, directory, new_path, p_override):
-    #
-    #     self._pathman.set_path(directory, new_path, p_override)
-
-        # if p_override:
-        #     self.set_profile_setting(directory,
-        #                              ks_sec.OVERRIDES,
-        #                              new_path)
-        # else:
-        #     self._pathman[directory] = new_path
-            # self._configman.update_config(directory,
-            #                               ks_sec.DIRECTORIES,
-            #                               new_path)
 
     def set_directory(self, key, path, profile_override=False):
         """
@@ -567,9 +512,6 @@ class _ModManager:
         :param profile_override:
         """
         self._pathman.set_path(key, path, profile_override)
-
-        # self.set_config_value(key, ks_sec.DIRECTORIES,
-        #                       path, profile_override)
 
     def get_directory(self, key, use_profile_override=True):
         """
@@ -587,16 +529,11 @@ class _ModManager:
 
         p = self._pathman.path(key, use_profile_override)
         return str(p) if p else ""
-        # return str(self._pathman.path(key, use_profile_override))
-
-        # return self.get_config_value(
-        #     key, ks_sec.DIRECTORIES,
-        #     use_profile_override=use_profile_override)
 
     ##=============================================
     ## Installation
     ## --------------------------------------------
-    ## Methods below are asynchronous
+    ## Some methods below are asynchronous
     ##=============================================
 
     async def get_installer(self, archive, extract_dir=None):
@@ -645,40 +582,8 @@ class _ModManager:
                                                        extract_dir)
                         break
 
-                        # if os.path.exists(modconf):
-                        #     await installman.prepare_fomod(modconf, extract_dir)
-                        # elif os.path.exists(modconf.lower()):
-                        #     await installman.prepare_fomod(modconf.lower(), extract_dir)
-
         del _install
         return installer
-        # save a reference
-        # self._iman = installer
-        # return installer object
-        # return self._iman
-
-    # async def get_mod_archive_structure(self, archive=None):
-    #     """
-    #
-    #     :param archive:
-    #     :rtype: skymodman.utils.archivefs.ArchiveFS
-    #     :return: the internal folder structure of the mod `archive`
-    #         represented by a Tree structure
-    #     """
-    #     if not archive and not self._iman:
-    #         raise TypeError(
-    #             "If no InstallManager is active, "
-    #             "an archive file must be provided.")
-    #
-    #     if archive and (
-    #         not self._iman or self._iman.archive != archive):
-    #         self._iman = _install.InstallManager(archive)
-    #
-    #     # modstruct = await installman.mod_structure_tree()
-    #     # return modstruct
-    #
-    #     modfs = await self._iman.mkarchivefs()
-    #     return modfs
 
     ##=============================================
     ## Installation Helpers

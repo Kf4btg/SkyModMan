@@ -167,17 +167,7 @@ class Profile:
         if self.overrides[dirkey].path and (self.overrides[dirkey].enabled or ignore_enabled):
             return self.overrides[dirkey].path
 
-
-        # override=self.get_setting(kstr_section.OVERRIDES, dirkey)
-        #
-        # if override and (self.override_enabled(dirkey) or ignore_enabled):
-        #     return override
-        # if self.get_setting(kstr_section.OVERRIDES, dirkey):
-
         return ""
-
-
-        # return self.get_setting(kstr_section.OVERRIDES, dirkey) or ""
 
     def setoverride(self, dirkey, path, enable=None):
         """
@@ -224,8 +214,6 @@ class Profile:
             self.save_setting(kstr_section.OVR_ENABLED, dirkey, setenabled)
 
         return self.overrides[dirkey].enabled
-
-        # return self.get_setting(kstr_section.OVR_ENABLED, dirkey)
 
     # shortcuts for enabling/disabling overrides
     disable_override = partialmethod(override_enabled, setenabled=False)
