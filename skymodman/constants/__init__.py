@@ -6,6 +6,11 @@ from . import keystrings as _keystr
 # what to show in the title-bar of the main window and some dialog
 APPTITLE = "SkyModMan"
 
+## configuration-related strings
+APPNAME = "skymodman" # mainly for use w/ appdirs
+MAIN_CONFIG = "{}.ini".format(APPNAME)
+PROFILES_DIRNAME = "profiles"
+
 # For things that are going to presented to the user as
 # customizable preferences, we also need a user-friendly
 # display name to plug into labels and messages

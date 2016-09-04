@@ -472,6 +472,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # until the user corrects this
         if not Manager.get_directory(KeyStr_Dirs.MODS):
             self.filetree_modlist.setEnabled(False)
+            self.filetree_modlist.setToolTip("Mods directory is currently invalid")
 
         ##################################
         ## File Viewer
@@ -1341,24 +1342,24 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     ## UI Helper Functions
     ##===============================================
 
-    def check_setup(self):
-        """
-        Make sure that every absolutely required piece of config
-        information is available before everything gets fully loaded.
-        So far, this means:
-                * Skyrim-installation directory
-        """
-
-        # must have a configured skyrim installation folder
-        skydir = Manager.get_directory(KeyStr_Dirs.SKYRIM)
-        if not skydir:
-            if message("information", "Select Skyrim Installation",
-                       'Before the manager runs, please take a moment to'
-                       ' specify the folder where Skyrim itself is'
-                       ' installed. Click "OK" to show the folder'
-                       ' selection dialog.',
-                       buttons=('ok', 'cancel'), default_button='ok'):
-                self.select_skyrim_dir()
+    # def check_setup(self):
+    #     """
+    #     Make sure that every absolutely required piece of config
+    #     information is available before everything gets fully loaded.
+    #     So far, this means:
+    #             * Skyrim-installation directory
+    #     """
+    #
+    #     # must have a configured skyrim installation folder
+    #     skydir = Manager.get_directory(KeyStr_Dirs.SKYRIM)
+    #     if not skydir:
+    #         if message("information", "Select Skyrim Installation",
+    #                    'Before the manager runs, please take a moment to'
+    #                    ' specify the folder where Skyrim itself is'
+    #                    ' installed. Click "OK" to show the folder'
+    #                    ' selection dialog.',
+    #                    buttons=('ok', 'cancel'), default_button='ok'):
+    #             self.select_skyrim_dir()
             # else:
             #     self.safe_quit()
 
@@ -1656,45 +1657,53 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         Show dialog allowing user to choose a mod folder.
 
-        If a profile is currently loaded, this will set a directory
-        override for the mods folder that applies to this profile only.
-        The default directory can be set in the preferences dialog.
-        When no profile is loaded, this will instead set the default
-        directory.
+        This updates the default mod folder. If a profile override is
+        active, it will be disabled. Use the preferences dialog
+        to set up and enable a profile-specific override.
+
         """
+        # If a profile is currently loaded, this will set a directory
+        # override for the mods folder that applies to this profile only.
+        # The default directory can be set in the preferences dialog.
+        # When no profile is loaded, this will instead set the default
+        # directory.
+
+
         # noinspection PyTypeChecker
         moddir = QtWidgets.QFileDialog.getExistingDirectory(
             self,
             "Choose Directory Containing Installed Mods",
-            Manager.get_directory(KeyStr_Dirs.MODS)
+            Manager.get_directory(KeyStr_Dirs.MODS, False)
             # Manager.conf['dir_mods']
         )
 
         # update config with new path
         if check_path(moddir):
-            Manager.set_directory(KeyStr_Dirs.MODS, moddir)
+            Manager.set_directory(KeyStr_Dirs.MODS, moddir, False)
+
+            if Manager.profile and Manager.profile.override_enabled(KeyStr_Dirs.MODS):
+                Manager.profile.disable_override(KeyStr_Dirs.MODS)
 
             # reverify and reload the mods.
             if not Manager.validate_mod_installs():
                 self.mod_table.model().reload_errors_only()
 
-    @pyqtSlot()
-    def select_skyrim_dir(self):
-        """
-        Show file selection dialog for user to select the directory
-        where Skyrim is installed
-        """
-        # noinspection PyTypeChecker
-        skydir = QtWidgets.QFileDialog.getExistingDirectory(
-            self,
-            "Select Skyrim Installation",
-            Manager.get_directory(KeyStr_Dirs.SKYRIM) or "")
-
-        # update config with new path
-        if check_path(skydir):
-            Manager.set_directory(KeyStr_Dirs.SKYRIM, skydir)
-        else:
-            self.safe_quit()
+    # @pyqtSlot()
+    # def select_skyrim_dir(self):
+    #     """
+    #     Show file selection dialog for user to select the directory
+    #     where Skyrim is installed
+    #     """
+    #     skydir = QtWidgets.QFileDialog.getExistingDirectory(
+    #         self,
+    #         "Select Skyrim Installation",
+    #         Manager.get_directory(KeyStr_Dirs.SKYRIM) or "")
+    #
+    #     # update config with new path
+    #     if check_path(skydir):
+    #         Manager.set_directory(KeyStr_Dirs.SKYRIM, skydir)
+    #     else:
+    #         self.safe_quit()
 
     # noinspection PyTypeChecker,PyArgumentList
     def install_mod_archive(self, manual=False):

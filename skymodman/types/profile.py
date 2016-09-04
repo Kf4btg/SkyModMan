@@ -1,5 +1,7 @@
 from pathlib import Path
+from functools import partialmethod
 from configparser import ConfigParser as confparser
+from collections import namedtuple
 
 from skymodman import exceptions
 from skymodman.constants import FALLBACK_PROFILE
@@ -13,6 +15,9 @@ ProfileFiles = (MODINFO, LOADORDER, INIEDITS, OVERWRITE, HIDDEN, SETTINGS) = (
     "modinfo.json", "loadorder.json", "iniedits.json",
     "overwrites.json", "hiddenfiles.json", "settings.ini")
 
+
+dir_override = namedtuple("dir_override", "path enabled")
+dir_override.__doc__ = "Contains the set path and enabled flag for a defined directory override."
 
 # from skymodman.utils import humanizer
 # @humanizer.humanize
@@ -50,6 +55,11 @@ class Profile:
         """
 
         self.name = name
+        self.overrides = {} # type: dict [str, dir_override]
+
+        ##=================================
+        ## Path checks/creation
+        ##---------------------------------
 
         self.folder = profiles_dir / name # type: Path
 
@@ -82,11 +92,27 @@ class Profile:
                     with f.open('w') as ini:
                         c.write(ini)
 
+        ##=================================
+        ## Load config
+        ##---------------------------------
+
         # we don't worry about the json files, but we need to load in
         # the values from the ini file and store it.
         self._config = self.load_profile_settings()
         # self.LOGGER << "Loaded profile-specific settings: {}".format(self.settings)
 
+        ##=================================
+        ## Extract overrides
+        ##---------------------------------
+
+        for k in Profile.__default_settings[kstr_section.OVERRIDES]:
+            self.overrides[k] = dir_override(
+                self.get_setting(kstr_section.OVERRIDES, k),
+                self.get_setting(kstr_section.OVR_ENABLED, k)
+            )
+
+
+    # <editor-fold desc="properties">
 
     @property
     def Config(self):
@@ -117,41 +143,99 @@ class Profile:
     def settings(self):
         return self.folder / SETTINGS
 
-    def diroverride(self, dirkey):
-        """Return the value of the profile's override for the given
-        directory. If no override has been made or `dir_key` cannot
-        be found in the profile's config, return an empty string.
-        """
-        return self.get_setting(kstr_section.OVERRIDES, dirkey) or ""
+    # </editor-fold>
 
-    def setoverride(self, dirkey, path):
+    ##=============================================
+    ## Directory Overrides
+    ##=============================================
+
+    def diroverride(self, dirkey, ignore_enabled=False):
+        """
+        Return the value of the profile's override for the given
+        directory, if that override is currently enabled.
+        If no override has been made, `dirkey` cannot
+        be found in the profile's config, or the override is disabled,
+        return an empty string.
+
+        :param dirkey: key string for the desired directory
+        :param ignore_enabled: if this is set to ``True``, ignore the
+            value of the "enabled" switch for this directory, and always
+            return the override if it has been defined, even if it has
+            been disabled.
+        """
+
+        if self.overrides[dirkey].path and (self.overrides[dirkey].enabled or ignore_enabled):
+            return self.overrides[dirkey].path
+
+
+        # override=self.get_setting(kstr_section.OVERRIDES, dirkey)
+        #
+        # if override and (self.override_enabled(dirkey) or ignore_enabled):
+        #     return override
+        # if self.get_setting(kstr_section.OVERRIDES, dirkey):
+
+        return ""
+
+
+        # return self.get_setting(kstr_section.OVERRIDES, dirkey) or ""
+
+    def setoverride(self, dirkey, path, enable=None):
         """
         Set a path override. Note that no path verification is performed
         here.
 
-        :param dirkey: From constants.kstr_dirs
+        :param dirkey: From constants.keystrings.Dirs
         :param path: should refer to a real path on the filesystem
+        :param enable: if set to True or False, the "enabled" switch
+            for this override will be updated to that value. If omitted
+            or None, no change will be made to the enabled status.
         """
 
-        self.save_setting(kstr_section.OVERRIDES, dirkey, path)
+        if dirkey in self.overrides:
+            enabled = self.overrides[dirkey].enabled \
+                if enable is None \
+                else bool(enable)
+
+            self.overrides[dirkey] = dir_override(path, enabled)
+
+            # update config dict
+            self._config[kstr_section.OVERRIDES][dirkey] = path
+            self._config[kstr_section.OVR_ENABLED][dirkey] = enabled
+
+            # save updated config to disk
+            self._save_profile_settings()
+        else:
+            self.LOGGER.error("Attempted to set override for unrecognized path key '{}'".format(dirkey))
+
 
     def override_enabled(self, dirkey, setenabled=None):
         """
 
         :param dirkey:
-        :param setenabled: If omitted, return the current enabled
+        :param bool setenabled: If omitted, return the current enabled
             status of the given override. if True or False, update the
             enabled status to that value and return it.
         :return:
         """
 
-        if setenabled is None:
-            return self.get_setting(kstr_section.OVR_ENABLED, dirkey)
-        elif setenabled:
-            self.save_setting(kstr_section.OVR_ENABLED, dirkey, True)
-        else:
-            self.save_setting(kstr_section.OVR_ENABLED, dirkey, False)
-        return self.get_setting(kstr_section.OVR_ENABLED, dirkey)
+        if setenabled is not None:
+            self.overrides[dirkey] = self.overrides[dirkey]._replace(enabled=setenabled)
+
+            self.save_setting(kstr_section.OVR_ENABLED, dirkey, setenabled)
+
+        return self.overrides[dirkey].enabled
+
+        # return self.get_setting(kstr_section.OVR_ENABLED, dirkey)
+
+    # shortcuts for enabling/disabling overrides
+    disable_override = partialmethod(override_enabled, setenabled=False)
+    enable_override = partialmethod(override_enabled, setenabled=True)
+
+
+
+    ##=============================================
+    ## File manipulation
+    ##=============================================
 
     def rename(self, new_name):
         """
@@ -191,6 +275,10 @@ class Profile:
         for f in [self.folder / p for p in ProfileFiles]:
             if f.exists():
                 f.unlink()
+
+    ##=============================================
+    ## Profile-specific settings management
+    ##=============================================
 
     def load_profile_settings(self):
         config = confparser()

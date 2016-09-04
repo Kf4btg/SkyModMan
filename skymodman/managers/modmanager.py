@@ -4,9 +4,10 @@ from skymodman.types import ModEntry, Alert
 from skymodman.managers import (config as _config,
                                 database as _database,
                                 profiles as _profiles,
+                                paths as _paths
                                 # installer as _install
                                 )
-from skymodman.constants import db_fields as _db_fields
+from skymodman.constants import alerts, db_fields as _db_fields
 from skymodman.constants.keystrings import (Dirs as ks_dir,
                                             Section as ks_sec,
                                             INI as ks_ini)
@@ -46,8 +47,11 @@ class _ModManager:
 
     def __init__(self):
 
-        # the order here matters; profileManager requires config
+        # first, initialize the alerts
+        alerts.init_alerts(self)
 
+        # the order here matters; profileManager requires config
+        self._pathman = _paths.PathManager(self)
         self._configman = _config.ConfigManager(self)
 
         self._profileman = _profiles.ProfileManager(self._configman.paths.dir_profiles, self)
@@ -66,15 +70,19 @@ class _ModManager:
         self.alerts = set() # type: Set [Alert]
 
         # add a test alert
-        self.alerts.add(
-            Alert(level='NORMAL', label='Test Alert',
-                  desc="This is a Test alert",
-                  fix="You cannot fix this. Ever.",
-                  check=lambda: True)
-        )
+        self.alerts.add(alerts.test_alert)
+        #     Alert(level='NORMAL', label='Test Alert',
+        #           desc="This is a Test alert",
+        #           fix="You cannot fix this. Ever.",
+        #           check=lambda: True)
+        # )
 
 
     ## Sub-manager access properties ##
+
+    @property
+    def Paths(self):
+        return self._pathman
 
     @property
     def Config(self):
@@ -255,9 +263,11 @@ class _ModManager:
         self._profileman.rename_profile(profile, new_name)
 
         if profile is self.profile:
-            self._configman.update_config(ks_ini.LASTPROFILE,
-                                          ks_sec.GENERAL,
-                                          profile.name)
+            self._configman.update_genvalue(ks_ini.LASTPROFILE,
+                                            profile.name)
+            # self._configman.update_config(ks_ini.LASTPROFILE,
+            #                               ks_sec.GENERAL,
+            #                               profile.name)
 
     def get_profiles(self, names_only=True):
         """
@@ -338,14 +348,14 @@ class _ModManager:
         sky_dir = self.get_directory(ks_dir.SKYRIM)
 
         # first check that we found the Skyrim directory
-        if sky_dir is None:
+        if not sky_dir:
             ## TODO: store common alerts as constants externally
-            self.add_alert(
-                Alert(level='HIGH', label="Skyrim not found",
-                      desc="The main Skyrim installation folder could not be found or is not defined.",
-                      fix="Choose an existing folder in the Preferences dialog.",
-                      check=lambda: self.get_directory(ks_dir.SKYRIM) is None)
-            )
+            self.add_alert(alerts.dnf_skyrim)
+            #     Alert(level='HIGH', label="Skyrim not found",
+            #           desc="The main Skyrim installation folder could not be found or is not defined.",
+            #           fix="Choose an existing folder in the Preferences dialog.",
+            #           check=lambda: self.get_directory(ks_dir.SKYRIM) is None)
+            # )
             self.LOGGER.warning("The main Skyrim folder could not be "
                            "found. That's going to be a problem.")
         else:
@@ -476,18 +486,22 @@ class _ModManager:
 
         :return:
         """
-        ap = self.profile
+        # ap = self.profile
 
         # IF there is an active profile, AND we happen to be asking for
         # a directory, AND use_profile_override is True, AND the active
         # profile actually contains an override for this directory AND
         # that override is currently enabled............:
         #   return that override
-        if ap and section == ks_sec.DIRECTORIES \
-                and use_profile_override \
-                and ap.override_enabled(name) \
-                and ap.diroverride(name):
-            val = ap.diroverride(name)
+
+        if section == ks_sec.DIRECTORIES:
+            val = self._pathman.path(name, use_profile_override)
+
+        # if ap and section == ks_sec.DIRECTORIES \
+        #         and use_profile_override \
+        #         and ap.override_enabled(name) \
+        #         and ap.diroverride(name):
+        #     val = ap.diroverride(name)
         else:
             # in all other situations, just
             # return the stored config value
@@ -520,35 +534,42 @@ class _ModManager:
         """
         if section == ks_sec.DIRECTORIES:
             # if a profile is active, set an override
-            self._change_configured_path(name, value,
+            self.set_directory(name, value,
                                     set_profile_override and
                                     self.profile is not None)
 
         elif section == ks_sec.GENERAL:
-            self._configman.update_config(name, section, value)
+            self._configman.update_genvalue(name, value)
+            # self._configman.update_config(name, section, value)
 
 
-    def _change_configured_path(self, directory, new_path, p_override):
-        if p_override:
-            self.set_profile_setting(directory,
-                                     ks_sec.OVERRIDES,
-                                     new_path)
-        else:
-            self._configman.update_config(directory,
-                                          ks_sec.DIRECTORIES,
-                                          new_path)
+    # def _change_configured_path(self, directory, new_path, p_override):
+    #
+    #     self._pathman.set_path(directory, new_path, p_override)
 
-    def set_directory(self, key, path, profile_override=True):
+        # if p_override:
+        #     self.set_profile_setting(directory,
+        #                              ks_sec.OVERRIDES,
+        #                              new_path)
+        # else:
+        #     self._pathman[directory] = new_path
+            # self._configman.update_config(directory,
+            #                               ks_sec.DIRECTORIES,
+            #                               new_path)
+
+    def set_directory(self, key, path, profile_override=False):
         """
         Update the configured value of the directory indicated by `key`
-        (from constants.ks_dir) to the new value given in `path`
+        (from constants.keystrings.Dirs) to the new value given in `path`
 
         :param key:
         :param str path:
         :param profile_override:
         """
-        self.set_config_value(key, ks_sec.DIRECTORIES,
-                              path, profile_override)
+        self._pathman.set_path(key, path, profile_override)
+
+        # self.set_config_value(key, ks_sec.DIRECTORIES,
+        #                       path, profile_override)
 
     def get_directory(self, key, use_profile_override=True):
         """
@@ -563,9 +584,14 @@ class _ModManager:
             currently active profile, if one is set.
         :return:
         """
-        return self.get_config_value(
-            key, ks_sec.DIRECTORIES,
-            use_profile_override=use_profile_override)
+
+        p = self._pathman.path(key, use_profile_override)
+        return str(p) if p else ""
+        # return str(self._pathman.path(key, use_profile_override))
+
+        # return self.get_config_value(
+        #     key, ks_sec.DIRECTORIES,
+        #     use_profile_override=use_profile_override)
 
     ##=============================================
     ## Installation
