@@ -5,13 +5,16 @@ from collections import deque
 from functools import lru_cache
 from pathlib import PurePath, Path
 
+from skymodman.managers import Submanager
+
 from skymodman.constants import SkyrimGameInfo # TopLevelDirs_Bain, TopLevelSuffixes
+
 from skymodman.installer import common
 from skymodman.installer.fomod import Fomod
-from skymodman.managers import modmanager
-from skymodman.managers.archive import ArchiveHandler
+
 from skymodman.types.archivefs import archivefs as arcfs
 from skymodman.utils import withlogger, tree
+from skymodman.utils.archive import ArchiveHandler
 from skymodman.utils.fsutils import dir_move_merge
 
 
@@ -27,17 +30,13 @@ from skymodman.utils.fsutils import dir_move_merge
 #         self.flags = {}
 
 @withlogger
-class InstallManager:
+class InstallManager(Submanager):
     """
     Handles unpacking of mod archives and moving mod files and directories into the appropriate locations.
     """
 
     # noinspection PyArgumentList
     def __init__(self, mod_archive, *args, **kwargs):
-
-        # get this reference here to prevent circular import issues
-        self.Manager = modmanager.Manager()
-
         super().__init__(*args, **kwargs)
         self.archiver = ArchiveHandler()
 
@@ -57,12 +56,13 @@ class InstallManager:
         # self.install_state = installState()
 
         # maintain a mapping of lower-case versions of the image-paths
-        # defined in the fomod config to the actual filesystem-location of the
-        # extracted images (likely in a temp dir, having been extracted
-        # for display with the Fomod-installer)
+        # defined in the fomod config to the actual filesystem-location
+        # of the extracted images (likely in a temp dir, having been
+        # extracted for display with the Fomod-installer)
         self.normalized_imgpaths = {}
 
-        self.install_dir = self.Manager.Config.paths.dir_mods / self.arc_path.stem.lower()
+        # we get the `mainmanager` attribute from our Submanager base
+        self.install_dir = self.mainmanager.Config.paths.dir_mods / self.arc_path.stem.lower()
         # Used to track state during installation
         self.files_to_install = []
         self.files_installed = deque()
@@ -341,7 +341,7 @@ class InstallManager:
 
     @lru_cache(256)
     def check_file(self, file, state):
-        return self.Manager.checkFileState(file, state)
+        return self.mainmanager.checkFileState(file, state)
 
     def check_flag(self, flag, value):
         return flag in self.flags \

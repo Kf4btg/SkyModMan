@@ -1,13 +1,14 @@
 from pathlib import Path
 
 from skymodman import exceptions
+from skymodman.managers import Submanager
 from skymodman.types import Profile, diqt
 from skymodman.constants import FALLBACK_PROFILE
 from skymodman.utils import withlogger
 
 # @humanizer.humanize
 @withlogger
-class ProfileManager:
+class ProfileManager(Submanager):
     """
     Manages loading and saving user profiles
     """
@@ -21,11 +22,12 @@ class ProfileManager:
     __cache = diqt(maxlen_=5)
 
 
-    def __init__(self, directory):
+    def __init__(self, directory, *args):
         """
         :param Path directory: the application's 'profiles' storage directory
         """
-        super().__init__()
+
+        super().__init__(*args)
 
         self._profiles_dir = directory
         self._current_profile = None # type: Profile

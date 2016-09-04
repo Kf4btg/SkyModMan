@@ -48,12 +48,12 @@ class _ModManager:
 
         # the order here matters; profileManager requires config
 
-        self._cman = _config.ConfigManager()
+        self._configman = _config.ConfigManager(self)
 
-        self._pman = _profiles.ProfileManager(self._cman.paths.dir_profiles)
+        self._profileman = _profiles.ProfileManager(self._configman.paths.dir_profiles, self)
 
         # set up db, but do not load info until requested
-        self._dman = _database.DBManager()
+        self._dbman = _database.DBManager(self)
         self._db_initialized = False
 
         # install manager; instantiated when needed
@@ -79,17 +79,17 @@ class _ModManager:
     @property
     def Config(self):
         """Access the ConfigManager instance for the current session"""
-        return self._cman
+        return self._configman
 
     @property
     def Profiler(self):
         """Access the Profile Manager for the current session"""
-        return self._pman
+        return self._profileman
 
     @property
     def DB(self):
         """Access the Database Manager for the current session"""
-        return self._dman
+        return self._dbman
 
     ## Various things what need easy access ##
 
@@ -99,15 +99,15 @@ class _ModManager:
         :return: the currently active profile, or None if one has not
             yet been set.
         """
-        return self._pman.active_profile
+        return self._profileman.active_profile
 
     @property
     def file_conflicts(self):
-        return self._dman.file_conflicts
+        return self._dbman.file_conflicts
 
     @property
     def mods_with_conflicting_files(self):
-        return self._dman.mods_with_conflicting_files
+        return self._dbman.mods_with_conflicting_files
 
     def getdbcursor(self):
         """
@@ -116,7 +116,7 @@ class _ModManager:
 
         :return: sqlite3.Cursor
         """
-        return self._dman.conn.cursor()
+        return self._dbman.conn.cursor()
     
     ##=============================================
     ## Alerts
@@ -196,24 +196,24 @@ class _ModManager:
                 self._set_profile(old_profile)
             else:
                 # if we came from no profile, make sure we're back there
-                self._pman.set_active_profile(None)
+                self._profileman.set_active_profile(None)
 
             return False
 
         # if we successfully made it here, update the config value
         # for the last-loaded profile and return True
-        self._cman.last_profile = profile
+        self._configman.last_profile = profile
 
         return True
 
     def _set_profile(self, profile_name):
         ## internal handler
 
-        self._pman.set_active_profile(profile_name)
+        self._profileman.set_active_profile(profile_name)
 
         # have to reinitialize the database
         if self._db_initialized:
-            self._dman.reinit()
+            self._dbman.reinit()
         else:
             self._db_initialized= True
             # well, it will be in just a second
@@ -229,10 +229,10 @@ class _ModManager:
         :param skymodman.types.Profile copy_from:
         :return: new Profile object
         """
-        return self._pman.new_profile(name, copy_from)
+        return self._profileman.new_profile(name, copy_from)
 
     def delete_profile(self, profile):
-        self._pman.delete_profile(profile)
+        self._profileman.delete_profile(profile)
 
     def rename_profile(self, new_name, profile=None):
         """
@@ -248,16 +248,16 @@ class _ModManager:
         if profile is None:
             profile = self.profile
         elif isinstance(profile, str):
-            profile = self._pman[profile]
+            profile = self._profileman[profile]
 
         self.LOGGER << "Renaming profile: {}->{}".format(profile.name,
                                                      new_name)
-        self._pman.rename_profile(profile, new_name)
+        self._profileman.rename_profile(profile, new_name)
 
         if profile is self.profile:
-            self._cman.update_config(ks_ini.LASTPROFILE,
-                                     ks_sec.GENERAL,
-                                     profile.name)
+            self._configman.update_config(ks_ini.LASTPROFILE,
+                                          ks_sec.GENERAL,
+                                          profile.name)
 
     def get_profiles(self, names_only=True):
         """
@@ -266,9 +266,9 @@ class _ModManager:
         :param names_only: if True, only yield the profile names. If false,
             yield tuples of (name, Profile) pairs"""
         if names_only:
-            yield from (n for n in self._pman.profile_names)
+            yield from (n for n in self._profileman.profile_names)
         else:
-            yield from self._pman.profiles_by_name()
+            yield from self._profileman.profiles_by_name()
 
     def get_profile_setting(self, name, section, default=None):
         """
@@ -305,7 +305,7 @@ class _ModManager:
                        self.profile.name)
 
         # try to read modinfo file
-        if self._dman.load_mod_info(self.profile.modinfo):
+        if self._dbman.load_mod_info(self.profile.modinfo):
             # if successful, validate modinfo
 
             self.LOGGER << "validating installed mods"
@@ -316,7 +316,7 @@ class _ModManager:
             self.LOGGER << "Could not load mod info; reading " \
                        "from configured mods directory."
 
-            self._dman.get_mod_data_from_directory(
+            self._dbman.get_mod_data_from_directory(
                 self.get_directory(ks_dir.MODS))
 
             # and [re]create the cache file
@@ -329,7 +329,7 @@ class _ModManager:
         # _logger << "Loading list of all Mod Files on disk"
 
         # make sure we use the profile override if there is one
-        self._dman.load_all_mod_files(
+        self._dbman.load_all_mod_files(
             self.get_directory(ks_dir.MODS))
 
         # let's also add the files from the base
@@ -351,7 +351,7 @@ class _ModManager:
         else:
             for f in Path(sky_dir).iterdir():
                 if f.name.lower() == "data":
-                    self._dman.add_files_from_dir('Skyrim', str(f))
+                    self._dbman.add_files_from_dir('Skyrim', str(f))
                     break
 
         # [print(*r) for r in _dataman._con.execute("select *
@@ -360,10 +360,10 @@ class _ModManager:
         # _logger << "Finished loading list of all Mod Files on disk"
 
         # detect which mods contain files with the same name
-        self._dman.detect_file_conflicts()
+        self._dbman.detect_file_conflicts()
 
         # load set of files hidden by user
-        self._dman.load_hidden_files(self.profile.hidden_files)
+        self._dbman.load_hidden_files(self.profile.hidden_files)
 
     ##=============================================
     ## Mod Information
@@ -378,7 +378,7 @@ class _ModManager:
         """
 
         return {r['directory']: r['error'] for r in
-                self._dman.select("mods", "directory", "error")}
+                self._dbman.select("mods", "directory", "error")}
 
     def allmodinfo(self):
         """
@@ -388,17 +388,17 @@ class _ModManager:
 
         :rtype: __generator[dict[str, sqlite3.Row], Any, None]
         """
-        for row in self._dman.get_mod_info():
+        for row in self._dbman.get_mod_info():
             yield dict(zip(row.keys(), row))
 
     def enabled_mods(self):
         """
         yields the names of enabled mods for the currently active profile
         """
-        yield from self._dman.enabled_mods(True)
+        yield from self._dbman.enabled_mods(True)
 
     def disabled_mods(self):
-        yield from self._dman.disabled_mods(True)
+        yield from self._dbman.disabled_mods(True)
 
     def validate_mod_installs(self):
         """
@@ -408,7 +408,7 @@ class _ModManager:
 
         :return: True if no errors encountered, False otherwise
         """
-        return self._dman.validate_mods_list(
+        return self._dbman.validate_mods_list(
             self.get_directory(ks_dir.MODS))
 
 
@@ -437,26 +437,26 @@ class _ModManager:
         # using the context manager may allow deferrable foreign
         # to go unsatisfied for a moment
 
-        with self._dman.conn:
+        with self._dbman.conn:
             # delete the row with the given ordinal
-            self._dman.delete("mods", "ordinal=?", rows_to_delete, True)
+            self._dbman.delete("mods", "ordinal=?", rows_to_delete, True)
 
             # and reinsert
 
-            self._dman.insert(len(_db_fields), "mods", *_db_fields,
-                              params=dbrowgen)
+            self._dbman.insert(len(_db_fields), "mods", *_db_fields,
+                               params=dbrowgen)
 
         # And finally save changes to disk
         self.save_mod_list()
 
     def save_mod_list(self):
         """Request that database manager save modinfo to disk"""
-        self._dman.save_mod_info(self.profile.modinfo)
+        self._dbman.save_mod_info(self.profile.modinfo)
         # reset so that next install will reflect the new state
         self._enabledmods = None
 
     def save_hidden_files(self):
-        self._dman.save_hidden_files(self.profile.hidden_files)
+        self._dbman.save_hidden_files(self.profile.hidden_files)
 
     ##=============================================
     ## Configuration Management Interface
@@ -491,7 +491,7 @@ class _ModManager:
         else:
             # in all other situations, just
             # return the stored config value
-            val = self._cman[name]
+            val = self._configman[name]
 
         # if the value stored in config was None (or some other
         # False-like value), return the `default` parameter instead
@@ -525,7 +525,7 @@ class _ModManager:
                                     self.profile is not None)
 
         elif section == ks_sec.GENERAL:
-            self._cman.update_config(name, section, value)
+            self._configman.update_config(name, section, value)
 
 
     def _change_configured_path(self, directory, new_path, p_override):
@@ -534,9 +534,9 @@ class _ModManager:
                                      ks_sec.OVERRIDES,
                                      new_path)
         else:
-            self._cman.update_config(directory,
-                                     ks_sec.DIRECTORIES,
-                                     new_path)
+            self._configman.update_config(directory,
+                                          ks_sec.DIRECTORIES,
+                                          new_path)
 
     def set_directory(self, key, path, profile_override=True):
         """
@@ -589,7 +589,7 @@ class _ModManager:
         from skymodman.managers import installer as _install
 
         # instantiate a new install manager
-        installer = _install.InstallManager(archive)
+        installer = _install.InstallManager(archive, self)
 
 
         if extract_dir is not None: # we're expecting a fomod
@@ -677,11 +677,11 @@ class _ModManager:
         """
 
         matches = list(r['directory'] for r in
-                       self._dman.select("modfiles",
+                       self._dbman.select("modfiles",
                                          "directory",
-                                         where="filepath = ?",
-                                         params=(file.lower(), )
-                       ))
+                                          where="filepath = ?",
+                                          params=(file.lower(), )
+                                          ))
 
         if matches:
             if any(m == 'Skyrim'

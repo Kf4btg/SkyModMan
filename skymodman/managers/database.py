@@ -7,6 +7,7 @@ from itertools import count, repeat
 from collections import defaultdict
 
 from skymodman import exceptions
+from skymodman.managers import Submanager
 from skymodman.constants import db_fields, ModError
 from skymodman.utils import withlogger, tree
 
@@ -51,7 +52,7 @@ def getconn(path):
 # from skymodman.utils import humanizer
 # @humanizer.humanize
 @withlogger
-class DBManager:
+class DBManager(Submanager):
 
     _SCHEMA = """
         CREATE TABLE mods (
@@ -92,11 +93,8 @@ class DBManager:
     }
         # "error": lambda v: ModError.NONE
 
-    def __init__(self):
-        """
-
-        """
-        super().__init__()
+    def __init__(self, *args):
+        super().__init__(*args)
 
         # create db in memory
         self._con = getconn(":memory:")

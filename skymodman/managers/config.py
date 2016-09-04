@@ -7,6 +7,7 @@ from collections import defaultdict
 import appdirs
 
 from skymodman import exceptions
+from skymodman.managers import Submanager
 from skymodman.utils import withlogger, fsutils
 from skymodman.utils.fsutils import check_path
 from skymodman.constants import EnvVars, FALLBACK_PROFILE, keystrings
@@ -106,10 +107,10 @@ class ConfigPaths:
 
 # @humanize
 @withlogger
-class ConfigManager:
+class ConfigManager(Submanager):
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args):
+        super().__init__(*args)
 
         self.__paths = ConfigPaths()
 
