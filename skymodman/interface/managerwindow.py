@@ -265,6 +265,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.file_toolBar.addWidget(self.alerts_button)
 
+        self._alertbtn_orig_size = self.alerts_button.size()
+
         # show the 'alerts' indicator if there are any active alerts
         self.alerts_button.setVisible(Manager.has_alerts)
 
@@ -979,8 +981,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self._update_enabled_actions()
 
         # also recheck alerts when loading new profile
+        self.update_alerts()
         # Fixme: if any alerts are active, check_alerts() will probably perform some redundant, duplicate work: the Manager queries the check() method of each active alert, but it's quite likely that the same operation was just performed for the alert to have been added to the list of active alerts in the first place! However, since check() methods _should_ be rather lightweight, this may not be a top concern unless there are for some reason a LOT of alerts (which also should not be the case). At the moment, the best idea I can think of is to add some sort of event-registration that will allow an alert to register the action(s) that will trigger it to be reevaluated. Unfortunately I feel this "solution" may turn out to be far worse than the current problem. Perhaps another way may present itself, and I'll continue to think on this initial idea.
-        self.check_alerts()
+        # self.check_alerts()
 
     @pyqtSlot()
     def on_new_profile_action(self):
@@ -1287,22 +1290,49 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     ## UI Helper Functions
     ##===============================================
 
-    def check_alerts(self):
+    def update_alerts(self):
         """
-        If there are visible alerts, check if they have been resolved
-        and remove those which have. If all have been resolved, hide
-        the alerts indicator.
+        Just populates the alerts-dropdown with the contents of the
+        main Manager's alerts collection. Does not request any checks.
         """
-        Manager.check_alerts()
 
+        self.LOGGER << "update_alerts"
         # this will update/clear the alerts list as appropriate
         self.alerts_data.setStringList(
             [a.label + ": " + a.desc for a in Manager.alerts]
         )
+        # self.LOGGER << "has_alerts: {}".format(Manager.has_alerts)
+        if not Manager.has_alerts:
+            self.alerts_button.setVisible(False)
+            # self.alerts_button.hide()
 
-        self.alerts_listview.adjustSize()
+            # Why doesn't setting visible = False work?!?!?!?!?!?!?!
+            # self.alerts_button.setFixedSize(0, 0)
+            # print("vis=false")
+            # self.alerts_button.setEnabled(False)
+        else:
+            self.alerts_button.setVisible(True)
+            # self.alerts_button.setBaseSize(self._alertbtn_orig_size)
+            # print("vis=true")
+            # self.LOGGER << "{}".format(self.alerts_button.isVisible())
 
-        self.alerts_button.setVisible(Manager.has_alerts)
+
+    # def check_alerts(self):
+    #     """
+    #     If there are visible alerts, check if they have been resolved
+    #     and remove those which have. If all have been resolved, hide
+    #     the alerts indicator.
+    #     """
+    #     Manager.check_alerts()
+    #
+    #     # this will update/clear the alerts list as appropriate
+    #     self.alerts_data.setStringList(
+    #         [a.label + ": " + a.desc for a in Manager.alerts]
+    #     )
+    #
+    #     self.alerts_listview.adjustSize()
+    #
+    #     self.alerts_button.setVisible(Manager.has_alerts)
 
         # if Manager.has_alerts:
         #     self.alerts_data.setStringList(
@@ -1558,6 +1588,11 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         pdialog.exec_()
 
         del PreferencesDialog
+
+        # now have the Manager check to see if all the directories
+        # are valid, and update the alerts indicator if needed
+        Manager.check_dirs()
+        self.update_alerts()
 
 
     @pyqtSlot()
