@@ -153,7 +153,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             if prof_policy:
                 val = {
                     constants.ProfileLoadPolicy.last:
-                        KeyStr_INI.LASTPROFILE,
+                        KeyStr_INI.LAST_PROFILE,
                     constants.ProfileLoadPolicy.default:
                         KeyStr_INI.DEFAULT_PROFILE
                 }[prof_policy]
@@ -493,8 +493,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             f.escapeLineEdit.connect(f.clearFocus)
 
     def __init_modlist_filter_state(self, filter_):
-        activeonly = Manager.get_profile_setting(KeyStr_INI.ACTIVEONLY,
-                                            KeyStr_Section.FILEVIEWER)
+        activeonly = Manager.get_profile_setting(KeyStr_INI.ACTIVE_ONLY,
+                                                 KeyStr_Section.FILEVIEWER)
 
         if activeonly is None:
             # if no profile loaded, set it unchecked and disable it
@@ -1090,7 +1090,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.filters[F.mod_list].setOnlyShowActive(checked)
         self.update_modlist_label(checked)
-        Manager.set_profile_setting(KeyStr_INI.ACTIVEONLY,
+        Manager.set_profile_setting(KeyStr_INI.ACTIVE_ONLY,
                                     KeyStr_Section.FILEVIEWER,
                                     checked)
 

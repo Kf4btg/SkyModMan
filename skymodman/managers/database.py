@@ -8,7 +8,7 @@ from collections import defaultdict
 
 from skymodman import exceptions
 from skymodman.managers import Submanager
-from skymodman.constants import db_fields, ModError
+from skymodman.constants import db_fields, ModError, keystrings
 from skymodman.utils import withlogger, tree
 
 _mcount = count()
@@ -719,7 +719,7 @@ class DBManager(Submanager):
         yield from cur
 
 
-    def get_mod_data_from_directory(self, mods_dir):
+    def get_mod_data_from_directory(self):
         """
         scan the actual mods-directory and populate the database from
         there instead of a cached json file.
@@ -727,17 +727,18 @@ class DBManager(Submanager):
         Will need to do this on first run and periodically to make sure
         cache is in sync.
 
-        :param str mods_dir:
         """
         # TODO: Perhaps this should be run on every startup? At least to make sure it matches the stored data.
         import configparser as _config
+
+        mods_dir = self.mainmanager.Paths.path(keystrings.Dirs.MODS)
 
         self.logger.info("Reading mods from mod directory")
         configP = _config.ConfigParser()
 
 
         mods_list = []
-        for moddir in Path(mods_dir).iterdir():
+        for moddir in mods_dir.iterdir():
             # skip any non-directories
             if not moddir.is_dir(): continue
 
@@ -754,13 +755,20 @@ class DBManager(Submanager):
             inipath = moddir / "meta.ini"
             if inipath.exists():
                 configP.read(str(inipath))
-                mods_list.append(
-                    self.make_mod_entry(
-                        ordinal = order,
-                        directory=dirname,
-                        modid=configP['General']['modid'],
-                        version=configP['General']['version']
-                    ))
+                try:
+                    mods_list.append(
+                        self.make_mod_entry(
+                            ordinal = order,
+                            directory=dirname,
+                            modid=configP['General']['modid'],
+                            version=configP['General']['version']
+                        ))
+                except KeyError:
+                    # if the meta.ini file was malformed or something,
+                    # ignore it
+                    mods_list.append(
+                        self.make_mod_entry(ordinal=order,
+                                            directory=dirname))
             else:
                 mods_list.append(
                     self.make_mod_entry(ordinal = order,
@@ -770,7 +778,7 @@ class DBManager(Submanager):
 
         del _config
 
-    def load_all_mod_files(self, directory):
+    def load_all_mod_files(self, mods_dir=None):
         """
         Here's an experiment to load ALL files from disk when the
         program starts up...let's see how long it takes
@@ -787,12 +795,17 @@ class DBManager(Submanager):
         did make some tweaks to the code, but still...I'm guessing the
         files were still in the system RAM?
 
-        :param str directory: path to the configured mod-storage dir
         """
+
+        if mods_dir:
+            if isinstance(mods_dir, str):
+                mods_dir = Path(mods_dir)
+        else:
+            mods_dir = self.mainmanager.Paths.path(keystrings.Dirs.MODS)
 
         # go through each folder indivually
         with self._con:
-            for modfolder in Path(directory).iterdir():
+            for modfolder in mods_dir.iterdir():
                 if not modfolder.is_dir(): continue
                 self.add_files_from_dir(modfolder.name, str(modfolder))
 
@@ -903,7 +916,11 @@ class DBManager(Submanager):
         #             print('\t', m)
 
     def make_mod_entry(self, **kwargs):
-        """generates a tuple representing a mod-entry by supplementing a possibly-incomplete mapping of keywords (`kwargs`) with default values for any missing fields"""
+        """
+        generates a tuple representing a mod-entry by supplementing a
+        possibly-incomplete mapping of keywords (`kwargs`) with default
+        values for any missing fields
+        """
         row = []
 
         for field in db_fields[:-1]:
@@ -913,7 +930,7 @@ class DBManager(Submanager):
                      )
         return tuple(row)
 
-    def validate_mods_list(self, moddir):
+    def validate_mods_list(self):
         """
         Compare the database's list of mods against a list of the
         folders in the installed-mods directory. Handle discrepancies by
@@ -924,8 +941,6 @@ class DBManager(Submanager):
             * Mods Not Found: for mods listed in the list of installed
               mods whose installation folders were not found on disk.
 
-        :param str moddir: the path to the mod storage directory
-
         :return: True if no errors and table unchanged. False if errors
             encountered and/or removed from table
         """
@@ -935,7 +950,8 @@ class DBManager(Submanager):
         # problems with the mod installation
 
         # list of all the installed mods
-        installed_mods = os.listdir(moddir)
+        installed_mods = self.mainmanager.Paths.list_mod_folders()
+        # installed_mods = os.listdir(moddir)
 
         # first, reset the errors column
 

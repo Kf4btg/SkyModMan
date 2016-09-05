@@ -28,7 +28,7 @@ class Profile:
     """
     __default_settings = {
         kstr_section.FILEVIEWER: {
-            kstr_ini.ACTIVEONLY: True,
+            kstr_ini.ACTIVE_ONLY: True,
         },
         kstr_section.OVERRIDES: {
             kstr_dirs.SKYRIM: "",

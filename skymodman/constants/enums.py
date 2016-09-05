@@ -159,11 +159,11 @@ class EnvVars(str, Enum):
 #             >>>     print(f)
 #         """
 #         ## main INI
-#         LASTPROFILE = "last_profile"  # name of last loaded profile
+#         LAST_PROFILE = "last_profile"  # name of last loaded profile
 #         DEFAULT_PROFILE = "defaultprofile"
 #
 #         ## profiles only
-#         ACTIVEONLY = "activeonly"
+#         ACTIVE_ONLY = "activeonly"
 #
 #     class Dirs(metaclass=Iternum):
 #         """Key strings for referring to application directories"""

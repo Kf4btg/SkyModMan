@@ -8,7 +8,7 @@ import appdirs
 
 from skymodman import exceptions
 from skymodman.managers import Submanager
-from skymodman.utils import withlogger, fsutils
+from skymodman.utils import withlogger
 from skymodman.utils.fsutils import check_path
 from skymodman.constants import EnvVars, FALLBACK_PROFILE, keystrings, APPNAME, MAIN_CONFIG
 
@@ -16,7 +16,7 @@ from skymodman.constants import EnvVars, FALLBACK_PROFILE, keystrings, APPNAME, 
 _SECTION_GENERAL = keystrings.Section.GENERAL
 _SECTION_DIRS = keystrings.Section.DIRECTORIES
 
-_KEY_LASTPRO = keystrings.INI.LASTPROFILE
+_KEY_LASTPRO = keystrings.INI.LAST_PROFILE
 _KEY_DEFPRO  = keystrings.INI.DEFAULT_PROFILE
 _KEY_PROFDIR = keystrings.Dirs.PROFILES
 _KEY_MODDIR  = keystrings.Dirs.MODS
@@ -281,7 +281,7 @@ class ConfigManager(Submanager):
         :return: True if the directory existed, False if it did not/had to be created
         """
 
-        p = self.paths.path(which)
+        p = self.paths.path(which, False)
 
         try:
             return self._check_path_exist(p, create)
@@ -388,7 +388,7 @@ class ConfigManager(Submanager):
                 setattr(self.paths, path_key, p)
 
             # update config-file mirror
-            self.currentValues[_SECTION_DIRS][path_key] = self[path_key]
+            self.currentValues[_SECTION_DIRS][path_key] = self.paths[path_key]
 
         if self.path_errors:
             for att, errlist in self.path_errors.items():
@@ -524,87 +524,3 @@ class ConfigManager(Submanager):
 
         with self.paths.file_main.open('w') as f:
             config.write(f)
-
-    def move_dir(self, dir_label, destination, remove_old_dir=True):
-        """
-        Change the storage path for the given directory and move the
-        current contents of that directory to the new location.
-
-        :param dir_label: label (e.g. 'dir_mods') for the dir to move
-        :param str destination: where to move it
-        :raises: ``exceptions.FileAccessError`` if the destination exists and is not an empty directory, or if there is an issue with removing the original directory after the move has occurred. If errors occur during the move operation itself, an ``exceptions.MultiFileError`` will be raised. The ``errors`` attribute on this exception object is a collection of tuples for each file that failed to copy correctly, containing the name of the file and the original exception.
-        :param remove_old_dir: if True, remove the original directory from disk after
-            moving all its contents
-        """
-        curr_path = self.paths.path(dir_label)
-
-        new_path = Path(destination)
-
-        # list of 2-tuples; item1 is the file we were attempting to move,
-        # item2 is the exception that occurred during that attempt
-        errors = []
-
-        # flag to indicate whether we should copy all the contents or
-        # move the original dir itself
-        copy_contents = True
-
-        # make sure new_path does not exist/is empty dir
-        if new_path.exists():
-
-            # also make sure it's a directory
-            if not new_path.is_dir():
-                raise exceptions.FileAccessError(destination,
-                                                 "'{file}' is not a directory")
-
-            if len(os.listdir(destination)) > 0:
-                raise exceptions.FileAccessError(destination, "The directory '{file}' must be nonexistent or empty.")
-            ## dir exists and is empty; easiest thing to do would be to remove
-            ## it and move the old folder into its place; though if the dir is a
-            ## symlink, that could really mess things up...guess we'll have to do
-            ## it one-by-one, then.
-            # copy_contents = True
-
-        elif remove_old_dir:
-            # The scenario where the destination does not exist and we're
-            # removing the original folder is really the only situation
-            # in which we can get away with simply moving the original...
-            copy_contents=False
-
-        if copy_contents:
-            for item in curr_path.iterdir():
-                # move all items inside the new path
-                try:
-                    fsutils.move_path(item, new_path)
-                except (OSError, exceptions.FileAccessError) as e:
-                    self.LOGGER.error(e)
-                    errors.append((item, e))
-
-            ## after all that, we can remove the old dir...hopefully
-            if remove_old_dir and not errors:
-                try:
-                    curr_path.rmdir()
-                except OSError as e:
-                    raise exceptions.FileAccessError(curr_path, "The original directory '{file}' could not be removed") from e
-        else:
-            # new_path does not exist, so we can just move the old dir to the destination
-            try:
-                fsutils.move_path(curr_path, new_path)
-            except (OSError, exceptions.FileAccessError) as e:
-                self.LOGGER.error(e)
-                errors.append((curr_path, e))
-
-        if errors:
-            raise exceptions.MultiFileError(errors, "Errors occurred during move operation.")
-
-
-    def list_mod_folders(self):
-        """
-        Just get a list of all mods installed in the mod directory
-        (i.e. a list of folder names)
-
-        :return: list of names
-        """
-        self.LOGGER.info("Getting list of mod directories from {}".format(self.paths['dir_mods']))
-        return os.listdir(self.paths['dir_mods'])
-
-

@@ -18,9 +18,9 @@ FALLBACK_PROFILE = "default"
 # customizable preferences, we also need a user-friendly
 # display name to plug into labels and messages
 DisplayNames = {
-    _keystr.INI.ACTIVEONLY: "Only Show Active Mods",
+    _keystr.INI.ACTIVE_ONLY:     "Only Show Active Mods",
     _keystr.INI.DEFAULT_PROFILE: "Default Profile",
-    _keystr.INI.LASTPROFILE: "Last Loaded Profile",
+    _keystr.INI.LAST_PROFILE: "Last Loaded Profile",
 
     _keystr.Dirs.PROFILES: "Profiles Directory",
     _keystr.Dirs.SKYRIM: "Skyrim Installation",

@@ -63,14 +63,14 @@ class INI(metaclass=Iternum):
         >>>     print(f)
     """
     ## main INI
-    LASTPROFILE = "last_profile"  # name of last loaded profile
+    LAST_PROFILE = "last_profile"  # name of last loaded profile
     """name of last loaded profile"""
 
-    DEFAULT_PROFILE = "defaultprofile"
+    DEFAULT_PROFILE = "default_profile"
     """name of default profile"""
 
     ## profiles only
-    ACTIVEONLY = "activeonly"
+    ACTIVE_ONLY = "active_only"
     """Boolean indicating whether all mods or just active mods should be shown in the mod-files list"""
 
 

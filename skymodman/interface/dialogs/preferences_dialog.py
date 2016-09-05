@@ -21,7 +21,7 @@ PLP = constants.ProfileLoadPolicy
 
 Manager = modmanager.Manager()
 # ref to the ConfigManager
-Config = Manager.Config
+# Config = Manager.Config
 
 ## text and style sheets for indicator labels
 _invalid_path_str = "Path not found"
@@ -54,7 +54,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
         ## Default Path values
         # returns empty strings for unset paths
-        self.paths={p:Config.paths[p] for p in D}
+        self.paths={p:Manager.get_directory(p, False) for p in D}
 
         ## associate text boxes with directories
         self.path_boxes = {
@@ -224,7 +224,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
                 ##---------------------##
                 # override buttons/choosers
-                self.override_boxes[d].setText(self._selected_profile.diroverride(d))
+                self.override_boxes[d].setText(self._selected_profile.diroverride(d, ignore_enabled=True))
 
                 obtn = self.override_buttons[d]
                 # if override is enabled in profile, check the button
@@ -316,6 +316,27 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         """
         self._selected_profile = self.combo_profiles.currentData()
         self.check_default()
+        self._update_override_boxes()
+
+    def _update_override_boxes(self):
+        """When the selected profile changes, we need to update the
+        paths displayed on the profiles tab"""
+
+        for d in (D.SKYRIM, D.MODS, D.VFS):
+            self.override_boxes[d].setText(
+                self._selected_profile.diroverride(d,
+                                                   ignore_enabled=True))
+
+            obtn = self.override_buttons[d]
+            # if override is enabled in profile, check the button
+            obtn.setChecked(self._selected_profile.override_enabled(d))
+
+            # the buttons are already set to toggle the enable status of
+            # the entry field/dir chooser when pressed, so make sure those
+            # are in the correct enable state to begin with
+            self.override_boxes[d].setEnabled(obtn.isChecked())
+            self.override_choosers[d].setEnabled(obtn.isChecked())
+
 
     @pyqtSlot(bool)
     def set_default_profile(self, checked):
@@ -326,9 +347,9 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         """
         if checked:
             if self._selected_profile:
-                Config.default_profile = self._selected_profile.name
+                Manager.Config.default_profile = self._selected_profile.name
         else:
-            Config.default_profile = constants.FALLBACK_PROFILE
+            Manager.Config.default_profile = constants.FALLBACK_PROFILE
 
     def check_default(self):
         """
@@ -339,7 +360,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         if self._selected_profile:
             # don't want unchecking this to trigger changing the default profile
             with ui_utils.blocked_signals(self.cbox_default):
-                self.cbox_default.setChecked(self._selected_profile.name == Config.default_profile)
+                self.cbox_default.setChecked(self._selected_profile.name == Manager.Config.default_profile)
 
 
     @pyqtSlot(str, bool)
@@ -400,12 +421,12 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                         checkbox_checked=True)
                     if do_move:
                         try:
-                            Config.move_dir(key, newpath, remove_old)
+                            Manager.Paths.move_dir(key, newpath, remove_old)
                         except exceptions.FileAccessError as e:
                             message('critical',
                                     "Cannot perform move operation.",
                                     "The following error occurred:",
-                                    str(e), buttons='ok',
+                                    detailed_text=str(e), buttons='ok',
                                     default_button='ok')
                         except exceptions.MultiFileError as mfe:
                             s=""
@@ -414,8 +435,8 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                             message('critical',
                                     title="Errors during move operation",
                                     text="The move operation may not have fully completed. The following errors were encountered: ",
-                                    info_text=s,
-                                    buttons='ok', default_button='ok')
+                                    buttons='ok', default_button='ok',
+                                    detailed_text=s)
                         else:
                             self._update_path(key, newpath)
                     else:
@@ -431,11 +452,16 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
             if not newovrd or (os.path.isabs(newovrd)
                                and os.path.exists(newovrd)):
+                # we can't just call Manager.set_directory(...,...,True)
+                # because that method only sets overrides for the active
+                # profile, which is not necessarily the same as the
+                # selected profile here
                 sp.setoverride(d, newovrd)
 
-    def _update_path(self, key, newpath):
-        Manager.set_directory(key, newpath, False)
-        self.paths[key] = newpath
+    def _update_path(self, key, newpath, is_override=False):
+        Manager.set_directory(key, newpath, is_override)
+        if not is_override:
+            self.paths[key] = newpath
 
 
     @pyqtSlot(str)

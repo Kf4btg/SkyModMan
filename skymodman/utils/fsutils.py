@@ -11,6 +11,8 @@ from skymodman.exceptions import FileAccessError
 
 __all__ = ["check_path", "join_path", "change_dir", "dir_move_merge"]
 
+# alias os.listdir
+listdir=os.listdir
 
 def check_path(path, exp_user=False):
     """

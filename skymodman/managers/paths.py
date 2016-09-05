@@ -1,7 +1,8 @@
 from pathlib import Path
 
+from skymodman import exceptions
 from skymodman.managers import Submanager
-from skymodman.utils import withlogger
+from skymodman.utils import withlogger, fsutils
 from skymodman.constants import keystrings
 
 _pathvars = ("file_main", "dir_config", "dir_data", "dir_profiles", "dir_mods", "dir_vfs", "dir_skyrim")
@@ -47,12 +48,28 @@ class PathManager(Submanager):
         self.dir_vfs      = dir_vfs
 
 
+    ##=============================================
+    ## Path validation
+    ##=============================================
+
+    def is_valid(self, key, use_profile_override=True, check_exists=False):
+        """
+
+        :param key:
+        :param use_profile_override:
+        :param check_exists:
+        :return:
+        """
+        p = self.path(key, use_profile_override)
+        if p:
+            return p.exists() if check_exists else True
+        return False
 
     ##=============================================
     ## Getting/setting paths
     ##=============================================
 
-    def path(self, key, use_profile_override=False):
+    def path(self, key, use_profile_override=True):
         """
         Get the current value for a given path as a Path object
 
@@ -64,7 +81,7 @@ class PathManager(Submanager):
             requested directory
         """
 
-        if use_profile_override:
+        if use_profile_override and key in _overridedirs:
             p = self.mainmanager.profile
             if p:
                 do = p.diroverride(key)
@@ -112,7 +129,7 @@ class PathManager(Submanager):
             if key in _dirvars:
                 # if it's a configurable directory, make sure
                 # it's also recorded in the main Config file.
-                self.mainmanager.Config.update_dirpath(key, value)
+                self.mainmanager.Config.update_dirpath(key)
 
     def __getitem__(self, key):
         """
@@ -155,4 +172,96 @@ class PathManager(Submanager):
                 self.mainmanager.Config.update_dirpath(key, value)
         else:
             raise KeyError(key)
+
+    ##=============================================
+    ## Some path manipulation
+    ##=============================================
+
+    def move_dir(self, key, destination, remove_old_dir=True, profile_override=False):
+        """
+        Change the storage path for the given directory and move the
+        current contents of that directory to the new location.
+
+        :param key: label (e.g. 'dir_mods') for the dir to move
+        :param str destination: where to move it
+        :raises: ``exceptions.FileAccessError`` if the destination exists and is not an empty directory, or if there is an issue with removing the original directory after the move has occurred. If errors occur during the move operation itself, an ``exceptions.MultiFileError`` will be raised. The ``errors`` attribute on this exception object is a collection of tuples for each file that failed to copy correctly, containing the name of the file and the original exception.
+        :param remove_old_dir: if True, remove the original directory from disk after
+            moving all its contents
+        """
+        curr_path = self.path(key, profile_override)
+
+        new_path = Path(destination)
+
+        # list of 2-tuples; item1 is the file we were attempting to move,
+        # item2 is the exception that occurred during that attempt
+        errors = []
+
+        # flag to indicate whether we should copy all the contents or
+        # move the original dir itself
+        copy_contents = True
+
+        # make sure new_path does not exist/is empty dir
+        if new_path.exists():
+
+            # also make sure it's a directory
+            if not new_path.is_dir():
+                raise exceptions.FileAccessError(destination,
+                                                 "'{file}' is not a directory")
+
+            if len(fsutils.listdir(destination)) > 0:
+                raise exceptions.FileAccessError(destination, "The directory '{file}' must be nonexistent or empty.")
+            ## dir exists and is empty; easiest thing to do would be to remove
+            ## it and move the old folder into its place; though if the dir is a
+            ## symlink, that could really mess things up...guess we'll have to do
+            ## it one-by-one, then.
+            # copy_contents = True
+
+        elif remove_old_dir:
+            # The scenario where the destination does not exist and we're
+            # removing the original folder is really the only situation
+            # in which we can get away with simply moving the original...
+            copy_contents=False
+
+        if copy_contents:
+            for item in curr_path.iterdir():
+                # move all items inside the new path
+                try:
+                    fsutils.move_path(item, new_path)
+                except (OSError, exceptions.FileAccessError) as e:
+                    self.LOGGER.error(e)
+                    errors.append((item, e))
+
+            ## after all that, we can remove the old dir...hopefully
+            if remove_old_dir and not errors:
+                try:
+                    curr_path.rmdir()
+                except OSError as e:
+                    raise exceptions.FileAccessError(curr_path, "The original directory '{file}' could not be removed") from e
+        else:
+            # new_path does not exist, so we can just move the old dir to the destination
+            try:
+                fsutils.move_path(curr_path, new_path)
+            except (OSError, exceptions.FileAccessError) as e:
+                self.LOGGER.exception(e)
+                errors.append((curr_path, e))
+
+        if errors:
+            raise exceptions.MultiFileError(errors, "Errors occurred during move operation.")
+
+
+    def list_mod_folders(self, use_profile_override=True):
+        """
+        Just get a list of all mods installed in the mod directory
+        (i.e. a list of folder names)
+
+        :return: list of names
+        """
+
+        mpath = self.path(keystrings.Dirs.MODS, use_profile_override)
+
+        if mpath:
+            self.LOGGER.info("Getting list of mod directories from {}".format(mpath))
+
+            # only return names of folders, not any other type of file
+            return [f.name for f in mpath.iterdir() if f.is_dir()]
 

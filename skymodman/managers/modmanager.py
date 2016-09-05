@@ -61,11 +61,22 @@ class _ModManager:
         # used when the installer needs to query mod state
         self._enabledmods = None
 
+
+
         # set of issues that arise during operation
         self.alerts = set() # type: Set [Alert]
 
         # add a test alert
-        self.alerts.add(alerts.test_alert)
+        # self.alerts.add(alerts.test_alert)
+
+        # tracking which dirs are valid will make things easier
+        self._valid_dirs = {
+            ks_dir.MODS:   False,
+            ks_dir.SKYRIM: False,
+            ks_dir.VFS:    False
+        }
+        # do initial check of directories
+        self.check_dirs()
 
     ## Sub-manager access properties ##
 
@@ -137,11 +148,15 @@ class _ModManager:
         :param Alert alert:
         :return:
         """
-        try:
-            self.alerts.remove(alert)
-        except ValueError as e:
-            self.LOGGER << "Attempted to remove non-existent alert: "
-            self.LOGGER.exception(e)
+        # try:
+
+        # discard(), unlike remove(), does not throw a KeyError for
+        # missing values
+        self.alerts.discard(alert)
+
+        # except KeyError as e:
+        #     self.LOGGER << "Attempted to remove non-existent alert: "
+        #     self.LOGGER.exception(e)
 
     def check_alerts(self):
         """
@@ -157,6 +172,27 @@ class _ModManager:
 
         # remove resolved alerts
         self.alerts -= to_remove
+
+    def check_dirs(self):
+        """
+        See if all the necessary directories are defined/present. Add
+        appropriate alerts if not.
+        """
+
+        check_profile = self.profile is not None
+        for key, al in ((ks_dir.SKYRIM, alerts.dnf_skyrim),
+                        (ks_dir.MODS, alerts.dnf_mods),
+                        (ks_dir.VFS, alerts.dnf_vfs)):
+
+            self._valid_dirs[key] = self._pathman.is_valid(key, check_profile)
+
+            if self._valid_dirs[key]:
+                # if we get a valid value back,
+                # remove the alert if it was present
+                self.remove_alert(al)
+            else:
+                # otherwise, add the alert
+                self.add_alert(al)
 
     ##=============================================
     ## Profile Management Interface
@@ -203,19 +239,7 @@ class _ModManager:
 
         return True
 
-    def _set_profile(self, profile_name):
-        ## internal handler
 
-        self._profileman.set_active_profile(profile_name)
-
-        # have to reinitialize the database
-        if self._db_initialized:
-            self._dbman.reinit()
-        else:
-            self._db_initialized= True
-            # well, it will be in just a second
-
-        self._load_active_profile_data()
 
     def new_profile(self, name, copy_from=None):
         """
@@ -252,7 +276,7 @@ class _ModManager:
         self._profileman.rename_profile(profile, new_name)
 
         if profile is self.profile:
-            self._configman.update_genvalue(ks_ini.LASTPROFILE,
+            self._configman.update_genvalue(ks_ini.LAST_PROFILE,
                                             profile.name)
 
     def get_profiles(self, names_only=True):
@@ -275,7 +299,8 @@ class _ModManager:
         :return: current value of the setting
         """
         if self.profile is not None:
-            return self.profile.Config[section][name]
+            return self.profile.get_setting(section, name)
+            # return self.profile.Config[section][name]
         return default
 
     def set_profile_setting(self, name, section, value):
@@ -290,6 +315,23 @@ class _ModManager:
     ##=================================
     ## Internal profile mgmt
     ##---------------------------------
+
+    def _set_profile(self, profile_name):
+        ## internal handler
+
+        self._profileman.set_active_profile(profile_name)
+
+        # have to reinitialize the database
+        if self._db_initialized:
+            self._dbman.reinit()
+        else:
+            self._db_initialized= True
+            # well, it will be in just a second
+
+        # recheck the directories
+        self.check_dirs()
+
+        self._load_active_profile_data()
 
     def _load_active_profile_data(self):
         """
@@ -312,11 +354,13 @@ class _ModManager:
             self.LOGGER << "Could not load mod info; reading " \
                        "from configured mods directory."
 
-            self._dbman.get_mod_data_from_directory(
-                self.get_directory(ks_dir.MODS))
+            if self._valid_dirs[ks_dir.MODS]:
+                self._dbman.get_mod_data_from_directory()
+                # and [re]create the cache file
+                self.save_mod_list()
+            else:
+                self.LOGGER.error("Mod directory invalid or unset")
 
-            # and [re]create the cache file
-            self.save_mod_list()
 
         # clear the "list of enabled mods" cache (used by installer)
         self._enabledmods = None
@@ -325,24 +369,38 @@ class _ModManager:
         # _logger << "Loading list of all Mod Files on disk"
 
         # make sure we use the profile override if there is one
-        self._dbman.load_all_mod_files(
-            self.get_directory(ks_dir.MODS))
+        if self._valid_dirs[ks_dir.MODS]:
+            self._dbman.load_all_mod_files()
+        else:
+            self.LOGGER.error("Mod directory invalid or unset")
+
 
         # let's also add the files from the base
         # Skyrim Data folder to the db
 
-        sky_dir = self.get_directory(ks_dir.SKYRIM)
+        # sky_dir = self.get_directory(ks_dir.SKYRIM)
 
         # first check that we found the Skyrim directory
-        if not sky_dir:
-            self.add_alert(alerts.dnf_skyrim)
-            self.LOGGER.warning("The main Skyrim folder could not be "
-                           "found. That's going to be a problem.")
-        else:
-            for f in Path(sky_dir).iterdir():
+        if self._valid_dirs[ks_dir.SKYRIM]:
+
+            sky_dir = self._pathman.path(ks_dir.SKYRIM)
+            for f in sky_dir.iterdir():
                 if f.name.lower() == "data":
                     self._dbman.add_files_from_dir('Skyrim', str(f))
                     break
+        else:
+            self.LOGGER.warning("The main Skyrim folder could not be "
+                                "found. That's going to be a problem.")
+
+        # if not sky_dir:
+        #     # self.add_alert(alerts.dnf_skyrim)
+        #     self.LOGGER.warning("The main Skyrim folder could not be "
+        #                    "found. That's going to be a problem.")
+        # else:
+        #     for f in sky_dir.iterdir():
+        #         if f.name.lower() == "data":
+        #             self._dbman.add_files_from_dir('Skyrim', str(f))
+        #             break
 
         # [print(*r) for r in _dataman._con.execute("select *
         # from modfiles where directory='Skyrim'")]
@@ -398,8 +456,12 @@ class _ModManager:
 
         :return: True if no errors encountered, False otherwise
         """
-        return self._dbman.validate_mods_list(
-            self.get_directory(ks_dir.MODS))
+
+        if not self._valid_dirs[ks_dir.MODS]:
+            self.LOGGER.error("Mod directory invalid or unset")
+            return False
+
+        return self._dbman.validate_mods_list()
 
 
     ##=============================================
@@ -512,6 +574,9 @@ class _ModManager:
         :param profile_override:
         """
         self._pathman.set_path(key, path, profile_override)
+
+        # check if dirs valid
+        self.check_dirs()
 
     def get_directory(self, key, use_profile_override=True):
         """
