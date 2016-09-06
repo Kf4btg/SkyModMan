@@ -1,8 +1,5 @@
 class Error(Exception):
-    pass
-
-class DependencyError(Error):
-    pass
+    """Base class for all app-specific errors"""
 
 class GeneralError(Error):
     """
@@ -20,6 +17,7 @@ class DatabaseError(GeneralError):
 
 #----------------------------
 class ConfigError(Error):
+    """Base class for configuration-related exceptions."""
     def __init__(self, key, section):
         self.section = section
         self.key = key
@@ -42,8 +40,25 @@ class InvalidConfigKeyError(ConfigError):
         return "'{0.key}' is not a valid configuration key for section '{0.section}'.".format(self)
 
 #---------------------------
+class InvalidAppDirectoryError(GeneralError):
+    """Raised when one of the important directories required for app-
+    function is invalid, unset, or missing."""
+    def __init__(self, dir_key, current_value, msg="A required directory is invalid or unset"):
+        super().__init__(msg)
+        self.dir_key = dir_key
+        self.curr_path = current_value
+
+    def __str__(self):
+        return "{msg}: directory {which}, currently {what}".format(
+            msg=self.msg,
+            which=self.dir_key,
+            what="'%s'" % self.curr_path if self.curr_path else 'unset'
+        )
+
+#---------------------------
 
 class ProfileError(Error):
+    """General Error for exceptions related to Profiles."""
     def __init__(self, profilename, msg='{name}'):
         self.profilename = profilename
         self.msg = msg
@@ -52,22 +67,27 @@ class ProfileError(Error):
         return self.msg.format(name=self.profilename)
 
 class ProfileDoesNotExistError(ProfileError):
+    """Raised when trying to load a Profile that cannot be found"""
     def __init__(self, profilename):
         super().__init__(profilename,
                          "No profile with the name '{name}' could be found.")
 
 class ProfileExistsError(ProfileError):
+    """Raised when attempting to create a profile with the same name
+    of one which already exists."""
     def __init__(self, profilename):
         super().__init__(profilename,
                          "A profile matching the name '{name}' already exists.")
 
 class ProfileDeletionError(ProfileError):
+    """Raised when a profile could not (fully) deleted"""
     def __init__(self, profilename):
         super().__init__(profilename,
                          "The profile directory for '{name}' could be"
                          " fully removed")
 
 class DeleteDefaultProfileError(ProfileError):
+    """Raised when trying to delete the default profile."""
     def __init__(self):
         super().__init__('default',
                          "The default profile cannot be deleted or renamed")
@@ -134,11 +154,14 @@ class FilesystemDesyncError(Error):
 
 #------------------------------
 class ArchiverError(Error):
-    pass
+    """Indicates an error during archive extraction."""
 
 #------------------------------
 class FomodError(Error):
     pass
+
+class DependencyError(Error):
+    """Raised if a mod dependency is not satisfied during installation."""
 
 #------------------------------
 class CancelMerge(Error):
@@ -148,5 +171,7 @@ class CancelMerge(Error):
 
 class MergeSkipDir(Error):
     """
-    Raised when a conflicting sub-directory is encountered during a directory-merge operation. Indicates to caller that the given directory is being ignored and only its contents will be moved.
+    Raised when a conflicting sub-directory is encountered during a
+    directory-merge operation. Indicates to caller that the given
+    directory is being ignored and only its contents will be moved.
     """
