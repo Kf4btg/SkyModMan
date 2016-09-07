@@ -1,4 +1,5 @@
 from functools import partial
+from collections import defaultdict
 import os
 
 from PyQt5.QtWidgets import QDialog, QFileDialog, QDialogButtonBox
@@ -53,8 +54,8 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         ## our constant key-strings ##
 
         ## Default Path values
-        # returns empty strings for unset paths
-        self.paths={p:Manager.get_directory(p, False) for p in D}
+        # with nofail, returns empty strings for unset paths
+        self.paths={p:Manager.get_directory(p, False, nofail=True) for p in D}
 
         ## associate text boxes with directories
         self.path_boxes = {
@@ -126,8 +127,39 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         self._selected_profile = self.combo_profiles.currentData()
         """:type: skymodman.managers.profiles.Profile"""
 
+        # track when the user makes config changes so the buttons
+        # can be enabled/disabled as needed
+        # actually, right now it's enabled when anything is clicked/
+        # edited and only disabled after Apply is clicked
+        self._unchanged = True
+        # tracked changed elements by object id()
+        # ...I think this will work...
+        # self._changed = set()
+
+
+        # mapping of profiles to values of overrides
+        # dict [profile_name: dict[dir_key: override_value]]
+        self._override_paths = defaultdict(dict)
+
+        # get easier references to ok/apply buttons
+        self.btn_apply = self.prefs_btnbox.button(QDialogButtonBox.Apply)
+        self.btn_ok = self.prefs_btnbox.button(QDialogButtonBox.Ok)
+
+        # initially disabled
+        self.btn_apply.setEnabled(False)
+
         ## and now finish setting up the UI
         self.setupMoreUI()
+
+
+    def _mark_changed(self):
+        if self._unchanged:
+            self._unchanged = False
+            self.btn_apply.setEnabled(True)
+
+    def _mark_unchanged(self):
+        self._unchanged = True
+        self.btn_apply.setEnabled(False)
 
     def setupMoreUI(self):
         """More adjustments to the UI"""
@@ -143,9 +175,13 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         # -- checkboxes should reflect current settings
         self.cbox_restore_size.setChecked(
             app_settings.Get(UI.RESTORE_WINSIZE))
+        # enable Apply button after clicking
+        self.cbox_restore_size.toggled.connect(self._mark_changed)
 
         self.cbox_restore_pos.setChecked(
             app_settings.Get(UI.RESTORE_WINPOS))
+        self.cbox_restore_pos.toggled.connect(self._mark_changed)
+
 
         # check the appropriate radio button based on current policy;
         # associate a change in the radio selection with updating
@@ -189,9 +225,6 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         ## setup any UI-element associated with it to
         ## the correct initial status.
 
-        # game-related
-        gdirs = (D.SKYRIM, D.MODS, D.VFS)
-
         # so many things are keyed with the app directory
         for d in D:
             dpath = self.paths[d]
@@ -203,7 +236,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                 partial(self.choose_directory, d))
 
             # essentially all but the Profiles dir
-            if d in gdirs:
+            if d in constants.overrideable_dirs:
 
                 # handle indicator labels
                 lbl = self.indicator_labels[d]
@@ -224,11 +257,24 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
                 ##---------------------##
                 # override buttons/choosers
-                self.override_boxes[d].setText(self._selected_profile.diroverride(d, ignore_enabled=True))
+
+                # x is just a shortcut for the stupid-long dict selector
+                x = self._override_paths[self._selected_profile.name]
+
+                # record current value of override
+                x[d] = {
+                    'enabled': self._selected_profile.override_enabled(d),
+                    'value': self._selected_profile.diroverride(
+                                        d, ignore_enabled=True)
+                }
+
+
+                self.override_boxes[d].setText(x[d]['value'])
 
                 obtn = self.override_buttons[d]
+                is_enabled = x[d]['enabled']
                 # if override is enabled in profile, check the button
-                obtn.setChecked(self._selected_profile.override_enabled(d))
+                obtn.setChecked(is_enabled)
 
                 # connect toggle signal to profile-config-updater
                 obtn.toggled.connect(partial(self.on_override_toggled, d))
@@ -236,8 +282,8 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                 # the buttons are already set to toggle the enable status of
                 # the entry field/dir chooser when pressed, so make sure those
                 # are in the correct enable state to begin with
-                self.override_boxes[d].setEnabled(obtn.isChecked())
-                self.override_choosers[d].setEnabled(obtn.isChecked())
+                self.override_boxes[d].setEnabled(is_enabled)
+                self.override_choosers[d].setEnabled(is_enabled)
 
                 # connect override chooser buttons to file dialog
                 self.override_choosers[d].clicked.connect(
@@ -249,9 +295,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         self.pathEditFinished.connect(self.on_path_edit)
 
         ## apply button ##
-        # btn_apply = self.prefs_btnbox.button(QDialogButtonBox.Apply)
-        self.prefs_btnbox.button(QDialogButtonBox.Apply
-                                 ).clicked.connect(self.apply_changes)
+        self.btn_apply.clicked.connect(self.on_apply_button_pressed)
 
         # also apply changes when clicking OK
         # noinspection PyUnresolvedReferences
@@ -269,6 +313,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
         if enabled:
             self._selected_plp = constants.ProfileLoadPolicy(value)
+            self._mark_changed()
 
     @pyqtSlot(str)
     def on_path_edit(self, key):
@@ -277,6 +322,12 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         """
         new_value = self.path_boxes[key].text()
         label = self.indicator_labels[key]
+
+        if new_value != self.paths[key]:
+            # this will only matter the first time, but still...
+            # if the user edits the path box and the new value
+            # is different than the current path, enable apply button
+            self._mark_changed()
 
         # if they cleared the box, mark it missing
         if not new_value:
@@ -322,20 +373,39 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         """When the selected profile changes, we need to update the
         paths displayed on the profiles tab"""
 
-        for d in (D.SKYRIM, D.MODS, D.VFS):
-            self.override_boxes[d].setText(
-                self._selected_profile.diroverride(d,
-                                                   ignore_enabled=True))
+        for d in constants.overrideable_dirs:
+
+            # if we've seen this profile before, use its stored
+            # override info
+            if self._selected_profile in self._override_paths:
+                # 'x' is just a shortcut
+                x = self._override_paths[self._selected_profile.name]
+            else:
+                # due to defaultdict(), this creates the entry
+                x = self._override_paths[self._selected_profile.name]
+
+                # record current value of override
+                x[d] = {
+                    'enabled': self._selected_profile.override_enabled(d),
+                    'value':   self._selected_profile.diroverride(
+                        d, ignore_enabled=True)
+                }
+
+
+            self.override_boxes[d].setText(x[d]['value'])
 
             obtn = self.override_buttons[d]
+
+            is_enabled = x[d]['enabled']
+
             # if override is enabled in profile, check the button
-            obtn.setChecked(self._selected_profile.override_enabled(d))
+            obtn.setChecked(is_enabled)
 
             # the buttons are already set to toggle the enable status of
             # the entry field/dir chooser when pressed, so make sure those
             # are in the correct enable state to begin with
-            self.override_boxes[d].setEnabled(obtn.isChecked())
-            self.override_choosers[d].setEnabled(obtn.isChecked())
+            self.override_boxes[d].setEnabled(is_enabled)
+            self.override_choosers[d].setEnabled(is_enabled)
 
 
     @pyqtSlot(bool)
@@ -345,6 +415,9 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         selector, update the config to mark the current profile as
         default. If they uncheck it, mark 'default' as default...
         """
+
+        # this is applied immediately
+
         if checked:
             if self._selected_profile:
                 Manager.Config.default_profile = self._selected_profile.name
@@ -371,9 +444,15 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         :param dirkey:
         :param enabled:
         """
+        self._override_paths[self._selected_profile.name][
+            dirkey]['enabled'] = enabled
         ## XXX: should we wait until Apply to save this? or do it immediately like this?
         self._selected_profile.override_enabled(dirkey, enabled)
 
+    @pyqtSlot()
+    def on_apply_button_pressed(self):
+        self.apply_changes()
+        self._mark_unchanged()
 
     @pyqtSlot()
     def apply_changes(self):
@@ -443,11 +522,17 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                         self._update_path(key, newpath)
 
         # and now let's do it again for the overrides
+
         sp = self._selected_profile
-        for d, box in self.override_boxes.items():
-            newovrd = box.text()
+        ovrdict = self._override_paths[sp]
+
+        # use values held in the override_paths collection;
+        # NOTE: this only updates the profile that is currently selected at the time this method is called. Is this how it should work? Should we save all changes? should we reset any changes made when the profile is changed without hitting apply?
+        for d, override_info in ovrdict.items():
+            newovrd = override_info['value']
 
             if newovrd == sp.diroverride(d):
+                # no change
                 continue
 
             if not newovrd or (os.path.isabs(newovrd)
@@ -458,10 +543,24 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                 # selected profile here
                 sp.setoverride(d, newovrd)
 
-    def _update_path(self, key, newpath, is_override=False):
-        Manager.set_directory(key, newpath, is_override)
-        if not is_override:
-            self.paths[key] = newpath
+
+        # for d, box in self.override_boxes.items():
+        #     newovrd = box.text()
+        #
+        #     if newovrd == sp.diroverride(d):
+        #         continue
+        #
+        #     if not newovrd or (os.path.isabs(newovrd)
+        #                        and os.path.exists(newovrd)):
+        #         # we can't just call Manager.set_directory(...,...,True)
+        #         # because that method only sets overrides for the active
+        #         # profile, which is not necessarily the same as the
+        #         # selected profile here
+        #         sp.setoverride(d, newovrd)
+
+    def _update_path(self, key, newpath):
+        Manager.set_directory(key, newpath)
+        self.paths[key] = newpath
 
 
     @pyqtSlot(str)
@@ -484,7 +583,11 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         # is one...maybe that's a Qt bug, though. Or maybe it's because of the
         # hidden folder in the path?
 
-        start = self._selected_profile.diroverride(folder) if override else self.paths[folder]
+        ovrdict = self._override_paths[self._selected_profile.name]
+
+
+        start = ovrdict[folder]['value'] if override else self.paths[folder]
+        # start = self._selected_profile.diroverride(folder) if override else self.paths[folder]
 
         # noinspection PyTypeChecker
         chosen = QFileDialog.getExistingDirectory(self,
@@ -495,10 +598,13 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
             if override:
                 self.override_boxes[folder].setText(chosen)
+                ovrdict[folder]['value'] = chosen
             else:
                 self.path_boxes[folder].setText(chosen)
-                if folder in self.indicator_labels.keys():
+                if folder in self.indicator_labels:
                     self.indicator_labels[folder].setVisible(False)
+            # enable apply button if needed
+            self._mark_changed()
 
 
 
