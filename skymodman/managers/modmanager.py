@@ -75,11 +75,15 @@ class _ModManager:
 
         # tracking which dirs are valid will make things easier
         self._valid_dirs = {d:False for d in ks_dir}
-        # do initial check of directories
-        self.check_dirs()
 
-        if self._valid_dirs[ks_dir.MODS]:
-            self._installed_mods = self._pathman.list_mod_folders()
+        # make sure we have a valid profiles directory
+        self.check_dir(ks_dir.PROFILES)
+
+        # do initial check of directories
+        # self.check_dirs()
+
+        # if self._valid_dirs[ks_dir.MODS]:
+        #     self._installed_mods = self._pathman.list_mod_folders()
 
     ## Sub-manager access properties ##
 
@@ -189,6 +193,10 @@ class _ModManager:
         self.alerts -= to_remove
 
     def _init_diralerts(self):
+        """Create pre-constructed Alerts to use when necessary. Using
+        preconstructed instances prevents duplication of alerts when
+        stored by their hash-value, such as in a set or dict."""
+
         self._diralerts={
             ks_dir.SKYRIM: Alert(
                 level=Alert.HIGH,
@@ -237,6 +245,8 @@ class _ModManager:
             self._valid_dirs[key]=False
             self.add_alert(self._diralerts[key])
 
+        return self._valid_dirs[key]
+
     def check_dirs(self):
         """
         See if all the necessary directories are defined/present. Add
@@ -259,7 +269,12 @@ class _ModManager:
         :param profile:
         """
 
-        # TODO: would it be possible...to make a context manager for profiles? I.e., the entire time a profile is active, we'd be within the "with" statement of a context manager? And when it closes we make sure to write all changed data? Or, it that's not feasible, maybe just the switch mechanics below could be wrapped in one for better error handling.
+        # TODO: would it be possible...to make a context manager for
+        # profiles? I.e., the entire time a profile is active, we'd be
+        # within the "with" statement of a context manager? And when it
+        # closes we make sure to write all changed data? Or, it that's
+        # not feasible, maybe just the switch mechanics below could be
+        # wrapped in one for better error handling.
 
         # save this in case of a rollback
         old_profile = self.profile.name if self.profile else None
@@ -358,9 +373,8 @@ class _ModManager:
         :param default: value to return when there is no active profile
         :return: current value of the setting
         """
-        if self.profile is not None:
+        if self.profile:
             return self.profile.get_setting(section, name)
-            # return self.profile.Config[section][name]
         return default
 
     def set_profile_setting(self, name, section, value):
@@ -369,7 +383,7 @@ class _ModManager:
         :param str name: Name of the setting
         :param value: the new value of the setting
         """
-        if self.profile is not None:
+        if self.profile:
             self.profile.save_setting(section, name, value)
 
     ##=================================
@@ -377,98 +391,302 @@ class _ModManager:
     ##---------------------------------
 
     def _set_profile(self, profile_name):
-        ## internal handler
+        """internal handler for assigning new profile"""
 
-        # _ddirs = (ks_dir.SKYRIM, ks_dir.MODS, ks_dir.VFS)
+        # if we have no active profile, treat this as a 'first run'
+        if not self.profile:
+            self._set_first_profile(profile_name)
+        else:
+            self._change_profile(profile_name)
 
         # keep references to currently configured directories
-        curr_dirs = {d:self.get_directory(d, nofail=True) for d in overrideable_dirs}
+        # curr_dirs = {d:self.get_directory(d, nofail=True)
+        #              for d in overrideable_dirs}
+        #
+        # self._profileman.set_active_profile(profile_name)
+        #
+        # # see if configured dirs changed:
+        # dir_changed = {}
+        # for d in overrideable_dirs:
+        #     try:
+        #         dir_changed[d] = self.get_directory(d)!=curr_dirs[d]
+        #     except exceptions.InvalidAppDirectoryError:
+        #         # add alert on invalid new dir
+        #         self.add_alert(self._diralerts[d])
+        #         # dir has changed only if current (previous) was valid
+        #         dir_changed[d] = not(curr_dirs[d])
+        #     else:
+        #         # remove any alerts if dir is valid
+        #         self.remove_alert(self._diralerts[d])
+        #
+        # # dir_changed = {d:curr_dirs[d]!=self.get_directory(d) for d in _ddirs}
+        #
+        # moddir_changed = self._modlist_needs_refresh = dir_changed[ks_dir.MODS]
+        # # if the mods directory changed, make sure modlist gets refreshed
+        # # self._modlist_needs_refresh = dir_changed[ks_dir.MODS]
+        #
+        #
+        # # have to reinitialize the database
+        #     # only drop the 'mods' or 'modfiles' tables
+        #     # if the mods-directory changed
+        # self._dbman.reinit(mods=moddir_changed, files=moddir_changed)
+        #
+        # self.LOGGER << "loading data for active profile: {}".format(
+        #                self.profile.name)
+        #
+        # # try to read modinfo file
+        # if (dir_changed[ks_dir.MODS] or not self._db_initialized) and self._dbman.load_mod_info(self.profile.modinfo):
+        #     # if successful, validate modinfo (i.e. synchronize the list
+        #     # of mods from the modinfo file with mods actually
+        #     # present in Mods directory)
+        #
+        #     self.validate_mod_installs()
+        # elif self._db_initialized and not dir_changed[ks_dir.MODS] and self._dbman.update_table_from_modinfo(self.profile.modinfo):
+        #     # if mod dir did not change, just try to update info
+        #     self.LOGGER << "updated mod table from mod info file"
+        # else:
+        #
+        #     # if it fails, (re-)read mod data from disk and create
+        #     # a new mod_info file
+        #     self.LOGGER << "Could not load mod info; reading " \
+        #                "from configured mods directory."
+        #
+        #     # if self._valid_dirs[ks_dir.MODS]:
+        #     try:
+        #         self._dbman.get_mod_data_from_directory()
+        #     # else:
+        #     except exceptions.InvalidAppDirectoryError as e:
+        #         self.LOGGER.error(e)
+        #         # self.LOGGER.error("Mod directory invalid or unset")
+        #     else:
+        #         # and [re]create the cache file
+        #         self.save_mod_info()
+        #
+        #
+        # # clear the "list of enabled mods" cache (used by installer)
+        # self._enabledmods = None
+        #
+        # # analyze mod files for conflicts
+        # self.analyze_mod_files()
+
+    def _set_first_profile(self, profile_name):
+        """Called when the first profile is selected (and any time we
+        go from (no profile)->(some profile))"""
+
+        self.LOGGER << "Loading initial profile: {}".format(profile_name)
 
         self._profileman.set_active_profile(profile_name)
+
+        self.check_dirs()
+
+        if self._change_mods_directory():
+            self.analyze_mod_files()
+
+        self._enabledmods = None
+
+        # info_loaded = False
+        # if self._dbman.load_mod_info(self.profile.modinfo):
+        #     self.LOGGER << "Successfully read cached mod info"
+        #
+        #     self.validate_mod_installs()
+        #     info_loaded = True
+        # else:
+        #     self.LOGGER << "Unable to load cached mod info; " \
+        #                    "constructing cache from Mods directory"
+        #
+        #     try:
+        #         self._dbman.get_mod_data_from_directory()
+        #     # else:
+        #     except exceptions.InvalidAppDirectoryError as e:
+        #         self.LOGGER.error(e)
+        #         # self.LOGGER.error("Mod directory invalid or unset")
+        #     else:
+        #         # and [re]create the cache file
+        #         self.save_mod_info()
+        #         info_loaded = True
+
+        # if we successfully managed to load/generate mod info,
+        # analyze mod files for conflicts
+        # if info_loaded:
+        #     self.analyze_mod_files()
+
+    def _change_profile(self, profile_name):
+        """
+        Called to change from one profile to another (as opposed to
+        starting with no profile)
+
+        :param profile_name:
+        """
+
+        self.LOGGER << "loading data for profile: {}".format(
+            self.profile.name)
+
+        # keep references to currently (soon to be previously)
+        # configured directories
+        prev_dirs = {d: self.get_directory(d, nofail=True)
+                     for d in overrideable_dirs}
+
+        self._profileman.set_active_profile(profile_name)
+
+        # ...only the MODS dir is ever checked; is there actually a
+        # need (other than setting alerts) to track them all here?
+        # Or is setting alerts a good-enough reason?
 
         # see if configured dirs changed:
         dir_changed = {}
         for d in overrideable_dirs:
             try:
-                dir_changed[d] = self.get_directory(d)!=curr_dirs[d]
+                dir_changed[d] = self.get_directory(d) != prev_dirs[d]
             except exceptions.InvalidAppDirectoryError:
                 # add alert on invalid new dir
                 self.add_alert(self._diralerts[d])
-                # dir has changed only if current (previous) was valid
-                dir_changed[d] = not(curr_dirs[d])
+                # dir has changed only if previous was valid
+                dir_changed[d] = bool(prev_dirs[d])
             else:
                 # remove any alerts if dir is valid
                 self.remove_alert(self._diralerts[d])
 
-        # dir_changed = {d:curr_dirs[d]!=self.get_directory(d) for d in _ddirs}
+        moddir_changed = self._modlist_needs_refresh = dir_changed[
+                ks_dir.MODS]
 
-        # if the mods directory changed, make sure modlist gets refreshed
-        self._modlist_needs_refresh = dir_changed[ks_dir.MODS]
-
-
-        # have to reinitialize the database
-        if self._db_initialized:
-            # only drop the 'mods' or 'modfiles' tables
-            # if the mods-directory changed
-
-            self._dbman.reinit(mods=self._modlist_needs_refresh,
-                               files=self._modlist_needs_refresh)
-
-        # else:
-            # well, it will be in just a second
-
-        # recheck the directories if any changed
-        # if any(dir_changed.values()):
-        #     self.check_dirs()
-
-        # self._load_active_profile_data()
-
-    # def _load_active_profile_data(self):
-    #     """
-    #     Asks the Database Manager to load the information stored
-    #     on disk for the given profile into an in-memory database
-    #     that will be used to provide data to the rest of the app.
-    #     """
-        self.LOGGER << "loading data for active profile: {}".format(
-                       self.profile.name)
-
-        # try to read modinfo file
-        if (dir_changed[ks_dir.MODS] or not self._db_initialized) and self._dbman.load_mod_info(self.profile.modinfo):
-            # if successful, validate modinfo (i.e. synchronize the list
-            # of mods from the modinfo file with mods actually
-            # present in Mods directory)
-            self._db_initialized= True
-
-            self.LOGGER << "validating installed mods"
-            self.validate_mod_installs()
-        elif self._db_initialized and not dir_changed[ks_dir.MODS] and self._dbman.update_table_from_modinfo(self.profile.modinfo):
-            # if mod dir did not change, just try to update info
-            self.LOGGER << "updated mod table from mod info file"
+        if moddir_changed:
+            info_loaded = self._change_mods_directory()
         else:
-            self._db_initialized= True
+            info_loaded = self._update_table_from_modinfo()
 
-            # if it fails, (re-)read mod data from disk and create
-            # a new mod_info file
-            self.LOGGER << "Could not load mod info; reading " \
-                       "from configured mods directory."
-
-            # if self._valid_dirs[ks_dir.MODS]:
-            try:
-                self._dbman.get_mod_data_from_directory()
-            # else:
-            except exceptions.InvalidAppDirectoryError as e:
-                self.LOGGER.error(e)
-                # self.LOGGER.error("Mod directory invalid or unset")
-            else:
-                # and [re]create the cache file
-                self.save_mod_info()
-
+        # if we successfully managed to load/generate mod info,
+        # analyze mod files for conflicts
+        if info_loaded:
+            self.analyze_mod_files()
 
         # clear the "list of enabled mods" cache (used by installer)
         self._enabledmods = None
 
+        # info_loaded = False
+        # if moddir_changed:
+        #     # if the mod directory changed, reinitialize all tables
+        #     self._dbman.reinit()
+        #
+        #     # try to read modinfo file
+        #     if self._dbman.load_mod_info(self.profile.modinfo):
+        #         info_loaded = True
+        #
+        #         # if successful, validate modinfo (i.e. synchronize the list
+        #         # of mods from the modinfo file with mods actually
+        #         # present in Mods directory)
+        #         self.validate_mod_installs()
+        # else:
+        #     # if the mod directory stayed the same, do not clear
+        #     # the mods or modfiles tables
+        #     self._dbman.reinit(mods=False, files=False)
+        #
+        #     # try to read and update the table from the modinfo file
+        #     info_loaded =  self._dbman.update_table_from_modinfo(
+        #         self.profile.modinfo)
+        #
+        # if not info_loaded:
+        #     # if it fails, (re-)read mod data from disk and create
+        #     # a new mod_info file
+        #     self.LOGGER << "Unable to load cached mod info; " \
+        #                    "constructing cache from Mods directory"
+        #
+        #     try:
+        #         self._dbman.get_mod_data_from_directory()
+        #     except exceptions.InvalidAppDirectoryError as e:
+        #         self.LOGGER.error(e)
+        #     else:
+        #         # and [re]create the cache file
+        #         self.save_mod_info()
+        #         info_loaded = True
+
+        # # if we successfully managed to load/generate mod info,
+        # # analyze mod files for conflicts
+        # if info_loaded:
+        #     self.analyze_mod_files()
+        #
+        # # clear the "list of enabled mods" cache (used by installer)
+        # self._enabledmods = None
+
+    def _change_mods_directory(self):
+        """
+        If the user changes the currently-configured mod installation
+        directory (whether through preferences or by switching profiles),
+        re-analyze the mod-info file and contents of the new directory
+        """
+
+        # first, reinitialize the db tables
+        self._dbman.reinit()
+
+        # try to read modinfo file
+        if self._dbman.load_mod_info(self.profile.modinfo):
+            # if successful, validate modinfo (i.e. synchronize the list
+            # of mods from the modinfo file with mods actually
+            # present in Mods directory)
+            self.validate_mod_installs()
+            return True
+        else:
+            # if it fails, (re-)read mod data from disk and create
+            # a new mod_info file
+            self.LOGGER << "Unable to load cached mod info; " \
+                           "constructing cache from Mods directory"
+
+            return self._gen_modinfo()
+
+        # finally, if we successfully managed to load/generate mod info,
         # analyze mod files for conflicts
-        self.analyze_mod_files()
+        # if info_loaded:
+        #     self.analyze_mod_files()
+
+    def _update_table_from_modinfo(self):
+        """
+        Read the modinfo file of the active profile and update the
+        "mods" db table with the info from it.  This assumes that the
+        modinfo file and the "mods" table contain the same mod entries
+        (just, of course, with different details like 'enabled', 'name',
+        etc.)
+
+        :return: True if modinfo file was successfully read or generated
+        """
+
+        # reinitialize only the hidden files table
+        self._dbman.reinit(mods=False, files=False)
+
+        # first attempt to read the modinfo file and update the table
+        # values from it; if it cannot be read, attempt to generate it.
+        return self._dbman.update_table_from_modinfo(
+            self.profile.modinfo) or self._gen_modinfo()
+
+
+
+    def _gen_modinfo(self):
+        """
+        Generate the modinfo file for the current profile by reading
+        the folders present in the mods directory
+
+        :return: True if the modinfo file was successfully created,
+            False if not.
+        """
+
+        # at this point, we might as well just drop the mods table
+        # and regenerate, since we'd have to set everything back
+        # to default, anyway.
+
+        self._dbman.reinit()
+
+        try:
+            # populate the mods table from the main mods directory
+            self._dbman.get_mod_data_from_directory()
+        except exceptions.InvalidAppDirectoryError as e:
+            # unless the mod directory is somehow invalid, then
+            # return False
+            self.LOGGER.error(e)
+            return False
+        else:
+            # and (re)generate the modinfo file using default values
+            self.save_mod_info()
+            # return success
+            return True
+
 
     def analyze_mod_files(self):
         """
@@ -557,6 +775,7 @@ class _ModManager:
 
         :return: True if no errors encountered, False otherwise
         """
+        self.LOGGER << "Validating installed mods"
 
         # if not self._valid_dirs[ks_dir.MODS]:
         #     self.LOGGER.error("Mod directory invalid or unset")

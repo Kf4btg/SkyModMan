@@ -97,6 +97,12 @@ class DBManager(Submanager):
     def __init__(self, *args):
         super().__init__(*args)
 
+        # indicates if fill_mods_table() has ever been called
+        self._initialized = False
+
+        # track which tables are currently empty
+        self._empty = {tn:True for tn in self._tablenames}
+
         # create db in memory
         self._con = getconn(":memory:")
         # self._con.set_trace_callback(print)
@@ -151,6 +157,10 @@ class DBManager(Submanager):
         """
         return self.get_mod_info(True).fetchall()
 
+    @property
+    def is_initialized(self):
+        return self._initialized
+
 
     ######################
     ## Table management ##
@@ -167,6 +177,7 @@ class DBManager(Submanager):
 
         # self.LOGGER.debug("dropping mods table")
 
+
         with self._con:
             # take advantage of the "truncate optimization" feature in sqlite
             # to remove all rows quicker and easier than dropping and recreating.
@@ -177,9 +188,18 @@ class DBManager(Submanager):
             #     self._con.execute("DELETE FROM {table}".format(table=n))
 
             # security???
-            if mods: self._con.execute("DELETE FROM mods")
-            if files: self._con.execute("DELETE FROM modfiles")
-            if hidden: self._con.execute("DELETE FROM hiddenfiles")
+            if mods and not self._empty['mods']:
+                self._con.execute("DELETE FROM mods")
+                self._empty['mods'] = True
+
+            if files and not self._empty['modfiles']:
+                self._con.execute("DELETE FROM modfiles")
+                self._empty['modfiles'] = True
+
+            if hidden and not self._empty['hiddenfiles']:
+                self._con.execute("DELETE FROM hiddenfiles")
+                self._empty['hiddenfiles'] = True
+
 
     # def reset_table(self, table_name):
     #     """
@@ -480,22 +500,26 @@ class DBManager(Submanager):
         with json_source.open('r') as f:
             try:
                 hiddenfiles = json.load(f)
-                for mod, files in hiddenfiles.items():
-                    # gethiddenfiles returns a list of 1-tuples,
-                    # each one with a filepath
-                    hfiles = self._gethiddenfiles(files, "", [])
+                if hiddenfiles:
+                    # if there were any listed, mark table non-empty
+                    self._empty['hiddenfiles'] = False
 
-                    # we're committing to the db after each mod is
-                    # handled; waiting until the end might speed things
-                    # up, but doing it this way means that if there's a
-                    # problem with one of the mods, we only rollback
-                    # that one transaction instead of losing the info
-                    # for EVERY mod. Savepoints may be another approach.
-                    with self._con:
-                        self._con.executemany(
-                            "INSERT INTO hiddenfiles VALUES (?, ?)",
-                            zip(repeat(mod), hfiles)
-                        )
+                    for mod, files in hiddenfiles.items():
+                        # gethiddenfiles returns a list of 1-tuples,
+                        # each one with a filepath
+                        hfiles = self._gethiddenfiles(files, "", [])
+
+                        # we're committing to the db after each mod is
+                        # handled; waiting until the end might speed things
+                        # up, but doing it this way means that if there's a
+                        # problem with one of the mods, we only rollback
+                        # that one transaction instead of losing the info
+                        # for EVERY mod. Savepoints may be another approach.
+                        with self._con:
+                            self._con.executemany(
+                                "INSERT INTO hiddenfiles VALUES (?, ?)",
+                                zip(repeat(mod), hfiles)
+                            )
 
                 # [print(*r, sep="\t|\t") for r in
                 #  self._con.execute("select * from hiddenfiles")]
@@ -595,7 +619,6 @@ class DBManager(Submanager):
 
         return c
 
-
     def files_hidden(self, for_mod):
         """
         Yield paths of currently hidden files for the given mod
@@ -609,7 +632,6 @@ class DBManager(Submanager):
             (for_mod, )
         ))
 
-
     # def fill_mods_table(self, mod_list, doprint=False):
     def fill_mods_table(self, mod_list):
         """
@@ -621,6 +643,10 @@ class DBManager(Submanager):
         :param Iterable[tuple] mod_list:
         """
 
+        if not self._empty['mods']:
+            raise exceptions.DatabaseError("Attempted to populate "
+                                           "non-empty table 'mods'")
+
         # ignore the error field for now
         with self._con:
             # insert the list of row-tuples into the in-memory db
@@ -630,6 +656,9 @@ class DBManager(Submanager):
                     ", ".join("?" * len(db_fields_noerror))
                 ),
                 mod_list)
+
+            # mark db as initialized (if it wasn't already)
+            self._empty['mods'] = False
 
         # db_fields[:-1] to ignore the error field for now
         # (leave it at its default of 0)
@@ -772,7 +801,6 @@ class DBManager(Submanager):
         yield from self._con.execute(
             "SELECT * FROM mods WHERE error = ?", (error_type, ))
 
-
     def get_mod_info(self, raw_cursor = False) :
         """
         Yields Row objects containing all information about installed mods
@@ -797,24 +825,28 @@ class DBManager(Submanager):
 
         """
         # TODO: Perhaps this should be run on every startup? At least to make sure it matches the stored data.
-        import configparser as _config
 
-        mods_dir = self.mainmanager.Paths.path(keystrings.Dirs.MODS)
+        mods_dir = self.mainmanager.get_directory(keystrings.Dirs.MODS,
+                                                  aspath=True)
+
+        # list of installed mod folders
+        installed_mods = self.mainmanager.installed_mods
+
+        import configparser as _config
 
         self.logger.info("Reading mods from mod directory")
         configP = _config.ConfigParser()
 
 
         mods_list = []
-        for moddir in mods_dir.iterdir():
-            # skip any non-directories
-            if not moddir.is_dir(): continue
+        for dirname in installed_mods:
+            moddir = mods_dir / dirname
 
             # since this is the creation of the mods list, we just
             # derive the ordinal from order in which the mod-folders
             # are encountered (likely alphabetical)
             order = len(mods_list)+1
-            dirname = moddir.name
+            # dirname = moddir.name
 
             # self.load_all_mod_files(moddir, order)
 
@@ -842,7 +874,11 @@ class DBManager(Submanager):
                     self.make_mod_entry(ordinal = order,
                                         directory=dirname))
 
-        self.fill_mods_table(mods_list)
+        # so long as the mod directory wasn't empty, populate the table
+        if mods_list:
+            self.fill_mods_table(mods_list)
+        else:
+            self.LOGGER << "Mods directory empty"
 
         del _config
 
@@ -871,12 +907,16 @@ class DBManager(Submanager):
         else:
             mods_dir = self.mainmanager.get_directory(keystrings.Dirs.MODS, aspath=True)
 
+        installed_mods = self.mainmanager.installed_mods
+
         # go through each folder indivually
         with self._con:
-            for modfolder in mods_dir.iterdir():
-                if modfolder.is_dir():
-                    self.add_files_from_dir(modfolder.name,
-                                            str(modfolder))
+            for mdir in installed_mods:
+                self.add_files_from_dir(mdir, str(mods_dir / mdir))
+            # for modfolder in mods_dir.iterdir():
+            #     if modfolder.is_dir():
+            #         self.add_files_from_dir(modfolder.name,
+            #                                 str(modfolder))
 
         # self.LOGGER << "dumping db contents to disk"
         # with open('res/test2.dump.sql', 'w') as f:
@@ -911,6 +951,9 @@ class DBManager(Submanager):
             self._con.executemany(
                 "INSERT INTO modfiles VALUES (?, ?)",
                 zip(repeat(mod_name), mfiles))
+
+            # mark modfiles table non-empty
+            self._empty['modfiles'] = False
 
 
         # try: mfiles.remove('meta.ini') #don't care about these

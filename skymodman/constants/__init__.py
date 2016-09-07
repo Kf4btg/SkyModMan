@@ -44,7 +44,7 @@ _dbflds = _nt("_dbflds", _dbflds_noerr._fields + ("FLD_ERR",))
 
 ## Definitions for actual string values of database field names
 db_fields_noerror = _dbflds_noerr("ordinal", "directory", "name", "modid", "version", "enabled")
-db_fields = _dbflds(db_fields_noerror + ("error",))
+db_fields = _dbflds(*(db_fields_noerror + ("error",)))
 
 ## And a reverse-lookup to find the correct in-order index of a given field
 db_field_order = {fld:db_fields.index(fld) for fld in db_fields}
