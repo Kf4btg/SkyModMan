@@ -34,6 +34,10 @@ class Alert(namedtuple("Alert", "level label desc fix check")):
     """
     __slots__ = ()
 
+    LOW = 0
+    NORMAL = 1
+    HIGH = 2
+
     @property
     def is_active(self):
         """

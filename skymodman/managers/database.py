@@ -8,7 +8,8 @@ from collections import defaultdict
 
 from skymodman import exceptions
 from skymodman.managers import Submanager
-from skymodman.constants import db_fields, ModError, keystrings
+from skymodman.constants import (db_fields, db_fields_noerror,
+                                 db_field_order, ModError, keystrings)
 from skymodman.utils import withlogger, tree
 
 _mcount = count()
@@ -155,8 +156,14 @@ class DBManager(Submanager):
     ## Table management ##
     ######################
 
-    def reinit(self):
-        """Drop the current mods table and reinitialize as empty"""
+    def reinit(self, mods=True, files=True, hidden=True):
+        """
+        Drop the current tables and reinitialize as empty
+
+        :param mods: If True, drop the mods table
+        :param files: If True, drop the modfiles table
+        :param hidden: If True, drop the hiddenfiles table
+        """
 
         # self.LOGGER.debug("dropping mods table")
 
@@ -170,9 +177,9 @@ class DBManager(Submanager):
             #     self._con.execute("DELETE FROM {table}".format(table=n))
 
             # security???
-            self._con.execute("DELETE FROM mods")
-            self._con.execute("DELETE FROM modfiles")
-            self._con.execute("DELETE FROM hiddenfiles")
+            if mods: self._con.execute("DELETE FROM mods")
+            if files: self._con.execute("DELETE FROM modfiles")
+            if hidden: self._con.execute("DELETE FROM hiddenfiles")
 
     # def reset_table(self, table_name):
     #     """
@@ -227,7 +234,7 @@ class DBManager(Submanager):
         :param name: name of the savepoint; does not need to be unique.
             If not provided, the name 'last' will be used.
             ``rollback("last")`` will then return to the most recent
-            time checkpoint() was called.
+            time savepoint() was called.
         :return:
         """
 
@@ -418,12 +425,17 @@ class DBManager(Submanager):
     ## DATA LOADING ##
     ##################
 
-    def load_mod_info(self, json_source) -> bool:
+    def load_mod_info(self, json_source, update_only=False) -> bool:
         """
         read the saved mod information from a json file and
         populate the in-memory database
 
         :param str|Path json_source: path to modinfo.json file
+        :param update_only: if set to True, then instead of attempting
+            to fill the mods table from scratch with the data read from
+            the modinfo json, assume that the table is already populated
+            and only UPDATE certain fields with values read from the
+            modinfo file.
         """
         global _mcount
         # reset counter so that mod-ordinal is determined by the order
@@ -449,6 +461,7 @@ class DBManager(Submanager):
                                   .format(json_source))
                 success = False
         return success
+
 
     def load_hidden_files(self, json_source) -> bool:
         """
@@ -543,15 +556,15 @@ class DBManager(Submanager):
 
         # print(tree.to_string(2))
 
-    def remove_hidden_files(self, mod_dir, filelist):
+    def remove_hidden_files(self, mod_dir, file_list):
         """
         Remove the items (filepaths) in file list from the hiddenfiles
-        db table. If the filelist contains more than 900 items, the
-        files will be deleted in batches of 900 (999 is parameter
+        db table. If `file_list` contains more than 900 items, they
+        will be deleted in batches of 900 (999 is parameter
         limit in sqlite)
 
         :param mod_dir: directory name of the mod from which to delete
-        :param filelist: list of files
+        :param file_list: list of files
         """
 
         self.checktx()
@@ -562,23 +575,23 @@ class DBManager(Submanager):
 
         c = self._con.cursor()
 
-        if len(filelist) <= _SQLMAX:
+        if len(file_list) <= _SQLMAX:
             # nothing special
             _q=_q.format(mdir=mod_dir,
-                      paths=", ".join("?" * len(filelist)))
-            c.execute(_q, filelist)
+                         paths=", ".join("?" * len(file_list)))
+            c.execute(_q, file_list)
         else:
             # something special
-            sections, remainder = divmod(len(filelist), _SQLMAX)
+            sections, remainder = divmod(len(file_list), _SQLMAX)
             for i in range(sections):
                 s = _SQLMAX * i
                 query = _q.format(mdir=mod_dir,
                                   paths=", ".join('?' * _SQLMAX))
-                c.execute(query, filelist[s:s + _SQLMAX])
+                c.execute(query, file_list[s:s + _SQLMAX])
             if remainder:
                 query = _q.format(mdir=mod_dir,
                                   paths=", ".join('?' * remainder))
-                c.execute(query, filelist[sections * _SQLMAX:])
+                c.execute(query, file_list[sections * _SQLMAX:])
 
         return c
 
@@ -608,19 +621,74 @@ class DBManager(Submanager):
         :param Iterable[tuple] mod_list:
         """
 
-        # db_fields[:-1] to ignore the error field for now
-        # (leave it at its default of 0)
-        dbfields_ = db_fields[:-1]
-
+        # ignore the error field for now
         with self._con:
             # insert the list of row-tuples into the in-memory db
             self._con.executemany(
                 "INSERT INTO mods({}) VALUES ({})".format(
-                    ", ".join(dbfields_),
-                    ", ".join("?" * len(dbfields_))
+                    ", ".join(db_fields_noerror),
+                    ", ".join("?" * len(db_fields_noerror))
                 ),
                 mod_list)
 
+        # db_fields[:-1] to ignore the error field for now
+        # (leave it at its default of 0)
+        # dbfields_ = db_fields[:-1]
+        #
+        # with self._con:
+        #     # insert the list of row-tuples into the in-memory db
+        #     self._con.executemany(
+        #         "INSERT INTO mods({}) VALUES ({})".format(
+        #             ", ".join(dbfields_),
+        #             ", ".join("?" * len(dbfields_))
+        #         ),
+        #         mod_list)
+
+
+    def update_table_from_modinfo(self, modinfo_file):
+        """
+        read from a profile's modinfo.json, use that information
+        to update the mutable fields of the current 'mods' table
+        """
+
+        FLD_ORD  = db_fields.FLD_ORD
+        FLD_NAME = db_fields.FLD_NAME
+        FLD_ENAB = db_fields.FLD_ENAB
+        FLD_DIR  = db_fields.FLD_DIR
+
+        counter = count()
+
+        # first, we need to whittle down the info to just the mutable
+        # fields; use this as the object-pairs-hook.
+        def oph(pairs):
+            # return a tuple of (ordinal, name, is-enabled, directory)
+            d = dict(pairs)
+            return next(counter), d[FLD_NAME], d[FLD_ENAB], d[FLD_DIR]
+
+        # technically, version & modid are mutable, too...but that's
+        # a different problem. If everything is up to date, they
+        # *shouldn't* change on a profile-switch. There should probably
+        # be a consistency/sync-check somewhere to ensure that, though.
+        # Somewhere that's not here.
+
+        success = True
+        with modinfo_file.open('r') as f:
+            # read from json file
+            try:
+                mods = json.load(f, object_pairs_hook=oph)
+            except json.decoder.JSONDecodeError:
+                self.LOGGER.error("No mod information present in {}, "
+                                  "or file is malformed."
+                                  .format(modinfo_file))
+                success=False
+            else:
+                with self._con:
+                    # update mutable info
+                    self._con.executemany(
+                        "UPDATE mods SET {} = ?, {} = ?, {} = ? WHERE {} = ?".format(
+                            FLD_ORD, FLD_NAME, FLD_ENAB, FLD_DIR)
+                        , mods)
+        return success
 
     ############
     ## Saving ##
@@ -641,7 +709,7 @@ class DBManager(Submanager):
         # we don't save the ordinal rank, so we need to get a list (set)
         # of the fields without "ordinal" Using sets here is OK because
         # field order doesn't matter when saving
-        noord_fields = set(db_fields) ^ {"ordinal", "error"}
+        noord_fields = set(db_fields) - {db_fields.FLD_ORD, db_fields.FLD_ERR}
 
         modinfo = []
 
@@ -801,13 +869,14 @@ class DBManager(Submanager):
             if isinstance(mods_dir, str):
                 mods_dir = Path(mods_dir)
         else:
-            mods_dir = self.mainmanager.Paths.path(keystrings.Dirs.MODS)
+            mods_dir = self.mainmanager.get_directory(keystrings.Dirs.MODS, aspath=True)
 
         # go through each folder indivually
         with self._con:
             for modfolder in mods_dir.iterdir():
-                if not modfolder.is_dir(): continue
-                self.add_files_from_dir(modfolder.name, str(modfolder))
+                if modfolder.is_dir():
+                    self.add_files_from_dir(modfolder.name,
+                                            str(modfolder))
 
         # self.LOGGER << "dumping db contents to disk"
         # with open('res/test2.dump.sql', 'w') as f:
@@ -923,14 +992,14 @@ class DBManager(Submanager):
         """
         row = []
 
-        for field in db_fields[:-1]:
+        for field in db_fields_noerror:
             row.append(kwargs.get(field, self.__defaults
                                   .get(field, lambda v: "")(kwargs)
                                 )
                      )
         return tuple(row)
 
-    def validate_mods_list(self):
+    def validate_mods_list(self, installed_mods):
         """
         Compare the database's list of mods against a list of the
         folders in the installed-mods directory. Handle discrepancies by
@@ -950,17 +1019,16 @@ class DBManager(Submanager):
         # problems with the mod installation
 
         # list of all the installed mods
-        installed_mods = self.mainmanager.Paths.list_mod_folders()
+        # installed_mods = self.mainmanager.Paths.list_mod_folders()
         # installed_mods = os.listdir(moddir)
 
-        # first, reset the errors column
-
+        # reset the errors collection
         num_removed = self.reset_errors()
 
         self.logger.debug("Resetting mod errors: {} entries affected"
                           .format(num_removed))
 
-        dblist = [t["directory"] for t in
+        dblist = [r["directory"] for r in
                   self._con.execute("SELECT directory FROM mods")]
 
         not_found = []
@@ -990,37 +1058,34 @@ class DBManager(Submanager):
         # large chunks, so we accumulated the errors above and will
         # insert them all at once
         if not_listed:
-            with self._con:
-                ## for each mod-directory name in not_listed, update
-                ## the 'error' field for that mod's db-entry to be
-                ## ModError.MOD_NOT_LISTED
-                query = "UPDATE mods SET error = {} " \
-                        "WHERE directory IN (".format(
-                    # use int() for a bit of added security
-                    int(ModError.MOD_NOT_LISTED))
-
-                # get the appropriate number of ?
-                query += ", ".join("?" * len(not_listed)) + ")"
-
-                # make it so.
-                self._con.execute(query, not_listed)
+            self._update_errors(ModError.MOD_NOT_LISTED, not_listed)
 
         if not_found:
-            ## same as above, but for DIR_NOT_FOUND
-
-            with self._con:
-                query = "UPDATE mods SET error = {} " \
-                        "WHERE directory IN (".format(
-                    int(ModError.DIR_NOT_FOUND))
-
-                query += ", ".join("?" * len(not_found)) + ")"
-
-                self._con.execute(query, not_found)
+            self._update_errors(ModError.DIR_NOT_FOUND, not_found)
 
         # return true only if all 3 are empty/0;
         # we return false on num_removed so that the GUI will
         # still update its contents
         return not (not_listed or not_found or num_removed)
+
+    def _update_errors(self, error_type, dir_list):
+        """helper method for validate_mods_list"""
+
+        with self._con:
+            ## for each mod-directory name in `dir_list`, update the
+            ## 'error' field for that mod's db-entry to be `error_type`
+            query = "UPDATE mods SET error = {} " \
+                    "WHERE directory IN (".format(
+                    # use int() for a bit of added security
+                    int(error_type))
+
+            # get the appropriate number of '?'.
+            # i don't think we need to worry about this going over
+            # 999...do we?
+            query += ", ".join("?" * len(dir_list)) + ")"
+
+            # make it so.
+            self._con.execute(query, dir_list)
 
     @staticmethod
     def json_write(json_target, pyobject):
@@ -1045,9 +1110,12 @@ class DBManager(Submanager):
         :return: Tuple containing just the values of the fields
         """
 
+        # value for ordinal is taken from global incrementer as it is not
+        # stored in the modinfo file and is instead dependent on the
+        # order in which items are read from said file
         return (next(_mcount),) + tuple(
             s[1] for s in sorted(pairs,
-                                 key=lambda p: db_fields.index(p[0])))
+                                 key=lambda p: db_field_order[p[0]]))
 
 
 # if __name__ == '__main__':

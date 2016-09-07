@@ -136,7 +136,6 @@ class ProfileManager(Submanager):
 
                 self._current_profile = self.load_profile(profilename)
 
-
         return self._current_profile
 
     #############################

@@ -1,12 +1,13 @@
 from pathlib import Path
 
+from skymodman import exceptions
 from skymodman.types import ModEntry, Alert
 from skymodman.managers import (config as _config,
                                 database as _database,
                                 profiles as _profiles,
                                 paths as _paths
                                 )
-from skymodman.constants import alerts, db_fields as _db_fields
+from skymodman.constants import overrideable_dirs, db_fields as _db_fields
 from skymodman.constants.keystrings import (Dirs as ks_dir,
                                             Section as ks_sec,
                                             INI as ks_ini)
@@ -46,7 +47,8 @@ class _ModManager:
     def __init__(self):
 
         # first, initialize the alerts
-        alerts.init_alerts(self)
+        self._diralerts={}
+        self._init_diralerts()
 
         # the order here matters; profileManager requires config
         self._pathman = _paths.PathManager(self)
@@ -61,22 +63,23 @@ class _ModManager:
         # used when the installer needs to query mod state
         self._enabledmods = None
 
+        # cached list of mods in mod directory
+        self._installed_mods = []
+        # flag that tells us to re-read the list from disk
+        self._modlist_needs_refresh = True
+
 
 
         # set of issues that arise during operation
         self.alerts = set() # type: Set [Alert]
 
-        # add a test alert
-        # self.alerts.add(alerts.test_alert)
-
         # tracking which dirs are valid will make things easier
-        self._valid_dirs = {
-            ks_dir.MODS:   False,
-            ks_dir.SKYRIM: False,
-            ks_dir.VFS:    False
-        }
+        self._valid_dirs = {d:False for d in ks_dir}
         # do initial check of directories
         self.check_dirs()
+
+        if self._valid_dirs[ks_dir.MODS]:
+            self._installed_mods = self._pathman.list_mod_folders()
 
     ## Sub-manager access properties ##
 
@@ -116,6 +119,18 @@ class _ModManager:
     @property
     def mods_with_conflicting_files(self):
         return self._dbman.mods_with_conflicting_files
+
+    @property
+    def installed_mods(self):
+        if self._modlist_needs_refresh:
+            try:
+                self._installed_mods = self._pathman.list_mod_folders()
+            except exceptions.InvalidAppDirectoryError:
+                self._installed_mods = []
+            finally:
+                self._modlist_needs_refresh = False
+
+        return self._installed_mods
 
     def getdbcursor(self):
         """
@@ -173,26 +188,66 @@ class _ModManager:
         # remove resolved alerts
         self.alerts -= to_remove
 
+    def _init_diralerts(self):
+        self._diralerts={
+            ks_dir.SKYRIM: Alert(
+                level=Alert.HIGH,
+                label="Skyrim not found",
+                desc="The main Skyrim installation folder could not be found or is not defined.",
+                fix="Choose an existing folder in the Preferences dialog.",
+                check=lambda: not self.get_directory(ks_dir.SKYRIM, nofail=True)),
+
+            ks_dir.MODS: Alert(
+                level=Alert.HIGH,
+                label="Mods Directory not found",
+                desc="The mod installation directory could not be found or is not defined.",
+                fix="Choose an existing folder in the Preferences dialog.",
+                check=lambda: not self.get_directory(ks_dir.MODS, nofail=True)
+            ),
+
+            ks_dir.VFS: Alert(
+                level=Alert.HIGH,
+                label="Virtual Filesystem mount not found",
+                desc="The mount point for the virtual filesystem could not be found or is not defined.",
+                fix="Choose an existing folder in the Preferences dialog.",
+                check=lambda: not self.get_directory(ks_dir.VFS, nofail=True)
+            ),
+            ks_dir.PROFILES: Alert(
+                level=Alert.HIGH,
+                label="Profiles directory not found",
+                desc="Profiles directory must be present for proper operation.",
+                fix="Choose an existing folder in the Preferences dialog.",
+                check=lambda: not self.get_directory(ks_dir.PROFILES, nofail=True)
+            )
+        }
+
+
+    def check_dir(self, key):
+        """Check that the specified app directory is valid. Add
+        appropriate alert if not."""
+
+        if self._pathman.is_valid(key, self.profile is not None):
+            # if we get a valid value back,
+            # remove the alert if it was present
+            self._valid_dirs[key] = True
+            self.remove_alert(self._diralerts[key])
+        else:
+            # otherwise, add the alert
+
+            self._valid_dirs[key]=False
+            self.add_alert(self._diralerts[key])
+
     def check_dirs(self):
         """
         See if all the necessary directories are defined/present. Add
         appropriate alerts if not.
         """
 
-        check_profile = self.profile is not None
-        for key, al in ((ks_dir.SKYRIM, alerts.dnf_skyrim),
-                        (ks_dir.MODS, alerts.dnf_mods),
-                        (ks_dir.VFS, alerts.dnf_vfs)):
+        for key in ks_dir:
+            self.check_dir(key)
 
-            self._valid_dirs[key] = self._pathman.is_valid(key, check_profile)
-
-            if self._valid_dirs[key]:
-                # if we get a valid value back,
-                # remove the alert if it was present
-                self.remove_alert(al)
-            else:
-                # otherwise, add the alert
-                self.add_alert(al)
+    def refresh_modlist(self):
+        """Regenerate the list of installed mods"""
 
     ##=============================================
     ## Profile Management Interface
@@ -253,6 +308,11 @@ class _ModManager:
         return self._profileman.new_profile(name, copy_from)
 
     def delete_profile(self, profile):
+        """
+        Remove profile folder and all contained files from disk.
+
+        :param profile:
+        """
         self._profileman.delete_profile(profile)
 
     def rename_profile(self, new_name, profile=None):
@@ -319,93 +379,134 @@ class _ModManager:
     def _set_profile(self, profile_name):
         ## internal handler
 
+        # _ddirs = (ks_dir.SKYRIM, ks_dir.MODS, ks_dir.VFS)
+
+        # keep references to currently configured directories
+        curr_dirs = {d:self.get_directory(d, nofail=True) for d in overrideable_dirs}
+
         self._profileman.set_active_profile(profile_name)
+
+        # see if configured dirs changed:
+        dir_changed = {}
+        for d in overrideable_dirs:
+            try:
+                dir_changed[d] = self.get_directory(d)!=curr_dirs[d]
+            except exceptions.InvalidAppDirectoryError:
+                # add alert on invalid new dir
+                self.add_alert(self._diralerts[d])
+                # dir has changed only if current (previous) was valid
+                dir_changed[d] = not(curr_dirs[d])
+            else:
+                # remove any alerts if dir is valid
+                self.remove_alert(self._diralerts[d])
+
+        # dir_changed = {d:curr_dirs[d]!=self.get_directory(d) for d in _ddirs}
+
+        # if the mods directory changed, make sure modlist gets refreshed
+        self._modlist_needs_refresh = dir_changed[ks_dir.MODS]
+
 
         # have to reinitialize the database
         if self._db_initialized:
-            self._dbman.reinit()
-        else:
-            self._db_initialized= True
+            # only drop the 'mods' or 'modfiles' tables
+            # if the mods-directory changed
+
+            self._dbman.reinit(mods=self._modlist_needs_refresh,
+                               files=self._modlist_needs_refresh)
+
+        # else:
             # well, it will be in just a second
 
-        # recheck the directories
-        self.check_dirs()
+        # recheck the directories if any changed
+        # if any(dir_changed.values()):
+        #     self.check_dirs()
 
-        self._load_active_profile_data()
+        # self._load_active_profile_data()
 
-    def _load_active_profile_data(self):
-        """
-        Asks the Database Manager to load the information stored
-        on disk for the given profile into an in-memory database
-        that will be used to provide data to the rest of the app.
-        """
+    # def _load_active_profile_data(self):
+    #     """
+    #     Asks the Database Manager to load the information stored
+    #     on disk for the given profile into an in-memory database
+    #     that will be used to provide data to the rest of the app.
+    #     """
         self.LOGGER << "loading data for active profile: {}".format(
                        self.profile.name)
 
         # try to read modinfo file
-        if self._dbman.load_mod_info(self.profile.modinfo):
-            # if successful, validate modinfo
+        if (dir_changed[ks_dir.MODS] or not self._db_initialized) and self._dbman.load_mod_info(self.profile.modinfo):
+            # if successful, validate modinfo (i.e. synchronize the list
+            # of mods from the modinfo file with mods actually
+            # present in Mods directory)
+            self._db_initialized= True
 
             self.LOGGER << "validating installed mods"
             self.validate_mod_installs()
-
+        elif self._db_initialized and not dir_changed[ks_dir.MODS] and self._dbman.update_table_from_modinfo(self.profile.modinfo):
+            # if mod dir did not change, just try to update info
+            self.LOGGER << "updated mod table from mod info file"
         else:
-            # if it fails, re-read mod data from disk
+            self._db_initialized= True
+
+            # if it fails, (re-)read mod data from disk and create
+            # a new mod_info file
             self.LOGGER << "Could not load mod info; reading " \
                        "from configured mods directory."
 
-            if self._valid_dirs[ks_dir.MODS]:
+            # if self._valid_dirs[ks_dir.MODS]:
+            try:
                 self._dbman.get_mod_data_from_directory()
-                # and [re]create the cache file
-                self.save_mod_list()
+            # else:
+            except exceptions.InvalidAppDirectoryError as e:
+                self.LOGGER.error(e)
+                # self.LOGGER.error("Mod directory invalid or unset")
             else:
-                self.LOGGER.error("Mod directory invalid or unset")
+                # and [re]create the cache file
+                self.save_mod_info()
 
 
         # clear the "list of enabled mods" cache (used by installer)
         self._enabledmods = None
 
+        # analyze mod files for conflicts
+        self.analyze_mod_files()
+
+    def analyze_mod_files(self):
+        """
+        This is a relatively hefty operation that gets a list of ALL the
+        individual files within each mod folder found in the main Mods
+        directory. A database table is created and kept for these, along
+        with a reference to which mod the file belongs. This table
+        is then analyzed to detect duplicate files and overwrites between
+        mods. Additionally, any files that the user has marked 'hidden'
+        are loaded from the profile config. All this information is
+        then available to present to the user.
+
+        """
+
         # FIXME: avoid doing this on profile change
         # _logger << "Loading list of all Mod Files on disk"
 
-        # make sure we use the profile override if there is one
-        if self._valid_dirs[ks_dir.MODS]:
+        try:
             self._dbman.load_all_mod_files()
-        else:
-            self.LOGGER.error("Mod directory invalid or unset")
-
+        except exceptions.InvalidAppDirectoryError as e:
+            # don't fail-out in this case; continue w/ attempt
+            # to add files from skyrim dir
+            self.LOGGER.error(e)
 
         # let's also add the files from the base
         # Skyrim Data folder to the db
 
-        # sky_dir = self.get_directory(ks_dir.SKYRIM)
-
         # first check that we found the Skyrim directory
-        if self._valid_dirs[ks_dir.SKYRIM]:
-
+        try:
             sky_dir = self._pathman.path(ks_dir.SKYRIM)
             for f in sky_dir.iterdir():
-                if f.name.lower() == "data":
+                if f.is_dir() and f.name.lower() == "data":
                     self._dbman.add_files_from_dir('Skyrim', str(f))
                     break
-        else:
-            self.LOGGER.warning("The main Skyrim folder could not be "
-                                "found. That's going to be a problem.")
-
-        # if not sky_dir:
-        #     # self.add_alert(alerts.dnf_skyrim)
-        #     self.LOGGER.warning("The main Skyrim folder could not be "
-        #                    "found. That's going to be a problem.")
-        # else:
-        #     for f in sky_dir.iterdir():
-        #         if f.name.lower() == "data":
-        #             self._dbman.add_files_from_dir('Skyrim', str(f))
-        #             break
-
-        # [print(*r) for r in _dataman._con.execute("select *
-        # from modfiles where directory='Skyrim'")]
-
-        # _logger << "Finished loading list of all Mod Files on disk"
+        except exceptions.InvalidAppDirectoryError as e:
+            self.LOGGER.warning(e)
+            # self.LOGGER.warning("The main Skyrim folder could not be "
+            #                     "found.")
 
         # detect which mods contain files with the same name
         self._dbman.detect_file_conflicts()
@@ -457,11 +558,15 @@ class _ModManager:
         :return: True if no errors encountered, False otherwise
         """
 
-        if not self._valid_dirs[ks_dir.MODS]:
-            self.LOGGER.error("Mod directory invalid or unset")
-            return False
+        # if not self._valid_dirs[ks_dir.MODS]:
+        #     self.LOGGER.error("Mod directory invalid or unset")
+        #     return False
 
-        return self._dbman.validate_mods_list()
+        try:
+            return self._dbman.validate_mods_list(self.installed_mods)
+        except exceptions.InvalidAppDirectoryError as e:
+            self.LOGGER.error(e)
+            return False
 
 
     ##=============================================
@@ -499,15 +604,19 @@ class _ModManager:
                                params=dbrowgen)
 
         # And finally save changes to disk
-        self.save_mod_list()
+        self.save_mod_info()
 
-    def save_mod_list(self):
-        """Request that database manager save modinfo to disk"""
+    def save_mod_info(self):
+        """Have database manager save modinfo to disk"""
         self._dbman.save_mod_info(self.profile.modinfo)
         # reset so that next install will reflect the new state
         self._enabledmods = None
 
     def save_hidden_files(self):
+        """
+        Write the collection of hidden files (stored on the profile
+        object) to disk.
+        """
         self._dbman.save_hidden_files(self.profile.hidden_files)
 
     ##=============================================
@@ -576,9 +685,10 @@ class _ModManager:
         self._pathman.set_path(key, path, profile_override)
 
         # check if dirs valid
-        self.check_dirs()
+        self.check_dir(key)
 
-    def get_directory(self, key, use_profile_override=True):
+    def get_directory(self, key, use_profile_override=True, *,
+                      aspath=False, nofail=False):
         """
         Get the stored path for the app directory referenced by `key`.
         If use_profile_override is True and an override is set in the
@@ -589,11 +699,18 @@ class _ModManager:
         :param key: constants.ks_dir.WHATEVER
         :param use_profile_override: Return the path-override from the
             currently active profile, if one is set.
+        :param aspath: set ``True`` to return the value as a Path object
+        :param nofail: If set to ``True``, suppress an invalidDirectory
+            exception and return an empty string instead (or ``None``
+            if `aspath`==``True``)
         :return:
         """
-
-        p = self._pathman.path(key, use_profile_override)
-        return str(p) if p else ""
+        try:
+            p = self._pathman.path(key, use_profile_override)
+            return p if aspath else str(p)
+        except exceptions.InvalidAppDirectoryError:
+            if nofail: return None if aspath else ""
+            raise
 
     ##=============================================
     ## Installation

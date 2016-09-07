@@ -20,6 +20,9 @@ class Iternum(type):
     def __iter__(cls):
         yield from (v for k,v in cls.__dict__.items() if not k.startswith('_'))
 
+    def __contains__(cls, val):
+        return val in [v for k,v in cls.__dict__.items() if not k.startswith('_')]
+
 ##=============================================
 ## Implementations
 ##=============================================

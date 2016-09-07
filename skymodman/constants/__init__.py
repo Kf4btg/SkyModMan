@@ -2,6 +2,8 @@
 from .enums import *
 from . import keystrings as _keystr
 
+from collections import namedtuple as _nt
+
 
 # what to show in the title-bar of the main window and some dialog
 APPTITLE = "SkyModMan"
@@ -31,13 +33,28 @@ DisplayNames = {
     _keystr.UI.RESTORE_WINPOS: "Restore Window Position",
 }
 
-# defines the names and order of fields in the database
-db_fields = ("ordinal", "directory", "name", "modid", "version", "enabled", "error")
+overrideable_dirs = (_keystr.Dirs.SKYRIM, _keystr.Dirs.MODS, _keystr.Dirs.VFS)
+
+## definitions of database fields and order, including a version w/o
+## the "Error" field
+_dbflds_noerr = _nt("_dbflds_noerr", "FLD_ORD FLD_DIR FLD_NAME FLD_MODID FLD_VER FLD_ENAB")
+#
+_dbflds = _nt("_dbflds", _dbflds_noerr._fields + ("FLD_ERR",))
+
+
+## Definitions for actual string values of database field names
+db_fields_noerror = _dbflds_noerr("ordinal", "directory", "name", "modid", "version", "enabled")
+db_fields = _dbflds(db_fields_noerror + ("error",))
+
+## And a reverse-lookup to find the correct in-order index of a given field
+db_field_order = {fld:db_fields.index(fld) for fld in db_fields}
+
+# db_fields = _dbflds("ordinal", "directory", "name", "modid", "version", "enabled", "error")
 
 # a tuple of the db fields without the ordinal or error field;
 # simply for convenience. As it is constructed from a set, it
 # Should only be used where the order of the fields doesn't matter
-noordinal_dbfields = tuple(set(db_fields) ^ {"ordinal", "error"})
+# noordinal_dbfields = tuple(set(db_fields) ^ {"ordinal", "error"})
 
 class SkyrimGameInfo:
     """Contains information specific to Skyrim (filenames, ids, etc)

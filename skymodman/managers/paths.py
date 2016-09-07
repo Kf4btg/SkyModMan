@@ -3,21 +3,21 @@ from pathlib import Path
 from skymodman import exceptions
 from skymodman.managers import Submanager
 from skymodman.utils import withlogger, fsutils
-from skymodman.constants import keystrings
+from skymodman.constants import keystrings, overrideable_dirs
 
 _pathvars = ("file_main", "dir_config", "dir_data", "dir_profiles", "dir_mods", "dir_vfs", "dir_skyrim")
 
 # these are the directory paths that can be customized by the user
-_dirvars = (keystrings.Dirs.MODS,
-            keystrings.Dirs.PROFILES,
-            keystrings.Dirs.SKYRIM,
-            keystrings.Dirs.VFS)
+# _dirvars = (keystrings.Dirs.MODS,
+#             keystrings.Dirs.PROFILES,
+#             keystrings.Dirs.SKYRIM,
+#             keystrings.Dirs.VFS)
 
 # aaaand these are the directories that can be overriden
 # on a per-profile basis
-_overridedirs = (keystrings.Dirs.MODS,
-            keystrings.Dirs.SKYRIM,
-            keystrings.Dirs.VFS)
+# _overridedirs = (keystrings.Dirs.MODS,
+#             keystrings.Dirs.SKYRIM,
+#             keystrings.Dirs.VFS)
 
 @withlogger
 class PathManager(Submanager):
@@ -60,10 +60,12 @@ class PathManager(Submanager):
         :param check_exists:
         :return:
         """
-        p = self.path(key, use_profile_override)
-        if p:
+
+        try:
+            p = self.path(key, use_profile_override)
             return p.exists() if check_exists else True
-        return False
+        except exceptions.InvalidAppDirectoryError:
+            return False
 
     ##=============================================
     ## Getting/setting paths
@@ -71,7 +73,9 @@ class PathManager(Submanager):
 
     def path(self, key, use_profile_override=True):
         """
-        Get the current value for a given path as a Path object
+        Get the current value for a given path as a Path object.
+
+        Raises InvalidAppDirectoryError if the path is unset
 
         :param key:
         :param use_profile_override: If true and the active profile has
@@ -81,17 +85,23 @@ class PathManager(Submanager):
             requested directory
         """
 
-        if use_profile_override and key in _overridedirs:
+        # check that key is a path-key so we aren't returning arbitrary
+        # instance attributes
+        if key not in _pathvars:
+            raise KeyError(key)
+
+        if use_profile_override and key in overrideable_dirs:
             p = self.mainmanager.profile
             if p:
                 do = p.diroverride(key)
                 if do: return Path(do)
 
-        # check that key is a path-key so we aren't returning arbitrary
-        # instance attributes
-        if key in _pathvars:
-            return getattr(self, key, None)
-        return None
+        val = getattr(self, key)
+
+        if not val:
+            raise exceptions.InvalidAppDirectoryError(key, None)
+
+        return val
 
     def set_path(self, key, value, profile_override=False):
         """
@@ -107,7 +117,7 @@ class PathManager(Submanager):
         """
 
         if profile_override:
-            if key in _overridedirs and self.mainmanager.profile:
+            if key in overrideable_dirs and self.mainmanager.profile:
                 self.mainmanager.profile.setoverride(key,
                     str(value) if value is not None else "")
 
@@ -126,7 +136,7 @@ class PathManager(Submanager):
             else:
                 setattr(self, key, value)
 
-            if key in _dirvars:
+            if key in keystrings.Dirs:
                 # if it's a configurable directory, make sure
                 # it's also recorded in the main Config file.
                 self.mainmanager.Config.update_dirpath(key)
@@ -168,7 +178,7 @@ class PathManager(Submanager):
             else:
                 setattr(self, key, value)
 
-            if key in _dirvars:
+            if key in keystrings.Dirs:
                 self.mainmanager.Config.update_dirpath(key, value)
         else:
             raise KeyError(key)
@@ -257,11 +267,11 @@ class PathManager(Submanager):
         :return: list of names
         """
 
+        # allow invaliddir error to propagate
         mpath = self.path(keystrings.Dirs.MODS, use_profile_override)
 
-        if mpath:
-            self.LOGGER.info("Getting list of mod directories from {}".format(mpath))
+        self.LOGGER.info("Getting list of mod directories from {}".format(mpath))
 
-            # only return names of folders, not any other type of file
-            return [f.name for f in mpath.iterdir() if f.is_dir()]
+        # only return names of folders, not any other type of file
+        return [f.name for f in mpath.iterdir() if f.is_dir()]
 
