@@ -230,7 +230,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         be added to the toolbar.
         """
 
-        self.alerts_button = QtWidgets.QToolButton(self)
+        self.alerts_button = QtWidgets.QToolButton(self.file_toolBar)
         self.alerts_button.setObjectName("alerts_button")
 
         self.alerts_button.setIcon(QtGui.QIcon.fromTheme("dialog-warning"))
@@ -243,9 +243,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.alerts_button.setMenu(QtWidgets.QMenu(self.alerts_button))
 
-        self.action_show_alerts = QtWidgets.QWidgetAction(self.alerts_button)
-        self.action_show_alerts.setObjectName("action_show_alerts")
-
 
 
         self.alerts_listview = QtWidgets.QListView(self.alerts_button)
@@ -254,21 +251,30 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.alerts_data = QtCore.QStringListModel()
         self.alerts_listview.setModel(self.alerts_data)
 
-        self.action_show_alerts.setDefaultWidget(self.alerts_listview)
+        # create the action that contains the popup
+        action_show_alerts = QtWidgets.QWidgetAction(self.alerts_button)
+        # set popup view as default widget
+        action_show_alerts.setDefaultWidget(self.alerts_listview)
+        # add the action to the menu of the alerts button;
+        # this causes the "menu" to consist wholly of the display widget
+        self.alerts_button.menu().addAction(action_show_alerts)
 
 
         # self.alerts_infobox = QtWidgets.QTextBrowser(self.alerts_button)
         # self.alerts_infobox.setObjectName("alerts_infobox")
-        # self.action_show_alerts.setDefaultWidget(self.alerts_infobox)
+        # action_show_alerts.setDefaultWidget(self.alerts_infobox)
 
-        self.alerts_button.menu().addAction(self.action_show_alerts)
-
-        self.file_toolBar.addWidget(self.alerts_button)
-
-        self._alertbtn_orig_size = self.alerts_button.size()
+        ## OK...so, since QWidget.setVisible() does not work for items
+        ## added to a toolbar with addWidget(?!), we need to save the
+        ## action returned by the addWidget() method (who knew?!) and
+        ## use its setVisible() &c. methods.
+        ## is this returned action the same as "action_show_alerts"
+        ## above? I have no idea!!
+        self.action_show_alerts = self.file_toolBar.addWidget(self.alerts_button)
+        self.action_show_alerts.setObjectName("action_show_alerts")
 
         # show the 'alerts' indicator if there are any active alerts
-        self.alerts_button.setVisible(Manager.has_alerts)
+        self.action_show_alerts.setVisible(Manager.has_alerts)
 
     def _setup_toolbar(self):
         """We've got a few things to add to the toolbar:
@@ -1296,60 +1302,20 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         main Manager's alerts collection. Does not request any checks.
         """
 
-        self.LOGGER << "update_alerts"
+        # self.LOGGER << "update_alerts"
+
         # this will update/clear the alerts list as appropriate
         self.alerts_data.setStringList(
             [a.label + ": " + a.desc for a in Manager.alerts]
         )
-        # self.LOGGER << "has_alerts: {}".format(Manager.has_alerts)
         if not Manager.has_alerts:
-            self.alerts_button.setVisible(False)
-            # self.alerts_button.hide()
-
-            # Why doesn't setting visible = False work?!?!?!?!?!?!?!
-            # self.alerts_button.setFixedSize(0, 0)
-            # print("vis=false")
-            # self.alerts_button.setEnabled(False)
+            self.LOGGER << "Hide alerts indicator"
+            # have to hide using action, not button
+            # (See docs for qtoolbar.addWidget...)
+            self.action_show_alerts.setVisible(False)
         else:
-            self.alerts_button.setVisible(True)
-            # self.alerts_button.setBaseSize(self._alertbtn_orig_size)
-            # print("vis=true")
-            # self.LOGGER << "{}".format(self.alerts_button.isVisible())
-
-
-    # def check_alerts(self):
-    #     """
-    #     If there are visible alerts, check if they have been resolved
-    #     and remove those which have. If all have been resolved, hide
-    #     the alerts indicator.
-    #     """
-    #     Manager.check_alerts()
-    #
-    #     # this will update/clear the alerts list as appropriate
-    #     self.alerts_data.setStringList(
-    #         [a.label + ": " + a.desc for a in Manager.alerts]
-    #     )
-    #
-    #     self.alerts_listview.adjustSize()
-    #
-    #     self.alerts_button.setVisible(Manager.has_alerts)
-
-        # if Manager.has_alerts:
-        #     self.alerts_data.setStringList(
-        #         [a.label + ": " + a.desc for a in Manager.alerts]
-        #     )
-        #
-        #
-        #     # text = ""
-        #     # for a in Manager.alerts:
-        #     #     text+=a.label+": "+a.desc+"\n"
-        #     #
-        #     # self.alerts_infobox.setText(text)
-        #
-        #
-        #     self.alerts_button.setVisible(True)
-        # else:
-        #     self.alerts_button.setVisible(False)
+            self.LOGGER << "Show alerts indicator"
+            self.action_show_alerts.setVisible(True)
 
     # def update_UI(self, *args):
     def update_UI(self):
