@@ -18,7 +18,7 @@ from skymodman.interface.qundo.commands import (
     clear_missing_mods
 )
 
-Manager = None
+Manager = None # type: modmanager._ModManager
 
 # <editor-fold desc="ModuleConstants">
 
@@ -571,7 +571,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         if query_db:
             # if we need to query the database to refresh the errors,
             # do that here:
-            errors = Manager.get_errors()
+            errors = Manager.get_mod_errors()
 
             # update the "error" field of each modentry
             for m in self.mod_entries:
