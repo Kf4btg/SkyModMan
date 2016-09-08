@@ -268,7 +268,6 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                                         d, ignore_enabled=True)
                 }
 
-
                 self.override_boxes[d].setText(x[d]['value'])
 
                 obtn = self.override_buttons[d]

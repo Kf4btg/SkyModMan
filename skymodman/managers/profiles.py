@@ -121,10 +121,10 @@ class ProfileManager(Submanager):
         """
 
         :param str|None profilename: name of the profile to activate; if it
-            does already exist on disk, it will be created. If this
+            does not already exist on disk, it will be created. If this
             parameter is ``None``, then the ``active_profile`` property
             will be unset.
-        :return: the newly created Profile object
+        :return: the newly activated Profile object
         """
 
         if profilename is None:
@@ -144,7 +144,8 @@ class ProfileManager(Submanager):
 
     def iter_profiles(self):
         """Iterate over the list of known profiles"""
-        yield from self._profile_names
+        # yield from self._profile_names
+        yield from (self.load_profile(p) for p in sorted(self._profile_names))
 
     def profiles_by_name(self):
         """

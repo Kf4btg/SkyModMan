@@ -7,7 +7,7 @@ from skymodman.managers import (config as _config,
                                 profiles as _profiles,
                                 paths as _paths
                                 )
-from skymodman.constants import overrideable_dirs, db_fields as _db_fields
+from skymodman.constants import overrideable_dirs, db_fields as _db_fields, db_field_order as _field_order
 from skymodman.constants.keystrings import (Dirs as ks_dir,
                                             Section as ks_sec,
                                             INI as ks_ini)
@@ -168,8 +168,6 @@ class _ModManager:
         If there are active alerts, check if they have been resolved
         and remove those which have.
         """
-        # TODO: figure out the best times to do this. Like...after a new profile is loaded? After the preferences are applied/dialog is closed? When a tab is changed?? When the moon is blue???????
-
         to_remove = set()
         for a in self.alerts: # type: Alert
             if not a.is_active:
@@ -253,7 +251,7 @@ class _ModManager:
 
     def activate_profile(self, profile):
         """
-        Set the active profile to the profile given by `profile_name`
+        Set the active profile to given profile object
         :param profile:
         """
 
@@ -265,15 +263,16 @@ class _ModManager:
         # wrapped in one for better error handling.
 
         # save this in case of a rollback
-        old_profile = self.profile.name if self.profile else None
+        # old_profile = self.profile.name if self.profile else None
+        old_profile = self.profile
 
         try:
             # make sure we're dealing with just the name
-            if isinstance(profile, _profiles.Profile):
-                profile = profile.name
-            assert isinstance(profile, str)
+            # if isinstance(profile, _profiles.Profile):
+            #     profile = profile.name
+            # assert isinstance(profile, str)
 
-            self._set_profile(profile)
+            self._load_profile(profile)
 
         except Exception as e:
             # if ANY errors occur, rollback the profile-switch
@@ -284,7 +283,7 @@ class _ModManager:
                 # we can't be sure quite how far the activation process
                 # made it before failing, so just do a fresh assignment
                 # of the old_profile
-                self._set_profile(old_profile)
+                self._load_profile(old_profile)
             else:
                 # if we came from no profile, make sure we're back there
                 self._profileman.set_active_profile(None)
@@ -293,7 +292,7 @@ class _ModManager:
 
         # if we successfully made it here, update the config value
         # for the last-loaded profile and return True
-        self._configman.last_profile = profile
+        self._configman.last_profile = profile.name
 
         return True
 
@@ -340,16 +339,26 @@ class _ModManager:
             self._configman.update_genvalue(ks_ini.LAST_PROFILE,
                                             profile.name)
 
-    def get_profiles(self, names_only=True):
+    def get_profiles(self, names=True, objects=True):
         """
         Generator that iterates over all existing profiles.
 
-        :param names_only: if True, only yield the profile names. If false,
-            yield tuples of (name, Profile) pairs"""
-        if names_only:
-            yield from (n for n in self._profileman.profile_names)
-        else:
+        results depend on options passed. If `names` and `options` are
+        both True, yield tuples of (name, Profile) pairs.  If `names` is
+        True and `options` is False, yield only the profile names.
+        Likewise, if `names` is False and `objects` is True, yield only
+        the Profile objects. If both are False...why did you call this
+        in the first place?
+
+        :param names: include names in output
+        :param objects: include Profile objects in output
+        """
+        if names and objects:
             yield from self._profileman.profiles_by_name()
+        elif names:
+            yield from (n for n in self._profileman.profile_names)
+        elif objects:
+            yield from self._profileman.iter_profiles()
 
     def get_profile_setting(self, name, section, default=None):
         """
@@ -376,18 +385,24 @@ class _ModManager:
     ## Internal profile mgmt
     ##---------------------------------
 
-    def _set_profile(self, profile_name):
+    def _load_profile(self, profile):
         """internal handler for assigning new profile"""
+        self.LOGGER << "<==Method called"
+
+        # if isinstance(profile_name, Profile):
+        profile_name = profile.name
 
         # if we have no active profile, treat this as a 'first run'
         if not self.profile:
-            self._set_first_profile(profile_name)
+            self._load_first_profile(profile_name)
         else:
             self._change_profile(profile_name)
 
-    def _set_first_profile(self, profile_name):
+    def _load_first_profile(self, profile_name):
         """Called when the first profile is selected (and any time we
         go from (no profile)->(some profile))"""
+
+        ## **Notes on this stuff can be found under _change_profile()
 
         self.LOGGER << "Loading initial profile: {}".format(profile_name)
 
@@ -395,8 +410,9 @@ class _ModManager:
 
         self.check_dirs()
 
-        if self._change_mods_directory():
-            self.analyze_mod_files()
+        if self._update_modinfo(True):
+            self.analyze_mod_files(True, True)
+        self._dbman.load_hidden_files(self.profile.hidden_files)
 
         self._enabledmods = None
 
@@ -407,10 +423,11 @@ class _ModManager:
 
         :param profile_name:
         """
+        # self.LOGGER << "<==Method called (profile_name={})".format(profile_name)
+
 
         self.LOGGER << "loading data for profile: {}".format(
-            self.profile.name)
-
+            profile_name)
         # keep references to currently (soon to be previously)
         # configured directories
         prev_dirs = {d: self.get_directory(d, nofail=True)
@@ -438,37 +455,52 @@ class _ModManager:
 
         moddir_changed = self._modlist_needs_refresh = dir_changed[
                 ks_dir.MODS]
+        skydir_changed = dir_changed[ks_dir.SKYRIM]
 
-        # load/generate/update modinfo and mod table, as needed
+        # load/generate modinfo and mod table, as needed
+        if self._update_modinfo(moddir_changed) and (
+                    moddir_changed or skydir_changed):
+            # if we successfully managed to load/generate mod info,
+            # find all mod-related files on disk (if required) and
+            # analyze for conflicts
+            self.analyze_mod_files(moddir_changed, skydir_changed)
 
-        if moddir_changed:
-            info_loaded = self._change_mods_directory()
-        else:
-            info_loaded = self._update_table_from_modinfo()
+        # always need to re-check hidden files
+        # todo: clear out saved hidden files for mods that have been uninstalled.
+        self._dbman.load_hidden_files(self.profile.hidden_files)
 
-        # if we successfully managed to load/generate mod info,
-        # analyze mod files for conflicts
-        if info_loaded:
-            self.analyze_mod_files()
-
-        # clear the "list of enabled mods" cache (used by installer)
+        # finally, clear the "list of enabled mods" cache (used by installer)
         self._enabledmods = None
 
-    def _change_mods_directory(self):
+    def _update_modinfo(self, moddir_changed):
         """
-        If the user changes the currently-configured mod installation
-        directory (whether through preferences or by switching profiles),
-        re-analyze the mod-info file and contents of the new directory
-        """
+        When a new (or the first) profile is loaded, rebuild the mods
+        table from that profile's modinfo file. Compare the information
+        in the modinfo file to the list of mods actually present in the
+        installation directory and mark any missing/extra entries.
 
+        If the modinfo file cannot be found or read, regenerate it in
+        a default state using the directories found on disk. No
+        validation is done in this case as the modinfo and the actual
+        state of installed mods are guaranteed to be initially the same.
+
+        :param bool moddir_changed: if False, do not reinitialize the db
+            table which contains the file listings for each installed
+            mod. As generating that info is an expensive operation, we
+            should only do when necessary (i.e. when the user has set
+            a new default/override for the Mods directory).
+        :return: True if we managed to successfully read or generate the
+            modinfo file. False if an error occurred
+        """
         # first, reinitialize the db tables
-        self._dbman.reinit()
+        self._dbman.reinit(files=moddir_changed)
 
-        # try to read modinfo file
+        # try to read modinfo file (populates "mods" table)
         if self._dbman.load_mod_info(self.profile.modinfo):
             # if successful, validate modinfo (i.e. synchronize the list
-            # of mods from the modinfo file with mods actually
+            # of mods from the modinfo file with mod folders actually
             # present in Mods directory)
+            # FIXME: when switching from a profile with lots of "missing" mods to one without missing mods that uses the same configured-mods folder, the latter will still show a mod-missing error, despite the fact that they are not.
             self.validate_mod_installs()
             return True
         else:
@@ -479,27 +511,6 @@ class _ModManager:
 
             return self._gen_modinfo()
 
-    def _update_table_from_modinfo(self):
-        """
-        Read the modinfo file of the active profile and update the
-        "mods" db table with the info from it.  This assumes that the
-        modinfo file and the "mods" table contain the same mod entries
-        (just, of course, with different details like 'enabled', 'name',
-        etc.)
-
-        :return: True if modinfo file was successfully read or generated
-        """
-
-        # reinitialize only the hidden files table
-        self._dbman.reinit(mods=False, files=False)
-
-        # first attempt to read the modinfo file and update the table
-        # values from it; if it cannot be read, attempt to generate it.
-        return self._dbman.update_table_from_modinfo(
-            self.profile.modinfo) or self._gen_modinfo()
-
-
-
     def _gen_modinfo(self):
         """
         Generate the modinfo file for the current profile by reading
@@ -508,12 +519,7 @@ class _ModManager:
         :return: True if the modinfo file was successfully created,
             False if not.
         """
-
-        # at this point, we might as well just drop the mods table
-        # and regenerate, since we'd have to set everything back
-        # to default, anyway.
-
-        self._dbman.reinit()
+        self.LOGGER << "<==Method called"
 
         try:
             # populate the mods table from the main mods directory
@@ -530,49 +536,6 @@ class _ModManager:
             return True
 
 
-    def analyze_mod_files(self):
-        """
-        This is a relatively hefty operation that gets a list of ALL the
-        individual files within each mod folder found in the main Mods
-        directory. A database table is created and kept for these, along
-        with a reference to which mod the file belongs. This table
-        is then analyzed to detect duplicate files and overwrites between
-        mods. Additionally, any files that the user has marked 'hidden'
-        are loaded from the profile config. All this information is
-        then available to present to the user.
-
-        """
-
-        # FIXME: avoid doing this on profile change
-        # _logger << "Loading list of all Mod Files on disk"
-
-        try:
-            self._dbman.load_all_mod_files()
-        except exceptions.InvalidAppDirectoryError as e:
-            # don't fail-out in this case; continue w/ attempt
-            # to add files from skyrim dir
-            self.LOGGER.error(e)
-
-        # let's also add the files from the base
-        # Skyrim Data folder to the db
-
-        # first check that we found the Skyrim directory
-        try:
-            sky_dir = self._pathman.path(ks_dir.SKYRIM)
-            for f in sky_dir.iterdir():
-                if f.is_dir() and f.name.lower() == "data":
-                    self._dbman.add_files_from_dir('Skyrim', str(f))
-                    break
-        except exceptions.InvalidAppDirectoryError as e:
-            self.LOGGER.warning(e)
-            # self.LOGGER.warning("The main Skyrim folder could not be "
-            #                     "found.")
-
-        # detect which mods contain files with the same name
-        self._dbman.detect_file_conflicts()
-
-        # load set of files hidden by user
-        self._dbman.load_hidden_files(self.profile.hidden_files)
 
     ##=============================================
     ## Mod Information
@@ -619,15 +582,48 @@ class _ModManager:
         """
         self.LOGGER << "Validating installed mods"
 
-        # if not self._valid_dirs[ks_dir.MODS]:
-        #     self.LOGGER.error("Mod directory invalid or unset")
-        #     return False
-
         try:
             return self._dbman.validate_mods_list(self.installed_mods)
         except exceptions.InvalidAppDirectoryError as e:
             self.LOGGER.error(e)
             return False
+
+    def analyze_mod_files(self, load_modfiles=True, load_skyfiles=True):
+        """
+        This is a relatively hefty operation that gets a list of ALL the
+        individual files within each mod folder found in the main Mods
+        directory. A database table is created and kept for these, along
+        with a reference to which mod the file belongs. This table
+        is then analyzed to detect duplicate files and overwrites between
+        mods. All this information is then available to present to the user.
+
+        """
+        self.LOGGER << "<==Method called"
+
+        # _logger << "Loading list of all Mod Files on disk"
+
+        # if required, examine the disk for files.
+        if load_modfiles:
+            try:
+                self._dbman.load_all_mod_files()
+            except exceptions.InvalidAppDirectoryError as e:
+                # don't fail-out in this case; continue w/ attempt
+                # to add files from skyrim dir
+                self.LOGGER.error(e)
+
+        # let's also add the files from the base
+        # Skyrim Data folder to the db
+        if load_skyfiles:
+            try:
+                self._dbman.load_skyfiles(
+                    self.get_directory(ks_dir.SKYRIM,
+                                       aspath=True))
+            except exceptions.InvalidAppDirectoryError as e:
+                self.LOGGER.warning(e)
+
+        # with all discovered files loaded into the database,
+        # detect which mods contain files with the same name
+        self._dbman.detect_file_conflicts()
 
 
     ##=============================================
@@ -647,8 +643,9 @@ class _ModManager:
         dbrowgen = (
             tuple([getattr(mod, field)
                    for field in sorted(mod._fields,
-                                       key=lambda f: _db_fields.index(
-                                           f))
+                                       key=_field_order.get)
+                                       # key=lambda f: _db_fields.index(
+                                       #     f))
                    ])
             for mod in changes)
 
@@ -669,6 +666,8 @@ class _ModManager:
 
     def save_mod_info(self):
         """Have database manager save modinfo to disk"""
+        self.LOGGER << "<==Method called"
+
         self._dbman.save_mod_info(self.profile.modinfo)
         # reset so that next install will reflect the new state
         self._enabledmods = None
@@ -678,6 +677,8 @@ class _ModManager:
         Write the collection of hidden files (stored on the profile
         object) to disk.
         """
+        self.LOGGER << "<==Method called"
+
         self._dbman.save_hidden_files(self.profile.hidden_files)
 
     ##=============================================

@@ -17,6 +17,33 @@ _mcount = count()
 # max number of vars for sqlite query is 999
 _SQLMAX=900
 
+# DB schema definition
+_SCHEMA = """
+        CREATE TABLE mods (
+            ordinal   INTEGER unique, --mod's rank in the install order
+            directory TEXT    unique, --folder on disk holding mod's files
+            name      TEXT,           --user-editable label for mod
+            modid     INTEGER,        --nexus id, or 0 if none
+            version   TEXT,           --arbitrary, set by mod author
+            enabled   INTEGER default 1,  --effectively a boolean value (0,1)
+            error     INTEGER default 0 -- Type code for errors encountered during load
+        );
+        CREATE TABLE hiddenfiles (
+            directory TEXT REFERENCES mods(directory) DEFERRABLE INITIALLY DEFERRED,
+                                -- the mod directory under which this file resides
+            filepath      TEXT      -- path to the file that has been hidden
+        );
+        CREATE TABLE modfiles (
+            directory     TEXT REFERENCES mods(directory) DEFERRABLE INITIALLY DEFERRED, -- the mod directory under which this file resides
+            filepath      TEXT      -- path to the file
+        );
+        """
+# having the foreign key deferrable should prevent the db freaking
+# out when we temporarily delete entries in 'mods' to modify the
+# install order.
+
+
+
 # this Connection subclass courtesy of Ryan Kelly:
 # http://code.activestate.com/lists/python-list/189197/
 # during a discussion of the problems with savepoints
@@ -55,30 +82,7 @@ def getconn(path):
 @withlogger
 class DBManager(Submanager):
 
-    _SCHEMA = """
-        CREATE TABLE mods (
-            ordinal   INTEGER unique, --mod's rank in the install order
-            directory TEXT    unique, --folder on disk holding mod's files
-            name      TEXT,           --user-editable label for mod
-            modid     INTEGER,        --nexus id, or 0 if none
-            version   TEXT,           --arbitrary, set by mod author
-            enabled   INTEGER default 1,  --effectively a boolean value (0,1)
-            error     INTEGER default 0 -- Type code for errors encountered during load
-        );
-        CREATE TABLE hiddenfiles (
-            directory TEXT REFERENCES mods(directory) DEFERRABLE INITIALLY DEFERRED,
-                                -- the mod directory under which this file resides
-            filepath      TEXT      -- path to the file that has been hidden
-        );
-        CREATE TABLE modfiles (
-            directory     TEXT REFERENCES mods(directory) DEFERRABLE INITIALLY DEFERRED, -- the mod directory under which this file resides
-            filepath      TEXT      -- path to the file
-        );
-        """
 
-    # having the foreign key deferrable should prevent the db freaking
-    # out when we temporarily delete entries in 'mods' to modify the
-    # install order.
 
     # names of all tables
     _tablenames = ("modfiles", "hiddenfiles", "mods")
@@ -121,7 +125,7 @@ class DBManager(Submanager):
         # GRRRR even with isolation_level=None, this STILL
         # auto-commits before executing the script if we're currently
         # within a transaction!!
-        self._con.executescript(self._SCHEMA)
+        self._con.executescript(_SCHEMA)
         self._con.row_factory = sqlite3.Row
 
         # These are created from the database, so it seems like it may
@@ -200,28 +204,6 @@ class DBManager(Submanager):
                 self._con.execute("DELETE FROM hiddenfiles")
                 self._empty['hiddenfiles'] = True
 
-
-    # def reset_table(self, table_name):
-    #     """
-    #     Remove all rows from specified table
-    #
-    #     :param table_name: Jim.
-    #     :return: Number of rows removed
-    #     """
-    #
-    #     # not that I'm worried too much about security with this
-    #     # program... but let's see if we can't avoid some SQL-injection
-    #     # attacks, just out of principle
-    #
-    #     if table_name not in self._tablenames:
-    #         raise exceptions.DatabaseError(
-    #             "'{}' is not a valid table name".format(table_name))
-    #
-    #     q="DELETE FROM {table}".format(table=table_name)
-    #     with self._con:
-    #         return self._con.execute(q).rowcount
-
-
     def reset_errors(self):
         """
         Reset the "error" column for each mod to ModError.None
@@ -266,8 +248,6 @@ class DBManager(Submanager):
             # to enforce this
             name.split()[0])
         )
-
-
 
     ##############
     ## wrappers ##
@@ -369,22 +349,6 @@ class DBManager(Submanager):
         # return self._con.execute(sql, params)
         return cmd(sql, params)
 
-    # def updatemany(self, sql, params=None):
-    #     """
-    #     As update(), but for multiple transactions. Returns the cursor
-    #     object that was created to execute the statement. The changes
-    #     made are NOT committed before this method returns; call
-    #     commit() (or call this method while using the connection as a
-    #     context manager) to make sure they're saved.
-    #
-    #     :param str sql:
-    #     :param typing.Iterable params:
-    #     :return: the cursor object that executed the query
-    #     """
-    #     self.checktx()
-    #
-    #     return self._con.executemany(sql, params)
-
     def delete(self, table, where="", params=(), many=False):
         """
         Delete entries from a database table.
@@ -398,11 +362,6 @@ class DBManager(Submanager):
         self.checktx()
 
         cmd = self._con.executemany if many else self._con.execute
-
-        # print("DELETE FROM {tbl}{whr}".format(
-        #     tbl=table,
-        #     whr=(" WHERE %s" % where) if where else ""
-        # ))
 
         return cmd("DELETE FROM {tbl}{whr}".format(
             tbl=table,
@@ -428,12 +387,6 @@ class DBManager(Submanager):
 
         cmd = self._con.executemany if many else self._con.execute
 
-        # print("INSERT INTO {tbl}{flds} VALUES {vals}".format(
-        #     tbl=table,
-        #     flds= ('(%s)' % ", ".join(fields)) if fields else "",
-        #     vals= '?' if values_count == 1
-        #         else '({})'.format(", ".join('?' * values_count))))
-
         return cmd("INSERT INTO {tbl}{flds} VALUES {vals}".format(
             tbl=table,
             flds= ('(%s)' % ", ".join(fields)) if fields else "",
@@ -441,28 +394,50 @@ class DBManager(Submanager):
                 else '({})'.format(", ".join('?' * values_count))
         ), params)
 
+    def count(self, table, **kwargs):
+        """
+        Get a count of items in the given table. If no keyword arguments
+        are provide, get total count of all rows in the table. If
+        keyword args are given that correspond to (field_name=value)
+        pairs, return count of rows matching those condition(s).
+        """
+
+        if table not in self._tablenames:
+            self.LOGGER.error("Invalid table name '{}'".format(table))
+            return -1
+
+        if not kwargs:
+            return self._con.execute(
+                "SELECT COUNT(*) FROM {}".format(table)
+            ).fetchone()[0]
+        else:
+            q="SELECT COUNT(*) FROM {} WHERE ".format(table)
+            keys=[]
+            vals=[]
+            ## do this to make sure the keys and their associated
+            ## values are properly matched (same index)
+            for k,v in kwargs.items():
+                keys.append(k)
+                vals.append(v)
+
+            q+=", ".join(["{} = ?".format(k) for k in keys])
+            return self._con.execute(q, vals).fetchone()[0]
+
     ##################
     ## DATA LOADING ##
     ##################
 
-    def load_mod_info(self, json_source, update_only=False) -> bool:
+    def load_mod_info(self, json_source):
         """
         read the saved mod information from a json file and
         populate the in-memory database
 
         :param str|Path json_source: path to modinfo.json file
-        :param update_only: if set to True, then instead of attempting
-            to fill the mods table from scratch with the data read from
-            the modinfo json, assume that the table is already populated
-            and only UPDATE certain fields with values read from the
-            modinfo file.
         """
         global _mcount
         # reset counter so that mod-ordinal is determined by the order
         # in which the entries are read from the file
         _mcount = count()
-
-        # self.LOGGER.debug("loading mod db from file")
 
         if not isinstance(json_source, Path):
             json_source = Path(json_source)
@@ -483,7 +458,7 @@ class DBManager(Submanager):
         return success
 
 
-    def load_hidden_files(self, json_source) -> bool:
+    def load_hidden_files(self, json_source):
         """
 
         :param str|Path json_source:
@@ -491,11 +466,9 @@ class DBManager(Submanager):
         """
         self.LOGGER.info("Analyzing hidden files")
 
-
         if not isinstance(json_source, Path):
             json_source = Path(json_source)
         success = False
-
 
         with json_source.open('r') as f:
             try:
@@ -569,7 +542,6 @@ class DBManager(Submanager):
 
         for row in self._con.execute(
             "SELECT * FROM hiddenfiles ORDER BY directory, filepath"):
-            # print(*row)
             p = PurePath(row['directory'], row['filepath'])
             pathparts = p.parts[:-1]
 
@@ -659,65 +631,6 @@ class DBManager(Submanager):
 
             # mark db as initialized (if it wasn't already)
             self._empty['mods'] = False
-
-        # db_fields[:-1] to ignore the error field for now
-        # (leave it at its default of 0)
-        # dbfields_ = db_fields[:-1]
-        #
-        # with self._con:
-        #     # insert the list of row-tuples into the in-memory db
-        #     self._con.executemany(
-        #         "INSERT INTO mods({}) VALUES ({})".format(
-        #             ", ".join(dbfields_),
-        #             ", ".join("?" * len(dbfields_))
-        #         ),
-        #         mod_list)
-
-
-    def update_table_from_modinfo(self, modinfo_file):
-        """
-        read from a profile's modinfo.json, use that information
-        to update the mutable fields of the current 'mods' table
-        """
-
-        FLD_ORD  = db_fields.FLD_ORD
-        FLD_NAME = db_fields.FLD_NAME
-        FLD_ENAB = db_fields.FLD_ENAB
-        FLD_DIR  = db_fields.FLD_DIR
-
-        counter = count()
-
-        # first, we need to whittle down the info to just the mutable
-        # fields; use this as the object-pairs-hook.
-        def oph(pairs):
-            # return a tuple of (ordinal, name, is-enabled, directory)
-            d = dict(pairs)
-            return next(counter), d[FLD_NAME], d[FLD_ENAB], d[FLD_DIR]
-
-        # technically, version & modid are mutable, too...but that's
-        # a different problem. If everything is up to date, they
-        # *shouldn't* change on a profile-switch. There should probably
-        # be a consistency/sync-check somewhere to ensure that, though.
-        # Somewhere that's not here.
-
-        success = True
-        with modinfo_file.open('r') as f:
-            # read from json file
-            try:
-                mods = json.load(f, object_pairs_hook=oph)
-            except json.decoder.JSONDecodeError:
-                self.LOGGER.error("No mod information present in {}, "
-                                  "or file is malformed."
-                                  .format(modinfo_file))
-                success=False
-            else:
-                with self._con:
-                    # update mutable info
-                    self._con.executemany(
-                        "UPDATE mods SET {} = ?, {} = ?, {} = ? WHERE {} = ?".format(
-                            FLD_ORD, FLD_NAME, FLD_ENAB, FLD_DIR)
-                        , mods)
-        return success
 
     ############
     ## Saving ##
@@ -846,9 +759,6 @@ class DBManager(Submanager):
             # derive the ordinal from order in which the mod-folders
             # are encountered (likely alphabetical)
             order = len(mods_list)+1
-            # dirname = moddir.name
-
-            # self.load_all_mod_files(moddir, order)
 
             # support loading information
             # read from meta.ini (ModOrganizer) file, if present
@@ -913,15 +823,48 @@ class DBManager(Submanager):
         with self._con:
             for mdir in installed_mods:
                 self.add_files_from_dir(mdir, str(mods_dir / mdir))
-            # for modfolder in mods_dir.iterdir():
-            #     if modfolder.is_dir():
-            #         self.add_files_from_dir(modfolder.name,
-            #                                 str(modfolder))
 
-        # self.LOGGER << "dumping db contents to disk"
+        self._empty['modfiles'] = self.count("modfiles") < 1
+
+
+
+                # self.LOGGER << "dumping db contents to disk"
         # with open('res/test2.dump.sql', 'w') as f:
         #     for l in self._con.iterdump():
         #         f.write(l+'\n')
+
+    def load_skyfiles(self, skyrim_dir):
+        """
+        Like 'load_all_mod_files', this examines the disk for
+        individual files and adds them to the modfiles table. However,
+        this only examines the "Data" directory within the given
+        Skyrim installation folder and addsd the files under the mod
+        name "Skyrim"
+
+        :param skyrim_dir:
+        """
+
+        # check if we have any "Skyrim"-rows already
+
+        c=self.count("modfiles", directory='Skyrim')
+        self.LOGGER << "Skyfile count: {}".format(c)
+
+        # if self.count("modfiles", directory='Skyrim')
+
+        if c:
+            # if so, clear them out
+            self.remove_files('Skyrim')
+
+        with self._con:
+            for f in skyrim_dir.iterdir():
+                if f.is_dir() and f.name.lower() == "data":
+                    # add files to db under mod-name "Skyrim"
+                    # TODO: make sure all parts of the application treat these items as a special case (since the files listed here obviously won't be under the 'normal' mods directory)
+                    self.add_files_from_dir('Skyrim', str(f))
+                    break
+
+        self._empty['modfiles'] = self.count("modfiles") < 1
+
 
     # noinspection PyIncorrectDocstring
     def add_files_from_dir(self, mod_name, mod_root, *,
@@ -953,11 +896,25 @@ class DBManager(Submanager):
                 zip(repeat(mod_name), mfiles))
 
             # mark modfiles table non-empty
-            self._empty['modfiles'] = False
+            # self._empty['modfiles'] = False
 
 
         # try: mfiles.remove('meta.ini') #don't care about these
         # except ValueError: pass
+
+    def remove_files(self, for_mod):
+        """
+        Remove all data rows from the modfiles table that belong to the
+        specified mod
+
+        :param for_mod: Name of mod's directory on disk (i.e. the ID
+            under which they are keyed in the db)
+        """
+        if not self._empty['modfiles']:
+            self.LOGGER << "Removing files for mod '{}' from database".format(for_mod)
+
+            with self._con:
+                self._con.execute("DELETE FROM modfiles WHERE directory = ?", (for_mod, ))
 
     def detect_file_conflicts(self):
         """
@@ -970,53 +927,58 @@ class DBManager(Submanager):
         changes (or immediately after they've saved them)
         """
 
-        self.LOGGER.info("Detecting file conflicts")
 
-
-        # if we're reloading the status of conflicted mods,
-        # delete the view if it exists
-
-        # create the view
-        with self._con:
-            self._con.execute("DROP VIEW IF EXISTS filesbymodorder")
-
-            # self._con.execute(q)
-            self._con.execute("""
-                CREATE VIEW filesbymodorder AS
-                    SELECT ordinal, f.directory, filepath
-                    FROM modfiles f, mods m
-                    WHERE f.directory=m.directory
-                    ORDER BY ordinal
-                """)
-
+        # setup variables
         file=''
         conflicts = defaultdict(list)
         mods_with_conflicts = defaultdict(list)
 
-        # [print(*r) for r in self._con.execute(detect_dupes_query)]
-        # for r in self._con.execute(detect_dupes_query):
+        # only run if there are actually any files to check
+        if not self._empty['modfiles']:
+            self.LOGGER.info("Detecting file conflicts")
 
-        # query view to detect duplicates
-        for r in self._con.execute("""
-            SELECT f.filepath, f.ordinal, f.directory
-                FROM filesbymodorder f
-                INNER JOIN (
-                    SELECT filepath, COUNT(*) AS C
-                    FROM filesbymodorder
-                    GROUP BY filepath
-                    HAVING C > 1
-                ) dups ON f.filepath=dups.filepath
-                ORDER BY f.filepath, f.ordinal
-                """):
-            if r['filepath'] != file:
-                file=r['filepath']
-            mod=r['directory']
+            # if we're reloading the status of conflicted mods,
+            # delete the view if it exists
 
-            # a dictionary of file conflicts to an ordered
-            #  list of mods which contain them
-            conflicts[file].append(mod)
-            # also, a dictionary of mods to a list of conflicting files
-            mods_with_conflicts[mod].append(file)
+            # create the view
+            with self._con:
+                self._con.execute("DROP VIEW IF EXISTS filesbymodorder")
+
+                # self._con.execute(q)
+                self._con.execute("""
+                    CREATE VIEW filesbymodorder AS
+                        SELECT ordinal, f.directory, filepath
+                        FROM modfiles f, mods m
+                        WHERE f.directory=m.directory
+                        ORDER BY ordinal
+                    """)
+
+            # [print(*r) for r in self._con.execute(detect_dupes_query)]
+            # for r in self._con.execute(detect_dupes_query):
+
+            # query view to detect duplicates
+            for r in self._con.execute("""
+                SELECT f.filepath, f.ordinal, f.directory
+                    FROM filesbymodorder f
+                    INNER JOIN (
+                        SELECT filepath, COUNT(*) AS C
+                        FROM filesbymodorder
+                        GROUP BY filepath
+                        HAVING C > 1
+                    ) dups ON f.filepath=dups.filepath
+                    ORDER BY f.filepath, f.ordinal
+                    """):
+                if r['filepath'] != file:
+                    file=r['filepath']
+                mod=r['directory']
+
+                # a dictionary of file conflicts to an ordered
+                #  list of mods which contain them
+                conflicts[file].append(mod)
+                # also, a dictionary of mods to a list of conflicting files
+                mods_with_conflicts[mod].append(file)
+        else:
+            self.LOGGER << "No files present in modfiles table"
 
         self.file_conflicts = conflicts
         self.mods_with_conflicting_files = mods_with_conflicts
@@ -1053,6 +1015,7 @@ class DBManager(Submanager):
             * Mods Not Found: for mods listed in the list of installed
               mods whose installation folders were not found on disk.
 
+        :param installed_mods: list of all installed mods
         :return: True if no errors and table unchanged. False if errors
             encountered and/or removed from table
         """
@@ -1060,10 +1023,6 @@ class DBManager(Submanager):
         # believe only directly comparing dirnames will allow
         # us to provide useful feedback to the user about
         # problems with the mod installation
-
-        # list of all the installed mods
-        # installed_mods = self.mainmanager.Paths.list_mod_folders()
-        # installed_mods = os.listdir(moddir)
 
         # reset the errors collection
         num_removed = self.reset_errors()
@@ -1159,42 +1118,4 @@ class DBManager(Submanager):
         return (next(_mcount),) + tuple(
             s[1] for s in sorted(pairs,
                                  key=lambda p: db_field_order[p[0]]))
-
-
-# if __name__ == '__main__':
-#     # from skymodman.managers import ModManager
-#
-#     DB = DBManager()
-#     DB._con.row_factory = sqlite3.Row
-#
-#     DB.load_mod_info(Path(os.path.expanduser("~/.config/skymodman/profiles/default/modinfo.json")))
-#
-#     c= DB.conn.execute("select * from mods")
-#
-#     print (c.description)
-#
-#     r=c.fetchone() #type: sqlite3.Row
-#
-#     print(type(r))
-#
-#     print(r.keys())
-#     print(r['directory'])
-#
-#     print(dict(zip(r.keys(), r)))
-#
-#
-#
-#
-#
-#     # print(DB.getone("Select * from mods where ordinal = 22"))
-#     # [ print(r) for r in DB.execute_("Select * from mods where ordinal BETWEEN 20 AND 24")]
-#     #
-#     # DB.conn.execute("DELETE FROM mods WHERE ordinal = 22")
-#     # [ print(r) for r in DB.execute_("Select * from mods where ordinal BETWEEN 20 AND 24")]
-#     #
-#     # DB.conn.execute("INSERT into mods (name, directory, ordinal) VALUES ('boogawooga', 'boogawoogadir', 22)")
-#     #
-#     # [ print(r) for r in DB.execute_("Select * from mods where ordinal BETWEEN 20 AND 24")]
-#
-#     DB.shutdown()
 

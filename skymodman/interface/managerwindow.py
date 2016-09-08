@@ -405,8 +405,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         model = models.ProfileListModel()
 
-        for name, profile in Manager.get_profiles(
-                names_only=False):
+        for profile in Manager.get_profiles(names=False):
             model.insertRows(data=profile)
 
         self.profile_selector.setModel(model)
@@ -917,56 +916,58 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.LOGGER.error("No profile chosen?!")
         else:
             new_profile = self.profile_selector.currentData(
-                Qt.UserRole).name
+                Qt.UserRole) # type == Profile
 
             # if no active profile, just load the selected one.
             # if somehow selected the same profile, do nothing
-            if Manager.profile is None or \
-                            new_profile != Manager.profile.name:
-                # check for unsaved changes to the mod-list
-                reply = self.table_prompt_if_unsaved()
 
-                # only continue to change profile if user does NOT
-                # click cancel (or if there are no changes to save)
-                if reply == QtWidgets.QMessageBox.Cancel:
-                    # reset the text in the profile selector;
-                    # this SHOULDn't enter an infinite loop because,
-                    # since we haven't yet changed
-                    # self.profile_selector_index, now 'index' will be
-                    # the same as 'old_index' at the top of this
-                    # function and nothing else in the program will
-                    # change (just the name shown in the profile
-                    # selector)
-                    self.profile_selector.setCurrentIndex(old_index)
+            if Manager.profile and Manager.profile.name == new_profile.name:
+                return
+
+            # if Manager.profile is None or \
+            #                 new_profile != Manager.profile.name:
+            # check for unsaved changes to the mod-list
+            reply = self.table_prompt_if_unsaved()
+
+            # only continue to change profile if user does NOT
+            # click cancel (or if there are no changes to save)
+            if reply == QtWidgets.QMessageBox.Cancel:
+                # reset the text in the profile selector;
+                # this SHOULDn't enter an infinite loop because,
+                # since we haven't yet changed
+                # self.profile_selector_index, now 'index' will be
+                # the same as 'old_index' at the top of this
+                # function and nothing else in the program will
+                # change (just the name shown in the profile
+                # selector)
+                self.profile_selector.setCurrentIndex(old_index)
+            else:
+                self.LOGGER.info(
+                    "Activating profile '{}'".format(
+                        new_profile.name))
+
+                if Manager.activate_profile(new_profile):
+
+                    self.logger << "Resetting views for new profile"
+
+                    # update our variable which tracks the current index
+                    self.profile_selector_index = index
+
+                    # No => "Don't save changes, drop them"
+                    # if reply == QtWidgets.QMessageBox.No:
+
+                    # Whether they clicked "no" or not, we
+                    # don't bother reverting, mods list is getting
+                    # reset; just disable the buttons
+                    self.mod_table.undo_stack.clear()
+                    # for s in self.undo_stacks:
+                    #     s.clear()
+
+
+                    self.newProfileLoaded.emit(new_profile.name)
                 else:
-
-
-                    self.LOGGER.info(
-                        "Activating profile '{}'".format(
-                            new_profile))
-
-                    if Manager.activate_profile(new_profile):
-
-                        self.logger << "Resetting views for new profile"
-
-                        # update our variable which tracks the current index
-                        self.profile_selector_index = index
-
-                        # No => "Don't save changes, drop them"
-                        # if reply == QtWidgets.QMessageBox.No:
-
-                        # Whether they clicked "no" or not, we
-                        # don't bother reverting, mods list is getting
-                        # reset; just disable the buttons
-                        self.mod_table.undo_stack.clear()
-                        # for s in self.undo_stacks:
-                        #     s.clear()
-
-
-                        self.newProfileLoaded.emit(new_profile)
-                    else:
-                        self.LOGGER.error("Profile Activation failed.")
-                        self.profile_selector.setCurrentIndex(old_index)
+                    self.LOGGER.error("Profile Activation failed.")
+                    self.profile_selector.setCurrentIndex(old_index)
 
     @pyqtSlot('QString')
     def on_profile_load(self, profile_name):
@@ -988,8 +989,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # also recheck alerts when loading new profile
         self.update_alerts()
-        # Fixme: if any alerts are active, check_alerts() will probably perform some redundant, duplicate work: the Manager queries the check() method of each active alert, but it's quite likely that the same operation was just performed for the alert to have been added to the list of active alerts in the first place! However, since check() methods _should_ be rather lightweight, this may not be a top concern unless there are for some reason a LOT of alerts (which also should not be the case). At the moment, the best idea I can think of is to add some sort of event-registration that will allow an alert to register the action(s) that will trigger it to be reevaluated. Unfortunately I feel this "solution" may turn out to be far worse than the current problem. Perhaps another way may present itself, and I'll continue to think on this initial idea.
-        # self.check_alerts()
 
     @pyqtSlot()
     def on_new_profile_action(self):
@@ -1204,10 +1203,12 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 return
 
         # text was found or was '': reset style sheet if one is present
-        if self.modtable_search_box.styleSheet():
-            self.modtable_search_box.setStyleSheet('')
-            self.status_bar.clearMessage()
+        self._clear_searchbox_style()
+        # if self.modtable_search_box.styleSheet():
+        #     self.modtable_search_box.setStyleSheet('')
+        #     self.status_bar.clearMessage()
 
+    @pyqtSlot()
     def _clear_searchbox_style(self):
         if self.modtable_search_box.styleSheet():
             self.modtable_search_box.setStyleSheet('')
