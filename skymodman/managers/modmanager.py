@@ -411,7 +411,9 @@ class _ModManager:
         self.check_dirs()
 
         if self._update_modinfo(True):
-            self.analyze_mod_files(True, True)
+            self.find_all_mod_files(True, True)
+            self._dbman.detect_file_conflicts()
+
         self._dbman.load_hidden_files(self.profile.hidden_files)
 
         self._enabledmods = None
@@ -463,7 +465,11 @@ class _ModManager:
             # if we successfully managed to load/generate mod info,
             # find all mod-related files on disk (if required) and
             # analyze for conflicts
-            self.analyze_mod_files(moddir_changed, skydir_changed)
+            self.find_all_mod_files(moddir_changed, skydir_changed)
+            # with all discovered files loaded into the database,
+            # detect which mods contain files with the same name
+            self._dbman.detect_file_conflicts()
+
 
         # always need to re-check hidden files
         # todo: clear out saved hidden files for mods that have been uninstalled.
@@ -500,7 +506,6 @@ class _ModManager:
             # if successful, validate modinfo (i.e. synchronize the list
             # of mods from the modinfo file with mod folders actually
             # present in Mods directory)
-            # FIXME: when switching from a profile with lots of "missing" mods to one without missing mods that uses the same configured-mods folder, the latter will still show a mod-missing error, despite the fact that they are not.
             self.validate_mod_installs()
             return True
         else:
@@ -588,22 +593,20 @@ class _ModManager:
             self.LOGGER.error(e)
             return False
 
-    def analyze_mod_files(self, load_modfiles=True, load_skyfiles=True):
+    def find_all_mod_files(self, modfiles=True, skyfiles=True):
         """
         This is a relatively hefty operation that gets a list of ALL the
         individual files within each mod folder found in the main Mods
         directory. A database table is created and kept for these, along
         with a reference to which mod the file belongs. This table
-        is then analyzed to detect duplicate files and overwrites between
-        mods. All this information is then available to present to the user.
+        can then be analyzed to detect duplicate files and overwrites
+        between mods.
 
         """
-        self.LOGGER << "<==Method called"
-
-        # _logger << "Loading list of all Mod Files on disk"
+        self.LOGGER << "Finding mod files on disk"
 
         # if required, examine the disk for files.
-        if load_modfiles:
+        if modfiles:
             try:
                 self._dbman.load_all_mod_files()
             except exceptions.InvalidAppDirectoryError as e:
@@ -613,18 +616,13 @@ class _ModManager:
 
         # let's also add the files from the base
         # Skyrim Data folder to the db
-        if load_skyfiles:
+        if skyfiles:
             try:
                 self._dbman.load_skyfiles(
                     self.get_directory(ks_dir.SKYRIM,
                                        aspath=True))
             except exceptions.InvalidAppDirectoryError as e:
                 self.LOGGER.warning(e)
-
-        # with all discovered files loaded into the database,
-        # detect which mods contain files with the same name
-        self._dbman.detect_file_conflicts()
-
 
     ##=============================================
     ## Data Persistence
