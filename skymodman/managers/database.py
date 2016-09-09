@@ -1015,7 +1015,7 @@ class DBManager(Submanager):
             * Mods Not Found: for mods listed in the list of installed
               mods whose installation folders were not found on disk.
 
-        :param installed_mods: list of all installed mods
+        :param list[str] installed_mods: list of all installed mods
         :return: True if no errors and table unchanged. False if errors
             encountered and/or removed from table
         """
@@ -1024,7 +1024,8 @@ class DBManager(Submanager):
         # us to provide useful feedback to the user about
         # problems with the mod installation
 
-        # reset the errors collection
+        # reset the errors collection (set 'error' field to 0 for
+        # every row where it is currently non-zero)
         num_removed = self.reset_errors()
 
         self.logger.debug("Resetting mod errors: {} entries affected"
@@ -1033,11 +1034,15 @@ class DBManager(Submanager):
         dblist = [r["directory"] for r in
                   self._con.execute("SELECT directory FROM mods")]
 
+        # make a copy of the mods list since we may be
+        # modifying its contents
+        im_list = installed_mods[:]
+
         not_found = []
         not_listed = []
 
-        if len(dblist) > len(installed_mods):
-            for modname in installed_mods:
+        if len(dblist) > len(im_list):
+            for modname in im_list:
                 try:
                     dblist.remove(modname)
                 except ValueError:
@@ -1049,11 +1054,11 @@ class DBManager(Submanager):
         else: # len(dblist) <= len(installed_mods):
             for modname in dblist:
                 try:
-                    installed_mods.remove(modname)
+                    im_list.remove(modname)
                 except ValueError:
                     not_found.append(modname)
             # if everything matched, this should be empty
-            not_listed = installed_mods
+            not_listed = im_list
 
 
         # i think inserting into the database is faster when done in
