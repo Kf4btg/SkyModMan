@@ -51,13 +51,13 @@ class _ModManager:
         self._init_diralerts()
 
         # the order here matters; profileManager requires config
-        self._pathman = _paths.PathManager(self)
-        self._configman = _config.ConfigManager(self)
+        self._pathman = _paths.PathManager(mcp=self)
+        self._configman = _config.ConfigManager(mcp=self)
 
-        self._profileman = _profiles.ProfileManager(self._pathman.dir_profiles, self)
+        self._profileman = _profiles.ProfileManager(self._pathman.dir_profiles, mcp=self)
 
         # set up db, but do not load info until requested
-        self._dbman = _database.DBManager(self)
+        self._dbman = _database.DBManager(mcp=self)
         self._db_initialized = False
 
         # used when the installer needs to query mod state

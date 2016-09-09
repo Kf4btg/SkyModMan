@@ -1,13 +1,14 @@
 import json
 import json.decoder
 import os
-import sqlite3
+# import sqlite3
 from pathlib import Path, PurePath
 from itertools import count, repeat
 from collections import defaultdict
 
 from skymodman import exceptions
-from skymodman.managers import Submanager
+# from skymodman.managers import Submanager
+from skymodman.managers.base import Submanager, BaseDBManager
 from skymodman.constants import (db_fields, db_fields_noerror,
                                  db_field_order, ModError, keystrings)
 from skymodman.utils import withlogger, tree
@@ -48,44 +49,44 @@ _SCHEMA = """
 # http://code.activestate.com/lists/python-list/189197/
 # during a discussion of the problems with savepoints
 # and the mystery of python's isolation-levels
-class HappyConn(sqlite3.Connection):
-    def __enter__(self):
-        self.execute("BEGIN")
-        return self
-    def __exit__(self, exc_type, exc_info, traceback):
-        if exc_type is None:
-            self.execute("COMMIT")
-        else:
-            self.execute("ROLLBACK")
-
-def getconn(path):
-    """
-    return a modified Connection with its isolation level set to
-    ``None`` and sensible commit/rollback policies when used as a
-    context manager.
-    """
-    conn = sqlite3.connect(path, factory=HappyConn)
-    # "isolation_level = None" seems like a simple-enough thing
-    # to understand, but in truth it replaces the dark magic
-    # of pysqlite's auto-transactions with a new kind of dark
-    # magic that, at the least, allows us to avoid spurious
-    # auto-commits and enables savepoints (which are totally
-    # broken under the default isolation level). It requires
-    # paying a bit of extra attention and making sure to issue
-    # the appropriate BEGIN, ROLLBACK, and COMMIT commands.
-    conn.isolation_level = None
-    return conn
+# class HappyConn(sqlite3.Connection):
+#     def __enter__(self):
+#         self.execute("BEGIN")
+#         return self
+#     def __exit__(self, exc_type, exc_info, traceback):
+#         if exc_type is None:
+#             self.execute("COMMIT")
+#         else:
+#             self.execute("ROLLBACK")
+#
+# def getconn(path):
+#     """
+#     return a modified Connection with its isolation level set to
+#     ``None`` and sensible commit/rollback policies when used as a
+#     context manager.
+#     """
+#     conn = sqlite3.connect(path, factory=HappyConn)
+#     # "isolation_level = None" seems like a simple-enough thing
+#     # to understand, but in truth it replaces the dark magic
+#     # of pysqlite's auto-transactions with a new kind of dark
+#     # magic that, at the least, allows us to avoid spurious
+#     # auto-commits and enables savepoints (which are totally
+#     # broken under the default isolation level). It requires
+#     # paying a bit of extra attention and making sure to issue
+#     # the appropriate BEGIN, ROLLBACK, and COMMIT commands.
+#     conn.isolation_level = None
+#     return conn
 
 
 # from skymodman.utils import humanizer
 # @humanizer.humanize
 @withlogger
-class DBManager(Submanager):
+class DBManager(BaseDBManager, Submanager):
 
 
 
     # names of all tables
-    _tablenames = ("modfiles", "hiddenfiles", "mods")
+    # _tablenames = ("modfiles", "hiddenfiles", "mods")
 
     # which tables need to be reset when profile changes
     _profile_reset_tables = ("hiddenfiles", "mods")
@@ -98,8 +99,12 @@ class DBManager(Submanager):
     }
         # "error": lambda v: ModError.NONE
 
-    def __init__(self, *args):
-        super().__init__(*args)
+    def __init__(self, *args, **kwargs):
+        super().__init__(db_path=":memory:",
+                         schema=_SCHEMA,
+                         table_names=("mods", "modfiles", "hiddenfiles"),
+                         logger=self.LOGGER,
+                         *args, **kwargs)
 
         # indicates if fill_mods_table() has ever been called
         self._initialized = False
@@ -108,7 +113,7 @@ class DBManager(Submanager):
         self._empty = {tn:True for tn in self._tablenames}
 
         # create db in memory
-        self._con = getconn(":memory:")
+        # self._con = getconn(":memory:")
         # self._con.set_trace_callback(print)
 
         # self._con = sqlite3.connect(":memory:",
@@ -125,8 +130,8 @@ class DBManager(Submanager):
         # GRRRR even with isolation_level=None, this STILL
         # auto-commits before executing the script if we're currently
         # within a transaction!!
-        self._con.executescript(_SCHEMA)
-        self._con.row_factory = sqlite3.Row
+        # self._con.executescript(_SCHEMA)
+        # self._con.row_factory = sqlite3.Row
 
         # These are created from the database, so it seems like it may
         # be best just to store them in this class:
@@ -141,17 +146,17 @@ class DBManager(Submanager):
     ## Properties ##
     ################
 
-    @property
-    def conn(self) -> sqlite3.Connection:
-        """
-        Directly access the database connection of this manager
-        in order to perform custom queries.
-        """
-        return self._con
-
-    @property
-    def in_transaction(self):
-        return self._con.in_transaction
+    # @property
+    # def conn(self) -> sqlite3.Connection:
+    #     """
+    #     Directly access the database connection of this manager
+    #     in order to perform custom queries.
+    #     """
+    #     return self._con
+    #
+    # @property
+    # def in_transaction(self):
+    #     return self._con.in_transaction
 
     @property
     def mods(self):
@@ -216,212 +221,217 @@ class DBManager(Submanager):
             return self._con.execute(
                 "UPDATE mods SET error = 0 WHERE error != 0").rowcount
 
+
     ##=============================================
     ## Transaction Management
     ##=============================================
 
-    def checktx(self):
-        """Check if the connection is in a transaction. If not, begin one"""
-        if not self._con.in_transaction:
-            self._con.execute("BEGIN")
+    # <editor-fold desc="transactions">
 
-    def savepoint(self, name="last"):
-        """
-        Create a savepoint in the database with name `name`. If, later,
-        ``rollback()`` is called with the same name as a parameter, the
-        database will revert to the state it was in when the savepoint
-        was created, rather than all the way to the beginning of the
-        transaction.
+    # def checktx(self):
+    #     """Check if the connection is in a transaction. If not, begin one"""
+    #     if not self._con.in_transaction:
+    #         self._con.execute("BEGIN")
+    #
+    # def savepoint(self, name="last"):
+    #     """
+    #     Create a savepoint in the database with name `name`. If, later,
+    #     ``rollback()`` is called with the same name as a parameter, the
+    #     database will revert to the state it was in when the savepoint
+    #     was created, rather than all the way to the beginning of the
+    #     transaction.
+    #
+    #     :param name: name of the savepoint; does not need to be unique.
+    #         If not provided, the name 'last' will be used.
+    #         ``rollback("last")`` will then return to the most recent
+    #         time savepoint() was called.
+    #     :return:
+    #     """
+    #
+    #     self.checktx()
+    #
+    #     self._con.execute("SAVEPOINT {}".format(
+    #         # don't allow whitespace;
+    #         # take the first element of name split on ws
+    #         # to enforce this
+    #         name.split()[0])
+    #     )
+    #
+    # ##############
+    # ## wrappers ##
+    # ##############
+    #
+    # def commit(self):
+    #     """
+    #     Commit the current transaction. Logs a warning if there is no
+    #     active transaction to commit
+    #     """
+    #     if not self._con.in_transaction:
+    #         self.LOGGER.warning("Database not currently in transaction."
+    #                             " Committing anyway.")
+    #
+    #     self._con.execute("COMMIT")
+    #
+    # def rollback(self, savepoint=None):
+    #     """Rollback the current transaction. If a savepoint name is
+    #     provided, rollback to that savepoint"""
+    #
+    #     if self._con.in_transaction:
+    #         if savepoint:
+    #             self._con.execute("ROLLBACK TO {}".format(
+    #                 savepoint.split()[0]))
+    #         else:
+    #             self._con.execute("ROLLBACK")
+    #             # self._con.rollback()
+    #     else:
+    #         # i'm aware that a rollback without transaction isn't
+    #         # an error or anything; but if there's nothing to rollback
+    #         # and rollback() is called, then I likely did something
+    #         # wrong and I want to know that
+    #         self.LOGGER.warning("nothing to rollback")
+    #
+    # def shutdown(self):
+    #     """
+    #     Close the db connection
+    #     """
+    #     self._con.close()
+    #
+    # def select(self, from_table, *fields, where="", params=()):
+    #     """
+    #     Execute a SELECT statement for the specified fields from
+    #     the named table, optionally using a WHERE constraint and
+    #     parameters sequences. This method returns the cursor object
+    #     used to execute the statment (which can then be used in a
+    #     "yield from" statement or e.g. turned into a sequence
+    #     with fetchall() )
+    #
+    #     :param from_table: name of the database table to select from
+    #     :param fields: columns/fields to choose from each matching row.
+    #         If none are provided, then "*" will be used to select all
+    #         columns
+    #     :param where: a SQL 'WHERE' constraint, minus the "WHERE"
+    #     :param params: parameter sequence to match any "?" in the query
+    #
+    #     :rtype: sqlite3.Cursor
+    #
+    #     """
+    #
+    #     if from_table not in self._tablenames:
+    #         raise exceptions.DatabaseError(
+    #             "'{}' is not a valid from_table name".format(from_table))
+    #
+    #     _q = "SELECT {flds} FROM {tbl}{whr}".format(
+    #         flds = ", ".join(fields) if fields else "*",
+    #         tbl=from_table,
+    #         whr = " WHERE {}".format(where) if where else ""
+    #     )
+    #
+    #     return self._con.execute(_q, params)
+    #
+    #
+    # def selectone(self, from_table, *fields, where="", params=()):
+    #     """
+    #     Like ``select()``, but just returns the first row from the result
+    #     of the query
+    #     """
+    #     return self.select(from_table, *fields,
+    #                        where=where,
+    #                        params=params).fetchone()
+    #
+    # def update(self, sql, params=(), many=False):
+    #     """
+    #     Like select(), but for UPDATE, INSERT, DELETE, etc. commands.
+    #     Returns the cursor object that was created to execute the
+    #     statement. The changes made are NOT committed before this
+    #     method returns; call commit() (or call this method while
+    #     using the connection as a context manager) to make sure they're
+    #     saved.
+    #
+    #     :param str sql: a valid sql query
+    #     :param many: is this an ``executemany`` scenario?
+    #     :param typing.Iterable params:
+    #     """
+    #     self.checktx()
+    #
+    #     cmd = self._con.executemany if many else self._con.execute
+    #     # return self._con.execute(sql, params)
+    #     return cmd(sql, params)
+    #
+    # def delete(self, from_table, where="", params=(), many=False):
+    #     """
+    #     Delete entries from a database table.
+    #
+    #     :param from_table:
+    #     :param where: if omitted, ALL rows in the table will be reomved
+    #     :param params:
+    #     :param many: is this an ``executemany`` situation?
+    #     :return: cursor object
+    #     """
+    #     self.checktx()
+    #
+    #     cmd = self._con.executemany if many else self._con.execute
+    #
+    #     return cmd("DELETE FROM {tbl}{whr}".format(
+    #         tbl=from_table,
+    #         whr=(" WHERE %s" % where) if where else ""
+    #     ), params)
+    #
+    #
+    # def insert(self, values_count, table, *fields, params=(), many=True):
+    #     """
+    #     e.g.:
+    #
+    #         >>> insert(2, "datatable", "firstname", "address", params=ftuple_list)
+    #         executemany('INSERT INTO datatable(firstname, address) VALUES (?, ?)', ftuple_list)
+    #
+    #     :param int values_count: number of ? to use for the values
+    #     :param str table: name of table
+    #     :param fields: optional field names for table
+    #     :param params:
+    #     :param many:
+    #     :return:
+    #     """
+    #     self.checktx()
+    #
+    #     cmd = self._con.executemany if many else self._con.execute
+    #
+    #     return cmd("INSERT INTO {tbl}{flds} VALUES {vals}".format(
+    #         tbl=table,
+    #         flds= ('(%s)' % ", ".join(fields)) if fields else "",
+    #         vals= '?' if values_count == 1
+    #             else '({})'.format(", ".join('?' * values_count))
+    #     ), params)
+    #
+    # def count(self, table, **kwargs):
+    #     """
+    #     Get a count of items in the given table. If no keyword arguments
+    #     are provide, get total count of all rows in the table. If
+    #     keyword args are given that correspond to (field_name=value)
+    #     pairs, return count of rows matching those condition(s).
+    #     """
+    #
+    #     if table not in self._tablenames:
+    #         self.LOGGER.error("Invalid table name '{}'".format(table))
+    #         return -1
+    #
+    #     if not kwargs:
+    #         return self._con.execute(
+    #             "SELECT COUNT(*) FROM {}".format(table)
+    #         ).fetchone()[0]
+    #     else:
+    #         q="SELECT COUNT(*) FROM {} WHERE ".format(table)
+    #         keys=[]
+    #         vals=[]
+    #         ## do this to make sure the keys and their associated
+    #         ## values are properly matched (same index)
+    #         for k,v in kwargs.items():
+    #             keys.append(k)
+    #             vals.append(v)
+    #
+    #         q+=", ".join(["{} = ?".format(k) for k in keys])
+    #         return self._con.execute(q, vals).fetchone()[0]
 
-        :param name: name of the savepoint; does not need to be unique.
-            If not provided, the name 'last' will be used.
-            ``rollback("last")`` will then return to the most recent
-            time savepoint() was called.
-        :return:
-        """
-
-        self.checktx()
-
-        self._con.execute("SAVEPOINT {}".format(
-            # don't allow whitespace;
-            # take the first element of name split on ws
-            # to enforce this
-            name.split()[0])
-        )
-
-    ##############
-    ## wrappers ##
-    ##############
-
-    def commit(self):
-        """
-        Commit the current transaction. Logs a warning if there is no
-        active transaction to commit
-        """
-        if not self._con.in_transaction:
-            self.LOGGER.warning("Database not currently in transaction."
-                                " Committing anyway.")
-
-        self._con.execute("COMMIT")
-
-    def rollback(self, savepoint=None):
-        """Rollback the current transaction. If a savepoint name is
-        provided, rollback to that savepoint"""
-
-        if self._con.in_transaction:
-            if savepoint:
-                self._con.execute("ROLLBACK TO {}".format(
-                    savepoint.split()[0]))
-            else:
-                self._con.execute("ROLLBACK")
-                # self._con.rollback()
-        else:
-            # i'm aware that a rollback without transaction isn't
-            # an error or anything; but if there's nothing to rollback
-            # and rollback() is called, then I likely did something
-            # wrong and I want to know that
-            self.LOGGER.warning("nothing to rollback")
-
-    def shutdown(self):
-        """
-        Close the db connection
-        """
-        self._con.close()
-
-    def select(self, table, *fields, where="", params=()):
-        """
-        Execute a SELECT statement for the specified fields from
-        the named table, optionally using a WHERE constraint and
-        parameters sequences. This method returns the cursor object
-        used to execute the statment (which can then be used in a
-        "yield from" statement or e.g. turned into a sequence
-        with fetchall() )
-
-        :param table: name of the database table to select from
-        :param fields: columns/fields to choose from each matching row.
-            If none are provided, then "*" will be used to select all
-            columns
-        :param where: a SQL 'WHERE' constraint, minus the "WHERE"
-        :param params: parameter sequence to match any "?" in the query
-
-        :rtype: sqlite3.Cursor
-
-        """
-
-        if table not in self._tablenames:
-            raise exceptions.DatabaseError(
-                "'{}' is not a valid table name".format(table))
-
-        _q = "SELECT {flds} FROM {tbl}{whr}".format(
-            flds = ", ".join(fields) if fields else "*",
-            tbl=table,
-            whr = " WHERE {}".format(where) if where else ""
-        )
-
-        return self._con.execute(_q, params)
-
-
-    def selectone(self, table, *fields, where="", params=()):
-        """
-        Like ``select()``, but just returns the first row from the result
-        of the query
-        """
-        return self.select(table, *fields,
-                           where=where,
-                           params=params).fetchone()
-
-    def update(self, sql, params=(), many=False):
-        """
-        Like select(), but for UPDATE, INSERT, DELETE, etc. commands.
-        Returns the cursor object that was created to execute the
-        statement. The changes made are NOT committed before this
-        method returns; call commit() (or call this method while
-        using the connection as a context manager) to make sure they're
-        saved.
-
-        :param str sql: a valid sql query
-        :param many: is this an ``executemany`` scenario?
-        :param typing.Iterable params:
-        """
-        self.checktx()
-
-        cmd = self._con.executemany if many else self._con.execute
-        # return self._con.execute(sql, params)
-        return cmd(sql, params)
-
-    def delete(self, table, where="", params=(), many=False):
-        """
-        Delete entries from a database table.
-
-        :param table:
-        :param where: if omitted, ALL rows in the table will be reomved
-        :param params:
-        :param many: is this an ``executemany`` situation?
-        :return: cursor object
-        """
-        self.checktx()
-
-        cmd = self._con.executemany if many else self._con.execute
-
-        return cmd("DELETE FROM {tbl}{whr}".format(
-            tbl=table,
-            whr=(" WHERE %s" % where) if where else ""
-        ), params)
-
-
-    def insert(self, values_count, table, *fields, params=(), many=True):
-        """
-        e.g.:
-
-            >>> insert(2, "datatable", "firstname", "address", params=ftuple_list)
-            executemany('INSERT INTO datatable(firstname, address) VALUES (?, ?)', ftuple_list)
-
-        :param int values_count: number of ? to use for the values
-        :param str table: name of table
-        :param fields: optional field names for table
-        :param params:
-        :param many:
-        :return:
-        """
-        self.checktx()
-
-        cmd = self._con.executemany if many else self._con.execute
-
-        return cmd("INSERT INTO {tbl}{flds} VALUES {vals}".format(
-            tbl=table,
-            flds= ('(%s)' % ", ".join(fields)) if fields else "",
-            vals= '?' if values_count == 1
-                else '({})'.format(", ".join('?' * values_count))
-        ), params)
-
-    def count(self, table, **kwargs):
-        """
-        Get a count of items in the given table. If no keyword arguments
-        are provide, get total count of all rows in the table. If
-        keyword args are given that correspond to (field_name=value)
-        pairs, return count of rows matching those condition(s).
-        """
-
-        if table not in self._tablenames:
-            self.LOGGER.error("Invalid table name '{}'".format(table))
-            return -1
-
-        if not kwargs:
-            return self._con.execute(
-                "SELECT COUNT(*) FROM {}".format(table)
-            ).fetchone()[0]
-        else:
-            q="SELECT COUNT(*) FROM {} WHERE ".format(table)
-            keys=[]
-            vals=[]
-            ## do this to make sure the keys and their associated
-            ## values are properly matched (same index)
-            for k,v in kwargs.items():
-                keys.append(k)
-                vals.append(v)
-
-            q+=", ".join(["{} = ?".format(k) for k in keys])
-            return self._con.execute(q, vals).fetchone()[0]
+    #</editor-fold>
 
     ##################
     ## DATA LOADING ##
@@ -620,9 +630,9 @@ class DBManager(Submanager):
                                            "non-empty table 'mods'")
 
         # ignore the error field for now
-        with self._con:
+        with self.conn:
             # insert the list of row-tuples into the in-memory db
-            self._con.executemany(
+            self.conn.executemany(
                 "INSERT INTO mods({}) VALUES ({})".format(
                     ", ".join(db_fields_noerror),
                     ", ".join("?" * len(db_fields_noerror))

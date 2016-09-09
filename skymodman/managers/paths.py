@@ -25,7 +25,7 @@ class PathManager(Submanager):
     Keeps track of all configured paths used within the application.
     """
 
-    def __init__(self, mainmanager, file_main=None, dir_config=None, dir_data=None, dir_mods=None, dir_profiles=None, dir_skyrim=None, dir_vfs=None):
+    def __init__(self, file_main=None, dir_config=None, dir_data=None, dir_mods=None, dir_profiles=None, dir_skyrim=None, dir_vfs=None, *args, **kwargs):
         """
 
         :param Path file_main:
@@ -37,7 +37,6 @@ class PathManager(Submanager):
         :param Path dir_vfs:
         """
 
-        super().__init__(mainmanager)
 
         self.file_main    = file_main
         self.dir_config   = dir_config
@@ -47,6 +46,7 @@ class PathManager(Submanager):
         self.dir_skyrim   = dir_skyrim
         self.dir_vfs      = dir_vfs
 
+        super().__init__(*args, **kwargs)
 
     ##=============================================
     ## Path validation

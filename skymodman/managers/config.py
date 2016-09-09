@@ -42,8 +42,8 @@ _DEFAULT_CONFIG_={
 @withlogger
 class ConfigManager(Submanager):
 
-    def __init__(self, *args):
-        super().__init__(*args)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
         self.paths = self.mainmanager.Paths
 

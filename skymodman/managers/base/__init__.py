@@ -1,3 +1,8 @@
+"""Contains the generic bases for the managers used by the application.
+These should contain no application-specific functionality."""
+
+from .base_database import BaseDBManager
+
 
 
 class Submanager:
@@ -13,4 +18,3 @@ class Submanager:
         """
         self.mainmanager = mcp
         super().__init__(*args, **kwargs)
-
