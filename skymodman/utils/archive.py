@@ -8,6 +8,11 @@ from skymodman.exceptions import ArchiverError
 from skymodman.types import diqt
 from skymodman.log import withlogger
 
+_7zopts=("-bd",    # disable progress indic (uses readline, won't really work here...)
+          "-bb1",  # output verbosity 1 (show files as extracted)
+          "-ssc-", # case-INsensitive mode
+          "-y",    # assume yes to queries
+          )
 
 @withlogger
 class ArchiveHandler:
@@ -149,7 +154,17 @@ class ArchiveHandler:
         # normalize to lower case
         return [l+suffix for l in lines]
 
-    async def extract(self, archive, destination, specific_entries=None, callback=None):
+    async def extract(self, archive, destination,
+                      specific_entries=None,
+                      callback=None):
+        """
+
+        :param archive:
+        :param str destination:
+        :param specific_entries:
+        :param callback:
+        :return:
+        """
 
         dpath = Path(destination)
 
@@ -171,6 +186,10 @@ class ArchiveHandler:
 
 
     async def _extract_files(self, archive, dest, entries, callback):
+        """
+        Creates and executes the 7zip command that will extract the
+        specified entries from the archive.
+        """
         # self.LOGGER << "begin _extract_files"
         if not callback:
             def callback(*args): pass
@@ -180,13 +199,13 @@ class ArchiveHandler:
         else:
             includes = [""]
 
-        opts=("-bd",    # disable progress indic (uses readline, won't really work here...)
-              "-bb1",   # output verbosity 1 (show files as extracted)
-              "-ssc-",  # case-INsensitive mode
-              "-y",     # assume yes to queries
-              )
+        # opts=("-bd",    # disable progress indic (uses readline, won't really work here...)
+        #       "-bb1",   # output verbosity 1 (show files as extracted)
+        #       "-ssc-",  # case-INsensitive mode
+        #       "-y",     # assume yes to queries
+        #       )
         create = asyncio.create_subprocess_exec(
-            "7z", "x", *opts, "-o{}".format(dest),
+            "7z", "x", *_7zopts, "-o{}".format(dest),
             *includes, archive,
             stdout=asyncio.subprocess.PIPE
         )
