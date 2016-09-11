@@ -22,10 +22,20 @@ class ConfigError(Error):
         self.section = section
         self.key = key
 
+class InvalidConfigSectionError(GeneralError):
+    def __init__(self, section):
+        self.section = section
+        super().__init__("Invalid section header '{}'".format(section))
+
 class ConfigValueUnsetError(ConfigError):
     """The given key and section exist, but do not contain a valid value"""
     def __str__(self):
         return "Configuration parameter '{0.key}' in section '{0.section}' is unset.".format(self)
+    
+class MissingConfigSectionError(GeneralError):
+    def __init__(self, section):
+        self.section = section
+        super().__init__("Section header '{}' not found".format(section))
 
 class MissingConfigKeyError(ConfigError):
     """Based on the config-file schema, the application has determined that a key that should be in the config file is not present."""

@@ -1,10 +1,13 @@
+import appdirs
+
 from pathlib import Path
 
 from skymodman import exceptions
 from skymodman.managers.base import Submanager
 from skymodman.log import withlogger
 from skymodman.utils import fsutils
-from skymodman.constants import keystrings, overrideable_dirs
+from skymodman import constants
+from skymodman.constants import keystrings, overrideable_dirs, APPNAME
 
 _pathvars = ("file_main", "dir_config", "dir_data", "dir_profiles", "dir_mods", "dir_vfs", "dir_skyrim")
 
@@ -38,14 +41,34 @@ class PathManager(Submanager):
         :param Path dir_vfs:
         """
 
+        ## Defaults if not provided ##
 
-        self.file_main    = file_main
-        self.dir_config   = dir_config
-        self.dir_data     = dir_data
-        self.dir_mods     = dir_mods
-        self.dir_profiles = dir_profiles
+        # in user-config dir
+
+        self.dir_config = Path(appdirs.user_config_dir(APPNAME)) \
+            if not dir_config else dir_config
+
+        self.file_main = self.dir_config / constants.MAIN_CONFIG \
+            if not file_main else file_main
+
+        self.dir_profiles = Path(self.dir_config, 'profiles') \
+            if not dir_profiles else dir_profiles
+
+
+        # in user-data dir
+
+        self.dir_data = Path(appdirs.user_data_dir(APPNAME)) \
+            if not dir_data else dir_data
+
+        self.dir_mods = Path(self.dir_data, 'mods') \
+            if not dir_mods else dir_mods
+
+        self.dir_vfs = Path(self.dir_data, 'skyrimfs') \
+            if not dir_vfs else dir_vfs
+
+        ## Skyrim folder has no default ##
+
         self.dir_skyrim   = dir_skyrim
-        self.dir_vfs      = dir_vfs
 
         super().__init__(*args, **kwargs)
 
@@ -67,6 +90,27 @@ class PathManager(Submanager):
             return p.exists() if check_exists else True
         except exceptions.InvalidAppDirectoryError:
             return False
+
+    def check_exists(self, key, use_profile=True, create=False):
+        """
+        Check whether the directory for the given key exists and return
+        the result.
+
+
+        :param key:
+        :param create: if `True`, create the directory if it does not
+            exist. The final return value will still be False in this
+            case.
+        :return:
+        """
+
+        p = self.path(key, use_profile)
+
+        if create and not p.exists():
+            p.mkdir(parents=True)
+            return False
+
+        return p.exists()
 
     ##=============================================
     ## Getting/setting paths

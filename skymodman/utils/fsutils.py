@@ -168,7 +168,7 @@ def create_dir(path, parents=True):
 ##---------------------------------
 
 @singledispatch
-def open_atomic(file_name, dest_dir, as_bytes=False):
+def open_atomic(file_name, dest_dir=None, as_bytes=False):
     """
     Obtain a context manager for for writing to a file safely and
     atomically. If something goes wrong during the write, nothing will
@@ -179,11 +179,29 @@ def open_atomic(file_name, dest_dir, as_bytes=False):
         * ``open_atomic(file_name, dest_dir, as_bytes=False)``
         * ``open_atomic(dest_file_path, as_bytes=False)``
 
-    In the first form, `file_name` and `dest_dir` are both strings. In the second, `dest_file_path` is a Path object. In both cases, as_bytes is a boolean value
+    In the first form, `file_name` and `dest_dir` are both strings. If
+    dest_dir is None, file_name will be assumed to be entire path to
+    the file to open.
 
+    In the second, `dest_file_path` is a Path object.
+
+    In both cases, as_bytes is a boolean value
+
+    :type file_name: str
+    :type dest_dir: str
+    :type as_bytes: bool
     """
+    if dest_dir is None:
+        dest_dir = os.path.dirname(file_name)
+        file_name = os.path.basename(file_name)
+
     return _safewriter(file_name, dest_dir, as_bytes)
 
 @open_atomic.register(Path)
 def _ofsw(dest_file_path, as_bytes=False):
+    """
+
+    :param Path dest_file_path:
+    :param bool as_bytes:
+    """
     return _safewriter(dest_file_path.name, str(dest_file_path.parent), as_bytes)

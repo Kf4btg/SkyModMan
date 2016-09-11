@@ -2,6 +2,7 @@
 These should contain no application-specific functionality."""
 
 from .base_database import BaseDBManager
+from .base_config import BaseConfigManager
 
 
 

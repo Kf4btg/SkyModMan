@@ -1,16 +1,15 @@
 import configparser
-import os
+# import os
 from pathlib import Path
-from copy import deepcopy
 from collections import defaultdict
 
-import appdirs
+# import appdirs
 
 from skymodman import exceptions
-from skymodman.managers.base import Submanager
+from skymodman.managers.base import Submanager, BaseConfigManager
 from skymodman.log import withlogger
 from skymodman.utils.fsutils import check_path
-from skymodman.constants import EnvVars, FALLBACK_PROFILE, keystrings, APPNAME, MAIN_CONFIG
+from skymodman.constants import EnvVars, FALLBACK_PROFILE, keystrings #, APPNAME, MAIN_CONFIG
 
 # for convenience and quicker lookup
 _SECTION_GENERAL = keystrings.Section.GENERAL
@@ -30,26 +29,37 @@ _DEFAULT_CONFIG_={
         _KEY_DEFPRO:  FALLBACK_PROFILE
     },
     _SECTION_DIRS: {
-        _KEY_PROFDIR: appdirs.user_config_dir(APPNAME) + "/profiles",
+        _KEY_PROFDIR: "", #appdirs.user_config_dir(APPNAME) + "/profiles",
         _KEY_SKYDIR: "",
-        _KEY_MODDIR: appdirs.user_data_dir(APPNAME) +"/mods",
-        _KEY_VFSMNT: appdirs.user_data_dir(APPNAME) +"/skyrimfs",
+        _KEY_MODDIR: "", #appdirs.user_data_dir(APPNAME) +"/mods",
+        _KEY_VFSMNT: "", #appdirs.user_data_dir(APPNAME) +"/skyrimfs",
     }
 }
 
 
 # @humanize
 @withlogger
-class ConfigManager(Submanager):
+class ConfigManager(Submanager, BaseConfigManager):
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, mcp, *args, **kwargs):
 
-        self.paths = self.mainmanager.Paths
+        # easier reference to pathmanager
+        self.paths = mcp.Paths
+
+        # put defaults into template
+        _DEFAULT_CONFIG_[_SECTION_DIRS][_KEY_PROFDIR] = self.paths[_KEY_PROFDIR]
+        _DEFAULT_CONFIG_[_SECTION_DIRS][_KEY_MODDIR] = self.paths[_KEY_MODDIR]
+        _DEFAULT_CONFIG_[_SECTION_DIRS][_KEY_VFSMNT] = self.paths[_KEY_VFSMNT]
+
+        super().__init__(
+            template = _DEFAULT_CONFIG_,
+            config_file = self.paths.file_main,
+            environ_vars = EnvVars,
+            mcp=mcp, *args, **kwargs)
 
         # keep a dictionary that is effectively an in-memory version
         # of the main config file
-        self.currentValues = deepcopy(_DEFAULT_CONFIG_)
+        # self.currentValues = deepcopy(_DEFAULT_CONFIG_)
 
         # track errors encountered while loading paths
         self.path_errors=defaultdict(list)
@@ -58,7 +68,7 @@ class ConfigManager(Submanager):
         self.missing_keys = []
 
         # hold all environment variables and their values (if any) here.
-        self._environment = {k:os.getenv(k, "") for k in EnvVars}
+        # self._environment = {k:os.getenv(k, "") for k in EnvVars}
 
         # read config file, make sure all required data is present or at default
         self.ensure_default_setup()
@@ -79,8 +89,8 @@ class ConfigManager(Submanager):
         # since our keys are (as of right now) all unique (the sections
         # are more of a visual aid than anything else), take advantage
         # of that fact to track down the requested value
-        for s in self.currentValues.values():
-            if config_var in s.keys():
+        for s in self.current_values.values():
+            if config_var in s:
                 return s[config_var]
 
         # if all else fails return none
@@ -91,7 +101,8 @@ class ConfigManager(Submanager):
         """
         :return: Name of most recently active profile
         """
-        return self.currentValues[_SECTION_GENERAL][_KEY_LASTPRO]
+        return self.get_value(_SECTION_GENERAL, _KEY_LASTPRO)
+        # return self.current_values[_SECTION_GENERAL][_KEY_LASTPRO]
 
     @last_profile.setter
     def last_profile(self, name):
@@ -101,15 +112,19 @@ class ConfigManager(Submanager):
 
         :param name:
         """
-        self.currentValues[_SECTION_GENERAL][_KEY_LASTPRO] = name
-        self._save_value(_SECTION_GENERAL, _KEY_LASTPRO, name)
+        self.update_value(_SECTION_GENERAL, _KEY_LASTPRO, name)
+
+        # self.current_values[_SECTION_GENERAL][_KEY_LASTPRO] = name
+        # self._save_value(_SECTION_GENERAL, _KEY_LASTPRO, name)
 
     @property
     def default_profile(self):
         """
         :return: Name of the profile marked as default
         """
-        return self.currentValues[_SECTION_GENERAL][_KEY_DEFPRO]
+        return self.get_value(_SECTION_GENERAL, _KEY_DEFPRO)
+
+        # return self.current_values[_SECTION_GENERAL][_KEY_DEFPRO]
 
     @default_profile.setter
     def default_profile(self, name):
@@ -118,24 +133,26 @@ class ConfigManager(Submanager):
         and write the change to tghe configuration file
         :param str name:
         """
-        self.currentValues[_SECTION_GENERAL][_KEY_DEFPRO] = name
-        self._save_value(_SECTION_GENERAL, _KEY_DEFPRO, name)
+
+        self.update_value(_SECTION_GENERAL, _KEY_DEFPRO, name)
+        # self.current_values[_SECTION_GENERAL][_KEY_DEFPRO] = name
+        # self._save_value(_SECTION_GENERAL, _KEY_DEFPRO, name)
 
 
-    @property
-    def env(self):
-        """
-        :return: the dictionary containing the defined environment variables
-        """
-        return self._environment
-
-    def getenv(self, var):
-        """
-
-        :param var:
-        :return: the value of the environment variable specified by `var`
-        """
-        return self._environment[var]
+    # @property
+    # def env(self):
+    #     """
+    #     :return: the dictionary containing the defined environment variables
+    #     """
+    #     return self._environment
+    #
+    # def getenv(self, var):
+    #     """
+    #
+    #     :param var:
+    #     :return: the value of the environment variable specified by `var`
+    #     """
+    #     return self._environment[var]
 
     ##=============================================
     ## Setup and Sanity Checks
@@ -155,16 +172,26 @@ class ConfigManager(Submanager):
 
         # get the path to the our folder within the user's configuration directory
         # (e.g. ~/.config), using appdirs
-        self.paths.dir_config = Path(appdirs.user_config_dir(APPNAME))
+        # self.paths.dir_config = Path(appdirs.user_config_dir(APPNAME))
         ## check that config dir exists, create if missing ##
-        self._check_path_exist(self.paths.dir_config, True)
+        self.paths.check_exists('dir_config',
+                                use_profile=False,
+                                create=True)
+        # self._check_path_exist(self.paths.dir_config, True)
 
         ## check that main config file exists ##
-        self._check_main_config()
+        # self._check_main_config_exists()
+
+        if not Path(self.config_file).exists():
+            self.LOGGER.info("Creating default configuration file.")
+            self.create_config_file()
+
 
         ## Load settings from main config file ##
-        config = configparser.ConfigParser()
-        config.read(self.paths['file_main'])
+        # config = configparser.ConfigParser()
+        # config.read(self.paths['file_main'])
+
+        config = self.read_config()
 
         ##=================================
         ## Profile Directory
@@ -174,15 +201,24 @@ class ConfigManager(Submanager):
         # path to directory which holds all the profile info
         # TODO: should this stuff actually be in XDG_DATA_HOME??
         try:
-            self.paths.dir_profiles = Path(config[_SECTION_DIRS][_KEY_PROFDIR])
-        except KeyError:
-            self.missing_keys.append(exceptions.MissingConfigKeyError(_KEY_PROFDIR, _SECTION_DIRS))
+            # self.paths.dir_profiles = Path(config[_SECTION_DIRS][_KEY_PROFDIR])
+            self.paths.dir_profiles = Path(self._get_value_from(config, _SECTION_DIRS, _KEY_PROFDIR))
+
+
+        except (exceptions.MissingConfigKeyError,
+                    exceptions.MissingConfigSectionError) as e:
+            # XXX: on thinking about this, it may actually be beneficial to ignore a missing key here and just implicitly use the default. If the user ever customizes the path in the preferences dialog, we can write it to the config file then. This may prevent accidental changes to the path or even issues if some sort of upgrade changes the default.
+            # self.missing_keys.append(exceptions.MissingConfigKeyError(_KEY_PROFDIR, _SECTION_DIRS))
+            # FIXME: this won't work w/ MissingConfigSectionError
+            self.missing_keys.append(e)
 
             self.LOGGER.warning("Key for profiles directory missing; using default.")
-            self.paths.dir_profiles = Path(_DEFAULT_CONFIG_[_SECTION_DIRS][_KEY_PROFDIR])
+            ## Should be default already
+            # self.paths.dir_profiles = Path(_DEFAULT_CONFIG_[_SECTION_DIRS][_KEY_PROFDIR])
 
         ## check that profiles dir exists, create if missing ##
-        if not self._check_dir_exist('dir_profiles', True):
+        if not self.paths.check_exists('dir_profiles', False, True):
+        # if not self._check_dir_exist('dir_profiles', True):
             # if it was missing, also create the folder for the default/fallback profile
             self.LOGGER.info("Creating directory for default profile.")
             (self.paths.dir_profiles / FALLBACK_PROFILE).mkdir()
@@ -197,12 +233,15 @@ class ConfigManager(Submanager):
         for key in (_KEY_LASTPRO, _KEY_DEFPRO):
             try:
                 # attempt to load saved values from config
-                self.currentValues[_SECTION_GENERAL][key] = self._load_config_value(config, _SECTION_GENERAL, key)
+                self.load_value_from(config, _SECTION_GENERAL, key)
+                # self.current_values[_SECTION_GENERAL][key] = self._load_config_value(config, _SECTION_GENERAL, key)
 
-            except exceptions.MissingConfigKeyError as e:
+            except (exceptions.MissingConfigKeyError,
+                    exceptions.MissingConfigSectionError) as e:
                 self.missing_keys.append(e)
                 self.LOGGER << "setting "+key+" to default value"
-                self.currentValues[_SECTION_GENERAL][key] = FALLBACK_PROFILE
+                self._set_value(_SECTION_GENERAL, key, FALLBACK_PROFILE)
+                # self.current_values[_SECTION_GENERAL][key] = FALLBACK_PROFILE
 
             finally:
                 # and now check that the folders for those dirs exist
@@ -221,10 +260,16 @@ class ConfigManager(Submanager):
 
         ## check that mods directory exists, but only create it if the
         # location in the config is same as the default
-        self._check_dir_exist('dir_mods',
-                              create=self.paths['dir_mods'] ==
+        self.paths.check_exists('dir_mods',
+                                use_profile=False,
+                                create=self.paths['dir_mods'] ==
                                      _DEFAULT_CONFIG_[_SECTION_DIRS]
                                      [_KEY_MODDIR])
+
+        # self._check_dir_exist('dir_mods',
+        #                       create=self.paths['dir_mods'] ==
+        #                              _DEFAULT_CONFIG_[_SECTION_DIRS]
+        #                              [_KEY_MODDIR])
 
         ## and finally, let's fill in any blank spots in the config.
         ## note that this does NOT overwrite any _invalid_ settings,
@@ -242,65 +287,65 @@ class ConfigManager(Submanager):
                 if s not in config:
                     config[s] = {}
 
-                config[s][k] = self.currentValues[s][k]
+                config[s][k] = self.current_values[s][k]
 
             with self.paths.file_main.open('w') as f:
                 config.write(f)
 
-    def _check_path_exist(self, path, create=False):
-        """
+    # def _check_path_exist(self, path, create=False):
+    #     """
+    #
+    #     :param path: Path object
+    #     :param create: if True and path does not exist, create it and
+    #         any required parent directories.
+    #     :return:
+    #     """
+    #
+    #     # if path is unset, there's not much we can do
+    #     if not path:
+    #         raise TypeError("path must not be None")
+    #
+    #     if not path.exists():
+    #         self.LOGGER.warning("{} not found.".format(path))
+    #
+    #         if create:
+    #             self.LOGGER.info("Creating {}".format(path))
+    #             path.mkdir(parents=True)
+    #
+    #         return False
+    #
+    #     return True
+    #
+    # def _check_dir_exist(self, which, create=False):
+    #     """
+    #     Given a known configuration/data directory, check that it exists
+    #      and create it if it doesn't
+    #
+    #     :param which: key string for directory
+    #     :param bool create: if True and the directory does not exist, create it and any required parents dirs
+    #     :return: True if the directory existed, False if it did not/had to be created
+    #     """
+    #
+    #     p = self.paths.path(which, False)
+    #
+    #     try:
+    #         return self._check_path_exist(p, create)
+    #     except TypeError:
+    #         raise exceptions.ConfigValueUnsetError(which, _SECTION_DIRS)
 
-        :param path: Path object
-        :param create: if True and path does not exist, create it and
-            any required parent directories.
-        :return:
-        """
 
-        # if path is unset, there's not much we can do
-        if not path:
-            raise TypeError("path must not be None")
-
-        if not path.exists():
-            self.LOGGER.warning("{} not found.".format(path))
-
-            if create:
-                self.LOGGER.info("Creating {}".format(path))
-                path.mkdir(parents=True)
-
-            return False
-
-        return True
-
-    def _check_dir_exist(self, which, create=False):
-        """
-        Given a known configuration/data directory, check that it exists
-         and create it if it doesn't
-
-        :param which: key string for directory
-        :param bool create: if True and the directory does not exist, create it and any required parents dirs
-        :return: True if the directory existed, False if it did not/had to be created
-        """
-
-        p = self.paths.path(which, False)
-
-        try:
-            return self._check_path_exist(p, create)
-        except TypeError:
-            raise exceptions.ConfigValueUnsetError(which, _SECTION_DIRS)
-
-
-    def _check_main_config(self):
-        """
-        Ensure main configuration file exists, creating if necessary
-        """
-
-        self.paths.file_main = self.paths.dir_config / MAIN_CONFIG
-
-        ## check that main config file exists ##
-        if not self.paths.file_main.exists():
-            self.LOGGER.info("Creating default configuration file.")
-            # create it w/ default values if it doesn't
-            self.create_default_config()
+    # def _check_main_config_exists(self):
+    #     """
+    #     Ensure main configuration file exists, creating if necessary
+    #     """
+    #
+    #     # self.paths.file_main = self.paths.dir_config / MAIN_CONFIG
+    #
+    #     ## check that main config file exists ##
+    #     if not self.paths.file_main.exists():
+    #         self.LOGGER.info("Creating default configuration file.")
+    #         # create it w/ default values if it doesn't
+    #         self.create_default_config()
 
     def _check_for_profile_dir(self, key):
         """
@@ -309,7 +354,8 @@ class ConfigManager(Submanager):
 
         :param key:
         """
-        pname = self.currentValues[_SECTION_GENERAL][key]
+        pname = self.get_value(_SECTION_GENERAL, key)
+        # pname = self.current_values[_SECTION_GENERAL][key]
         pdir = self.paths.dir_profiles / pname
 
         if not pdir.exists():
@@ -318,8 +364,10 @@ class ConfigManager(Submanager):
             # if the profile is not already the default, set it so.
             if pname != FALLBACK_PROFILE:
                 self.LOGGER << "falling back to default."
-                self.currentValues[_SECTION_GENERAL][
-                    key] = FALLBACK_PROFILE
+                self._set_value(_SECTION_GENERAL, key, FALLBACK_PROFILE)
+
+                # self.current_values[_SECTION_GENERAL][
+                #     key] = FALLBACK_PROFILE
                 # and go ahead and recurse this once,
                 # to ensure that the default folder is created
                 self._check_for_profile_dir(key)
@@ -356,7 +404,8 @@ class ConfigManager(Submanager):
             # if they didn't or it didn't exist, pull the config value
             if p is None:
                 try:
-                    config_val = self._load_config_value(config, _SECTION_DIRS, path_key)
+                    config_val = self._get_value_from(config, _SECTION_DIRS, path_key)
+                    # config_val = self._load_config_value(config, _SECTION_DIRS, path_key)
                 except exceptions.MissingConfigKeyError as e:
                     self.missing_keys.append(e)
                 else:
@@ -388,7 +437,8 @@ class ConfigManager(Submanager):
                 setattr(self.paths, path_key, p)
 
             # update config-file mirror
-            self.currentValues[_SECTION_DIRS][path_key] = self.paths[path_key]
+            self._set_value(_SECTION_DIRS, path_key, self.paths[path_key])
+            # self.current_values[_SECTION_DIRS][path_key] = self.paths[path_key]
 
         if self.path_errors:
             for att, errlist in self.path_errors.items():
@@ -425,25 +475,25 @@ class ConfigManager(Submanager):
         ## can check the environment
 
 
-    def create_default_config(self):
-        """
-        Called if the main configuration file does not exist in the expected location.
-        Creates 'skymodman.ini' with default values
-        """
-        #TODO: perhaps just include a default config file and copy it in place.
-
-        self.LOGGER << "Creating default configuration file"
-
-        config = configparser.ConfigParser()
-
-        # construct the default config
-        for section,vallist in _DEFAULT_CONFIG_.items():
-            config[section] = {}
-            for prop, value in vallist.items():
-                config[section][prop] = value
-
-        with self.paths.file_main.open('w') as configfile:
-            config.write(configfile)
+    # def create_default_config(self):
+    #     """
+    #     Called if the main configuration file does not exist in the expected location.
+    #     Creates 'skymodman.ini' with default values
+    #     """
+    #     #TODO: perhaps just include a default config file and copy it in place.
+    #
+    #     self.LOGGER << "Creating default configuration file"
+    #
+    #     config = configparser.ConfigParser()
+    #
+    #     # construct the default config
+    #     for section,vallist in _DEFAULT_CONFIG_.items():
+    #         config[section] = {}
+    #         for prop, value in vallist.items():
+    #             config[section][prop] = value
+    #
+    #     with self.paths.file_main.open('w') as configfile:
+    #         config.write(configfile)
 
     def update_dirpath(self, path_key):
         """
@@ -454,11 +504,13 @@ class ConfigManager(Submanager):
         through there and one need not worry about ever calling this
         method directly.
         """
-        if path_key in _DEFAULT_CONFIG_[_SECTION_DIRS]:
-            self._update_value(_SECTION_DIRS, path_key, self.paths[path_key])
-        else:
-            raise exceptions.InvalidConfigKeyError(path_key,
-                                                   _SECTION_DIRS)
+        self.update_value(_SECTION_DIRS, path_key, self.paths[path_key])
+
+        # if path_key in _DEFAULT_CONFIG_[_SECTION_DIRS]:
+        #     self._update_value(_SECTION_DIRS, path_key, self.paths[path_key])
+        # else:
+        #     raise exceptions.InvalidConfigKeyError(path_key,
+        #                                            _SECTION_DIRS)
 
     def update_genvalue(self, key, value):
         """
@@ -468,59 +520,61 @@ class ConfigManager(Submanager):
         :param value:
         :return:
         """
-
-        if key in _DEFAULT_CONFIG_[_SECTION_GENERAL]:
-            self._update_value(_SECTION_GENERAL, key, value)
-        else:
-            raise exceptions.InvalidConfigKeyError(key, _SECTION_GENERAL)
-
-    def update_config(self, key, section, value):
-        """
-        Update saved configuration file
-
-        :param  value: the new value to set
-        :param str key: which key will will be set to the new value
-        :param str section: valid values are "General" and "Directories" (or the enum value)
-        """
-
-        # validate new value against schema
-        try:
-            _DEFAULT_CONFIG_[section][key]
-        except KeyError as e:
-            raise exceptions.InvalidConfigKeyError(key, section) from e
-
-        self._update_value(section, key, value)
-
-    def _update_value(self, section, key, value):
-        """
-        Save a value to the config file and also update the local
-        config mirror.
-
-        :param section:
-        :param key:
-        :param value:
-        """
-
-        self._save_value(section, key, value)
-        self.currentValues[section][key] = value
+        self.update_value(_SECTION_GENERAL, key, value)
 
 
-    def _save_value(self, section, key, value):
-        """
-        Update the config file with a single value.
-        Performs no validation or error-handling.
-        Only meant to be called internally
+        # if key in _DEFAULT_CONFIG_[_SECTION_GENERAL]:
+        #     self._update_value(_SECTION_GENERAL, key, value)
+        # else:
+        #     raise exceptions.InvalidConfigKeyError(key, _SECTION_GENERAL)
 
-        :param section:
-        :param key:
-        :param value:
-        :return:
-        """
-        config = configparser.ConfigParser()
+    # def update_config(self, key, section, value):
+    #     """
+    #     Update saved configuration file
+    #
+    #     :param  value: the new value to set
+    #     :param str key: which key will will be set to the new value
+    #     :param str section: valid values are "General" and "Directories" (or the enum value)
+    #     """
+    #
+    #     # validate new value against schema
+    #     try:
+    #         _DEFAULT_CONFIG_[section][key]
+    #     except KeyError as e:
+    #         raise exceptions.InvalidConfigKeyError(key, section) from e
+    #
+    #     self._update_value(section, key, value)
 
-        config.read(self.paths['file_main'])
-
-        config[section][key] = value
-
-        with self.paths.file_main.open('w') as f:
-            config.write(f)
+    # def _update_value(self, section, key, value):
+    #     """
+    #     Save a value to the config file and also update the local
+    #     config mirror.
+    #
+    #     :param section:
+    #     :param key:
+    #     :param value:
+    #     """
+    #
+    #     self._save_value(section, key, value)
+    #     self.current_values[section][key] = value
+    #
+    #
+    # def _save_value(self, section, key, value):
+    #     """
+    #     Update the config file with a single value.
+    #     Performs no validation or error-handling.
+    #     Only meant to be called internally
+    #
+    #     :param section:
+    #     :param key:
+    #     :param value:
+    #     :return:
+    #     """
+    #     config = configparser.ConfigParser()
+    #
+    #     config.read(self.paths['file_main'])
+    #
+    #     config[section][key] = value
+    #
+    #     with self.paths.file_main.open('w') as f:
+    #         config.write(f)
