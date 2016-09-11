@@ -6,7 +6,7 @@ from PyQt5.QtCore import Qt, QModelIndex, QAbstractItemModel, pyqtSignal, pyqtSl
 from PyQt5.QtWidgets import QUndoStack
 
 
-from skymodman.utils import withlogger #, tree
+from skymodman.log import withlogger #, tree
 from skymodman.utils.fsutils import check_path
 from skymodman.managers import modmanager
 from skymodman.interface.qundo import UndoCmd

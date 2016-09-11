@@ -15,7 +15,7 @@ from skymodman.managers import modmanager
 from skymodman.interface import models, app_settings #, ui_utils
 from skymodman.interface.dialogs import message
 from skymodman.interface.install_helpers import InstallerUI
-from skymodman.utils import withlogger #, icons
+from skymodman.log import withlogger #, icons
 from skymodman.utils.fsutils import check_path, join_path
 
 from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow

@@ -8,7 +8,8 @@ from skymodman.constants import FALLBACK_PROFILE
 from skymodman.constants.keystrings import (Section as kstr_section,
                                             Dirs as kstr_dirs,
                                             INI as kstr_ini)
-from skymodman.utils import withlogger, open_for_safe_write
+from skymodman.log import withlogger
+from skymodman.utils import open_for_safe_write
 
 
 ProfileFiles = (MODINFO, LOADORDER, INIEDITS, OVERWRITE, HIDDEN, SETTINGS) = (

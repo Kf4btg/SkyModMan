@@ -53,7 +53,7 @@ class BaseDBManager:
         self._tablenames = tuple(table_names)
 
         # use subclass' logger
-        self._logger = logger
+        self._log = logger
 
 
     ##=============================================
@@ -114,8 +114,8 @@ class BaseDBManager:
         Commit the current transaction. Logs a warning if there is no
         active transaction to commit
         """
-        if not self._con.in_transaction and self._logger:
-            self._logger.warning(
+        if not self._con.in_transaction and self._log:
+            self._log.warning(
                 "Database not currently in transaction."
                 " Committing anyway.")
 
@@ -132,12 +132,12 @@ class BaseDBManager:
             else:
                 self._con.execute("ROLLBACK")
                 # self._con.rollback()
-        elif self._logger:
+        elif self._log:
             # i'm aware that a rollback without transaction isn't
             # an error or anything; but if there's nothing to rollback
             # and rollback() is called, then I likely did something
             # wrong and I want to know that
-            self._logger.warning("nothing to rollback")
+            self._log.warning("nothing to rollback")
 
     def shutdown(self):
         """

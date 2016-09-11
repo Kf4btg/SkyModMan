@@ -6,7 +6,7 @@ from pathlib import Path
 
 from skymodman.exceptions import ArchiverError
 from skymodman.types import diqt
-from skymodman.utils import withlogger
+from skymodman.log import withlogger
 
 
 @withlogger

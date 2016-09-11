@@ -8,7 +8,7 @@ import appdirs
 
 from skymodman import exceptions
 from skymodman.managers.base import Submanager
-from skymodman.utils import withlogger
+from skymodman.log import withlogger
 from skymodman.utils.fsutils import check_path
 from skymodman.constants import EnvVars, FALLBACK_PROFILE, keystrings, APPNAME, MAIN_CONFIG
 

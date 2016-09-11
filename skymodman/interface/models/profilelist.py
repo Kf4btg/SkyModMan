@@ -1,7 +1,7 @@
 from PyQt5.Qt import QModelIndex
 from PyQt5.QtCore import Qt, QAbstractListModel
 
-from skymodman.utils import withlogger
+from skymodman.log import withlogger
 
 @withlogger
 class ProfileListModel(QAbstractListModel):

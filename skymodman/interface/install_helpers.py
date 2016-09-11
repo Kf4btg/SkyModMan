@@ -6,7 +6,7 @@ import quamash
 
 from skymodman.managers import modmanager
 from skymodman.interface.dialogs import message
-from skymodman.utils import withlogger
+from skymodman.log import withlogger
 
 Manager = modmanager.Manager()
 

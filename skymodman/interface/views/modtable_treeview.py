@@ -3,7 +3,7 @@ from PyQt5 import QtWidgets as qtW
 from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot, QItemSelectionModel as qISM
 
 from skymodman.constants import Column, ModError
-from skymodman.utils import withlogger
+from skymodman.log import withlogger
 
 from skymodman.interface.models import ModTable_TreeModel
 from skymodman.interface.ui_utils import undomacro, blocked_signals

@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import QTreeWidget, QTreeWidgetItem, QAction, QMenu
 
 from skymodman.types.archivefs import ArchiveFS
 from skymodman.types.archivefs.cipathlib import PureCIPath
-from skymodman.utils import withlogger
+from skymodman.log import withlogger
 
 
 # from copy import deepcopy

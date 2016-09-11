@@ -13,7 +13,8 @@ from skymodman.installer import common
 from skymodman.installer.fomod import Fomod
 
 from skymodman.types.archivefs import archivefs as arcfs
-from skymodman.utils import withlogger, tree
+from skymodman.log import withlogger
+from skymodman.utils import tree
 from skymodman.utils.archive import ArchiveHandler
 from skymodman.utils.fsutils import dir_move_merge
 

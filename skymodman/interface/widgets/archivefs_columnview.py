@@ -3,7 +3,8 @@ from PyQt5.QtCore import pyqtSignal, Qt, QModelIndex
 from PyQt5.QtGui import QResizeEvent
 from PyQt5.QtWidgets import QStyle, QProxyStyle
 
-from skymodman.utils import withlogger, icons
+from skymodman.utils import icons
+from skymodman.log import withlogger
 
 
 class ResizingListView(QtWidgets.QListView):

@@ -7,7 +7,8 @@ from PyQt5 import QtWidgets
 from skymodman.interface.designer.uic.archive_structure_ui import Ui_mod_structure_dialog
 from skymodman.interface.widgets.overlay_layout import Overlay, OverlayCenter
 from skymodman.interface.models.archivefs_treemodel import ModArchiveTreeModel
-from skymodman.utils import withlogger, icons
+from skymodman.log import withlogger
+from skymodman.utils import icons
 
 _description = "Arrange the directory structure of the archive shown" \
                " to the right into the proper structure for" \

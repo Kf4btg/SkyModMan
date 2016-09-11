@@ -12,7 +12,7 @@ from skymodman.constants.keystrings import (Dirs as ks_dir,
                                             Section as ks_sec,
                                             INI as ks_ini)
 from skymodman.installer.common import FileState
-from skymodman.utils import withlogger
+from skymodman.log import withlogger
 
 __manager = None
 

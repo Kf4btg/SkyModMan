@@ -4,7 +4,7 @@ import sys
 import asyncio
 
 from skymodman.managers import modmanager
-from skymodman import constants, skylog
+from skymodman import constants, log
 
 
 def main():
@@ -62,7 +62,7 @@ if __name__ == '__main__':
                 loop.run_forever()
         finally:
             mmanager.DB.shutdown()
-            skylog.stop_listener()
+            log.stop_listener()
     else:
         main()
 

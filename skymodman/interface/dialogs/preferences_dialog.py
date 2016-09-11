@@ -10,7 +10,7 @@ from skymodman.interface import app_settings, ui_utils
 from skymodman.interface.dialogs import message, checkbox_message
 from skymodman.interface.designer.uic.preferences_dialog_ui import \
     Ui_Preferences_Dialog
-from skymodman.utils import withlogger
+from skymodman.log import withlogger
 from skymodman.utils.fsutils import check_path, create_dir
 from skymodman import constants, exceptions
 from skymodman.constants.keystrings import UI, Dirs as D

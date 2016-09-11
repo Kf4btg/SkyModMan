@@ -4,7 +4,7 @@ from skymodman import exceptions
 from skymodman.managers.base import Submanager
 from skymodman.types import Profile, diqt
 from skymodman.constants import FALLBACK_PROFILE
-from skymodman.utils import withlogger
+from skymodman.log import withlogger
 
 # @humanizer.humanize
 @withlogger

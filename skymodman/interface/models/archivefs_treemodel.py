@@ -8,7 +8,8 @@ from skymodman.constants import OverwriteMode
 from skymodman.interface.dialogs.file_exists_dialog import FileExistsDialog
 from skymodman.types.archivefs import archivefs
 from skymodman.types.archivefs.archivefs import ArchiveFS, PureCIPath, CIPath
-from skymodman.utils import icons, withlogger
+from skymodman.utils import icons
+from skymodman.log import withlogger
 
 
 class UndoCmd(QtWidgets.QUndoCommand):

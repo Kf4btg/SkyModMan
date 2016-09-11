@@ -10,7 +10,8 @@ from skymodman import exceptions
 from skymodman.managers.base import Submanager, BaseDBManager
 from skymodman.constants import (db_fields, db_fields_noerror,
                                  db_field_order, ModError, keystrings)
-from skymodman.utils import withlogger, tree
+from skymodman.log import withlogger
+from skymodman.utils import tree
 
 _mcount = count()
 

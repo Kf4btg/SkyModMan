@@ -8,7 +8,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeD
 from skymodman.interface.typedefs import QModEntry
 from skymodman.managers import modmanager
 from skymodman.constants import (Column as COL, ModError)
-from skymodman.utils import withlogger
+from skymodman.log import withlogger
 
 # sometimes...the import system makes me very angry
 from skymodman.interface.qundo.commands import (
