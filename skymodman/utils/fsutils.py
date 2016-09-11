@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from functools import singledispatch
 from pathlib import Path
 
 import os
@@ -8,6 +9,7 @@ from os.path import (exists as _exists,
                      join as _join)
 
 from skymodman.exceptions import FileAccessError
+from skymodman.utils.safewrite import SafeWriter as _safewriter
 
 __all__ = ["check_path", "join_path", "change_dir", "dir_move_merge"]
 
@@ -161,3 +163,27 @@ def create_dir(path, parents=True):
 
     return True
 
+##=================================
+## Atomic-Write
+##---------------------------------
+
+@singledispatch
+def open_atomic(file_name, dest_dir, as_bytes=False):
+    """
+    Obtain a context manager for for writing to a file safely and
+    atomically. If something goes wrong during the write, nothing will
+    have been overwritten. Can be used just like the built in open(f...)
+
+    This method has two forms:
+
+        * ``open_atomic(file_name, dest_dir, as_bytes=False)``
+        * ``open_atomic(dest_file_path, as_bytes=False)``
+
+    In the first form, `file_name` and `dest_dir` are both strings. In the second, `dest_file_path` is a Path object. In both cases, as_bytes is a boolean value
+
+    """
+    return _safewriter(file_name, dest_dir, as_bytes)
+
+@open_atomic.register(Path)
+def _ofsw(dest_file_path, as_bytes=False):
+    return _safewriter(dest_file_path.name, str(dest_file_path.parent), as_bytes)

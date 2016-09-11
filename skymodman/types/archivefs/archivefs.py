@@ -1,14 +1,26 @@
 from pathlib import PurePath
 # from functools import lru_cache
 
-from skymodman.utils import singledispatch_m
-from skymodman.utils.debug import Printer as PRINT
+# from skymodman.utils import singledispatch_m
+from functools import (singledispatch as _singledispatch,
+                       wraps as _wraps)
+# from skymodman.utils.debug import Printer as PRINT
 from skymodman.constants import SkyrimGameInfo, OverwriteMode
 
 from .fserrors import *
 from .cipathlib import PureCIPath, CIPath, cistat, SortFlags
 from .inoderecord import InodeRecord
 
+# FROM:
+# http://stackoverflow.com/questions/24601722/how-can-i-use-functools-singledispatch-with-instance-methods
+def singledispatch_m(func):
+    dispatcher = _singledispatch(func)
+
+    @_wraps(dispatcher)
+    def wrapper(*args, **kw):
+        return dispatcher.dispatch(
+            args[1].__class__)(*args, **kw)
+    return wrapper
 
 def get_associated_pathtype(arcfs):
 
@@ -823,7 +835,7 @@ class ArchiveFS:
             try:
                 self._check_collision(dest, overwrite)
             except Error_EEXIST:
-                PRINT << "collided"
+                # PRINT << "collided"
 
                 if overwrite & OverwriteMode.IGNORE:
                     return False

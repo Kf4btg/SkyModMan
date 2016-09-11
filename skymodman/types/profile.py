@@ -9,7 +9,7 @@ from skymodman.constants.keystrings import (Section as kstr_section,
                                             Dirs as kstr_dirs,
                                             INI as kstr_ini)
 from skymodman.log import withlogger
-from skymodman.utils import open_for_safe_write
+from skymodman.utils.fsutils import open_atomic
 
 
 ProfileFiles = (MODINFO, LOADORDER, INIEDITS, OVERWRITE, HIDDEN, SETTINGS) = (
@@ -323,6 +323,6 @@ class Profile:
         config = confparser()
         config.read_dict(self._config)
 
-        with open_for_safe_write(self.settings) as ini:
+        with open_atomic(self.settings) as ini:
             config.write(ini)
 

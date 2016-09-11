@@ -1,4 +1,4 @@
-from skymodman.utils import shifter
+from skymodman.utils.shifter import shifter
 from ..undocmd import UndoCmd
 
 class ShiftRowsCommand(UndoCmd):

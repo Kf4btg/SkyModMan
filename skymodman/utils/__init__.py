@@ -1,5 +1,5 @@
-from functools import (singledispatch as _singledispatch,
-                       wraps as _wraps)
+# from functools import (singledispatch as _singledispatch,
+#                        wraps as _wraps)
                        # reduce as _reduce)
 # from itertools import (chain as _chain,
 #                        combinations as _combos)
@@ -7,8 +7,8 @@ from functools import (singledispatch as _singledispatch,
 
 # from skymodman import skylog as _skylog
 
-from .safewrite import open_for_safe_write
-from .shifter import shifter
+# from .safewrite import open_for_safe_write
+# from .shifter import shifter
 
 
 # def withlogger(cls):
@@ -35,14 +35,14 @@ from .shifter import shifter
 
 # FROM:
 # http://stackoverflow.com/questions/24601722/how-can-i-use-functools-singledispatch-with-instance-methods
-def singledispatch_m(func):
-    dispatcher = _singledispatch(func)
-
-    @_wraps(dispatcher)
-    def wrapper(*args, **kw):
-        return dispatcher.dispatch(
-            args[1].__class__)(*args, **kw)
-    return wrapper
+# def singledispatch_m(func):
+#     dispatcher = _singledispatch(func)
+#
+#     @_wraps(dispatcher)
+#     def wrapper(*args, **kw):
+#         return dispatcher.dispatch(
+#             args[1].__class__)(*args, **kw)
+#     return wrapper
 
 # class classprop:
 #     """
