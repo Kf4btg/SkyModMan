@@ -347,6 +347,11 @@ class ConfigManager(Submanager, BaseConfigManager):
         # else:
         #     self.paths.dir_vfs = Path(config[_SECTION_GENERAL][_KEY_VFSMNT])
 
+    ##=============================================
+    ## Convenience methods for accessing what
+    ## are currently our only two sections
+    ##=============================================
+
     def update_dirpath(self, path_key):
         """
         Update the saved value of a configurable directory path
@@ -358,6 +363,8 @@ class ConfigManager(Submanager, BaseConfigManager):
         """
         self.update_value(_SECTION_DIRS, path_key, self.paths[path_key])
 
+    ## path information will be queried via the pathmanager
+
     def update_genvalue(self, key, value):
         """
         Update the value of a General setting
@@ -367,3 +374,19 @@ class ConfigManager(Submanager, BaseConfigManager):
         :return:
         """
         self.update_value(_SECTION_GENERAL, key, value)
+
+    def get_genvalue(self, key):
+        """
+        Get the value of a setting from the General section of the
+        config.
+
+        This is just a shortcut for config_manager.get_value("General", key)
+
+        (though of course contants.keystrings.Section.GENERAL is
+        preferred to the raw string "Directories")
+
+        :param key: setting config key
+        :return:
+        """
+
+        return self.get_value(_SECTION_GENERAL, key)

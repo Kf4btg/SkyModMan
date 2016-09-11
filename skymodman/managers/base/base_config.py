@@ -126,7 +126,6 @@ class BaseConfigManager:
         """
         try:
             s = self.current_values[section]
-            # return self.current_values[section][key]
         except KeyError:
             raise exceptions.InvalidConfigSectionError(section)
 
@@ -220,8 +219,6 @@ class BaseConfigManager:
         conf = self.read_config()
         self._set_value_on(conf, section, key, value)
         self._set_value(section, key, value)
-        # conf[section][key] = value
-        # self.current_values[section][key] = value
 
         self.write_config(conf)
 

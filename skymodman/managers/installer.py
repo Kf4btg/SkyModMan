@@ -103,7 +103,7 @@ class InstallManager(Submanager):
         Extract all or select items from the installer's associated mod archive to the `destination`. If either `entries` or `srcdestpairs` is specified, only the items found in those collections will be extracted (srcdestpairs takes precedence if both are provided). If neither are given, all files from the archive will be extracted to the destination.
 
         :param str destination: extraction destination
-        :param list[str] entries: list of archive entries (i.e. directories or files) to extract
+        :param collections.abc.Iterable[str] entries: list of archive entries (i.e. directories or files) to extract
         """
         # :param srcdestpairs: A list of 2-tuples where the first item is the source path within the archive of a file to install, and the second item is the path (relative to the mod installation directory) where the source should be extracted.
 

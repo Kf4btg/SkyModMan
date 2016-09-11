@@ -50,15 +50,16 @@ class _ModManager:
         self._diralerts={}
         self._init_diralerts()
 
-        # the order here matters; profileManager requires config
+        # the order here matters; profileManager requires config,
+        # config requires Paths...
         self._pathman = _paths.PathManager(mcp=self)
         self._configman = _config.ConfigManager(mcp=self)
 
-        self._profileman = _profiles.ProfileManager(self._pathman.dir_profiles, mcp=self)
+        self._profileman = _profiles.ProfileManager(
+            self._pathman.dir_profiles, mcp=self)
 
         # set up db, but do not load info until requested
         self._dbman = _database.DBManager(mcp=self)
-        self._db_initialized = False
 
         # used when the installer needs to query mod state
         self._enabledmods = None
@@ -70,9 +71,6 @@ class _ModManager:
 
         # set of issues that arise during operation
         self.alerts = set() # type: Set [Alert]
-
-        # tracking which dirs are valid will make things easier
-        self._valid_dirs = {d:False for d in ks_dir}
 
         # make sure we have a valid profiles directory
         self.check_dir(ks_dir.PROFILES)
@@ -213,7 +211,6 @@ class _ModManager:
             )
         }
 
-
     def check_dir(self, key):
         """Check that the specified app directory is valid. Add
         appropriate alert if not."""
@@ -223,15 +220,12 @@ class _ModManager:
             # remove the alert if it was present
             self.remove_alert(self._diralerts[key])
             return True
-            # self._valid_dirs[key] = True
         else:
             # otherwise, add the alert
 
             self.add_alert(self._diralerts[key])
             return False
-            # self._valid_dirs[key]=False
 
-        # return self._valid_dirs[key]
 
     def check_dirs(self):
         """
@@ -267,11 +261,6 @@ class _ModManager:
         old_profile = self.profile
 
         try:
-            # make sure we're dealing with just the name
-            # if isinstance(profile, _profiles.Profile):
-            #     profile = profile.name
-            # assert isinstance(profile, str)
-
             self._load_profile(profile)
 
         except Exception as e:
@@ -425,8 +414,6 @@ class _ModManager:
 
         :param profile_name:
         """
-        # self.LOGGER << "<==Method called (profile_name={})".format(profile_name)
-
 
         self.LOGGER << "loading data for profile: {}".format(
             profile_name)
@@ -540,8 +527,6 @@ class _ModManager:
             # return success
             return True
 
-
-
     ##=============================================
     ## Mod Information
     ##=============================================
@@ -642,8 +627,6 @@ class _ModManager:
             tuple([getattr(mod, field)
                    for field in sorted(mod._fields,
                                        key=_field_order.get)
-                                       # key=lambda f: _db_fields.index(
-                                       #     f))
                    ])
             for mod in changes)
 
@@ -703,7 +686,8 @@ class _ModManager:
         else:
             # in all other situations, just
             # return the stored config value
-            val = self._configman[name]
+            val = self._configman.get_genvalue(name)
+            # val = self._configman[name]
 
         # if the value stored in config was None (or some other
         # False-like value), return the `default` parameter instead
@@ -769,7 +753,8 @@ class _ModManager:
             p = self._pathman.path(key, use_profile_override)
             return p if aspath else str(p)
         except exceptions.InvalidAppDirectoryError:
-            if nofail: return None if aspath else ""
+            if nofail:
+                return None if aspath else ""
             raise
 
     ##=============================================
@@ -794,7 +779,7 @@ class _ModManager:
         from skymodman.managers import installer as _install
 
         # instantiate a new install manager
-        installer = _install.InstallManager(archive, self)
+        installer = _install.InstallManager(archive, mcp=self)
 
 
         if extract_dir is not None: # we're expecting a fomod
@@ -808,7 +793,7 @@ class _ModManager:
 
                 # if we found a fomod folder, extract (only) that
                 # that folder and its contents to a temporary directory
-                await installer.extract(extract_dir, [fomodpath])
+                await installer.extract(extract_dir, (fomodpath, ))
                 # modconf = os.path.join(extract_dir, fomodpath,
                 #                        "ModuleConfig.xml")
 
