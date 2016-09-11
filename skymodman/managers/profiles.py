@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from skymodman import exceptions
-from skymodman.managers import Submanager
+from skymodman.managers.base import Submanager
 from skymodman.types import Profile, diqt
 from skymodman.constants import FALLBACK_PROFILE
 from skymodman.utils import withlogger

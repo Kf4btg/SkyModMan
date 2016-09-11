@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from skymodman import exceptions
-from skymodman.managers import Submanager
+from skymodman.managers.base import Submanager
 from skymodman.utils import withlogger, fsutils
 from skymodman.constants import keystrings, overrideable_dirs
 

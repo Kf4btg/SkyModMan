@@ -5,7 +5,7 @@ from collections import deque
 from functools import lru_cache
 from pathlib import PurePath, Path
 
-from skymodman.managers import Submanager
+from skymodman.managers.base import Submanager
 
 from skymodman.constants import SkyrimGameInfo # TopLevelDirs_Bain, TopLevelSuffixes
 
