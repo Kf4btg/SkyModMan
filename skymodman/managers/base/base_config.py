@@ -1,4 +1,4 @@
-from contextlib import contextmanager
+# from contextlib import contextmanager
 from configparser import ConfigParser as _parser
 import os
 from copy import deepcopy
@@ -32,11 +32,14 @@ class BaseConfigManager:
 
         self.template = template # should be considered 'read-only'
 
+        # keep a dictionary that is effectively an in-memory version
+        # of the main config file
         self.current_values = deepcopy(template)
 
+        # hold all environment variables and their values (if any) here.
         self._environment = {k:os.getenv(k, "") for k in environ_vars}
 
-        self._pause_writing = False
+        # self._pause_writing = False
 
     ##=============================================
     ## Properties
@@ -222,27 +225,27 @@ class BaseConfigManager:
 
         self.write_config(conf)
 
-    @contextmanager
-    def update_values(self):
-        """A context manager that allows one to update as many
-        values as desired without saving the config.
-
-        When invoked, yields a ConfigParser instance initialized from
-        the current file. This can be used to update the values as
-        needed.
-
-        When the context manager exits, all the updated values will be
-        written to the config file."""
-
-        self._pause_writing = True
-
-        config = self.read_config()
-
-        yield config
-
-        self._pause_writing = False
-
-        self.write_config(config)
+    # @contextmanager
+    # def update_values(self):
+    #     """A context manager that allows one to update as many
+    #     values as desired without saving the config.
+    #
+    #     When invoked, yields a ConfigParser instance initialized from
+    #     the current file. This can be used to update the values as
+    #     needed.
+    #
+    #     When the context manager exits, all the updated values will be
+    #     written to the config file."""
+    #
+    #     self._pause_writing = True
+    #
+    #     config = self.read_config()
+    #
+    #     yield config
+    #
+    #     self._pause_writing = False
+    #
+    #     self.write_config(config)
 
 
 
