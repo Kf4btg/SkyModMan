@@ -1,20 +1,19 @@
 import asyncio
 import os
-import re
 from collections import deque
 from functools import lru_cache
 from pathlib import PurePath, Path
 
+# import re
+# from skymodman.constants import SkyrimGameInfo # TopLevelDirs_Bain, TopLevelSuffixes
+
 from skymodman.managers.base import Submanager
-
-from skymodman.constants import SkyrimGameInfo # TopLevelDirs_Bain, TopLevelSuffixes
-
 from skymodman.installer import common
 from skymodman.installer.fomod import Fomod
 
 from skymodman.types.archivefs import archivefs as arcfs
 from skymodman.log import withlogger
-from skymodman.utils import tree
+from skymodman.utils.tree import Tree
 from skymodman.utils.archive import ArchiveHandler
 from skymodman.utils.fsutils import dir_move_merge
 
@@ -63,7 +62,7 @@ class InstallManager(Submanager):
         self.normalized_imgpaths = {}
 
         # we get the `mainmanager` attribute from our Submanager base
-        self.install_dir = self.mainmanager.Config.paths.dir_mods / self.arc_path.stem.lower()
+        self.install_dir = self.mainmanager.Paths.dir_mods / self.arc_path.stem.lower()
         # Used to track state during installation
         self.files_to_install = []
         self.files_installed = deque()
@@ -98,15 +97,16 @@ class InstallManager(Submanager):
                 return e
         return None
 
-    async def extract(self, destination, entries=None,
-                      srcdestpairs=None, callback=None):
+                      # srcdestpairs=None,
+    async def extract(self, destination, entries=None, callback=None):
         """
         Extract all or select items from the installer's associated mod archive to the `destination`. If either `entries` or `srcdestpairs` is specified, only the items found in those collections will be extracted (srcdestpairs takes precedence if both are provided). If neither are given, all files from the archive will be extracted to the destination.
 
-        :param destination: extraction destination
-        :param entries: list of archive entries (i.e. directories or files) to extract
-        :param srcdestpairs: A list of 2-tuples where the first item is the source path within the archive of a file to install, and the second item is the path (relative to the mod installation directory) where the source should be extracted.
+        :param str destination: extraction destination
+        :param list[str] entries: list of archive entries (i.e. directories or files) to extract
         """
+        # :param srcdestpairs: A list of 2-tuples where the first item is the source path within the archive of a file to install, and the second item is the path (relative to the mod installation directory) where the source should be extracted.
+
         await self.archiver.extract(
             archive=self.archive,
             destination=destination,
@@ -150,7 +150,7 @@ class InstallManager(Submanager):
         of the items within the archive.
         :return:
         """
-        modtree = tree.Tree()
+        modtree = Tree()
         self.LOGGER << "building tree"
         for arc_entry in (await self.archive_contents(dirs=False)):
             ap = PurePath(arc_entry)
@@ -177,61 +177,6 @@ class InstallManager(Submanager):
             modfs.touch("/"+arc_entry)
 
         return modfs
-
-    def analyze_structure_tree(self, mod_tree, *, topdirs = SkyrimGameInfo.TopLevelDirs_Bain, topsuffixes = SkyrimGameInfo.TopLevelSuffixes):
-        """
-        check the mod-structure for an already-created tree
-
-        :param mod_tree:
-
-        :param topsuffixes:
-        :param topdirs:
-
-        :return: a tuple where the first item is the number of recognized
-        top-level items found, and the second is a dict with the keys
-        "files" and "folders", containing those recognized items, as
-        well as "docs" and "fomod_dir", if anything of that kind was found.
-        """
-        self.logger.debug("Analyzing structure of tree")
-        mod_data = {
-            "folders": [],
-            "files": [],
-            "docs": [],
-            # some mods have a fomod dir that just contains information
-            # about the mod, with no config script
-            "fomod_dir": None
-        }
-        doc_match = re.compile(r'(read.?me|doc(s|umentation)|info)', re.IGNORECASE)
-        for topdir in mod_tree.keys():
-            # grab anything that looks like mod data from the
-            # the top level of the tree
-            if topdir.lower() in topdirs:
-                mod_data["folders"].append(topdir)
-
-            elif doc_match.search(topdir):
-                mod_data["docs"].append(topdir)
-            elif topdir.lower()=="fomod":
-                mod_data["fomod_dir"] = topdir
-
-        for topfile in mod_tree.leaves:
-            if os.path.splitext(topfile)[-1].lstrip('.').lower() in  topsuffixes:
-                mod_data["files"].append(topfile)
-            elif doc_match.search(topfile):
-                mod_data["docs"].append(topfile)
-
-        # one last check: if there is only one item on the top level
-        # of the mod and that item is a directory, then check inside that
-        # directory for the necessary files.
-        if not mod_data["folders"] and not mod_data["files"]:
-            if len(mod_tree) == 1 and "_files" not in mod_tree.keys():
-                for _, subtree in mod_tree.items():
-                    # this recursive call could obviously dig deeper than
-                    # one more level in the tree, but there'd have to be
-                    # several 1-folder nested directories of non-top-level
-                    # dirs for that to happen, which seems rather unlikely.
-                    return self.analyze_structure_tree(subtree)
-
-        return len(mod_data["folders"])+len(mod_data["files"]), mod_data
 
     async def prepare_fomod(self, xmlfile, extract_dir=None):
         """
@@ -295,8 +240,6 @@ class InstallManager(Submanager):
             return self.normalized_imgpaths[image_path.lower()]
         except KeyError:
             return None
-
-
 
     def set_flag(self, flag, value):
         self.flags[flag]=value
@@ -379,7 +322,8 @@ class InstallManager(Submanager):
     def _count_folder_contents(self, folder):
         folder += '/'
 
-        return len([f for f in self.archive_files+self.archive_dirs if f.startswith(folder)])
+        return len([f for f in self.archive_files+self.archive_dirs
+                    if f.startswith(folder)])
 
     async def install_files(self, dest_dir=None, callback=None):
         """
@@ -431,10 +375,6 @@ class InstallManager(Submanager):
                 # folder are moved "to" the destination (their contents are merged with it)
                 dir_move_merge(installed, destination, overwite=True, name_mod=str.lower)
 
-
-
-
-
     async def rewind_install(self, callback=print):
         """
         Called when an install is cancelled during file copy/unpacking.
@@ -454,3 +394,58 @@ class InstallManager(Submanager):
             asyncio.get_event_loop().call_soon_threadsafe(
                 callback, f.source, remaining)
 
+
+    # def analyze_structure_tree(self, mod_tree, *, topdirs = SkyrimGameInfo.TopLevelDirs_Bain, topsuffixes = SkyrimGameInfo.TopLevelSuffixes):
+    #     """
+    #     check the mod-structure for an already-created tree
+    #
+    #     :param mod_tree:
+    #
+    #     :param topsuffixes:
+    #     :param topdirs:
+    #
+    #     :return: a tuple where the first item is the number of recognized
+    #     top-level items found, and the second is a dict with the keys
+    #     "files" and "folders", containing those recognized items, as
+    #     well as "docs" and "fomod_dir", if anything of that kind was found.
+    #     """
+    #     self.logger.debug("Analyzing structure of tree")
+    #     mod_data = {
+    #         "folders": [],
+    #         "files": [],
+    #         "docs": [],
+    #         # some mods have a fomod dir that just contains information
+    #         # about the mod, with no config script
+    #         "fomod_dir": None
+    #     }
+    #     doc_match = re.compile(r'(read.?me|doc(s|umentation)|info)', re.IGNORECASE)
+    #     for topdir in mod_tree.keys():
+    #         # grab anything that looks like mod data from the
+    #         # the top level of the tree
+    #         if topdir.lower() in topdirs:
+    #             mod_data["folders"].append(topdir)
+    #
+    #         elif doc_match.search(topdir):
+    #             mod_data["docs"].append(topdir)
+    #         elif topdir.lower()=="fomod":
+    #             mod_data["fomod_dir"] = topdir
+    #
+    #     for topfile in mod_tree.leaves:
+    #         if os.path.splitext(topfile)[-1].lstrip('.').lower() in  topsuffixes:
+    #             mod_data["files"].append(topfile)
+    #         elif doc_match.search(topfile):
+    #             mod_data["docs"].append(topfile)
+    #
+    #     # one last check: if there is only one item on the top level
+    #     # of the mod and that item is a directory, then check inside that
+    #     # directory for the necessary files.
+    #     if not mod_data["folders"] and not mod_data["files"]:
+    #         if len(mod_tree) == 1 and "_files" not in mod_tree.keys():
+    #             for _, subtree in mod_tree.items():
+    #                 # this recursive call could obviously dig deeper than
+    #                 # one more level in the tree, but there'd have to be
+    #                 # several 1-folder nested directories of non-top-level
+    #                 # dirs for that to happen, which seems rather unlikely.
+    #                 return self.analyze_structure_tree(subtree)
+    #
+    #     return len(mod_data["folders"])+len(mod_data["files"]), mod_data
