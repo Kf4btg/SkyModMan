@@ -332,9 +332,9 @@ class _ModManager:
         """
         Generator that iterates over all existing profiles.
 
-        results depend on options passed. If `names` and `options` are
+        results depend on options passed. If `names` and `objects` are
         both True, yield tuples of (name, Profile) pairs.  If `names` is
-        True and `options` is False, yield only the profile names.
+        True and `objects` is False, yield only the profile names.
         Likewise, if `names` is False and `objects` is True, yield only
         the Profile objects. If both are False...why did you call this
         in the first place?

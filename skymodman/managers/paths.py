@@ -239,9 +239,17 @@ class PathManager(Submanager):
 
         :param key: label (e.g. 'dir_mods') for the dir to move
         :param str destination: where to move it
-        :raises: ``exceptions.FileAccessError`` if the destination exists and is not an empty directory, or if there is an issue with removing the original directory after the move has occurred. If errors occur during the move operation itself, an ``exceptions.MultiFileError`` will be raised. The ``errors`` attribute on this exception object is a collection of tuples for each file that failed to copy correctly, containing the name of the file and the original exception.
-        :param remove_old_dir: if True, remove the original directory from disk after
-            moving all its contents
+        :raises: ``exceptions.FileAccessError`` if the destination
+            exists and is not an empty directory, or if there is an
+            issue with removing the original directory after the move
+            has occurred. If errors occur during the move operation
+            itself, an ``exceptions.MultiFileError`` will be raised. The
+            ``errors`` attribute on this exception object is a
+            collection of tuples for each file that failed to copy
+            correctly, containing the name of the file and the original
+            exception.
+        :param remove_old_dir: if True, remove the original directory
+            from disk after moving all its contents
         """
         curr_path = self.path(key, profile_override)
 
