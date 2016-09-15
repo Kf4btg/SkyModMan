@@ -86,7 +86,7 @@ class ModTable_TreeModel(QAbstractItemModel):
     def __init__(self, parent, manager, **kwargs):
         """
         """
-        super().__init__(**kwargs)
+        super().__init__(parent, **kwargs)
         self._parent = parent
 
         self.Manager = manager
