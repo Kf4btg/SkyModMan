@@ -14,7 +14,7 @@ from skymodman.constants.keystrings import (Dirs as ks_dir,
 from skymodman.installer.common import FileState
 from skymodman.log import withlogger
 
-__manager = None
+__manager = None # type: ModManager
 
 
 Config = None   # type: _config.ConfigManager
@@ -26,7 +26,7 @@ def Manager():
     global __manager
     if __manager is None:
         global Config, Profiler, DB
-        __manager = _ModManager()
+        __manager = ModManager()
 
         Config = __manager.Config
         Profiler = __manager.Profiler
@@ -36,7 +36,7 @@ def Manager():
 
 
 @withlogger
-class _ModManager:
+class ModManager:
     """
     The primary interface to all the management backends. Only one
     should be active at a time, thus, this class should not be
@@ -148,18 +148,27 @@ class _ModManager:
         Add an ``Alert`` object to the list of registered alerts
 
         :param Alert alert:
+        :return: True if the alert was added, False if it was already
+            present
         """
+        if alert in self.alerts:
+            return False
+
         self.alerts.add(alert)
+        return True
+
 
     def remove_alert(self, alert):
         """
         Remove the given Alert object from the list of alerts.
         :param Alert alert:
-        :return:
+        :return: True if the alert was removed, False if it was not
+            present in the set
         """
-        # discard(), unlike remove(), does not throw a KeyError for
-        # missing values
-        self.alerts.discard(alert)
+        if alert in self.alerts:
+            self.alerts.remove(alert)
+            return True
+        return False
 
     def check_alerts(self):
         """

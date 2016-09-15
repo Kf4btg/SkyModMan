@@ -15,7 +15,7 @@ class Submanager:
     def __init__(self, mcp, *args, **kwargs):
         """
 
-        :param skymodman.managers.modmanager._ModManager mcp:
+        :param skymodman.managers.modmanager.ModManager mcp:
         """
         self.mainmanager = mcp
         super().__init__(*args, **kwargs)

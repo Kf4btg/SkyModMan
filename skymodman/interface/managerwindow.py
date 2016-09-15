@@ -24,7 +24,7 @@ M = constants.qModels
 F = constants.qFilters
 TAB = constants.Tab
 
-Manager = None # type: modmanager._ModManager
+Manager = None # type: modmanager.ModManager
 
 ## Interestingly, using the icon font as a font works just fine;
 ## One can do things like:

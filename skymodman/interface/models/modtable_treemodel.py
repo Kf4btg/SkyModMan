@@ -18,7 +18,7 @@ from skymodman.interface.qundo.commands import (
     clear_missing_mods
 )
 
-Manager = None # type: modmanager._ModManager
+Manager = None # type: modmanager.ModManager
 
 # <editor-fold desc="ModuleConstants">
 

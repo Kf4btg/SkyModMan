@@ -12,7 +12,7 @@ from skymodman.managers import modmanager
 from skymodman.interface.qundo import UndoCmd
 from skymodman.interface.typedefs import QFSItem
 
-Manager = None # type: modmanager._ModManager
+Manager = None # type: modmanager.ModManager
 
 # actually provides a slight (but noticeable) speedup
 # Qt_Checked = Qt.Checked
