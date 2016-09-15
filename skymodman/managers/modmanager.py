@@ -14,25 +14,25 @@ from skymodman.constants.keystrings import (Dirs as ks_dir,
 from skymodman.installer.common import FileState
 from skymodman.log import withlogger
 
-__manager = None # type: ModManager
+# __manager = None # type: ModManager
 
-
-Config = None   # type: _config.ConfigManager
-Profiler = None # type: _profiles.ProfileManager
-DB = None       # type: _database.DBManager
+#
+# Config = None   # type: _config.ConfigManager
+# Profiler = None # type: _profiles.ProfileManager
+# DB = None       # type: _database.DBManager
 
 # singleton Manager
-def Manager():
-    global __manager
-    if __manager is None:
-        global Config, Profiler, DB
-        __manager = ModManager()
-
-        Config = __manager.Config
-        Profiler = __manager.Profiler
-        DB = __manager.DB
-
-    return __manager
+# def Manager():
+#     global __manager
+#     if __manager is None:
+#         global Config, Profiler, DB
+#         __manager = ModManager()
+#
+#         Config = __manager.Config
+#         Profiler = __manager.Profiler
+#         DB = __manager.DB
+#
+#     return __manager
 
 
 @withlogger
