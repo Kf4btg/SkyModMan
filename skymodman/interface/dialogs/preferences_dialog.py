@@ -5,7 +5,7 @@ import os
 from PyQt5.QtWidgets import QDialog, QFileDialog, QDialogButtonBox
 from PyQt5.QtCore import pyqtSlot, pyqtSignal #QStringListModel, Qt
 
-from skymodman.managers import modmanager
+# from skymodman.managers import modmanager
 from skymodman.interface import app_settings, ui_utils
 from skymodman.interface.dialogs import message, checkbox_message
 from skymodman.interface.designer.uic.preferences_dialog_ui import \
@@ -20,7 +20,7 @@ from skymodman.constants.keystrings import UI, Dirs as D
 # because I'm lazy
 PLP = constants.ProfileLoadPolicy
 
-Manager = modmanager.Manager()
+Manager = None
 # ref to the ConfigManager
 # Config = Manager.Config
 
@@ -49,6 +49,10 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
         # setup initial UI
         self.setupUi(self)
+
+        global Manager
+        # steal manager reference from main window
+        Manager = self.window().Manager
 
         ## create mappings for all the component groups using ##
         ## our constant key-strings ##

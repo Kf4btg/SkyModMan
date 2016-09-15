@@ -7,11 +7,12 @@ from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt5.QtWidgets import QMessageBox, QTreeWidgetItem, QLabel
 
 from skymodman import exceptions, constants
+from skymodman.constants import qModels as M, qFilters as F, Tab as TAB
 from skymodman.constants.keystrings import (Section as KeyStr_Section,
                                             Dirs as KeyStr_Dirs,
                                             INI as KeyStr_INI,
                                             UI as KeyStr_UI)
-from skymodman.managers import modmanager
+# from skymodman.managers import modmanager
 from skymodman.interface import models, app_settings #, ui_utils
 from skymodman.interface.dialogs import message
 from skymodman.interface.install_helpers import InstallerUI
@@ -20,11 +21,11 @@ from skymodman.utils.fsutils import check_path, join_path
 
 from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow
 
-M = constants.qModels
-F = constants.qFilters
-TAB = constants.Tab
+# M = constants.qModels
+# F = constants.qFilters
+# TAB = constants.Tab
 
-Manager = None # type: modmanager.ModManager
+# Manager = None # type: modmanager.ModManager
 
 ## Interestingly, using the icon font as a font works just fine;
 ## One can do things like:
@@ -57,8 +58,12 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         super().__init__(**kwargs)
 
-        global Manager
-        Manager = modmanager.Manager()
+        # global Manager
+        # Manager = modmanager.Manager()
+        # this field will contain the reference to the main ModManager
+        # backend (encapsulated in a QObject wrapper)
+        self.Manager = None
+        """:type: skymodman.interface.qmodmanager.QModManager"""
 
         self.LOGGER.info("Initializing ModManager Window")
         ModManagerWindow.instance = self
@@ -148,18 +153,18 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         ## apply() function for the profile_load_policy pref:
         ## loads either the last-used profile or the default profile,
         ## based on the stored value of the policy
-        def _load_profile(prof_policy):
-            # don't do anything if no policy was stored
-            if prof_policy:
-                val = {
-                    constants.ProfileLoadPolicy.last:
-                        KeyStr_INI.LAST_PROFILE,
-                    constants.ProfileLoadPolicy.default:
-                        KeyStr_INI.DEFAULT_PROFILE
-                }[prof_policy]
-                self.load_profile_by_name(
-                    Manager.get_config_value(val,
-                                             KeyStr_Section.GENERAL))
+        # def _load_profile(prof_policy):
+        #     # don't do anything if no policy was stored
+        #     if prof_policy:
+        #         val = {
+        #             constants.ProfileLoadPolicy.last:
+        #                 KeyStr_INI.LAST_PROFILE,
+        #             constants.ProfileLoadPolicy.default:
+        #                 KeyStr_INI.DEFAULT_PROFILE
+        #         }[prof_policy]
+        #         self.load_profile_by_name(
+        #             self.Manager.get_config_value(val,
+        #                                      KeyStr_Section.GENERAL))
 
         ## setup window-state prefs ##
 
@@ -182,8 +187,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # TODO: handle and prioritize the SMM_PROFILE env var
         app_settings.add(KeyStr_UI.PROFILE_LOAD_POLICY,
-                         constants.ProfileLoadPolicy.last,
-                         apply=_load_profile)
+                         constants.ProfileLoadPolicy.last)
+                         # ,
+                         # apply=_load_profile)
 
         ## ----------------------------------------------------- ##
         ## Now that we've defined them all, time to read them in ##
@@ -201,6 +207,51 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     ## Setup UI Functionality (called once on first load)
     ##===============================================
 
+    def assign_modmanager(self, manager):
+        """Assign the main mod-manager backend. Until this is called no
+        real data will be accessible in the interface.
+
+        :param skymodman.interface.qmodmanager.QModManager manager:
+
+        """
+        # assign manager
+        self.Manager = manager
+
+        # perform some setup that requires the manager
+
+        # setup profile selector
+        self._setup_profile_selector()
+
+        ## initialize model for mods table
+        self.mod_table.setModel(
+            models.ModTable_TreeModel(parent=self.mod_table,
+                                      manager=self.Manager))
+
+        self.models[M.mod_table] = self.mod_table.model()
+
+        ##
+        self._setup_file_tree()
+
+        ##
+        self._setup_undo_manager()
+
+        # load profile as indicated by settings
+        pload_policy = KeyStr_UI.PROFILE_LOAD_POLICY
+
+        if pload_policy:
+            to_load = {
+                constants.ProfileLoadPolicy.last:
+                    KeyStr_INI.LAST_PROFILE,
+                constants.ProfileLoadPolicy.default:
+                    KeyStr_INI.DEFAULT_PROFILE
+            }[pload_policy]
+            # get the name of the default/last profile and load its data
+            self.load_profile_by_name(
+                self.Manager.get_config_value(to_load,
+                                     KeyStr_Section.GENERAL))
+
+
+
     # <editor-fold desc="setup">
 
     def _meta_setup(self):
@@ -210,15 +261,15 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self._setup_alerts_button()
         self._setup_toolbar()
         self._setup_statusbar()
-        self._setup_profile_selector()
-        self._setup_table()
-        self._setup_file_tree()
+        # self._setup_profile_selector()
+        self._setup_table() # must wait for manager for model
+        # self._setup_file_tree()
         self._setup_actions()
         self._setup_button_connections()
         self._setup_local_signals_connections()
         self._setup_slot_connections()
 
-        self._setup_undo_manager()
+        # self._setup_undo_manager()
 
 
     def _setup_alerts_button(self):
@@ -287,8 +338,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.alerts_button)
         self.action_show_alerts.setObjectName("action_show_alerts")
 
-        # show the 'alerts' indicator if there are any active alerts
-        self.action_show_alerts.setVisible(Manager.has_alerts)
+        # initially hide the alerts indicator since there is no manager yet
+        self.action_show_alerts.setVisible(False)
+        # self.action_show_alerts.setVisible(Manager.has_alerts)
 
     def _setup_toolbar(self):
         """We've got a few things to add to the toolbar:
@@ -305,7 +357,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # with a plain old qwidget.
         # noinspection PyArgumentList
         spacer = QtWidgets.QWidget()
-        spacer.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        spacer.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
+                             QtWidgets.QSizePolicy.Expanding)
 
         # add it to the toolbar
         self.file_toolBar.addWidget(spacer)
@@ -342,7 +395,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         ## Note to : adding it to the left of the table never worked,
         ## for some reason...it always overlapped the table. Managed
         ## to get it placed on the right, though.
-        self.installed_mods_layout.addWidget(movement_toolbar, 1, self.installed_mods_layout.columnCount(), -1, 1)
+        self.installed_mods_layout.addWidget(
+            movement_toolbar, 1,
+            self.installed_mods_layout.columnCount(), -1, 1)
         movement_toolbar.addActions(macts)
 
         self.movement_toolbar = movement_toolbar
@@ -382,10 +437,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.LOGGER.debug("_setup_table")
 
         # Manager.load_active_profile_data()
-        self.mod_table.setModel(
-            models.ModTable_TreeModel(parent=self.mod_table))
 
-        self.models[M.mod_table] = self.mod_table.model()
+        ## moved assigning model to ``assign_modmanager()``
+
 
         # setup the animation to show/hide the search bar
         self.animate_show_search = QtCore.QPropertyAnimation(
@@ -420,7 +474,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         model = models.ProfileListModel()
 
-        for profile in Manager.get_profiles(names=False):
+        for profile in self.Manager.get_profiles(names=False):
             model.insertRows(data=profile)
 
         self.profile_selector.setModel(model)
@@ -463,7 +517,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         mod_filter.setFilterKeyColumn(constants.Column.NAME.value)
 
         # load and apply saved setting for 'activeonly' toggle
-        self.__init_modlist_filter_state(mod_filter)
+        # self.__init_modlist_filter_state(mod_filter)
 
         # finally, set the filter as the model for the modlist
         self.filetree_modlist.setModel(mod_filter)
@@ -475,9 +529,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # if the main mods directory is unset, just disable the list
         # until the user corrects this
-        if not Manager.get_directory(KeyStr_Dirs.MODS):
-            self.filetree_modlist.setEnabled(False)
-            self.filetree_modlist.setToolTip("Mods directory is currently invalid")
+        # if not Manager.get_directory(KeyStr_Dirs.MODS):
+        #     self.filetree_modlist.setEnabled(False)
+        #     self.filetree_modlist.setToolTip("Mods directory is currently invalid")
 
         ##################################
         ## File Viewer
@@ -485,7 +539,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         ## model for tree view of files
         fileviewer_model = self.models[
             M.file_viewer] = models.ModFileTreeModel(
-            parent=self.filetree_fileviewer)
+                parent=self.filetree_fileviewer,
+                manager=self.Manager)
 
         ## filter
         fileviewer_filter = self.filters[
@@ -515,7 +570,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             f.escapeLineEdit.connect(f.clearFocus)
 
     def __init_modlist_filter_state(self, filter_):
-        activeonly = Manager.get_profile_setting(KeyStr_INI.ACTIVE_ONLY,
+        activeonly = self.Manager.get_profile_setting(KeyStr_INI.ACTIVE_ONLY,
                                                  KeyStr_Section.FILEVIEWER)
 
         if activeonly is None:
@@ -936,7 +991,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             # if no active profile, just load the selected one.
             # if somehow selected the same profile, do nothing
 
-            if Manager.profile and Manager.profile.name == new_profile.name:
+            if self.Manager.profile and self.Manager.profile.name == new_profile.name:
                 return
 
             # if Manager.profile is None or \
@@ -961,7 +1016,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                     "Activating profile '{}'".format(
                         new_profile.name))
 
-                if Manager.activate_profile(new_profile):
+                if self.Manager.activate_profile(new_profile):
 
                     self.logger << "Resetting views for new profile"
 
@@ -1021,7 +1076,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # display popup, wait for close and check signal
         if popup.exec_() == popup.Accepted:
             # add new profile if they clicked ok
-            new_profile = Manager.new_profile(popup.final_name,
+            new_profile = self.Manager.new_profile(popup.final_name,
                                               popup.copy_from)
 
             self.profile_selector.model().addProfile(new_profile)
@@ -1038,7 +1093,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         the user accept the warning, proceed to delete the profile from
         disk and remove its entry from the profile selector.
         """
-        profile = Manager.profile
+        profile = self.Manager.profile
 
         if message('warning', 'Confirm Delete Profile',
                    'Delete "' + profile.name + '"?',
@@ -1047,7 +1102,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                    'customized load-orders, ini-edits, etc. Note '
                    'that installed mods will not be affected. This '
                    'cannot be undone. Do you wish to continue?'):
-            Manager.delete_profile(
+            self.Manager.delete_profile(
                 self.profile_selector.currentData())
             self.profile_selector.removeItem(
                 self.profile_selector.currentIndex())
@@ -1066,7 +1121,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         if newname:
             try:
-                Manager.rename_profile(newname)
+                self.Manager.rename_profile(newname)
             except exceptions.ProfileError as pe:
                 message('critical', "Error During Rename Operation",
                         text=str(pe), buttons='ok')
@@ -1113,7 +1168,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.filters[F.mod_list].setOnlyShowActive(checked)
         self.update_modlist_label(checked)
-        Manager.set_profile_setting(KeyStr_INI.ACTIVE_ONLY,
+        self.Manager.set_profile_setting(KeyStr_INI.ACTIVE_ONLY,
                                     KeyStr_Section.FILEVIEWER,
                                     checked)
 
@@ -1145,7 +1200,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if not text:
             self.filters[F.file_viewer].setFilterWildcard(text)
         else:
-            db = Manager.DB._con
+            # db = self.Manager.DB.conn
+            db = self.Manager.getdbcursor()
 
             sqlexpr = r'%' + text.replace('?', '_').replace('*',
                                                             r'%') + r'%'
@@ -1304,6 +1360,16 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # clear the file tree view
         self.models[M.file_viewer].setRootPath(None)
 
+        # if the main mods directory is unset, just disable the list
+        # until the user corrects this
+        if not self.Manager.get_directory(KeyStr_Dirs.MODS):
+            self.filetree_modlist.setEnabled(False)
+            self.filetree_modlist.setToolTip(
+                "Mods directory is currently invalid")
+        else:
+            self.filetree_modlist.setEnabled(True)
+            self.filetree_modlist.setToolTip(None)
+
         # update the label and checkbox on the modlist
         self.__init_modlist_filter_state(
             self.filters[F.mod_list])
@@ -1323,13 +1389,13 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # clear the list
         self.alerts_view_widget.clear()
 
-        if Manager.has_alerts:
+        if self.Manager.has_alerts:
             # self.alerts_view_widget.clear()
 
             # get a bold font to use for labels
             bfont = QtGui.QFont()
             bfont.setBold(True)
-            for a in Manager.alerts:
+            for a in self.Manager.alerts:
                 # the label/title as top-level item
                 alert_title = QTreeWidgetItem(self.alerts_view_widget,
                                               [a.label])
@@ -1504,9 +1570,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # add the name of the mod directory to the path of the
         # main mods folder
 
-        modstorage = Manager.get_directory(KeyStr_Dirs.MODS)
+        modstorage = self.Manager.get_directory(KeyStr_Dirs.MODS)
         if modstorage:
-            p = join_path(Manager.get_directory(KeyStr_Dirs.MODS), moddir)
+            p = join_path(self.Manager.get_directory(KeyStr_Dirs.MODS), moddir)
 
             self.models[M.file_viewer].setRootPath(p)
         # if the main mods-storage directory is unset, don't attempt
@@ -1527,7 +1593,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             was not shown
         """
         # check for unsaved changes to the mod-list
-        if Manager.profile is not None \
+        if self.Manager.profile is not None \
                 and not self.mod_table.undo_stack.isClean():
             ok = QMessageBox(QMessageBox.Warning, 'Unsaved Changes',
                              'Your mod install-order has unsaved '
@@ -1607,7 +1673,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # now have the Manager check to see if all the directories
         # are valid, and update the alerts indicator if needed
-        Manager.check_dirs()
+        self.Manager.check_dirs()
         self.update_alerts()
 
 
@@ -1632,18 +1698,18 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         moddir = QtWidgets.QFileDialog.getExistingDirectory(
             self,
             "Choose Directory Containing Installed Mods",
-            Manager.get_directory(KeyStr_Dirs.MODS, False)
+            self.Manager.get_directory(KeyStr_Dirs.MODS, False)
         )
 
         # update config with new path
         if check_path(moddir):
-            Manager.set_directory(KeyStr_Dirs.MODS, moddir, False)
+            self.Manager.set_directory(KeyStr_Dirs.MODS, moddir, False)
 
-            if Manager.profile and Manager.profile.override_enabled(KeyStr_Dirs.MODS):
-                Manager.profile.disable_override(KeyStr_Dirs.MODS)
+            if self.Manager.profile and self.Manager.profile.override_enabled(KeyStr_Dirs.MODS):
+                self.Manager.profile.disable_override(KeyStr_Dirs.MODS)
 
             # reverify and reload the mods.
-            if not Manager.validate_mod_installs():
+            if not self.Manager.validate_mod_installs():
                 self.mod_table.model().reload_errors_only()
 
     # noinspection PyTypeChecker,PyArgumentList
@@ -1666,7 +1732,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # short-circuit for testing
         filename='res/7ztest.7z'
         if filename:
-            installui = InstallerUI() # helper class
+            installui = InstallerUI(self.Manager) # helper class
             if manual:
                 self.show_statusbar_progress("Loading archive:")
 

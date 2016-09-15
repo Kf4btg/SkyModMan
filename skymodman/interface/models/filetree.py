@@ -8,11 +8,8 @@ from PyQt5.QtWidgets import QUndoStack
 
 from skymodman.log import withlogger #, tree
 from skymodman.utils.fsutils import check_path
-from skymodman.managers import modmanager
 from skymodman.interface.qundo import UndoCmd
 from skymodman.interface.typedefs import QFSItem
-
-Manager = None # type: modmanager.ModManager
 
 # actually provides a slight (but noticeable) speedup
 # Qt_Checked = Qt.Checked
@@ -38,23 +35,25 @@ class ModFileTreeModel(QAbstractItemModel):
     rootPathChanged = pyqtSignal(str)
     hasUnsavedChanges = pyqtSignal(bool)
 
-    def __init__(self, parent, **kwargs):
+    def __init__(self, parent, manager, **kwargs):
         """
 
-        :param ModManager manager:
+        :param skymodman.managers.modmanager.ModManager manager:
         :param kwargs: anything to pass on to base class
         :return:
         """
 
-        global Manager
-        Manager = modmanager.Manager()
 
         # noinspection PyArgumentList
         super().__init__(parent=parent,**kwargs)
         self._parent = parent
+        self.Manager=manager
+        self.DB = manager.DB
         self.rootpath = None #type: str
         self.modname = None #type: str
         self.rootitem = None #type: QFSItem
+
+
 
         # the mod table has this stored on the custom view,
         # but we have no custom view for the file tree, so...here it is
@@ -74,7 +73,7 @@ class ModFileTreeModel(QAbstractItemModel):
 
     @property
     def has_unsaved_changes(self):
-        return Manager.DB.in_transaction
+        return self.DB.in_transaction
 
     def setRootPath(self, path=None):
         """
@@ -145,7 +144,7 @@ class ModFileTreeModel(QAbstractItemModel):
     def _mark_hidden_files(self):
 
 
-        hfiles = list(r['filepath'] for r in Manager.DB.select(
+        hfiles = list(r['filepath'] for r in self.DB.select(
             "hiddenfiles",
             "filepath",
             where="directory = ?",
@@ -282,8 +281,8 @@ class ModFileTreeModel(QAbstractItemModel):
 
         elif col == COL_CONFLICTS: # third column is conflicts
             if role == Qt.DisplayRole and \
-                self.modname in Manager.mods_with_conflicting_files \
-                    and item.lpath in Manager.file_conflicts:
+                self.modname in self.Manager.mods_with_conflicting_files \
+                    and item.lpath in self.Manager.file_conflicts:
                 return "Yes"
 
 
@@ -354,9 +353,9 @@ class ModFileTreeModel(QAbstractItemModel):
         Commit any unsaved changes (currenlty just to hidden files) to
         the db and save the updated db state to disk
         """
-        if Manager.DB.in_transaction:
-            Manager.DB.commit()
-            Manager.save_hidden_files()
+        if self.DB.in_transaction:
+            self.DB.commit()
+            self.Manager.save_hidden_files()
             self.hasUnsavedChanges.emit(False)
 
     def revert(self):
@@ -372,7 +371,7 @@ class ModFileTreeModel(QAbstractItemModel):
         # be able to define a "clean" point in the middle of a
         # transaction...
 
-        Manager.DB.rollback()
+        self.DB.rollback()
         self.undostack.clear()
 
         # while self.undostack.canUndo() and not self.undostack.isClean():
@@ -399,6 +398,7 @@ class ModFileTreeModel(QAbstractItemModel):
         self.undostack.push(
             ChangeHiddenFilesCommand(self.rootitem,
                                      os.path.basename(self.rootpath),
+                                     self.DB,
                                      post_redo_callback=cb,
                                      post_undo_callback=cb
                                      ))
@@ -409,7 +409,7 @@ class ModFileTreeModel(QAbstractItemModel):
 class ChangeHiddenFilesCommand(UndoCmd):
 
 
-    def __init__(self, mod_root_item, mod_dir_name, text="", *args,
+    def __init__(self, mod_root_item, mod_dir_name, database_mgr, text="", *args,
                  **kwargs):
         """
 
@@ -421,6 +421,7 @@ class ChangeHiddenFilesCommand(UndoCmd):
 
         self.root_item = mod_root_item  # QFSItem
         self.mod_dir = mod_dir_name     # str
+        self.DB = database_mgr
 
         # these two track the actual QFSItems that were modified
         self.checked = []
@@ -433,7 +434,7 @@ class ChangeHiddenFilesCommand(UndoCmd):
         self.tounhide = []
 
         # get currently hidden files from db
-        currhidden = list(Manager.DB.files_hidden(self.mod_dir))
+        currhidden = list(self.DB.files_hidden(self.mod_dir))
 
         # if nothing was already hidden, we shouldn't waste time
         # trying to figure out what to un-hide
@@ -487,12 +488,12 @@ class ChangeHiddenFilesCommand(UndoCmd):
         """hide the visible, reveal the hidden"""
 
         # create a savepoint immediately before we change the db
-        Manager.DB.savepoint("changehidden")
+        self.DB.savepoint("changehidden")
 
         if self.tounhide:
-            Manager.DB.remove_hidden_files(self.mod_dir, self.tounhide)
+            self.DB.remove_hidden_files(self.mod_dir, self.tounhide)
         if self.tohide:
-            Manager.DB.insert(2, "hiddenfiles",
+            self.DB.insert(2, "hiddenfiles",
                               params=zip(repeat(self.mod_dir),
                                          self.tohide))
 
@@ -508,7 +509,7 @@ class ChangeHiddenFilesCommand(UndoCmd):
         """hide the hidden, visibilate the shown"""
         # if all goes well, we should just have to rollback to the
         # savepoint we made earlier...
-        Manager.DB.rollback("changehidden")
+        self.DB.rollback("changehidden")
 
         # ... and reset the checkstates
         self._modify_checkstates(True)
@@ -577,7 +578,7 @@ if __name__ == '__main__':
         #
         # # here's a list of the CURRENTLY hidden filepaths for this mod,
         # # as known to the database
-        # nowhiddens = list(Manager.DB.files_hidden(directory))
+        # nowhiddens = list(self.DB.files_hidden(directory))
         #
         # # let's forget all that silly complicated stuff and do this:
         # hiddens, unhiddens = self._get_hidden_states(len(nowhiddens) > 0)
@@ -595,9 +596,9 @@ if __name__ == '__main__':
         #     toadd = hiddens
         #
         # if toremove:
-        #     Manager.DB.remove_hidden_files(directory, toremove)
+        #     self.DB.remove_hidden_files(directory, toremove)
         # if toadd:
-        #     Manager.DB.insert(2, "hiddenfiles",
+        #     self.DB.insert(2, "hiddenfiles",
         #                       params=zip(repeat(directory), toadd))
 
 

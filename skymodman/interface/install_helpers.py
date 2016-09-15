@@ -4,18 +4,17 @@ from tempfile import TemporaryDirectory
 from PyQt5.QtWidgets import QProgressDialog
 import quamash
 
-from skymodman.managers import modmanager
 from skymodman.interface.dialogs import message
 from skymodman.log import withlogger
 
-Manager = modmanager.Manager()
 
 @withlogger
 class InstallerUI:
 
-    def __init__(self):
+    def __init__(self, manager):
         self.tmpdir = None
         self.numfiles = 0
+        self.Manager = manager
 
 
     async def do_install(self, archive, ready_callback=lambda:None, manual=False):
@@ -34,7 +33,7 @@ class InstallerUI:
         if manual:
             self.LOGGER << "initiating installer for manual install"
 
-            installer = await Manager.get_installer(archive)
+            installer = await self.Manager.get_installer(archive)
             modfs = await installer.mkarchivefs()
             ready_callback()
             await self._show_manual_install_dialog(modfs)
@@ -43,7 +42,7 @@ class InstallerUI:
             with TemporaryDirectory() as tmpdir:
                 self.LOGGER << "Created temporary directory at %s" % tmpdir
 
-                installer = await Manager.get_installer(archive, tmpdir)
+                installer = await self.Manager.get_installer(archive, tmpdir)
 
                 ready_callback()
 

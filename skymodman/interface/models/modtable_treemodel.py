@@ -6,7 +6,6 @@ from PyQt5 import QtGui
 from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData
 
 from skymodman.interface.typedefs import QModEntry
-from skymodman.managers import modmanager
 from skymodman.constants import (Column as COL, ModError)
 from skymodman.log import withlogger
 
@@ -17,8 +16,6 @@ from skymodman.interface.qundo.commands import (
     remove_rows,
     clear_missing_mods
 )
-
-Manager = None # type: modmanager.ModManager
 
 # <editor-fold desc="ModuleConstants">
 
@@ -86,14 +83,13 @@ class ModTable_TreeModel(QAbstractItemModel):
 
     errorsAnalyzed = pyqtSignal(int)
 
-    def __init__(self, parent, **kwargs):
+    def __init__(self, parent, manager, **kwargs):
         """
         """
         super().__init__(**kwargs)
         self._parent = parent
 
-        global Manager
-        Manager = modmanager.Manager()
+        self.Manager = manager
 
         self.mod_entries = [] #type: list [QModEntry]
 
@@ -544,7 +540,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         self._modifications.clear()
 
         self.mod_entries = [QModEntry(**d) for d
-                            in Manager.allmodinfo()]
+                            in self.Manager.allmodinfo()]
 
         self.check_mod_errors()
 
@@ -571,7 +567,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         if query_db:
             # if we need to query the database to refresh the errors,
             # do that here:
-            errors = Manager.get_mod_errors()
+            errors = self.Manager.get_mod_errors()
 
             # update the "error" field of each modentry
             for m in self.mod_entries:
@@ -614,7 +610,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         # to_save = [self.mod_entries[row]
         #            for row in set(self._modifications)]
 
-        Manager.save_user_edits(to_save)
+        self.Manager.save_user_edits(to_save)
 
     def clear_missing(self):
         """

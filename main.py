@@ -3,7 +3,7 @@ import os
 import sys
 import asyncio
 
-from skymodman.managers import modmanager
+# from skymodman.managers import modmanager
 from skymodman import constants, log
 
 
@@ -46,7 +46,7 @@ if __name__ == '__main__':
         # initialize the main ModManager; this causes the Manager()
         # method to return the same instance everytime it is invoked
         # for the rest of the program's run
-        mmanager = modmanager.Manager()
+        # mmanager = modmanager.Manager()
 
         # import this after the manager invokation to ensure that
         # the manager is already created at the time the managerwindow
@@ -55,6 +55,13 @@ if __name__ == '__main__':
 
 
         w = ModManagerWindow()
+
+        # after creation of the window, create and assign the backend
+        from skymodman.interface.qmodmanager import QModManager
+        mmanager = QModManager()
+
+        w.assign_modmanager(mmanager)
+
         w.show()
 
         try:
