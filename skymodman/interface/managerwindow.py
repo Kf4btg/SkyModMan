@@ -235,8 +235,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             }[pload_policy]
             # get the name of the default/last profile and load its data
             self.load_profile_by_name(
-                self.Manager.get_config_value(to_load,
-                                     KeyStr_Section.GENERAL))
+                self.Manager.get_config_value(to_load))
 
 
     def _setup_ui_interface(self):
@@ -1685,7 +1684,14 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # connect some of the dialog's signals to the data managers
         pdialog.defaultProfileChanged.connect(
-            self.Manager.on_default_profile_change)
+            self.Manager.set_default_profile)
+
+        pdialog.beginModifyPaths.connect(self.Manager.begin_queue_signals)
+        pdialog.endModifyPaths.connect(self.Manager.end_queue_signals)
+
+        pdialog.updateDirPath.connect(self.Manager.set_directory)
+
+        pdialog.moveAppFolder.connect(self.Manager.move_dir)
 
         pdialog.exec_()
 

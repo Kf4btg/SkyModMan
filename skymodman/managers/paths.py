@@ -232,6 +232,22 @@ class PathManager(Submanager):
     ## Some path manipulation
     ##=============================================
 
+    def list_mod_folders(self, use_profile_override=True):
+        """
+        Just get a list of all mods installed in the mod directory
+        (i.e. a list of folder names)
+
+        :return: list of names
+        """
+
+        # allow invaliddir error to propagate
+        mpath = self.path(keystrings.Dirs.MODS, use_profile_override)
+
+        self.LOGGER.info("Getting list of mod directories from {}".format(mpath))
+
+        # only return names of folders, not any other type of file
+        return [f.name for f in mpath.iterdir() if f.is_dir()]
+
     def move_dir(self, key, destination, remove_old_dir=True, profile_override=False):
         """
         Change the storage path for the given directory and move the
@@ -272,7 +288,9 @@ class PathManager(Submanager):
                                                  "'{file}' is not a directory")
 
             if len(fsutils.listdir(destination)) > 0:
-                raise exceptions.FileAccessError(destination, "The directory '{file}' must be nonexistent or empty.")
+                raise exceptions.FileAccessError(
+                    destination,
+                    "The directory '{file}' exists and is non-empty.")
             ## dir exists and is empty; easiest thing to do would be to remove
             ## it and move the old folder into its place; though if the dir is a
             ## symlink, that could really mess things up...guess we'll have to do
@@ -285,6 +303,9 @@ class PathManager(Submanager):
             # in which we can get away with simply moving the original...
             copy_contents=False
 
+        ###########################
+        ## actual move operation ##
+
         if copy_contents:
             for item in curr_path.iterdir():
                 # move all items inside the new path
@@ -294,37 +315,35 @@ class PathManager(Submanager):
                     self.LOGGER.error(e)
                     errors.append((item, e))
 
-            ## after all that, we can remove the old dir...hopefully
-            if remove_old_dir and not errors:
-                try:
-                    curr_path.rmdir()
-                except OSError as e:
-                    raise exceptions.FileAccessError(curr_path, "The original directory '{file}' could not be removed") from e
+            if not errors:
+                # if we managed it without error, update our configured path
+                # (want to do it now before any possible errors with
+                # removing the old directory)
+                self.set_path(key, new_path, profile_override)
+
+                ## after all that, we can remove the old dir...hopefully
+                if remove_old_dir :
+                    try:
+                        curr_path.rmdir()
+                    except OSError as e:
+                        raise exceptions.FileAccessError(
+                            curr_path,
+                            "The original directory '{file}' "
+                            "could not be removed") from e
         else:
             # new_path does not exist, so we can just move the old dir to the destination
+            # (this intrinsically takes care of the 'remove_old_dir' flag)
             try:
                 fsutils.move_path(curr_path, new_path)
             except (OSError, exceptions.FileAccessError) as e:
                 self.LOGGER.exception(e)
                 errors.append((curr_path, e))
+            else:
+                # if we managed it without error, update our configured path
+                self.set_path(key, new_path, profile_override)
 
         if errors:
             raise exceptions.MultiFileError(errors, "Errors occurred during move operation.")
 
 
-    def list_mod_folders(self, use_profile_override=True):
-        """
-        Just get a list of all mods installed in the mod directory
-        (i.e. a list of folder names)
-
-        :return: list of names
-        """
-
-        # allow invaliddir error to propagate
-        mpath = self.path(keystrings.Dirs.MODS, use_profile_override)
-
-        self.LOGGER.info("Getting list of mod directories from {}".format(mpath))
-
-        # only return names of folders, not any other type of file
-        return [f.name for f in mpath.iterdir() if f.is_dir()]
 

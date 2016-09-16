@@ -3,7 +3,7 @@ from collections import defaultdict
 import os
 
 from PyQt5.QtWidgets import QDialog, QFileDialog, QDialogButtonBox
-from PyQt5.QtCore import pyqtSlot, pyqtSignal #QStringListModel, Qt
+from PyQt5.QtCore import pyqtSlot as Slot, pyqtSignal as Signal #QStringListModel, Qt
 
 # from skymodman.managers import modmanager
 from skymodman.interface import app_settings, ui_utils
@@ -11,7 +11,7 @@ from skymodman.interface.dialogs import message, checkbox_message
 from skymodman.interface.designer.uic.preferences_dialog_ui import \
     Ui_Preferences_Dialog
 from skymodman.log import withlogger
-from skymodman.utils.fsutils import check_path, create_dir
+from skymodman.utils.fsutils import check_path #, create_dir
 from skymodman import constants, exceptions
 from skymodman.constants.keystrings import UI, Dirs as D
 
@@ -41,9 +41,18 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
     for the application.
     """
 
-    profilePolicyChanged = pyqtSignal(int, bool)
-    defaultProfileChanged = pyqtSignal(str)
-    pathEditFinished = pyqtSignal(str)
+    profilePolicyChanged = Signal(int, bool)
+    defaultProfileChanged = Signal(str)
+    _pathEditFinished = Signal(str)
+
+    beginModifyPaths = Signal()
+    """emitted when changes to configured paths are about to be applied"""
+    endModifyPaths = Signal()
+    """emitted after changes to configured paths have been applied"""
+    updateDirPath = Signal(str, str, bool)
+    """emitted with the key and new path of an application directory"""
+
+    moveAppFolder = Signal(str, str, bool, bool)
 
     def __init__(self, profilebox_model, profilebox_index, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -258,7 +267,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                 # have the line edits with an indicator label emit a signal
                 # when editing is finished that contains their key-string
                 self.path_boxes[d].editingFinished.connect(
-                    partial(self.pathEditFinished.emit, d))
+                    partial(self._pathEditFinished.emit, d))
 
                 ##---------------------##
                 # override buttons/choosers
@@ -294,9 +303,9 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                     partial(self.choose_override_dir, d))
 
 
-        # connect pathEditFinished signal to our validation handler
+        # connect _pathEditFinished signal to our validation handler
         # noinspection PyUnresolvedReferences
-        self.pathEditFinished.connect(self.on_path_edit)
+        self._pathEditFinished.connect(self.on_path_edit)
 
         ## apply button ##
         self.btn_apply.clicked.connect(self.on_apply_button_pressed)
@@ -305,7 +314,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         # noinspection PyUnresolvedReferences
         self.accepted.connect(self.apply_changes)
 
-    @pyqtSlot(int, bool)
+    @Slot(int, bool)
     def on_profile_policy_changed(self, value, enabled):
         """
 
@@ -319,7 +328,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             self._selected_plp = constants.ProfileLoadPolicy(value)
             self._mark_changed()
 
-    @pyqtSlot(str)
+    @Slot(str)
     def on_path_edit(self, key):
         """
         Called when the user manually edits a path box
@@ -366,7 +375,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             #     self._mark_invalid_path(label)
 
 
-    @pyqtSlot()
+    @Slot()
     def change_profile(self):
         """
         Update the data on the profiles tab to reflect the data from
@@ -415,7 +424,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             self.override_choosers[d].setEnabled(is_enabled)
 
 
-    @pyqtSlot(bool)
+    @Slot(bool)
     def set_default_profile(self, checked):
         """
         When the user checks the "default" box next to the profile
@@ -442,10 +451,10 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         if self._selected_profile:
             # don't want unchecking this to trigger changing the default profile
             with ui_utils.blocked_signals(self.cbox_default):
-                self.cbox_default.setChecked(self._selected_profile.name == Manager.Config.default_profile)
+                self.cbox_default.setChecked(self._selected_profile.name == Manager.default_profile)
 
 
-    @pyqtSlot(str, bool)
+    @Slot(str, bool)
     def on_override_toggled(self, dirkey, enabled):
         """
         Update the profile to save the enabled status of the override
@@ -458,12 +467,12 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         ## XXX: should we wait until Apply to save this? or do it immediately like this?
         self._selected_profile.override_enabled(dirkey, enabled)
 
-    @pyqtSlot()
+    @Slot()
     def on_apply_button_pressed(self):
         self.apply_changes()
         self._mark_unchanged()
 
-    @pyqtSlot()
+    @Slot()
     def apply_changes(self):
         """
         Save the user changes to the appropriate config files.
@@ -481,6 +490,9 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                 self._selected_plp)
 
         # check if any of the paths have changed and update accordingly
+
+        self.beginModifyPaths.emit()
+
         for key, path in self.paths.items():
             newpath = self.path_boxes[key].text()
             # skip unchanged items
@@ -542,39 +554,48 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                          "data to the new location?",
                     checkbox_text="Also remove original directory",
                     checkbox_checked=True)
+
+
                 if do_move:
-                    try:
-                        Manager.Paths.move_dir(key, newpath, remove_old)
-                    except exceptions.FileAccessError as e:
-                        message('critical',
-                                "Cannot perform move operation.",
-                                "The following error occurred:",
-                                detailed_text=str(e), buttons='ok',
-                                default_button='ok')
-                    except exceptions.MultiFileError as mfe:
-                        s = ""
-                        for file, exc in mfe.errors:
-                            s += "{0}: {1}\n".format(file, exc)
-                        message('critical',
-                                title="Errors during move operation",
-                                text="The move operation may not have fully completed. The following errors were encountered: ",
-                                buttons='ok', default_button='ok',
-                                detailed_text=s)
-                    else:
-                        self._update_path(key, newpath)
+
+                    self.moveAppFolder.emit(key, newpath, remove_old, False)
+
+                    # try:
+                    #     Manager.Paths.move_dir(key, newpath, remove_old)
+                    # except exceptions.FileAccessError as e:
+                    #     message('critical',
+                    #             "Cannot perform move operation.",
+                    #             "The following error occurred:",
+                    #             detailed_text=str(e), buttons='ok',
+                    #             default_button='ok')
+                    # except exceptions.MultiFileError as mfe:
+                    #     s = ""
+                    #     for file, exc in mfe.errors:
+                    #         s += "{0}: {1}\n".format(file, exc)
+                    #     message('critical',
+                    #             title="Errors during move operation",
+                    #             text="The move operation may not have fully completed. The following errors were encountered: ",
+                    #             buttons='ok', default_button='ok',
+                    #             detailed_text=s)
+                    # else:
+                    #     self._update_path(key, newpath)
                 else:
                     self._update_path(key, newpath)
 
     def _update_path(self, key, newpath):
-        Manager.set_directory(key, newpath)
+
+        # emit this signal which should be connected to the Manager's
+        # set_directory() method
+        self.updateDirPath.emit(key, newpath, False)
+        # Manager.set_directory(key, newpath)
         self.paths[key] = newpath
 
 
-    @pyqtSlot(str)
+    @Slot(str)
     def choose_override_dir(self, folder):
         self.choose_directory(folder, True)
 
-    @pyqtSlot(str)
+    @Slot(str)
     def choose_directory(self, folder, override=False):
         """
         Open the file dialog to allow the user to select a path for
