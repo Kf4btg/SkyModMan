@@ -16,6 +16,8 @@ from skymodman.interface.typedefs import QFSItem
 Qt_Unchecked = Qt.Unchecked
 # Qt_PartiallyChecked = Qt.PartiallyChecked
 Qt_CheckStateRole = Qt.CheckStateRole
+Qt_DisplayRole = Qt.DisplayRole
+Qt_DecorationRole = Qt.DecorationRole
 
 COLUMNS = (COL_NAME, COL_PATH, COL_CONFLICTS) = range(3)
 ColHeaders = ("Name", "Path", "Conflicts")
@@ -47,7 +49,6 @@ class ModFileTreeModel(QAbstractItemModel):
         # noinspection PyArgumentList
         super().__init__(parent=parent,**kwargs)
         self._parent = parent
-        self.Manager=manager
         self.DB = manager.DB
         self.rootpath = None #type: str
         self.modname = None #type: str
@@ -203,7 +204,7 @@ class ModFileTreeModel(QAbstractItemModel):
         :param orient:
         :param role:
         """
-        if orient == Qt.Horizontal and role==Qt.DisplayRole:
+        if orient == Qt.Horizontal and role == Qt_DisplayRole:
             return ColHeaders[section]
             # return "Name"
         return super().headerData(section, orient, role)
@@ -232,10 +233,12 @@ class ModFileTreeModel(QAbstractItemModel):
     def getIndexFromItem(self, item) -> QModelIndex:
         return self.createIndex(item.row, 0, item)
 
-    # noinspection PyArgumentList
-    @pyqtSlot('QModelIndex',name="parent", result = 'QModelIndex')
+    # handle the 'parent' overload w/ the next two slots
+    @pyqtSlot('QModelIndex', name="parent", result = 'QModelIndex')
     def parent(self, child_index=QModelIndex()):
-        if not child_index.isValid(): return QModelIndex()
+
+        if not child_index.isValid():
+            return QModelIndex()
 
         # get the parent FSItem from the reference stored in each FSItem
         parent = child_index.internalPointer().parent
@@ -247,7 +250,6 @@ class ModFileTreeModel(QAbstractItemModel):
         # which we use to create the index
         return self.createIndex(parent.row, 0, parent)
 
-    # noinspection PyArgumentList
     @pyqtSlot(name='parent', result='QObject')
     def parent_of_self(self):
         return self._parent
@@ -275,25 +277,58 @@ class ModFileTreeModel(QAbstractItemModel):
         item = self.getitem(index)
         col = index.column()
 
-        if col == COL_PATH:
-            if role == Qt.DisplayRole: #second column is path
+        if role == Qt_DisplayRole:
+            if col == COL_PATH:
                 return item.parent.path + "/"
-
-        elif col == COL_CONFLICTS: # third column is conflicts
-            if role == Qt.DisplayRole and \
-                self.modname in self.Manager.mods_with_conflicting_files \
-                    and item.lpath in self.Manager.file_conflicts:
-                return "Yes"
-
-
-        else: # column must be Name
-            if role == Qt.DisplayRole:
+            elif col == COL_NAME:
                 return item.name
-            elif role == Qt_CheckStateRole:
+            else: # column must be "Conflicts"
+                try:
+                    # TODO: provide a way (perhaps a drop-down list on the Conflicts column) to easily identify and navigate to the other mods containing a conflicting file
+                    if item.lpath in self.DB.file_conflicts.by_mod[self.modname]:
+                        return "Yes"
+                # if the mod was not in the conflict map,
+                # then return none
+                except KeyError:
+                    return None
+
+
+        # if it's not the display role, we only care about the name column
+        elif col == COL_NAME:
+            if role == Qt_CheckStateRole:
                 # hides the complexity of the tristate workings
                 return item.checkState
-            elif role == Qt.DecorationRole:
+            elif role == Qt_DecorationRole:
                 return item.icon
+
+        # if col == COL_PATH:
+        #     if role == Qt.DisplayRole: #second column is path
+        #         return item.parent.path + "/"
+        #
+        # elif col == COL_CONFLICTS: # third column is conflicts
+        #     if role == Qt.DisplayRole:
+        #         try:
+        #             if item.lpath in self.DB.file_conflicts.by_mod[self.modname]:
+        #                 return "Yes"
+        #
+        #         # if the mod was not in the conflict map, then return none as usual
+        #         except KeyError:
+        #             pass
+        #         # self.modname in self.DB.file_conflicts.by_mod \
+        #         #     and item.lpath in self.DB.file_conflicts.by_file:
+        #         # self.modname in self.Manager.mods_with_conflicting_files \
+        #         #     and item.lpath in self.Manager.file_conflicts:
+        #         # return "Yes"
+
+
+        # else: # column must be Name
+        #     if role == Qt.DisplayRole:
+        #         return item.name
+        #     elif role == Qt_CheckStateRole:
+        #         # hides the complexity of the tristate workings
+        #         return item.checkState
+        #     elif role == Qt.DecorationRole:
+        #         return item.icon
 
     # noinspection PyTypeChecker
     def setData(self, index, value, role=Qt_CheckStateRole):
@@ -304,10 +339,12 @@ class ModFileTreeModel(QAbstractItemModel):
         :param value:
         :param role:
         """
-        if not index.isValid(): return False
+        if not index.isValid():
+            return False
 
         item = self.getitem(index)
-        if role==Qt_CheckStateRole:
+
+        if role == Qt_CheckStateRole:
 
             item.checkState = value #triggers cascade if this a dir
 
@@ -355,7 +392,7 @@ class ModFileTreeModel(QAbstractItemModel):
         """
         if self.DB.in_transaction:
             self.DB.commit()
-            self.Manager.save_hidden_files()
+            self.DB.save_hidden_files()
             self.hasUnsavedChanges.emit(False)
 
     def revert(self):

@@ -4,7 +4,7 @@ import os
 
 from pathlib import Path, PurePath
 from itertools import count, repeat
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 
 from skymodman import exceptions
 from skymodman.managers.base import Submanager, BaseDBManager
@@ -44,6 +44,8 @@ _SCHEMA = """
 # install order.
 
 
+File_Conflict_Map = namedtuple("File_Conflict_Map", "by_file by_mod")
+
 
 # from skymodman.utils import humanizer
 # @humanizer.humanize
@@ -77,10 +79,13 @@ class DBManager(BaseDBManager, Submanager):
         # These are created from the database, so it seems like it may
         # be best just to store them in this class:
 
+        # initialize empty file conflict map
+        self._conflict_map = File_Conflict_Map({},{})
+
         ## {filepath:[list of mods containing that file]}
-        self.file_conflicts = defaultdict(list)
+        # self._file_conflicts = defaultdict(list)
         ## {mod:[contained files that are in conflict with other mods]}
-        self.mods_with_conflicting_files = defaultdict(list)
+        # self.mods_with_conflicting_files = defaultdict(list)
 
 
     ################
@@ -98,6 +103,25 @@ class DBManager(BaseDBManager, Submanager):
     @property
     def is_initialized(self):
         return self._initialized
+
+    @property
+    def file_conflicts(self):
+        """
+        Return an object containing information about conflicting files.
+        Use as follows:
+
+            * file_conflicts.by_file: dict[str, list[str]] -- a mapping
+                of file paths to a list of mods containing a file with
+                the same file path
+            * file_conflicts.by_mod: dict[str, list[str]] -- a mapping
+                of mod names to a list of files contained by that mod
+                which are in conflict with some other mod.
+
+
+        :return:
+        """
+        # return self._file_conflicts
+        return self._conflict_map
 
 
     ######################
@@ -251,7 +275,18 @@ class DBManager(BaseDBManager, Submanager):
         return flist
     ###################################
 
-    def save_hidden_files(self, json_target):
+    def save_hidden_files(self):
+        """
+        Save the contents of the hiddenfiles table to the
+        `hiddenfiles.json` file of the current profile
+
+        :return:
+        """
+        if self.mainmanager.profile:
+            self.save_hidden_files_to(self.mainmanager.profile.hidden_files)
+
+
+    def save_hidden_files_to(self, json_target):
         """
         Serialize the contents of the hiddenfiles table to a file in
         json format
@@ -707,8 +742,12 @@ class DBManager(BaseDBManager, Submanager):
         else:
             self.LOGGER << "No files present in modfiles table"
 
-        self.file_conflicts = conflicts
-        self.mods_with_conflicting_files = mods_with_conflicts
+        # convert to normal dicts when adding to conflict map
+        self._conflict_map = File_Conflict_Map(by_file=dict(conflicts),
+                                               by_mod=dict(mods_with_conflicts))
+
+        # self._file_conflicts = conflicts
+        # self.mods_with_conflicting_files = mods_with_conflicts
 
         # for c in mods_with_conflicts['Bethesda Hi-Res DLC Optimized']:
         #     print("other mods containing file '%s'" % c)

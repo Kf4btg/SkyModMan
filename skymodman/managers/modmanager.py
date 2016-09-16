@@ -107,14 +107,6 @@ class ModManager:
         return self._profileman.active_profile
 
     @property
-    def file_conflicts(self):
-        return self._dbman.file_conflicts
-
-    @property
-    def mods_with_conflicting_files(self):
-        return self._dbman.mods_with_conflicting_files
-
-    @property
     def installed_mods(self):
         if self._modlist_needs_refresh:
             try:
@@ -669,7 +661,7 @@ class ModManager:
         """
         self.LOGGER << "<==Method called"
 
-        self._dbman.save_hidden_files(self.profile.hidden_files)
+        self._dbman.save_hidden_files_to(self.profile.hidden_files)
 
     ##=============================================
     ## Configuration Management Interface

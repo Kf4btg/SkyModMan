@@ -479,91 +479,22 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # we don't actually use this yet...
         self.filters_dropdown.setVisible(False)
 
-
-
-
-
     def _setupui_file_tree(self):
         """
-        Create and populate the list of mod-folders shown on the
-        filetree tab, as well as prepare the fileviewer pane to show
-        files when a mod is selected
+        Setup the sizes of the file-viewer mod selector and tree view.
+        Models will be set up later.
         """
 
         self.LOGGER.debug("_setup_file_tree")
 
-
-        ##################################
-        ## Mods List
-        ##################################
-
-        # setup filter proxy for active mods list
-        # mod_filter = self.filters[
-        #     F.mod_list] = models.ActiveModsListFilter(
-        #     self.filetree_modlist)
-        #
-        # # use the main mod-table model as the source
-        # mod_filter.setSourceModel(self.models[M.mod_table])
-        # # ignore case when filtering
-        # mod_filter.setFilterCaseSensitivity(Qt.CaseInsensitive)
-        #
-        # # tell filter to read mod name column
-        # mod_filter.setFilterKeyColumn(constants.Column.NAME.value)
-        #
-        # # load and apply saved setting for 'activeonly' toggle
-        # # self._update_modlist_filter_state(mod_filter)
-        #
-        # # finally, set the filter as the model for the modlist
-        # self.filetree_modlist.setModel(mod_filter)
-        # # make sure we're just showing the mod name
-        # self.filetree_modlist.setModelColumn(constants.Column.NAME.value)
-
         self._filetreesplitter.setSizes(
             [1, 500])  # just make the left one smaller ok?
-
-        # if the main mods directory is unset, just disable the list
-        # until the user corrects this
-        # if not Manager.get_directory(KeyStr_Dirs.MODS):
-        #     self.filetree_modlist.setEnabled(False)
-        #     self.filetree_modlist.setToolTip("Mods directory is currently invalid")
-
-        ##################################
-        ## File Viewer
-        ##################################
-        ## model for tree view of files
-        # fileviewer_model = self.models[
-        #     M.file_viewer] = models.ModFileTreeModel(
-        #         parent=self.filetree_fileviewer,
-        #         manager=self.Manager)
-        #
-        # ## filter
-        # fileviewer_filter = self.filters[
-        #     F.file_viewer] = models.FileViewerTreeFilter(
-        #     self.filetree_fileviewer)
-        #
-        # fileviewer_filter.setSourceModel(fileviewer_model)
-        # fileviewer_filter.setFilterCaseSensitivity(Qt.CaseInsensitive)
-        #
-        # ## set model
-        # self.filetree_fileviewer.setModel(fileviewer_filter)
 
         ## resize 'name' column to be larger at first than 'path' column
         self.filetree_fileviewer.header().resizeSection(0, 400)
         # todo: remember user column resizes
         # self.models[M.file_viewer].rootPathChanged.connect(
         #   self.on_filetree_fileviewer_rootpathchanged)
-
-        ## show new files when mod selection in list
-        # self.filetree_modlist.selectionModel().currentChanged.connect(
-        #     lambda curr, prev: self.viewer_show_file_tree(
-        #         mod_filter.mapToSource(curr),
-        #         mod_filter.mapToSource(prev)))
-        #
-        # ## have escape key unfocus the filter boxes
-        # for f in [self.filetree_modfilter, self.filetree_filefilter]:
-        #     f.escapeLineEdit.connect(f.clearFocus)
-
-
 
     def _setupui_actions(self):
         """Connect all the actions to their appropriate slots/whatevers
