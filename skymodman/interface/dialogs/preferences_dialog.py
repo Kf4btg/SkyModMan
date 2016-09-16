@@ -42,6 +42,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
     """
 
     profilePolicyChanged = pyqtSignal(int, bool)
+    defaultProfileChanged = pyqtSignal(str)
     pathEditFinished = pyqtSignal(str)
 
     def __init__(self, profilebox_model, profilebox_index, *args, **kwargs):
@@ -246,10 +247,10 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                 lbl = self.indicator_labels[d]
                 if not dpath:
                     self._mark_missing_path(lbl)
-                elif not check_path(dpath):
-                    self._mark_invalid_path(lbl)
                 elif not os.path.isabs(dpath):
                     self._mark_nonabs_path(lbl)
+                elif not check_path(dpath):
+                    self._mark_invalid_path(lbl)
                 else:
                     # hide the label for valid paths
                     lbl.hide()
@@ -346,20 +347,23 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             label.setVisible(False)
 
         else: # but if it was invalid...
-            # show a messagebox asking if they would like to create it
-            if message(title='Path not found',
-                       text="Would you like to create this directory?",
-                       info_text=new_value):
-                create_dir(new_value)
+            self._mark_invalid_path(label)
 
-                # and just to make sure...
-                if os.path.exists(new_value):
-                    label.setVisible(False)
-                else:
-                    self._mark_invalid_path(label)
-            # if they say no, mark it invalid
-            else:
-                self._mark_invalid_path(label)
+            ## nahhhhh....
+            # show a messagebox asking if they would like to create it
+            # if message(title='Path not found',
+            #            text="Would you like to create this directory?",
+            #            info_text=new_value):
+            #     create_dir(new_value)
+            #
+            #     # and just to make sure...
+            #     if os.path.exists(new_value):
+            #         label.setVisible(False)
+            #     else:
+            #         self._mark_invalid_path(label)
+            # # if they say no, mark it invalid
+            # else:
+            #     self._mark_invalid_path(label)
 
 
     @pyqtSlot()
@@ -380,7 +384,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
             # if we've seen this profile before, use its stored
             # override info
-            if self._selected_profile in self._override_paths:
+            if self._selected_profile.name in self._override_paths:
                 # 'x' is just a shortcut
                 x = self._override_paths[self._selected_profile.name]
             else:
@@ -423,9 +427,11 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
         if checked:
             if self._selected_profile:
-                Manager.Config.default_profile = self._selected_profile.name
+                self.defaultProfileChanged.emit(self._selected_profile.name)
+                # Manager.Config.default_profile = self._selected_profile.name
         else:
-            Manager.Config.default_profile = constants.FALLBACK_PROFILE
+            self.defaultProfileChanged.emit(constants.FALLBACK_PROFILE)
+            # Manager.Config.default_profile = constants.FALLBACK_PROFILE
 
     def check_default(self):
         """
@@ -477,52 +483,10 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         # check if any of the paths have changed and update accordingly
         for key, path in self.paths.items():
             newpath = self.path_boxes[key].text()
-
-            # skip if unchanged
-            if path == newpath: continue
-
-            # allow changing if the path is valid or cleared
-            if not newpath:
-                # if they unset the path, just change it
-                self._update_path(key, newpath)
-
-            # if they set a valid new path, ask if they want to copy
-            # their existing data (assuming there is any)
-            # TODO: remember choice. Also for everything else in app
-            elif os.path.isabs(newpath) and os.path.exists(newpath):
-                if not path:
-                    # if the path is currently unset, nothing to move
-                    self._update_path(key, newpath)
-                else:
-                    do_move, remove_old = checkbox_message(
-                        title="Transfer {} Data?".format(
-                            constants.DisplayNames[key]),
-                        text="Would you like to move your existing "
-                             "data to the new location?",
-                        checkbox_text="Also remove original directory",
-                        checkbox_checked=True)
-                    if do_move:
-                        try:
-                            Manager.Paths.move_dir(key, newpath, remove_old)
-                        except exceptions.FileAccessError as e:
-                            message('critical',
-                                    "Cannot perform move operation.",
-                                    "The following error occurred:",
-                                    detailed_text=str(e), buttons='ok',
-                                    default_button='ok')
-                        except exceptions.MultiFileError as mfe:
-                            s=""
-                            for file, exc in mfe.errors:
-                                s+="{0}: {1}\n".format(file, exc)
-                            message('critical',
-                                    title="Errors during move operation",
-                                    text="The move operation may not have fully completed. The following errors were encountered: ",
-                                    buttons='ok', default_button='ok',
-                                    detailed_text=s)
-                        else:
-                            self._update_path(key, newpath)
-                    else:
-                        self._update_path(key, newpath)
+            # skip unchanged items
+            if path == newpath:
+                continue
+            self._handle_path_change(key, path, newpath)
 
         # and now let's do it again for the overrides
 
@@ -547,19 +511,59 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                 sp.setoverride(d, newovrd)
 
 
-        # for d, box in self.override_boxes.items():
-        #     newovrd = box.text()
-        #
-        #     if newovrd == sp.diroverride(d):
-        #         continue
-        #
-        #     if not newovrd or (os.path.isabs(newovrd)
-        #                        and os.path.exists(newovrd)):
-        #         # we can't just call Manager.set_directory(...,...,True)
-        #         # because that method only sets overrides for the active
-        #         # profile, which is not necessarily the same as the
-        #         # selected profile here
-        #         sp.setoverride(d, newovrd)
+    def _handle_path_change(self, key, old_path, newpath):
+        """Check for a change in the text-entry-box for the path and
+        act accordingly: update config, create/move dirs as needed"""
+        # newpath = self.path_boxes[key].text()
+
+        # allow changing if the path is valid or cleared
+        if not newpath:
+            # if they unset the path, just change it
+            self._update_path(key, newpath)
+
+        # if they set a valid new path, ask if they want to copy
+        # their existing data (assuming there is any)
+        # TODO: remember choice. Also for everything else in app
+        elif os.path.isabs(newpath) and os.path.exists(newpath):
+
+            # if the path is currently unset,
+            # invalid, or empty, nothing to move
+            if not old_path \
+                    or not os.path.exists(old_path) \
+                    or len(os.listdir(old_path)) == 0:
+                self._update_path(key, newpath)
+
+            else:
+
+                do_move, remove_old = checkbox_message(
+                    title="Transfer {} Data?".format(
+                        constants.DisplayNames[key]),
+                    text="Would you like to move your existing "
+                         "data to the new location?",
+                    checkbox_text="Also remove original directory",
+                    checkbox_checked=True)
+                if do_move:
+                    try:
+                        Manager.Paths.move_dir(key, newpath, remove_old)
+                    except exceptions.FileAccessError as e:
+                        message('critical',
+                                "Cannot perform move operation.",
+                                "The following error occurred:",
+                                detailed_text=str(e), buttons='ok',
+                                default_button='ok')
+                    except exceptions.MultiFileError as mfe:
+                        s = ""
+                        for file, exc in mfe.errors:
+                            s += "{0}: {1}\n".format(file, exc)
+                        message('critical',
+                                title="Errors during move operation",
+                                text="The move operation may not have fully completed. The following errors were encountered: ",
+                                buttons='ok', default_button='ok',
+                                detailed_text=s)
+                    else:
+                        self._update_path(key, newpath)
+                else:
+                    self._update_path(key, newpath)
 
     def _update_path(self, key, newpath):
         Manager.set_directory(key, newpath)

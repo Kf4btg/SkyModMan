@@ -323,6 +323,8 @@ class Profile:
         config = confparser()
         config.read_dict(self._config)
 
+        # type checker can't handle @singledispatch...
+        # noinspection PyTypeChecker
         with open_atomic(self.settings) as ini:
             config.write(ini)
 

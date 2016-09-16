@@ -217,6 +217,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # assign manager
         self.Manager = manager
 
+        # connect to signals
+        self.Manager.alertsChanged.connect(self.update_alerts)
+
         # perform some setup that requires the manager
         self._setup_data_interface()
 
@@ -268,23 +271,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # Thus, _setup_undo_manager() must be called down here.
         # For now.
         self._setup_undo_manager()
-
-    # def _meta_setup(self):
-    #     """
-    #     Calls all the setup methods
-    #     """
-    #     self._setup_alerts_button()
-    #     self._setup_toolbar()
-    #     self._setup_statusbar()
-    #     # self._setup_profile_selector()
-    #     self._setup_table_UI() # must wait for manager for model
-    #     # self._setup_file_tree()
-    #     self._setup_actions()
-    #     self._setup_button_connections()
-    #     self._setup_local_signals_connections()
-    #     self._setup_slot_connections()
-
-        # self._setup_undo_manager()
 
     ##=============================================
     ## Data-independent setup
@@ -981,13 +967,13 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.undo_stacks[self.current_tab])
 
 
-    @pyqtSlot()
-    def on_show_alerts(self):
-        """
-        When there are active alerts and the user clicks the alerts
-        indicator, show a tooltip-like popup listing the current alerts
-        """
-        self.LOGGER << "on_show_alerts"
+    # @pyqtSlot()
+    # def on_show_alerts(self):
+    #     """
+    #     When there are active alerts and the user clicks the alerts
+    #     indicator, show a tooltip-like popup listing the current alerts
+    #     """
+    #     self.LOGGER << "on_show_alerts"
 
         # for a in Manager.alerts:
         #     print(a)
@@ -1089,7 +1075,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self._update_enabled_actions()
 
         # also recheck alerts when loading new profile
-        self.update_alerts()
+        # self.update_alerts()
 
     @pyqtSlot()
     def on_new_profile_action(self):
@@ -1697,6 +1683,10 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         pdialog = PreferencesDialog(self.profile_selector.model(),
                                     self.profile_selector.currentIndex())
 
+        # connect some of the dialog's signals to the data managers
+        pdialog.defaultProfileChanged.connect(
+            self.Manager.on_default_profile_change)
+
         pdialog.exec_()
 
         del PreferencesDialog
@@ -1704,7 +1694,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # now have the Manager check to see if all the directories
         # are valid, and update the alerts indicator if needed
         self.Manager.check_dirs()
-        self.update_alerts()
+        # self.update_alerts()
 
 
     @pyqtSlot()

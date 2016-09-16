@@ -78,3 +78,11 @@ class QModManager(QObject, ModManager):
         """
 
         self.set_config_value(key, section, new_value, False)
+
+    @Slot(str)
+    def on_default_profile_change(self, profile_name):
+        """
+
+        :param profile_name:
+        """
+        super().set_default_profile(profile_name)

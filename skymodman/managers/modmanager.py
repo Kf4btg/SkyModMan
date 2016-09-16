@@ -371,6 +371,15 @@ class ModManager:
         if self.profile:
             self.profile.save_setting(section, name, value)
 
+    def set_default_profile(self, profile_name):
+        """
+        Set the profile with the given name as the default profile
+        for the application
+        :param profile_name:
+        """
+        if profile_name in self._profileman.profile_names:
+            self._configman.default_profile = profile_name
+
     ##=================================
     ## Internal profile mgmt
     ##---------------------------------

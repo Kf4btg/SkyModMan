@@ -113,8 +113,8 @@ class ConfigManager(Submanager, BaseConfigManager):
     @default_profile.setter
     def default_profile(self, name):
         """
-        Set `name` as the valuie of the 'default_profile' config key
-        and write the change to tghe configuration file
+        Set `name` as the value of the 'default_profile' config key
+        and write the change to the configuration file
         :param str name:
         """
         self.update_value(_SECTION_GENERAL, _KEY_DEFPRO, name)
