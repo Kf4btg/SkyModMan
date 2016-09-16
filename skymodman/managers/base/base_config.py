@@ -16,7 +16,7 @@ class BaseConfigManager:
         """
 
         :param config_file: the on-disk managed file.
-        :param template: a 'mock' version of the config file; i.e. a
+        :param dict[str, dict[str, str]] template: a 'mock' version of the config file; i.e. a
             dictionary with 1 level of nested dicts where each
             dict corresponds to a section in the configuration.
             Should contain sane default values.
@@ -34,7 +34,7 @@ class BaseConfigManager:
 
         # keep a dictionary that is effectively an in-memory version
         # of the main config file
-        self.current_values = deepcopy(template)
+        self.current_values = deepcopy(template) # type: dict [str, dict [str, str]]
 
         # hold all environment variables and their values (if any) here.
         self._environment = {k:os.getenv(k, "") for k in environ_vars}
@@ -94,7 +94,6 @@ class BaseConfigManager:
         """
         Return a ConfigParser instance initialized from the main
         config file
-        :return:
         """
 
         config = _parser()
@@ -121,8 +120,8 @@ class BaseConfigManager:
         Returns the current value for the config entry referenced by
         the given section and key
 
-        :param section:
-        :param key:
+        :param str section:
+        :param str key:
         """
         try:
             s = self.current_values[section]
@@ -142,8 +141,8 @@ class BaseConfigManager:
         if they are not present in the configparser
 
         :param _parser parser:
-        :param section:
-        :param key:
+        :param str section:
+        :param str key:
         """
 
         try:
@@ -162,9 +161,8 @@ class BaseConfigManager:
         and store it locally for retrieval w/ get_value()
 
         :param parser:
-        :param section:
-        :param key:
-        :return:
+        :param str section:
+        :param str key:
         """
 
         self._set_value(section, key,
@@ -210,10 +208,9 @@ class BaseConfigManager:
         Update a value specified by the given `section` and `key` and
         save the config file.
 
-        :param section:
-        :param key:
+        :param str section:
+        :param str key:
         :param value:
-        :return:
         """
 
         conf = self.read_config()

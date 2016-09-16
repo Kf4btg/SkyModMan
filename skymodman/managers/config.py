@@ -86,38 +86,38 @@ class ConfigManager(Submanager, BaseConfigManager):
         # if all else fails return none
         return None
 
-    @property
-    def last_profile(self) -> str:
-        """
-        :return: Name of most recently active profile
-        """
-        return self.get_value(_SECTION_GENERAL, _KEY_LASTPRO)
-
-    @last_profile.setter
-    def last_profile(self, name):
-        """
-        Set `name` as the value of the 'lastproifile;' cobfig key
-        and write the change to the configuration file
-
-        :param name:
-        """
-        self.update_value(_SECTION_GENERAL, _KEY_LASTPRO, name)
-
-    @property
-    def default_profile(self):
-        """
-        :return: Name of the profile marked as default
-        """
-        return self.get_value(_SECTION_GENERAL, _KEY_DEFPRO)
-
-    @default_profile.setter
-    def default_profile(self, name):
-        """
-        Set `name` as the value of the 'default_profile' config key
-        and write the change to the configuration file
-        :param str name:
-        """
-        self.update_value(_SECTION_GENERAL, _KEY_DEFPRO, name)
+    # @property
+    # def last_profile(self) -> str:
+    #     """
+    #     :return: Name of most recently active profile
+    #     """
+    #     return self.get_value(_SECTION_GENERAL, _KEY_LASTPRO)
+    #
+    # @last_profile.setter
+    # def last_profile(self, name):
+    #     """
+    #     Set `name` as the value of the 'lastproifile;' cobfig key
+    #     and write the change to the configuration file
+    #
+    #     :param name:
+    #     """
+    #     self.update_value(_SECTION_GENERAL, _KEY_LASTPRO, name)
+    #
+    # @property
+    # def default_profile(self):
+    #     """
+    #     :return: Name of the profile marked as default
+    #     """
+    #     return self.get_value(_SECTION_GENERAL, _KEY_DEFPRO)
+    #
+    # @default_profile.setter
+    # def default_profile(self, name):
+    #     """
+    #     Set `name` as the value of the 'default_profile' config key
+    #     and write the change to the configuration file
+    #     :param str name:
+    #     """
+    #     self.update_value(_SECTION_GENERAL, _KEY_DEFPRO, name)
 
     ##=============================================
     ## Setup and Sanity Checks

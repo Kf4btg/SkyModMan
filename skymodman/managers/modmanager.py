@@ -107,6 +107,16 @@ class ModManager:
         return self._profileman.active_profile
 
     @property
+    def default_profile(self):
+        """Name of the profile configured to be 'default'"""
+        return self.get_config_value(ks_ini.DEFAULT_PROFILE)
+
+    @property
+    def last_profile(self):
+        """Name of the most recently loaded profile"""
+        return self.get_config_value(ks_ini.LAST_PROFILE)
+
+    @property
     def installed_mods(self):
         if self._modlist_needs_refresh:
             try:
@@ -282,7 +292,8 @@ class ModManager:
 
         # if we successfully made it here, update the config value
         # for the last-loaded profile and return True
-        self._configman.last_profile = profile.name
+        self.set_config_value(ks_ini.LAST_PROFILE, profile.name)
+        # self._configman.last_profile = profile.name
 
         return True
 
@@ -377,8 +388,10 @@ class ModManager:
         for the application
         :param profile_name:
         """
+
         if profile_name in self._profileman.profile_names:
-            self._configman.default_profile = profile_name
+            self.set_config_value(ks_ini.DEFAULT_PROFILE, profile_name)
+            # self._configman.default_profile = profile_name
 
     ##=================================
     ## Internal profile mgmt
@@ -676,56 +689,53 @@ class ModManager:
     ## Configuration Management Interface
     ##=============================================
 
-    def get_config_value(self, name, section=ks_sec.NONE,
-                         default=None, use_profile_override=True):
-
+    def get_config_value(self, name, section=ks_sec.GENERAL,
+                         default=None):
         """
-        Get the current value of one of the main config values
+        Get the current value of one of the main config values. Do NOT
+        use this for getting directory paths; use get_directory()
+        instead
 
-        :param name: the key for which to retrieve the value
-        :param section: "General" or "Directories" or "" (enum values
-            are preferred)
-        :param default: value to return if the section/key is not found
-        :param use_profile_override:
+        :param str name: the key for which to retrieve the value
+        :param section: "General" is the only one for now
+        :param default: value to return if the val is not set
 
-        :return:
+        :return: value or default
         """
-        if section == ks_sec.DIRECTORIES:
-            val = self.get_directory(name, use_profile_override)
+        # in all other situations, just
+        # return the stored config value
 
-        else:
-            # in all other situations, just
-            # return the stored config value
-            val = self._configman.get_genvalue(name)
-            # val = self._configman[name]
+        val = self._configman.get_value(section, name)
 
-        # if the value stored in config was None (or some other
-        # False-like value), return the `default` parameter instead
-        return val if val else default
+        if not val: return default
+        return val
 
-    def set_config_value(self, name, section, value, set_profile_override=True):
+
+        # if section == ks_sec.GENERAL:
+        #     val = self._configman.get_genvalue(name)
+        #
+        #     # if the value stored in config was None (or some other
+        #     # False-like value), return the `default` parameter instead
+        #     return val if val else default
+        # else:
+        #     return self._configman.get_value(section, name)
+
+    def set_config_value(self, name, value, section=ks_sec.GENERAL):
         """
         Update the value for the setting with the given name under the given
-        section.
+        section. Use set_directory() instead of this to change the saved
+        path of a directory.
 
-        :param name:
+        :param str name:
         :param section:
         :param value: the new value to save
-        :param set_profile_override: if the key to be updated is a directory,
-            then, if this parameter is True, the updated value will be set
-            as a directory override in the local settings of the active
-            profile (if any). If this parameter is False, then the default
-            value for the path will be updated instead, and the profile
-            overrides left untouched.
         """
-        if section == ks_sec.DIRECTORIES:
-            # if a profile is active, set an override
-            self.set_directory(name, value,
-                                    set_profile_override and
-                                    self.profile is not None)
+        self._configman.update_value(section, name, value)
 
-        elif section == ks_sec.GENERAL:
-            self._configman.update_genvalue(name, value)
+        # if section == ks_sec.GENERAL:
+        #     self._configman.update_genvalue(name, value)
+        # else:
+        #     raise exceptions.InvalidConfigSectionError(section)
 
     def set_directory(self, key, path, profile_override=False):
         """
