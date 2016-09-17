@@ -8,7 +8,7 @@ from os.path import (exists as _exists,
                      expanduser as _expand,
                      join as _join)
 
-from skymodman.exceptions import FileAccessError
+from skymodman.exceptions import FileAccessError, FileDeletionError, MultiFileError
 from skymodman.utils.safewrite import SafeWriter as _safewriter
 
 __all__ = ["check_path", "join_path", "change_dir", "dir_move_merge"]
@@ -133,6 +133,89 @@ def move_path(src, dst):
         raise FileAccessError(
             str(dst),
             "'{file}' must be a directory or must not already exist.")
+
+def move_dir_contents(src, dst, remove_old=False):
+    """
+    Move the contents of a directory `src` to a new location `dst` which
+    must be an empty directory or non-existent.
+
+    :param str src:
+    :param str dst:
+    :param bool remove_old: If True, attempt to remove the original
+        source directory after its contents have been moved.
+    """
+
+    curr_path = Path(src)
+
+    new_path = Path(dst)
+
+    # list of 2-tuples; item1 is the file we were attempting to move,
+    # item2 is the exception that occurred during that attempt
+    errors = []
+
+    # flag to indicate whether we should copy all the contents or
+    # move the original dir itself
+    copy_contents = True
+
+    # make sure new_path does not exist/is empty dir
+    if new_path.exists():
+
+        # also make sure it's a directory
+        if not new_path.is_dir():
+            raise FileAccessError(dst, "'{file}' is not a directory")
+
+        if len(os.listdir(dst)) > 0:
+            raise FileAccessError(
+                dst, "The directory '{file}' exists and is non-empty.")
+        ## dir exists and is empty; easiest thing to do would be to remove
+        ## it and move the old folder into its place; though if the dir is a
+        ## symlink, that could really mess things up...guess we'll have to do
+        ## it one-by-one, then.
+        # copy_contents = True
+
+    elif remove_old:
+        # The scenario where the destination does not exist and we're
+        # removing the original folder is really the only situation
+        # in which we can get away with simply moving the original...
+        copy_contents = False
+
+    ###########################
+    ## actual move operation ##
+
+    if copy_contents:
+        for item in curr_path.iterdir():
+            # move all items inside the new path
+            try:
+                move_path(item, new_path)
+            except (OSError, FileAccessError) as e:
+                # self.LOGGER.error(e)
+                errors.append((item, e))
+
+        if not errors:
+            ## after all that, we can remove the old dir...hopefully
+            if remove_old:
+                try:
+                    curr_path.rmdir()
+                except OSError as e:
+                    raise FileDeletionError(
+                        curr_path,
+                        "The original directory '{file}' "
+                        "could not be removed") from e
+    else:
+        # new_path does not exist, so we can just move the old dir to
+        # the destination
+        # (this intrinsically takes care of the 'remove_old_dir' flag)
+        try:
+            move_path(curr_path, new_path)
+        except (OSError, FileAccessError) as e:
+            # self.LOGGER.exception(e)
+            errors.append((curr_path, e))
+        # else:
+            # if we managed it without error, update our configured path
+            # self.set_path(key, new_path, profile_override)
+
+    if errors:
+        raise MultiFileError(errors, "Errors occurred during move operation.")
 
 def create_dir(path, parents=True):
     """

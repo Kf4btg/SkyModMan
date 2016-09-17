@@ -4,6 +4,7 @@ from PyQt5.QtCore import QObject, pyqtSignal as Signal, pyqtSlot as Slot
 
 from skymodman import exceptions
 from skymodman.managers.modmanager import ModManager
+from skymodman.utils import fsutils
 from skymodman.interface.ui_utils import blocked_signals
 from skymodman.interface.dialogs import message
 
@@ -18,6 +19,8 @@ class QModManager(QObject, ModManager):
 
     alertsChanged = Signal()
     """emitted when Alerts are added to or removed from the alerts set"""
+
+    dirChanged = Signal(str, str)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -35,6 +38,9 @@ class QModManager(QObject, ModManager):
         self._qmembers = set()
         self.sigqueue = deque()
 
+    ##=============================================
+    ## Alert Handling
+    ##=============================================
 
     def add_alert(self, alert):
         if super().add_alert(alert):
@@ -72,6 +78,13 @@ class QModManager(QObject, ModManager):
     ## Config-change slots
     ##=============================================
 
+    def set_directory(self, key, path, profile_override=False):
+        super().set_directory(key, path, profile_override)
+
+        if not profile_override:
+            self.dirChanged.emit(key, path)
+
+
     @Slot(str, str, bool, bool)
     def move_dir(self, key, new_path, remove_old, override=False):
         """
@@ -86,8 +99,24 @@ class QModManager(QObject, ModManager):
         """
         # prev_path = self.get_directory(key, override)
 
+        do_update = False
+
         try:
-            self.Paths.move_dir(key, new_path, remove_old, override)
+            fsutils.move_dir_contents(self.Paths.path(key, override),
+                                      new_path,
+                                      remove_old)
+
+            # self.Paths.move_dir(key, new_path, remove_old, override)
+        except exceptions.FileDeletionError as e:
+            # this means the movement operation succeeded, but for some
+            # reason the original folder could not be deleted. Go ahead
+            # and update the configured path in this case.
+            message('warning',
+                    "Could not remove original folder.",
+                    "The following error occurred:",
+                    detailed_text=str(e), buttons='ok',
+                    default_button='ok')
+            do_update = True
         except exceptions.FileAccessError as e:
             message('critical',
                     "Cannot perform move operation.",
@@ -97,17 +126,23 @@ class QModManager(QObject, ModManager):
         except exceptions.MultiFileError as mfe:
             s = ""
             for file, exc in mfe.errors:
+                self.LOGGER.exception(exc)
                 s += "{0}: {1}\n".format(file, exc)
             message('critical',
                     title="Errors during move operation",
                     text="The move operation may not have fully completed. The following errors were encountered: ",
                     buttons='ok', default_button='ok',
                     detailed_text=s)
+        else:
+            do_update = True
+
+        if do_update:
+            self.set_directory(key, new_path, override)
 
         # if prev_path != self.get_directory(key, override):
 
         # no matter what happened, check for valid dir
-        self.check_dir(key)
+        # self.check_dir(key)
 
 
     # XXX: these are largely unnecessary...the only advantage they

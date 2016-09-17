@@ -746,7 +746,13 @@ class ModManager:
         :param str path:
         :param profile_override:
         """
+        # record in path manager
         self._pathman.set_path(key, path, profile_override)
+
+        if not profile_override and key in ks_dir:
+            # if it's a configurable directory, make sure
+            # it's also recorded in the main Config file.
+            self._configman.update_dirpath(key)
 
         # check if dirs valid
         self.check_dir(key)

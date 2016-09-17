@@ -567,7 +567,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                     text="Would you like to move your existing "
                          "data to the new location?",
                     checkbox_text="Also remove original directory",
-                    checkbox_checked=True)
+                    checkbox_checked=False )
 
 
                 if do_move:
@@ -603,6 +603,8 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         self.updateDirPath.emit(key, newpath, False)
         # Manager.set_directory(key, newpath)
         self.paths[key] = newpath
+
+    # def _move_dir(self, key, newpath, remove_old):
 
 
     @Slot(str)
