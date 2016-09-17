@@ -21,7 +21,8 @@ from skymodman.utils.fsutils import check_path #, create_dir
 # because I'm lazy
 PLP = constants.ProfileLoadPolicy
 
-MManager = None
+# MManager = None
+MManager = Manager()
 
 # ref to the ConfigManager
 # Config = Manager.Config
@@ -65,8 +66,8 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         self.setupUi(self)
 
         # hold on to reference to global manager
-        global MManager
-        MManager = Manager()
+        # global MManager
+        # MManager = Manager()
 
         ## create mappings for all the component groups using ##
         ## our constant key-strings ##
@@ -396,33 +397,39 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         """When the selected profile changes, we need to update the
         paths displayed on the profiles tab"""
 
+        first_time_seen = True
+
+        # check if we've seen this profile before
+        if self._selected_profile.name in self._override_paths:
+            first_time_seen = False
+
+        # either way, get the reference like this:
+        opdict = self._override_paths[self._selected_profile.name]
+        # if we HAVE seen it before, this will get us the saved info.
+        # if we have NOT, this will create the entry for this profile
+        # due to defaultdict
+
+
         for d in constants.overrideable_dirs:
 
-            # if we've seen this profile before, use its stored
-            # override info
-            if self._selected_profile.name in self._override_paths:
-                # 'x' is just a shortcut
-                x = self._override_paths[self._selected_profile.name]
-            else:
-                # due to defaultdict(), this creates the entry
-                x = self._override_paths[self._selected_profile.name]
-
-                # record current value of override
-                x[d] = {
-                    'enabled': self._selected_profile.override_enabled(d),
+            # if we haven't seen this profile before, record current
+            # value of the profile's override
+            if first_time_seen:
+                opdict[d] = {
+                    'enabled': self._selected_profile.override_enabled(
+                        d),
                     'value':   self._selected_profile.diroverride(
                         d, ignore_enabled=True)
                 }
+            # otherwise, we'll be using the previously stored info
 
+            # now set the text-box to show the current value
+            self.override_boxes[d].setText(opdict[d]['value'])
 
-            self.override_boxes[d].setText(x[d]['value'])
-
-            obtn = self.override_buttons[d]
-
-            is_enabled = x[d]['enabled']
+            is_enabled = opdict[d]['enabled']
 
             # if override is enabled in profile, check the button
-            obtn.setChecked(is_enabled)
+            self.override_buttons[d].setChecked(is_enabled)
 
             # the buttons are already set to toggle the enable status of
             # the entry field/dir chooser when pressed, so make sure those
