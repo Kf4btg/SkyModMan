@@ -621,9 +621,23 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         :return:
         """
 
-        # fixme: this doesn't seem to actually show the current folder if there
+        # -f-i-x-m-e-:this doesn't seem to actually show the current folder if there
         # is one...maybe that's a Qt bug, though. Or maybe it's because of the
         # hidden folder in the path?
+
+        # update: ok...so the 'default' dialog was crap and didn't work
+        # right. For some reason, adding an option (in this case
+        # 'DontResolveSymlinks') caused a different dialog to be used
+        # (one that looked more familiar to me) that worked MUCH better
+        # and started in the correct directory.
+        # Wondering if this was perhaps the 'non-native' dialog and the
+        # native one was just bad on my system, I changed the options to
+        # include 'UseNonNativeDialog'--but this showed a *different*
+        # dialog than the other two, which seemed to be between the
+        # others as far as functionality went. Presumably the "good"
+        # dialog was the native one, which is reassuring.
+        # Anyway, I still don't really know what's going on, but it
+        # seems to work ok for now...
 
         ovrdict = self._override_paths[self._selected_profile.name]
 
@@ -634,7 +648,8 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         # noinspection PyTypeChecker
         chosen = QFileDialog.getExistingDirectory(self,
                                                   "Select directory",
-                                                  start or "")
+                                                  directory=start or "",
+                                                  options=QFileDialog.DontResolveSymlinks)
 
         if check_path(chosen):
 
