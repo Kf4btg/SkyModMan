@@ -6,7 +6,7 @@ from PyQt5 import QtWidgets, QtGui, QtCore
 from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt5.QtWidgets import QMessageBox, QTreeWidgetItem, QLabel
 
-from skymodman import exceptions, constants
+from skymodman import exceptions, constants, Manager
 from skymodman.constants import qModels as M, qFilters as F, Tab as TAB
 from skymodman.constants.keystrings import (Section as KeyStr_Section,
                                             Dirs as KeyStr_Dirs,
@@ -195,8 +195,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # this will possibly:
         #  a) move the window
         #  b) resize the window
-        #  c) load data for a specific profile
-        #  d) any or none of the above
         app_settings.read_and_apply()
 
 
@@ -205,17 +203,19 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     ## Setup UI Functionality (called once on first load)
     ##===============================================
 
-    def assign_modmanager(self, manager):
-        """Assign the main mod-manager backend. Until this is called no
-        real data will be accessible in the interface. If the profile-
-        load-policy defined in the app settings is LAST or DEFAULT, load
-        the corresponding profile at this point.
+    def manager_ready(self):
+        """To be called by the app entry point after the modmanager
+        has been initialized and registered globally. This starts
+        the data-loading part of the program"""
 
-        :param skymodman.interface.qmodmanager.QModManager manager:
+        # make sure that whoever called this isn't lying
+        if not Manager():
+            return
 
-        """
-        # assign manager
-        self.Manager = manager
+        self.LOGGER << "Notified Manager ready"
+
+        # keep local ref
+        self.Manager = Manager()
 
         # connect to signals
         self.Manager.alertsChanged.connect(self.update_alerts)

@@ -61,6 +61,7 @@ if __name__ == '__main__':
         mmanager = QModManager()
         register_manager(mmanager)
 
+        w.manager_ready()
         # w.assign_modmanager(mmanager)
 
         w.show()

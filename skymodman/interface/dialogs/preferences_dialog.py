@@ -6,21 +6,23 @@ from PyQt5.QtWidgets import QDialog, QFileDialog, QDialogButtonBox
 from PyQt5.QtCore import pyqtSlot as Slot, pyqtSignal as Signal #QStringListModel, Qt
 
 # from skymodman.managers import modmanager
+from skymodman import Manager, constants
+from skymodman.constants.keystrings import UI, Dirs as D
+from skymodman.log import withlogger
+
 from skymodman.interface import app_settings, ui_utils
-from skymodman.interface.dialogs import message, checkbox_message
+from skymodman.interface.dialogs import checkbox_message #, message
 from skymodman.interface.designer.uic.preferences_dialog_ui import \
     Ui_Preferences_Dialog
-from skymodman.log import withlogger
 from skymodman.utils.fsutils import check_path #, create_dir
-from skymodman import constants, exceptions
-from skymodman.constants.keystrings import UI, Dirs as D
 
 
 
 # because I'm lazy
 PLP = constants.ProfileLoadPolicy
 
-Manager = None
+MManager = None
+
 # ref to the ConfigManager
 # Config = Manager.Config
 
@@ -34,6 +36,8 @@ _missing_path_style = "QLabel {color: orange; font-size: 10pt; " \
 
 _notabs_path_str = "Path must be absolute"
 
+
+# noinspection PyArgumentList
 @withlogger
 class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
     """
@@ -60,16 +64,19 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         # setup initial UI
         self.setupUi(self)
 
-        global Manager
-        # steal manager reference from main window
-        Manager = self.window().Manager
+        # hold on to reference to global manager
+        global MManager
+        MManager = Manager()
 
         ## create mappings for all the component groups using ##
         ## our constant key-strings ##
 
+
+
+
         ## Default Path values
         # with nofail, returns empty strings for unset paths
-        self.paths={p:Manager.get_directory(p, False, nofail=True) for p in D}
+        self.paths={p:MManager.get_directory(p, False, nofail=True) for p in D}
 
         ## associate text boxes with directories
         self.path_boxes = {
@@ -451,7 +458,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         if self._selected_profile:
             # don't want unchecking this to trigger changing the default profile
             with ui_utils.blocked_signals(self.cbox_default):
-                self.cbox_default.setChecked(self._selected_profile.name == Manager.default_profile)
+                self.cbox_default.setChecked(self._selected_profile.name == MManager.default_profile)
 
 
     @Slot(str, bool)
