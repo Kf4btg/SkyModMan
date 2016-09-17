@@ -4,7 +4,7 @@ import sys
 import asyncio
 
 # from skymodman.managers import modmanager
-from skymodman import constants, log
+from skymodman import constants, log, register_manager
 
 
 def main():
@@ -59,8 +59,9 @@ if __name__ == '__main__':
         # after creation of the window, create and assign the backend
         from skymodman.interface.qmodmanager import QModManager
         mmanager = QModManager()
+        register_manager(mmanager)
 
-        w.assign_modmanager(mmanager)
+        # w.assign_modmanager(mmanager)
 
         w.show()
 
