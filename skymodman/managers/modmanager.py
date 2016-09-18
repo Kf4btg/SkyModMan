@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from skymodman import exceptions
-from skymodman.types import ModEntry, Alert
+from skymodman.types import ModEntry, Alert, AppFolder
 from skymodman.managers import (config as _config,
                                 database as _database,
                                 profiles as _profiles,
@@ -34,6 +34,28 @@ from skymodman.log import withlogger
 #
 #     return __manager
 
+## appfolder defaults
+appfolder_defaults = {
+    # name is dict key
+    ks_dir.SKYRIM: {
+        'display_name': "Skyrim Installation",
+        'default_path': "",
+    },
+    ks_dir.MODS: {
+        'display_name': "Mods Directory",
+        'default_path': "%APPDATADIR%/mods",
+    },
+    ks_dir.VFS: {
+        'display_name': "Virtual FS Mount Point",
+        'default_path': "%APPDATADIR%/skyrimfs",
+    },
+    ks_dir.PROFILES: {
+        'display_name': "Profiles Directory",
+        'default_path': "%APPCONFIGDIR%/profiles",
+    }
+
+}
+
 
 @withlogger
 class ModManager:
@@ -53,6 +75,35 @@ class ModManager:
         # the order here matters; profileManager requires config,
         # config requires Paths...
         self._pathman = _paths.PathManager(mcp=self)
+
+
+        ##=================================
+        ## set up Folders
+        ##---------------------------------
+        ## -- these (probably) don't really
+        ## need a separate manager; they
+        ## should pretty much manage themselves.
+
+        ## TODO: integrate the AppFolder objects into the project
+
+        ## XXX: should these be in the pathmanager? I'm inclined to think not. Does the pathmanager even need to exist now? It really only handles the path to the main config file (which should prob. just be handled by the config manager) and the base directories for the folders below...
+
+        self._folders = {}
+        _appdata = str(self._pathman.dir_data)
+        _appconf = str(self._pathman.dir_config)
+
+        # use defaults-skeleton to construct objects
+        for name, info in appfolder_defaults.items():
+            self._folders[name] = AppFolder(
+                name,
+                info['display_name'],
+                # fill in placeholders
+                default_path=info['default_path']
+                    .replace('%APPDATADIR%', _appdata)
+                    .replace('%APPCONFIGDIR%', _appconf)
+            )
+
+
         self._configman = _config.ConfigManager(mcp=self)
 
         self._profileman = _profiles.ProfileManager(
@@ -80,6 +131,11 @@ class ModManager:
     @property
     def Paths(self):
         return self._pathman
+
+    @property
+    def Folders(self):
+        """return the mapping of keys to AppFolder instances."""
+        return self._folders
 
     @property
     def Config(self):

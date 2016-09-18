@@ -514,6 +514,8 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                 continue
             self._handle_path_change(key, path, newpath)
 
+        self.endModifyPaths.emit()
+
         # and now let's do it again for the overrides
 
         sp = self._selected_profile
@@ -557,7 +559,9 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             if not old_path \
                     or not os.path.exists(old_path) \
                     or len(os.listdir(old_path)) == 0:
-                self._update_path(key, newpath)
+                self.updateDirPath.emit(key, newpath, False)
+
+                # self._update_path(key, newpath)
 
             else:
 
@@ -594,7 +598,9 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                     # else:
                     #     self._update_path(key, newpath)
                 else:
-                    self._update_path(key, newpath)
+                    self.updateDirPath.emit(key, newpath, False)
+
+                    # self._update_path(key, newpath)
 
     def _update_path(self, key, newpath):
 
@@ -606,6 +612,12 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
     # def _move_dir(self, key, newpath, remove_old):
 
+    @Slot(str, str)
+    def on_path_changed(self, key, path):
+        self.paths[key] = path
+
+        if self.path_boxes[key].text()!=path:
+            self.path_boxes[key].setText(path)
 
     @Slot(str)
     def choose_override_dir(self, folder):

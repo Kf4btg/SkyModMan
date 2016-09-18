@@ -2,12 +2,11 @@ import appdirs
 
 from pathlib import Path
 
-from skymodman import exceptions
-from skymodman.managers.base import Submanager
-from skymodman.log import withlogger
-from skymodman.utils import fsutils
-from skymodman import constants
+from skymodman import constants, exceptions
 from skymodman.constants import keystrings, overrideable_dirs, APPNAME
+from skymodman.log import withlogger
+from skymodman.managers.base import Submanager
+from skymodman.utils import fsutils
 
 _pathvars = ("file_main", "dir_config", "dir_data", "dir_profiles", "dir_mods", "dir_vfs", "dir_skyrim")
 

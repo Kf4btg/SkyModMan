@@ -1693,6 +1693,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         pdialog.moveAppFolder.connect(self.Manager.move_dir)
 
+        # and vice-versa
+        self.Manager.dirChanged.connect(pdialog.on_path_changed)
+
         pdialog.exec_()
 
         del PreferencesDialog

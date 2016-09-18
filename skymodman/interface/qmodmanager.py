@@ -73,6 +73,18 @@ class QModManager(QObject, ModManager):
         if self.alerts != prev_alerts:
             self.emit_signal(self.alertsChanged)
 
+    ##=============================================
+    ## Profile proxy
+    ##=============================================
+
+    # def set_profile_override(self, profile, key, ovrd_path):
+    #
+    #     # if we just got the name
+    #     if isinstance(profile, str):
+    #         profile = self.Profiler[profile]
+    #
+    #     profile.setoverride(key, ovrd_path)
+
 
     ##=============================================
     ## Config-change slots
