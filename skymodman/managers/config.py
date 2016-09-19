@@ -41,12 +41,22 @@ class ConfigManager(Submanager, BaseConfigManager):
     def __init__(self, mcp, *args, **kwargs):
 
         # easier reference to pathmanager
+        # XXX: this is now only used for config file and config dir...
         self.paths = mcp.Paths
 
         # put defaults into template
-        _DEFAULT_CONFIG_[_SECTION_DIRS][_KEY_PROFDIR] = self.paths[_KEY_PROFDIR]
-        _DEFAULT_CONFIG_[_SECTION_DIRS][_KEY_MODDIR] = self.paths[_KEY_MODDIR]
-        _DEFAULT_CONFIG_[_SECTION_DIRS][_KEY_VFSMNT] = self.paths[_KEY_VFSMNT]
+
+        _DEFAULT_CONFIG_[_SECTION_DIRS][_KEY_PROFDIR] = \
+            str(mcp.Folders[_KEY_PROFDIR].default_path or "")
+        # _DEFAULT_CONFIG_[_SECTION_DIRS][_KEY_PROFDIR] = self.paths[_KEY_PROFDIR]
+
+        _DEFAULT_CONFIG_[_SECTION_DIRS][_KEY_MODDIR] = \
+            str(mcp.Folders[_KEY_MODDIR].default_path or "")
+        # _DEFAULT_CONFIG_[_SECTION_DIRS][_KEY_MODDIR] = self.paths[_KEY_MODDIR]
+
+        _DEFAULT_CONFIG_[_SECTION_DIRS][_KEY_VFSMNT] = \
+            str(mcp.Folders[_KEY_VFSMNT].default_path or "")
+        # _DEFAULT_CONFIG_[_SECTION_DIRS][_KEY_VFSMNT] = self.paths[_KEY_VFSMNT]
 
         super().__init__(
             template = _DEFAULT_CONFIG_,
@@ -159,7 +169,11 @@ class ConfigManager(Submanager, BaseConfigManager):
         # path to directory which holds all the profile info
         # TODO: should this stuff actually be in XDG_DATA_HOME??
         try:
-            self.paths.profiles = Path(self._get_value_from(config, _SECTION_DIRS, _KEY_PROFDIR))
+            self.mainmanager.Folders['profiles'].set_path(
+                self._get_value_from(config,
+                                     _SECTION_DIRS,
+                                     _KEY_PROFDIR))
+            # self.paths.profiles = Path(self._get_value_from(config, _SECTION_DIRS, _KEY_PROFDIR))
 
 
         except (exceptions.MissingConfigKeyError,
@@ -172,10 +186,14 @@ class ConfigManager(Submanager, BaseConfigManager):
             ## Should be default already
 
         ## check that profiles dir exists, create if missing ##
-        if not self.paths.check_exists(_KEY_PROFDIR, False, True):
+        # if not self.paths.check_exists(_KEY_PROFDIR, False, True):
+        pdir = self.mainmanager.Folders['profiles'].path
+        if not pdir.exists():
+            pdir.mkdir(parents=True)
             # if it was missing, also create the folder for the default/fallback profile
             self.LOGGER.info("Creating directory for default profile.")
-            (self.paths.profiles / FALLBACK_PROFILE).mkdir()
+            (pdir / FALLBACK_PROFILE).mkdir()
+            # (self.paths.profiles / FALLBACK_PROFILE).mkdir()
 
 
         ##=================================
@@ -213,11 +231,15 @@ class ConfigManager(Submanager, BaseConfigManager):
 
         ## check that mods directory exists, but only create it if the
         # location in the config is same as the default
-        self.paths.check_exists(_KEY_MODDIR,
-                                use_profile=False,
-                                create=self.paths[_KEY_MODDIR] ==
-                                     _DEFAULT_CONFIG_[_SECTION_DIRS]
-                                     [_KEY_MODDIR])
+        mdir = self.mainmanager.Folders['mods'].path
+        if not mdir.exists() and str(mdir) == _DEFAULT_CONFIG_[_SECTION_DIRS][_KEY_MODDIR]:
+            mdir.mkdir(parents=True)
+
+        # self.paths.check_exists(_KEY_MODDIR,
+        #                         use_profile=False,
+        #                         create=self.paths[_KEY_MODDIR] ==
+        #                              _DEFAULT_CONFIG_[_SECTION_DIRS]
+        #                              [_KEY_MODDIR])
 
         ## and finally, let's fill in any blank spots in the config.
         ## note that this does NOT overwrite any _invalid_ settings,
@@ -248,7 +270,8 @@ class ConfigManager(Submanager, BaseConfigManager):
         :param key:
         """
         pname = self.get_value(_SECTION_GENERAL, key)
-        pdir = self.paths.profiles / pname
+        # pdir = self.paths.profiles / pname
+        pdir = self.mainmanager.Folders['profiles'].path / pname
 
         if not pdir.exists():
             self.LOGGER.warning("{}: Profile directory '{}' not found".format(key, pname))
@@ -322,11 +345,13 @@ class ConfigManager(Submanager, BaseConfigManager):
             # finally, if we have successfully deduced the path, set
             # it on the PathManager
             if p is not None:
+                self.mainmanager.Folders[path_key].set_path(p)
                 ## use setattr to avoid circular reference during setup
-                setattr(self.paths, path_key, p)
+                # setattr(self.paths, path_key, p)
 
             # update config-file mirror
-            self._set_value(_SECTION_DIRS, path_key, self.paths[path_key])
+            self._set_value(_SECTION_DIRS, path_key, p)
+            # self._set_value(_SECTION_DIRS, path_key, self.paths[path_key])
 
         if self.path_errors:
             for att, errlist in self.path_errors.items():
@@ -361,7 +386,9 @@ class ConfigManager(Submanager, BaseConfigManager):
         through there and one need not worry about ever calling this
         method directly.
         """
-        self.update_value(_SECTION_DIRS, path_key, self.paths[path_key])
+        # use current_path to bypass override, if any
+        self.update_value(_SECTION_DIRS, path_key, str(self.mainmanager.Folders[path_key].current_path or ""))
+        # self.update_value(_SECTION_DIRS, path_key, self.paths[path_key])
 
     ## path information will be queried via the pathmanager
 
