@@ -114,6 +114,10 @@ class AppFolder:
         else:
             return NotImplemented
 
+    def __bool__(self):
+        # return False if path() returns None
+        return self.path is not None
+
     ##=============================================
     ## validation properties
     ##=============================================
@@ -216,7 +220,9 @@ class AppFolder:
         """Deactivate the current override and revert to ``current_path``"""
         self._override_active=False
 
-
+    ##=============================================
+    ## Other methods
+    ##=============================================
 
     def move(self, new_path, remove_old=False, as_override=False):
         """
@@ -271,6 +277,14 @@ class AppFolder:
         else:
             self.set_override(new_path, False)
 
+    def iter_contents(self, dirs_only=False):
+        """Return an iterator over the contents of this folder"""
+        if not self.path or not self.path.exists():
+            raise StopIteration
+        if dirs_only:
+            yield from (d for d in self.path.iterdir() if d.is_dir())
+        else:
+            yield from self.path.iterdir()
 
 
     ##=============================================
@@ -278,12 +292,15 @@ class AppFolder:
     ##=============================================
 
     def register_change_listener(self, listener):
-        """
-        `listener` should be a callable that accepts 3 parameters;
-        it will be invoked as ``listener(appfolder, old_path, new_path)``,
-        where appfolder is this AppFolder instance, and old_path/new_path
-        are strings.
-        """
+        """`listener` should be a callable; it will be invoked with this
+        AppFolder instance as its first positional parameter upon
+        a path change"""
+        # """
+        # `listener` should be a callable that accepts 3 parameters;
+        # it will be invoked as ``listener(appfolder, old_path, new_path)``,
+        # where appfolder is this AppFolder instance, and old_path/new_path
+        # are strings.
+        # """
 
         if callable(listener):
             self._listeners.add(listener)
@@ -299,4 +316,5 @@ class AppFolder:
         """Invoke--in no particular or guaranteed order--all registered
          change-listeners with the change information"""
         for l in self._listeners:
-            l(self, old, new)
+            l(self)
+            # l(self, old, new)
