@@ -56,7 +56,7 @@ class Profile:
         """
 
         self.name = name
-        self.overrides = {} # type: dict [str, dir_override]
+        self._overrides = {} # type: dict [str, dir_override]
 
         ##=================================
         ## Path checks/creation
@@ -107,7 +107,7 @@ class Profile:
         ##---------------------------------
 
         for k in Profile.__default_settings[kstr_section.OVERRIDES]:
-            self.overrides[k] = dir_override(
+            self._overrides[k] = dir_override(
                 self.get_setting(kstr_section.OVERRIDES, k),
                 self.get_setting(kstr_section.OVR_ENABLED, k)
             )
@@ -144,6 +144,13 @@ class Profile:
     def settings(self):
         return self.folder / SETTINGS
 
+    def overrides(self, ignore_enabled=False):
+        """return a mapping of folder keys to paths for the currently
+        enabled overrides for this profile"""
+
+        return {k:(v.path or "") for k,v in self._overrides.items() if (ignore_enabled or v.enabled)}
+
+
     # </editor-fold>
 
     ##=============================================
@@ -165,8 +172,8 @@ class Profile:
             been disabled.
         """
 
-        if self.overrides[dirkey].path and (self.overrides[dirkey].enabled or ignore_enabled):
-            return self.overrides[dirkey].path
+        if self._overrides[dirkey].path and (self._overrides[dirkey].enabled or ignore_enabled):
+            return self._overrides[dirkey].path
 
         return ""
 
@@ -182,12 +189,12 @@ class Profile:
             or None, no change will be made to the enabled status.
         """
 
-        if dirkey in self.overrides:
-            enabled = self.overrides[dirkey].enabled \
+        if dirkey in self._overrides:
+            enabled = self._overrides[dirkey].enabled \
                 if enable is None \
                 else bool(enable)
 
-            self.overrides[dirkey] = dir_override(path, enabled)
+            self._overrides[dirkey] = dir_override(path, enabled)
 
             # update config dict
             self._config[kstr_section.OVERRIDES][dirkey] = path
@@ -210,11 +217,11 @@ class Profile:
         """
 
         if setenabled is not None:
-            self.overrides[dirkey] = self.overrides[dirkey]._replace(enabled=setenabled)
+            self._overrides[dirkey] = self._overrides[dirkey]._replace(enabled=setenabled)
 
             self.save_setting(kstr_section.OVR_ENABLED, dirkey, setenabled)
 
-        return self.overrides[dirkey].enabled
+        return self._overrides[dirkey].enabled
 
     # shortcuts for enabling/disabling overrides
     disable_override = partialmethod(override_enabled, setenabled=False)
