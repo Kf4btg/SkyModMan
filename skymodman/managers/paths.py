@@ -8,7 +8,7 @@ from skymodman.log import withlogger
 from skymodman.managers.base import Submanager
 from skymodman.utils import fsutils
 
-_pathvars = ("file_main", "dir_config", "dir_data", "dir_profiles", "dir_mods", "dir_vfs", "dir_skyrim")
+_pathvars = ("file_main", "dir_config", "dir_data", "profiles", "mods", "vfs", "skyrim")
 
 # these are the directory paths that can be customized by the user
 # _dirvars = (keystrings.Dirs.MODS,
@@ -28,16 +28,18 @@ class PathManager(Submanager):
     Keeps track of all configured paths used within the application.
     """
 
-    def __init__(self, file_main=None, dir_config=None, dir_data=None, dir_mods=None, dir_profiles=None, dir_skyrim=None, dir_vfs=None, *args, **kwargs):
+    def __init__(self, file_main=None, dir_config=None, dir_data=None,
+                 mods=None, profiles=None, skyrim=None, vfs=None,
+                 *args, **kwargs):
         """
 
         :param Path file_main:
         :param Path dir_config:
         :param Path dir_data:
-        :param Path dir_mods:
-        :param Path dir_profiles:
-        :param Path dir_skyrim:
-        :param Path dir_vfs:
+        :param Path mods:
+        :param Path profiles:
+        :param Path skyrim:
+        :param Path vfs:
         """
 
         ## Defaults if not provided ##
@@ -50,8 +52,8 @@ class PathManager(Submanager):
         self.file_main = self.dir_config / constants.MAIN_CONFIG \
             if not file_main else file_main
 
-        self.dir_profiles = Path(self.dir_config, 'profiles') \
-            if not dir_profiles else dir_profiles
+        self.profiles = Path(self.dir_config, 'profiles') \
+            if not profiles else profiles
 
 
         # in user-data dir
@@ -59,15 +61,15 @@ class PathManager(Submanager):
         self.dir_data = Path(appdirs.user_data_dir(APPNAME)) \
             if not dir_data else dir_data
 
-        self.dir_mods = Path(self.dir_data, 'mods') \
-            if not dir_mods else dir_mods
+        self.mods = Path(self.dir_data, 'mods') \
+            if not mods else mods
 
-        self.dir_vfs = Path(self.dir_data, 'skyrimfs') \
-            if not dir_vfs else dir_vfs
+        self.vfs = Path(self.dir_data, 'skyrimfs') \
+            if not vfs else vfs
 
         ## Skyrim folder has no default ##
 
-        self.dir_skyrim   = dir_skyrim
+        self.skyrim   = skyrim
 
         super().__init__(*args, **kwargs)
 
@@ -188,7 +190,7 @@ class PathManager(Submanager):
     def __getitem__(self, key):
         """
         Use dict-access to get the string version of a stored path.
-        E.g.: paths['dir_mods'] -> '/path/to/mod/install/directory'
+        E.g.: paths['mods'] -> '/path/to/mod/install/directory'
 
         Raises a keyerror if the key is not recognized.
 
@@ -252,7 +254,7 @@ class PathManager(Submanager):
         Change the storage path for the given directory and move the
         current contents of that directory to the new location.
 
-        :param key: label (e.g. 'dir_mods') for the dir to move
+        :param key: label (e.g. 'mods') for the dir to move
         :param str destination: where to move it
         :raises: ``exceptions.FileAccessError`` if the destination
             exists and is not an empty directory, or if there is an

@@ -67,7 +67,7 @@ class ConfigManager(Submanager, BaseConfigManager):
         """
         Use dict-access to get the value of any of items in this config instance by property name. E.g:
 
-        >>> config['dir_mods']
+        >>> config['mods']
         '/path/to/mod/install/directory'
         >>> config['last_profile']
         'default'
@@ -159,7 +159,7 @@ class ConfigManager(Submanager, BaseConfigManager):
         # path to directory which holds all the profile info
         # TODO: should this stuff actually be in XDG_DATA_HOME??
         try:
-            self.paths.dir_profiles = Path(self._get_value_from(config, _SECTION_DIRS, _KEY_PROFDIR))
+            self.paths.profiles = Path(self._get_value_from(config, _SECTION_DIRS, _KEY_PROFDIR))
 
 
         except (exceptions.MissingConfigKeyError,
@@ -172,10 +172,10 @@ class ConfigManager(Submanager, BaseConfigManager):
             ## Should be default already
 
         ## check that profiles dir exists, create if missing ##
-        if not self.paths.check_exists('dir_profiles', False, True):
+        if not self.paths.check_exists(_KEY_PROFDIR, False, True):
             # if it was missing, also create the folder for the default/fallback profile
             self.LOGGER.info("Creating directory for default profile.")
-            (self.paths.dir_profiles / FALLBACK_PROFILE).mkdir()
+            (self.paths.profiles / FALLBACK_PROFILE).mkdir()
 
 
         ##=================================
@@ -213,9 +213,9 @@ class ConfigManager(Submanager, BaseConfigManager):
 
         ## check that mods directory exists, but only create it if the
         # location in the config is same as the default
-        self.paths.check_exists('dir_mods',
+        self.paths.check_exists(_KEY_MODDIR,
                                 use_profile=False,
-                                create=self.paths['dir_mods'] ==
+                                create=self.paths[_KEY_MODDIR] ==
                                      _DEFAULT_CONFIG_[_SECTION_DIRS]
                                      [_KEY_MODDIR])
 
@@ -248,7 +248,7 @@ class ConfigManager(Submanager, BaseConfigManager):
         :param key:
         """
         pname = self.get_value(_SECTION_GENERAL, key)
-        pdir = self.paths.dir_profiles / pname
+        pdir = self.paths.profiles / pname
 
         if not pdir.exists():
             self.LOGGER.warning("{}: Profile directory '{}' not found".format(key, pname))
@@ -343,9 +343,9 @@ class ConfigManager(Submanager, BaseConfigManager):
         # check to see if the given path is a valid mount point
         # todo: this is assuming that the vfs has already been mounted manually; I'd much rather do it automatically, so I really should just check that the given directory is empty
         # if check_path(env_vfs) and os.path.ismount(env_vfs):
-        #     self.paths.dir_vfs = Path(env_vfs)
+        #     self.paths.vfs = Path(env_vfs)
         # else:
-        #     self.paths.dir_vfs = Path(config[_SECTION_GENERAL][_KEY_VFSMNT])
+        #     self.paths.vfs = Path(config[_SECTION_GENERAL][_KEY_VFSMNT])
 
     ##=============================================
     ## Convenience methods for accessing what

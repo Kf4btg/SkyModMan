@@ -79,16 +79,16 @@ class INI(metaclass=Iternum):
 
 class Dirs(metaclass=Iternum):
     """Key strings for referring to application directories"""
-    PROFILES = "dir_profiles"  # storage location for user profiles
+    PROFILES = "profiles"  # storage location for user profiles
     """storage location for user profiles"""
 
-    SKYRIM = "dir_skyrim"  # location of base skyrim install
+    SKYRIM = "skyrim"  # location of base skyrim install
     """location of base skyrim install"""
 
-    MODS = "dir_mods"  # location of mod storage
+    MODS = "mods"  # location of mod storage
     """Location of Mod Storage"""
 
-    VFS = "dir_vfs"  # mount point for "virtual" skyrim install
+    VFS = "vfs"  # mount point for "virtual" skyrim install
     """mount point for "virtual" skyrim install"""
 
 
