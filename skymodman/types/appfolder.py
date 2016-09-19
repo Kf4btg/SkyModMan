@@ -218,7 +218,12 @@ class AppFolder:
 
     def remove_override(self):
         """Deactivate the current override and revert to ``current_path``"""
-        self._override_active=False
+        if self._override_active:
+            self._override_active = False
+            if self.current_path!=self._override:
+                self._notify(self._override, self.current_path)
+
+
 
     ##=============================================
     ## Other methods

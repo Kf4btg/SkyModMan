@@ -3,7 +3,7 @@ from pathlib import Path
 from skymodman import exceptions
 from skymodman.managers.base import Submanager
 from skymodman.types import Profile, diqt
-from skymodman.constants import FALLBACK_PROFILE
+from skymodman.constants import FALLBACK_PROFILE, overrideable_dirs
 from skymodman.log import withlogger
 
 # @humanizer.humanize
@@ -136,12 +136,25 @@ class ProfileManager(Submanager):
 
                 self._current_profile = self.load_profile(profilename)
 
-                # check for and enable directory overrides
-                for odir, opath in self._current_profile.overrides():
+                # check for and en/dis-able directory overrides as needed
+                for dkey in overrideable_dirs:
                     try:
-                        self.mainmanager.Folders[odir].set_override(opath)
+                        ovrd = self._current_profile.diroverride(dkey)
                     except KeyError as e:
                         self.LOGGER.exception(e)
+                        self.mainmanager.Folders[dkey].remove_override()
+                    else:
+                        if ovrd:
+                            self.mainmanager.Folders[dkey].set_override(
+                                ovrd)
+                        else:
+                            self.mainmanager.Folders[dkey].remove_override()
+
+                # for odir, opath in self._current_profile.overrides():
+                #     try:
+                #         self.mainmanager.Folders[odir].set_override(opath)
+                #     except KeyError as e:
+                #         self.LOGGER.exception(e)
 
         return self._current_profile
 

@@ -62,7 +62,8 @@ class InstallManager(Submanager):
         self.normalized_imgpaths = {}
 
         # we get the `mainmanager` attribute from our Submanager base
-        self.install_dir = self.mainmanager.Paths.dir_mods / self.arc_path.stem.lower()
+        # self.install_dir = self.mainmanager.Paths.dir_mods / self.arc_path.stem.lower()
+        self.install_dir = self.mainmanager.Folders['mods'].path / self.arc_path.stem.lower()
         # Used to track state during installation
         self.files_to_install = []
         self.files_installed = deque()

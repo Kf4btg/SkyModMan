@@ -77,7 +77,9 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
         ## Default Path values
         # with nofail, returns empty strings for unset paths
-        self.paths={p:MManager.get_directory(p, False, nofail=True) for p in D}
+        # self.paths={p:MManager.get_directory(p, False, nofail=True) for p in D}
+        self.paths={f:str(MManager.Folders[f].current_path) for f in D}
+        self.defpaths = {f:str(MManager.Folders[f].default_path) for f in D}
 
         ## associate text boxes with directories
         self.path_boxes = {
@@ -250,8 +252,13 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         # so many things are keyed with the app directory
         for d in D:
             dpath = self.paths[d]
-            # show path text
-            self.path_boxes[d].setText(dpath)
+
+            # if the box is empty, show the default
+            self.path_boxes[d].setPlaceholderText(self.defpaths[d])
+
+            # if a custom path has been set, show path text
+            if dpath != self.defpaths[d]:
+                self.path_boxes[d].setText(dpath)
 
             # connect dir-chooser btns
             self.path_choosers[d].clicked.connect(
@@ -344,6 +351,8 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         new_value = self.path_boxes[key].text()
         label = self.indicator_labels[key]
 
+
+
         if new_value != self.paths[key]:
             # this will only matter the first time, but still...
             # if the user edits the path box and the new value
@@ -351,9 +360,13 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             self._mark_changed()
 
         # if they cleared the box, mark it missing
-        if not new_value:
-            self._mark_missing_path(label)
+        # if not new_value:
+        #     self._mark_missing_path(label)
 
+        # if they cleared the box, the default will be active
+        # ...unless there isn't one
+        if not new_value and not self.defpaths[key]:
+            self._mark_missing_path(label)
         elif not os.path.isabs(new_value):
             # then they didn't enter an absolute path
             self._mark_nonabs_path(label)
@@ -547,6 +560,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         # allow changing if the path is valid or cleared
         if not newpath:
             # if they unset the path, just change it
+            # NOTE: this will reset the path to default!
             self._update_path(key, newpath)
 
         # if they set a valid new path, ask if they want to copy
@@ -559,9 +573,8 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             if not old_path \
                     or not os.path.exists(old_path) \
                     or len(os.listdir(old_path)) == 0:
-                self.updateDirPath.emit(key, newpath, False)
-
-                # self._update_path(key, newpath)
+                # self.updateDirPath.emit(key, newpath, False)
+                self._update_path(key, newpath)
 
             else:
 
@@ -598,17 +611,18 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                     # else:
                     #     self._update_path(key, newpath)
                 else:
-                    self.updateDirPath.emit(key, newpath, False)
-
-                    # self._update_path(key, newpath)
+                    # self.updateDirPath.emit(key, newpath, False)
+                    self._update_path(key, newpath)
 
     def _update_path(self, key, newpath):
+        MManager.Folders[key].set_path(newpath)
 
         # emit this signal which should be connected to the Manager's
         # set_directory() method
-        self.updateDirPath.emit(key, newpath, False)
+        # self.updateDirPath.emit(key, newpath, False)
         # Manager.set_directory(key, newpath)
-        self.paths[key] = newpath
+        # self.paths[key] = newpath
+        self.paths[key] = str(MManager.Folders[key].current_path)
 
     # def _move_dir(self, key, newpath, remove_old):
 

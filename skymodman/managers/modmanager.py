@@ -103,8 +103,20 @@ class ModManager:
                     .replace('%APPCONFIGDIR%', _appconf)
             )
 
-        self._folders['mods'].register_change_listener()
+        self._folders['mods'].register_change_listener(self.on_dir_change)
+        self._folders['mods'].register_change_listener(self.refresh_modlist)
+        # self._moddir_changed = False
+        # self._folders['mods'].register_change_listener(lambda a,p,c: setattr(self, '_moddir_changed', p!=c))
 
+        self._folders['skyrim'].register_change_listener(self.on_dir_change)
+        # self._skydir_changed=False
+        # self._folders['skyrim'].register_change_listener(lambda a,p,c: setattr(self, '_skydir_changed', p!=c))
+
+
+        self._folders['profiles'].register_change_listener(self.on_dir_change)
+        self._folders['vfs'].register_change_listener(self.on_dir_change)
+
+        ##config ##
 
         self._configman = _config.ConfigManager(mcp=self)
 
@@ -126,7 +138,8 @@ class ModManager:
         self.alerts = set() # type: Set [Alert]
 
         # make sure we have a valid profiles directory
-        self.check_dir(ks_dir.PROFILES)
+        # self.check_dir(ks_dir.PROFILES)
+        self.check_dirs()
 
     ## Sub-manager access properties ##
 
@@ -177,12 +190,15 @@ class ModManager:
     @property
     def installed_mods(self):
         if self._modlist_needs_refresh:
-            try:
-                self._installed_mods = self._pathman.list_mod_folders()
-            except exceptions.InvalidAppDirectoryError:
-                self._installed_mods = []
-            finally:
-                self._modlist_needs_refresh = False
+            # self._installed_mods = list(self.Folders['mods'].iter_contents(True))
+            self.refresh_modlist(self.Folders['mods'])
+
+            # try:
+            #     self._installed_mods = self._pathman.list_mod_folders()
+            # except exceptions.InvalidAppDirectoryError:
+            #     self._installed_mods = []
+            # finally:
+            #     self._modlist_needs_refresh = False
 
         return self._installed_mods
 
@@ -305,19 +321,24 @@ class ModManager:
         for key in ks_dir:
             self.check_dir(key)
 
-    # def refresh_modlist(self):
-    #     """Regenerate the list of installed mods"""
+    def refresh_modlist(self, modfolder):
+        """Regenerate the cached list of installed mods"""
+        self.LOGGER << "Refreshing mods list"
+        self._installed_mods = list(
+            modfolder.iter_contents(True))
+            # self.Folders['mods'].iter_contents(True))
 
-    def on_dir_change(self, folder, previous, current):
+        self._modlist_needs_refresh = False
+
+    # def on_dir_change(self, folder, previous, current):
+    def on_dir_change(self, folder):
         """
         handler for directory-change events
 
         :param AppFolder folder:
-        :param str previous:
-        :param str current:
         """
 
-        if not current:
+        if not folder:
             self.add_alert(self._diralerts[folder.name])
         else:
             self.remove_alert(self._diralerts[folder.name])
@@ -493,9 +514,10 @@ class ModManager:
 
         self.LOGGER << "Loading initial profile: {}".format(profile_name)
 
+        # this will enable any profile overrides there may be
         self._profileman.set_active_profile(profile_name)
 
-        self.check_dirs()
+        # self.check_dirs()
 
         if self._update_modinfo(True):
             self.find_all_mod_files(True, True)
@@ -517,9 +539,12 @@ class ModManager:
             profile_name)
         # keep references to currently (soon to be previously)
         # configured directories
-        prev_dirs = {d: self.get_directory(d, nofail=True)
-                     for d in overrideable_dirs}
+        prev_dirs = {d: self.Folders[d].path for d in ks_dir}
+        # prev_dirs = {d: self.get_directory(d, nofail=True)
+        #              for d in overrideable_dirs}
 
+        # this will enable any profile overrides there may be,
+        # and also set self._[mod|sky]dir_changed
         self._profileman.set_active_profile(profile_name)
 
         # ...only the MODS dir is ever checked; is there actually a
@@ -527,22 +552,23 @@ class ModManager:
         # Or is setting alerts a good-enough reason?
 
         # see if configured dirs changed:
-        dir_changed = {}
-        for d in overrideable_dirs:
-            try:
-                dir_changed[d] = self.get_directory(d) != prev_dirs[d]
-            except exceptions.InvalidAppDirectoryError:
-                # add alert on invalid new dir
-                self.add_alert(self._diralerts[d])
-                # dir has changed only if previous was valid
-                dir_changed[d] = bool(prev_dirs[d])
-            else:
-                # remove any alerts if dir is valid
-                self.remove_alert(self._diralerts[d])
+        # dir_changed = {}
+        # for d in overrideable_dirs:
+        #     try:
+        #         dir_changed[d] = self.get_directory(d) != prev_dirs[d]
+        #     except exceptions.InvalidAppDirectoryError:
+        #         # add alert on invalid new dir
+        #         self.add_alert(self._diralerts[d])
+        #         # dir has changed only if previous was valid
+        #         dir_changed[d] = bool(prev_dirs[d])
+        #     else:
+        #         # remove any alerts if dir is valid
+        #         self.remove_alert(self._diralerts[d])
 
-        moddir_changed = self._modlist_needs_refresh = dir_changed[
-                ks_dir.MODS]
-        skydir_changed = dir_changed[ks_dir.SKYRIM]
+        # moddir_changed = self._modlist_needs_refresh = prev_dirs['mods'] != self.Folders['mods']
+        # skydir_changed = dir_changed[ks_dir.SKYRIM]
+        moddir_changed = prev_dirs['mods'] != self.Folders['mods']
+        skydir_changed = prev_dirs['skyrim']!=self.Folders['skyrim']
 
         # load/generate modinfo and mod table, as needed
         if self._update_modinfo(moddir_changed) and (
@@ -554,6 +580,10 @@ class ModManager:
             # with all discovered files loaded into the database,
             # detect which mods contain files with the same name
             self._dbman.detect_file_conflicts()
+
+        # (now reset these values)
+        # self._moddir_changed = False
+        # self._skydir_changed = False
 
 
         # always need to re-check hidden files
@@ -585,6 +615,7 @@ class ModManager:
         """
         # first, reinitialize the db tables
         self._dbman.reinit(files=moddir_changed)
+        # self._dbman.reinit(files=self._moddir_changed)
 
         # try to read modinfo file (populates "mods" table)
         if self._dbman.load_mod_info(self.profile.modinfo):
@@ -611,19 +642,30 @@ class ModManager:
         """
         self.LOGGER << "<==Method called"
 
-        try:
+        if self.Folders['mods']:
             # populate the mods table from the main mods directory
-            self._dbman.get_mod_data_from_directory()
-        except exceptions.InvalidAppDirectoryError as e:
-            # unless the mod directory is somehow invalid, then
-            # return False
-            self.LOGGER.error(e)
-            return False
-        else:
+            self._dbman.get_mod_data_from_directory(self.Folders['mods'].path)
             # and (re)generate the modinfo file using default values
             self.save_mod_info()
             # return success
             return True
+        else:
+            self.LOGGER.error("Mods Folder is unset")
+            return False
+
+        # try:
+        #     # populate the mods table from the main mods directory
+        #     self._dbman.get_mod_data_from_directory()
+        # except exceptions.InvalidAppDirectoryError as e:
+        #     # unless the mod directory is somehow invalid, then
+        #     # return False
+        #     self.LOGGER.error(e)
+        #     return False
+        # else:
+        #     # and (re)generate the modinfo file using default values
+        #     self.save_mod_info()
+        #     # return success
+        #     return True
 
     ##=============================================
     ## Mod Information
@@ -670,11 +712,11 @@ class ModManager:
         """
         self.LOGGER << "Validating installed mods"
 
-        try:
-            return self._dbman.validate_mods_list(self.installed_mods)
-        except exceptions.InvalidAppDirectoryError as e:
-            self.LOGGER.error(e)
-            return False
+        # try:
+        return self._dbman.validate_mods_list(self.installed_mods)
+        # except exceptions.InvalidAppDirectoryError as e:
+        #     self.LOGGER.error(e)
+        #     return False
 
     def find_all_mod_files(self, modfiles=True, skyfiles=True):
         """
@@ -690,22 +732,25 @@ class ModManager:
 
         # if required, examine the disk for files.
         if modfiles:
-            try:
-                self._dbman.load_all_mod_files()
-            except exceptions.InvalidAppDirectoryError as e:
+            if self.Folders[ks_dir.MODS]:
+            # try:
+                self._dbman.load_all_mod_files(self.Folders[ks_dir.MODS].path)
+            else:
+            # except exceptions.InvalidAppDirectoryError as e:
                 # don't fail-out in this case; continue w/ attempt
                 # to add files from skyrim dir
-                self.LOGGER.error(e)
+                # self.LOGGER.error(e)
+                self.LOGGER.error("Mods directory is unset")
 
         # let's also add the files from the base
         # Skyrim Data folder to the db
         if skyfiles:
-            try:
-                self._dbman.load_skyfiles(
-                    self.get_directory(ks_dir.SKYRIM,
-                                       aspath=True))
-            except exceptions.InvalidAppDirectoryError as e:
-                self.LOGGER.warning(e)
+            if self.Folders[ks_dir.SKYRIM]:
+                self._dbman.load_skyfiles(self.Folders[ks_dir.SKYRIM].path)
+                    # self.get_directory(ks_dir.SKYRIM,
+                    #                    aspath=True))
+            else:
+                self.LOGGER.warning("Skyrim directory is unset")
 
     ##=============================================
     ## Data Persistence

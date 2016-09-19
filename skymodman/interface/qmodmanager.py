@@ -4,7 +4,6 @@ from PyQt5.QtCore import QObject, pyqtSignal as Signal, pyqtSlot as Slot
 
 from skymodman import exceptions
 from skymodman.managers.modmanager import ModManager
-from skymodman.utils import fsutils
 from skymodman.interface.ui_utils import blocked_signals
 from skymodman.interface.dialogs import message
 
@@ -90,11 +89,11 @@ class QModManager(QObject, ModManager):
     ## Config-change slots
     ##=============================================
 
-    def set_directory(self, key, path, profile_override=False):
-        super().set_directory(key, path, profile_override)
-
-        if not profile_override:
-            self.dirChanged.emit(key, path)
+    # def set_directory(self, key, path, profile_override=False):
+    #     super().set_directory(key, path, profile_override)
+    #
+    #     if not profile_override:
+    #         self.dirChanged.emit(key, path)
 
 
     @Slot(str, str, bool, bool)
@@ -111,12 +110,13 @@ class QModManager(QObject, ModManager):
         """
         # prev_path = self.get_directory(key, override)
 
-        do_update = False
+        # do_update = False
 
         try:
-            fsutils.move_dir_contents(self.Paths.path(key, override),
-                                      new_path,
-                                      remove_old)
+            self.Folders[key].move(new_path, remove_old, override)
+            # fsutils.move_dir_contents(self.Paths.path(key, override),
+            #                           new_path,
+            #                           remove_old)
 
             # self.Paths.move_dir(key, new_path, remove_old, override)
         except exceptions.FileDeletionError as e:
@@ -128,7 +128,7 @@ class QModManager(QObject, ModManager):
                     "The following error occurred:",
                     detailed_text=str(e), buttons='ok',
                     default_button='ok')
-            do_update = True
+            # do_update = True
         except exceptions.FileAccessError as e:
             message('critical',
                     "Cannot perform move operation.",
@@ -145,54 +145,17 @@ class QModManager(QObject, ModManager):
                     text="The move operation may not have fully completed. The following errors were encountered: ",
                     buttons='ok', default_button='ok',
                     detailed_text=s)
-        else:
-            do_update = True
-
-        if do_update:
-            self.set_directory(key, new_path, override)
+        # else:
+        #     do_update = True
+        #
+        # if do_update:
+        #     self.set_directory(key, new_path, override)
 
         # if prev_path != self.get_directory(key, override):
 
         # no matter what happened, check for valid dir
         # self.check_dir(key)
 
-
-    # XXX: these are largely unnecessary...the only advantage they
-    # offer is being decorated with the @pyqtSlot() decorator, which
-    # should speed up the connection a bit, but probably not enough
-    # to make up for the fact that they are simply another level
-    # of redirection and mostly don't do anything other than
-    # call a corresponding super() method
-
-    # @Slot(str, str, bool)
-    # def set_directory(self, key, path, profile_override=False):
-    #     """Handle the user updating the configured path of an
-    #     application directory"""
-    #
-    #     # this will in turn call check_dir(), which may cause
-    #     # alertsChanged to be emitted
-    #     self.set_directory(dir_key, new_value, profile_override)
-
-    # # FIXME: this third parameter should be something else...whatever the "arbitrary python value" type is called
-    # @Slot(str, str, str)
-    # def on_setting_changed(self, section, key, new_value):
-    #     """
-    #     Note: not to be used when directories are changed.
-    #
-    #     :param section: Currently, should always be GENERAL
-    #     :param key: the config key for the setting
-    #     :param new_value: the updated value
-    #     """
-    #     self.set_config_value(key, section, new_value, False)
-
-
-    # @Slot(str)
-    # def on_default_profile_change(self, profile_name):
-    #     """
-    #
-    #     :param profile_name:
-    #     """
-    #     super().set_default_profile(profile_name)
 
     ##=============================================
     ## The signal queue

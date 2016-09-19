@@ -490,7 +490,7 @@ class DBManager(BaseDBManager, Submanager):
         yield from cur
 
 
-    def get_mod_data_from_directory(self):
+    def get_mod_data_from_directory(self, mods_dir):
         """
         scan the actual mods-directory and populate the database from
         there instead of a cached json file.
@@ -501,8 +501,8 @@ class DBManager(BaseDBManager, Submanager):
         """
         # TODO: Perhaps this should be run on every startup? At least to make sure it matches the stored data.
 
-        mods_dir = self.mainmanager.get_directory(keystrings.Dirs.MODS,
-                                                  aspath=True)
+        # mods_dir = self.mainmanager.get_directory(keystrings.Dirs.MODS,
+        #                                           aspath=True)
 
         # list of installed mod folders
         installed_mods = self.mainmanager.installed_mods
@@ -577,7 +577,13 @@ class DBManager(BaseDBManager, Submanager):
             if isinstance(mods_dir, str):
                 mods_dir = Path(mods_dir)
         else:
-            mods_dir = self.mainmanager.get_directory(keystrings.Dirs.MODS, aspath=True)
+            # mods_dir = self.mainmanager.get_directory(keystrings.Dirs.MODS, aspath=True)
+            mods_dir = self.mainmanager.Folders[keystrings.Dirs.MODS].path
+            # verify that mods dir is set
+            # if not mods_dir:
+            #     raise exceptions.InvalidAppDirectoryError(keystrings.Dirs.MODS, mods_dir)
+
+
 
         installed_mods = self.mainmanager.installed_mods
 

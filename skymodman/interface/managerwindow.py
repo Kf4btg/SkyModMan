@@ -1732,10 +1732,17 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # update config with new path
         if check_path(moddir):
-            self.Manager.set_directory(KeyStr_Dirs.MODS, moddir, False)
+            mfolder = self.Manager.Folders[KeyStr_Dirs.MODS]
 
-            if self.Manager.profile and self.Manager.profile.override_enabled(KeyStr_Dirs.MODS):
+            mfolder.set_path(moddir)
+            # self.Manager.set_directory(KeyStr_Dirs.MODS, moddir, False)
+
+            if mfolder.is_overriden:
+                mfolder.remove_override()
                 self.Manager.profile.disable_override(KeyStr_Dirs.MODS)
+
+            # if self.Manager.profile and self.Manager.profile.override_enabled(KeyStr_Dirs.MODS):
+            #     self.Manager.profile.disable_override(KeyStr_Dirs.MODS)
 
             # reverify and reload the mods.
             if not self.Manager.validate_mod_installs():
