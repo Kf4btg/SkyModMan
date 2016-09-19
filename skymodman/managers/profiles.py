@@ -136,6 +136,13 @@ class ProfileManager(Submanager):
 
                 self._current_profile = self.load_profile(profilename)
 
+                # check for and enable directory overrides
+                for odir, opath in self._current_profile.overrides():
+                    try:
+                        self.mainmanager.Folders[odir].set_override(opath)
+                    except KeyError as e:
+                        self.LOGGER.exception(e)
+
         return self._current_profile
 
     #############################
