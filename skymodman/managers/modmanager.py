@@ -88,7 +88,7 @@ class ModManager:
 
         ## XXX: should these be in the pathmanager? I'm inclined to think not. Does the pathmanager even need to exist now? It really only handles the path to the main config file (which should prob. just be handled by the config manager) and the base directories for the folders below...
 
-        self._folders = {}
+        self._folders = {} # type: dict [str, AppFolder]
         _appdata = str(self._pathman.dir_data)
         _appconf = str(self._pathman.dir_config)
 
@@ -102,6 +102,8 @@ class ModManager:
                     .replace('%APPDATADIR%', _appdata)
                     .replace('%APPCONFIGDIR%', _appconf)
             )
+
+        self._folders['mods'].register_change_listener()
 
 
         self._configman = _config.ConfigManager(mcp=self)
@@ -303,8 +305,25 @@ class ModManager:
         for key in ks_dir:
             self.check_dir(key)
 
-    def refresh_modlist(self):
-        """Regenerate the list of installed mods"""
+    # def refresh_modlist(self):
+    #     """Regenerate the list of installed mods"""
+
+    def on_dir_change(self, folder, previous, current):
+        """
+        handler for directory-change events
+
+        :param AppFolder folder:
+        :param str previous:
+        :param str current:
+        """
+
+        if not current:
+            self.add_alert(self._diralerts[folder.name])
+        else:
+            self.remove_alert(self._diralerts[folder.name])
+
+
+
 
     ##=============================================
     ## Profile Management Interface
