@@ -1,4 +1,4 @@
-from pathlib import Path
+from pathlib import Path, PurePath
 
 from skymodman.utils import fsutils
 from skymodman.exceptions import FileDeletionError
@@ -54,6 +54,10 @@ class AppFolder:
             elif isinstance(default_path, Path):
                 self.current_path = current_path
 
+        ## placeholder for override ##
+        self._override=None
+        self._override_active=False
+
         ## listeners, if any ##
 
         # callables listening for a change in the path
@@ -71,7 +75,7 @@ class AppFolder:
     @property
     def path(self):
         """Returns the current path of this folder as a Path object"""
-        return self.current_path
+        return self._override if self._override_active else self.current_path
 
     @property
     def spath(self):
@@ -81,20 +85,34 @@ class AppFolder:
         #     return str(self.current_path)
         # return ""
 
+    @property
+    def is_overriden(self):
+        """Return True if an override has been set and is active."""
+        return self._override_active
+
 
     ##=============================================
     ## magic method overrides
     ##=============================================
 
     def __str__(self):
-        if self.current_path:
-            return str(self.current_path)
+        if self.path:
+            return str(self.path)
         return ""
 
     def __repr__(self):
         # returns a representation of the CURRENT state of the object,
         # which is not necessarily the same as its initialization state.
         return "AppFolder(name={0.name}, display_name={0.display_name}, default_path={0.default_path}, current_path={0.current_path}".format(self)
+
+    def __eq__(self, other):
+        # can compare with strings, paths, or other AppFolders
+        if isinstance(other, (str, bytes)):
+            return self.__str__() == other
+        elif isinstance(other, AppFolder) or isinstance(other, PurePath):
+            return self.__str__() == str(other)
+        else:
+            return NotImplemented
 
     ##=============================================
     ## validation properties
@@ -122,7 +140,9 @@ class AppFolder:
         """internal method for updating the path and notifying listeners"""
         prev=self.spath
         self.current_path = new
-        self._notify(prev, self.spath)
+
+        if prev!=self.spath:
+            self._notify(prev, self.spath)
 
     def clear_path(self):
         """Unset this path. Do not revert to the default path even if
@@ -163,7 +183,42 @@ class AppFolder:
 
         # return False
 
-    def move(self, new_path, remove_old=False):
+    def set_override(self, path, validate=False):
+        """
+        While this override is active, `path` will be returned as the
+        value of this AppFolder rather than whatever is set as the
+        current path. The value of the current path will not, however,
+        be forgotten, and can be reverted to by calling remove_override().
+
+        Triggers a change notification.
+
+        :param path:
+        :param validate:
+        """
+
+        prev=self.spath
+
+        if not path:
+            self._override = None
+        else:
+            # _new = Path(path)
+            # if not validate or _new.exists():
+            self._override = Path(path)
+
+        self._override_active = True
+
+        # dont notify if override is same as current
+        if prev!=self.spath:
+            self._notify(prev, self.spath)
+
+
+    def remove_override(self):
+        """Deactivate the current override and revert to ``current_path``"""
+        self._override_active=False
+
+
+
+    def move(self, new_path, remove_old=False, as_override=False):
         """
         Update this folder's path to point to `new_path` on the
         filesystem, which must either not exist or be an empty
@@ -211,7 +266,10 @@ class AppFolder:
         # all other exceptions will propagate up
 
         # but if there were no other errors, set the path
-        self.set_path(new_path, False)
+        if not as_override:
+            self.set_path(new_path, False)
+        else:
+            self.set_override(new_path, False)
 
 
 
@@ -221,9 +279,10 @@ class AppFolder:
 
     def register_change_listener(self, listener):
         """
-        listener should be a callable that accepts 2 parameters: old_path and new_path.
-        :param listener:
-        :return:
+        `listener` should be a callable that accepts 3 parameters;
+        it will be invoked as ``listener(appfolder, old_path, new_path)``,
+        where appfolder is this AppFolder instance, and old_path/new_path
+        are strings.
         """
 
         if callable(listener):
@@ -240,4 +299,4 @@ class AppFolder:
         """Invoke--in no particular or guaranteed order--all registered
          change-listeners with the change information"""
         for l in self._listeners:
-            l(old, new)
+            l(self, old, new)
