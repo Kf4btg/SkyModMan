@@ -120,8 +120,9 @@ class ModManager:
 
         self._configman = _config.ConfigManager(mcp=self)
 
-        self._profileman = _profiles.ProfileManager(
-            self._pathman.dir_profiles, mcp=self)
+        self._profileman = _profiles.ProfileManager(mcp = self)
+            # self._folders['profiles'].path, mcp=self)
+            # self._pathman.dir_profiles, mcp=self)
 
         # set up db, but do not load info until requested
         self._dbman = _database.DBManager(mcp=self)
@@ -139,7 +140,7 @@ class ModManager:
 
         # make sure we have a valid profiles directory
         # self.check_dir(ks_dir.PROFILES)
-        self.check_dirs()
+        # self.check_dirs()
 
     ## Sub-manager access properties ##
 
@@ -324,8 +325,9 @@ class ModManager:
     def refresh_modlist(self, modfolder):
         """Regenerate the cached list of installed mods"""
         self.LOGGER << "Refreshing mods list"
-        self._installed_mods = list(
-            modfolder.iter_contents(True))
+        self._installed_mods = [d.name for d in modfolder.iter_contents(dirs_only=True)]
+        # self._installed_mods = list(
+        #     modfolder.iter_contents(True))
             # self.Folders['mods'].iter_contents(True))
 
         self._modlist_needs_refresh = False

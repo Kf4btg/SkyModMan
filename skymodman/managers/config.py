@@ -169,10 +169,8 @@ class ConfigManager(Submanager, BaseConfigManager):
         # path to directory which holds all the profile info
         # TODO: should this stuff actually be in XDG_DATA_HOME??
         try:
-            self.mainmanager.Folders['profiles'].set_path(
-                self._get_value_from(config,
-                                     _SECTION_DIRS,
-                                     _KEY_PROFDIR))
+            self.mainmanager.Folders['profiles'].path = self._get_value_from(
+                config, _SECTION_DIRS, _KEY_PROFDIR)
             # self.paths.profiles = Path(self._get_value_from(config, _SECTION_DIRS, _KEY_PROFDIR))
 
 
@@ -180,7 +178,7 @@ class ConfigManager(Submanager, BaseConfigManager):
                     exceptions.MissingConfigSectionError) as e:
             # XXX: on thinking about this, it may actually be beneficial to ignore a missing key here and just implicitly use the default. If the user ever customizes the path in the preferences dialog, we can write it to the config file then. This may prevent accidental changes to the path or even issues if some sort of upgrade changes the default.
             # self.missing_keys.append(exceptions.MissingConfigKeyError(_KEY_PROFDIR, _SECTION_DIRS))
-            self.missing_keys.append((e.secton, _KEY_PROFDIR))
+            self.missing_keys.append((e.section, _KEY_PROFDIR))
 
             self.LOGGER.warning("Key for profiles directory missing; using default.")
             ## Should be default already
@@ -256,6 +254,8 @@ class ConfigManager(Submanager, BaseConfigManager):
                 # check if the section itself is missing
                 if s not in config:
                     config[s] = {}
+                print(s, k)
+                print(self.current_values[s][k])
 
                 config[s][k] = self.current_values[s][k]
 
@@ -298,6 +298,7 @@ class ConfigManager(Submanager, BaseConfigManager):
 
         :param configparser.ConfigParser config:
         """
+
 
         for evar, path_key in (
                 (EnvVars.SKYDIR, _KEY_SKYDIR),
@@ -345,12 +346,19 @@ class ConfigManager(Submanager, BaseConfigManager):
             # finally, if we have successfully deduced the path, set
             # it on the PathManager
             if p is not None:
-                self.mainmanager.Folders[path_key].set_path(p)
+                self.mainmanager.Folders[path_key].path = p
                 ## use setattr to avoid circular reference during setup
                 # setattr(self.paths, path_key, p)
 
+            # and update config-file mirror
+            # note -- have to use strings to keep config parser
+            #         happy
+            self._set_value(_SECTION_DIRS, path_key, "" if not p else str(p))
+
             # update config-file mirror
-            self._set_value(_SECTION_DIRS, path_key, p)
+            # print("==>Method invoke: BaseConfig._set_value(", _SECTION_DIRS, path_key, p, ")")
+
+            # self._set_value(_SECTION_DIRS, path_key, p)
             # self._set_value(_SECTION_DIRS, path_key, self.paths[path_key])
 
         if self.path_errors:

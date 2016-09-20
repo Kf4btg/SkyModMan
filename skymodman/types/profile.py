@@ -62,6 +62,7 @@ class Profile:
         ## Path checks/creation
         ##---------------------------------
 
+        # todo: pull 'profiles_dir' from ModManager's profile AppFolder dynamically (so that the profiles directory can be changed without having to update the 'folder' attribute of every Profile as well).
         self.folder = profiles_dir / name # type: Path
 
         if not self.folder.exists():

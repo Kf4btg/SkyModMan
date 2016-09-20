@@ -123,6 +123,8 @@ class BaseConfigManager:
         :param str section:
         :param str key:
         """
+        # print("<==Method Call: BaseConfig.get_value(", section, key, ")")
+
         try:
             s = self.current_values[section]
         except KeyError:
@@ -144,6 +146,7 @@ class BaseConfigManager:
         :param str section:
         :param str key:
         """
+        # print("<==Static Call: BaseConfig._get_value_from(",parser, section, key, ")")
 
         try:
             s = parser[section]
@@ -164,6 +167,7 @@ class BaseConfigManager:
         :param str section:
         :param str key:
         """
+        # print("<==Method Call: BaseConfig.load_value_from(",parser, section, key, ")")
 
         self._set_value(section, key,
                         self._get_value_from(parser, section, key))
@@ -173,9 +177,11 @@ class BaseConfigManager:
         Using the config manager's template, return the default value
         for the entry under the given section and key.
 
-        :param section:
-        :param key:
+        :param str section:
+        :param str key:
         """
+        # print("<==Method Call: BaseConfig.default_value(", section, key, ")")
+
         return self.template[section][key]
 
     ##=============================================
@@ -184,8 +190,21 @@ class BaseConfigManager:
 
     @staticmethod
     def _set_value_on(parser, section, key, value):
-        """Wraps assigning a value to the given ConfigParser instance
-        in custom exception handlers"""
+        """
+        Wraps assigning a value to the given ConfigParser instance
+        in custom exception handlers
+
+        :param parser:
+        :param str section:
+        :param str key:
+        :param str value:
+        """
+        # print("<==Static Call: BaseConfig._set_value_on(", parser, section, key, value, ")")
+
+        # because 'option values must be strings', make sure we're not
+        # trying to store None
+        # if value is None:
+        #     value = ""
 
         try:
             s = parser[section]
@@ -198,8 +217,15 @@ class BaseConfigManager:
             raise exceptions.InvalidConfigKeyError(key, section)
 
     def _set_value(self, section, key, value):
-        """Wraps assigning a value to the current_values collection
-        in custom exception handlers"""
+        """
+        Wraps assigning a value to the current_values collection
+        in custom exception handlers
+
+        :param str section:
+        :param str key:
+        :param str value:
+        """
+        # print("<==Method Call: BaseConfig._set_value(", section, key, value, ")")
 
         self._set_value_on(self.current_values, section, key, value)
 
@@ -210,8 +236,9 @@ class BaseConfigManager:
 
         :param str section:
         :param str key:
-        :param value:
+        :param str value:
         """
+        # print("<==Method Call: BaseConfig.update_value(", section, key, value, ")")
 
         conf = self.read_config()
         self._set_value_on(conf, section, key, value)

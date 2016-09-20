@@ -77,6 +77,12 @@ class AppFolder:
         """Returns the current path of this folder as a Path object"""
         return self._override if self._override_active else self.current_path
 
+    @path.setter
+    def path(self, value):
+        """Set the path for this folder to `value`. No validation
+        will be performed."""
+        self.set_path(value)
+
     @property
     def spath(self):
         """Returns the current path of this folder as a string"""

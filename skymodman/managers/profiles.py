@@ -22,26 +22,25 @@ class ProfileManager(Submanager):
     __cache = diqt(maxlen_=5)
 
 
-    def __init__(self, directory, *args, **kwargs):
-        """
-        :param Path directory: the application's 'profiles' storage directory
-        """
+    def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
 
-        self._profiles_dir = directory
+        # self._profiles_dir = directory
         self._current_profile = None # type: Profile
 
+        _profiles_dir = self.mainmanager.Folders['profiles'].path
+
         # make sure directory exists
-        if not self._profiles_dir.exists():
+        if not _profiles_dir.exists():
             raise FileNotFoundError("Profile directory not found: {}"
-                                    .format(self._profiles_dir))
+                                    .format(_profiles_dir))
 
         ## load profile names from folders in profiles-dir
-        self.LOGGER.info("loading profiles from {}".format(self._profiles_dir))
+        self.LOGGER.info("loading profiles from {}".format(_profiles_dir))
         self._profile_names = [] # type: list [str]
 
-        for p in self._profiles_dir.iterdir():
+        for p in _profiles_dir.iterdir():
             if p.is_dir():
                 self._profile_names.append(p.name)
 
@@ -61,6 +60,11 @@ class ProfileManager(Submanager):
     @property
     def profile_names(self):
         return self._profile_names
+
+    @property
+    def _profiles_dir(self):
+        # TODO: just use the Folders instance directly
+        return self.mainmanager.Folders['profiles'].path
 
     #######################
     ## Choosing Profiles ##

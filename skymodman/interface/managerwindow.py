@@ -217,6 +217,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # keep local ref
         self.Manager = Manager()
 
+        # do an initial check of the Manager directories
+        self.Manager.check_dirs()
+
         # connect to signals
         self.Manager.alertsChanged.connect(self.update_alerts)
 
@@ -1378,7 +1381,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # if the main mods directory is unset, just disable the list
         # until the user corrects this
-        if not self.Manager.get_directory(KeyStr_Dirs.MODS):
+        # if not self.Manager.get_directory(KeyStr_Dirs.MODS):
+        if not self.Manager.Folders['mods']:
             self.filetree_modlist.setEnabled(False)
             self.filetree_modlist.setToolTip(
                 "Mods directory is currently invalid")
@@ -1585,9 +1589,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # add the name of the mod directory to the path of the
         # main mods folder
 
-        modstorage = self.Manager.get_directory(KeyStr_Dirs.MODS)
+        modstorage = self.Manager.Folders['mods']
         if modstorage:
-            p = join_path(self.Manager.get_directory(KeyStr_Dirs.MODS), moddir)
+            p = join_path(modstorage.spath, moddir)
 
             self.models[M.file_viewer].setRootPath(p)
         # if the main mods-storage directory is unset, don't attempt
@@ -1727,7 +1731,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         moddir = QtWidgets.QFileDialog.getExistingDirectory(
             self,
             "Choose Directory Containing Installed Mods",
-            self.Manager.get_directory(KeyStr_Dirs.MODS, False)
+            # self.Manager.get_directory(KeyStr_Dirs.MODS, False)
+            self.Manager.Folders['mods'].spath
         )
 
         # update config with new path
