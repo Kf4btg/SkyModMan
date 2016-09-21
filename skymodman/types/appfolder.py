@@ -38,17 +38,19 @@ class AppFolder:
 
         self.default_path = None
 
-        if default_path is not None:
+        # if not None or ""
+        if default_path:
             if isinstance(default_path, str):
                 self.default_path = Path(default_path)
             elif isinstance(default_path, Path):
                 self.default_path = default_path
+            ## anything not a str or Path will be ignored.
 
         ## current path ##
 
         self.current_path = self.default_path
 
-        if current_path is not None:
+        if current_path:
             if isinstance(current_path, str):
                 self.current_path = Path(current_path)
             elif isinstance(default_path, Path):
@@ -179,6 +181,8 @@ class AppFolder:
         # if new_path is None or "" or something, reset to default
         # path.
 
+        # print("<==Folder["+self.name+"].set_path("+repr(new_path)+")")
+
         if not new_path:
             self.reset_path()
             # return True
@@ -234,6 +238,42 @@ class AppFolder:
     ##=============================================
     ## Other methods
     ##=============================================
+
+    def get_path(self, ignore_override=True, as_string=True):
+        """Like the ``path`` property, but by default ignores any
+        profile override that has been set. Set `ignore_override` to
+        False to change this behavior.
+
+        :param ignore_override:
+        :param as_string:
+        :return: The current path for this appfolder as a Path object
+            (or as a string if `as_string` is True; in this case, an
+            unset value will be returned as "", rather than None
+            or an empty Path).
+        """
+
+        if ignore_override or not self._override_active:
+            ret=self.current_path
+        else:
+            ret=self._override
+
+        if as_string:
+            return "" if ret is None else str(ret)
+        return ret
+
+    def get_default(self, as_string=True):
+        """
+        Return the default path for this AppFolder.
+
+        :param as_string: if True, return the path as a string rather
+            than a Path object. In this case, an unset path will return
+            "".
+        """
+
+        if as_string:
+            return "" if self.default_path is None else str(self.default_path)
+        return self.default_path
+
 
     def move(self, new_path, remove_old=False, as_override=False):
         """

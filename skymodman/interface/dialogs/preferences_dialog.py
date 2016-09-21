@@ -78,8 +78,8 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         ## Default Path values
         # with nofail, returns empty strings for unset paths
         # self.paths={p:MManager.get_directory(p, False, nofail=True) for p in D}
-        self.paths={f:str(MManager.Folders[f].current_path) for f in D}
-        self.defpaths = {f:str(MManager.Folders[f].default_path) for f in D}
+        self.paths={f:MManager.Folders[f].get_path() for f in D}
+        self.defpaths = {f:MManager.Folders[f].get_default() for f in D}
 
         ## associate text boxes with directories
         self.path_boxes = {
@@ -365,19 +365,21 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
         # if they cleared the box, the default will be active
         # ...unless there isn't one
-        if not new_value and not self.defpaths[key]:
-            self._mark_missing_path(label)
-        elif not os.path.isabs(new_value):
-            # then they didn't enter an absolute path
-            self._mark_nonabs_path(label)
+        if not new_value:
+            if not self.defpaths[key]:
+                self._mark_missing_path(label)
+        else:
+            if not os.path.isabs(new_value):
+                # then they didn't enter an absolute path
+                self._mark_nonabs_path(label)
 
-        # if they entered a valid path
-        elif os.path.exists(new_value):
-            # hide the label cause we're all good
-            label.setVisible(False)
+            # if they entered a valid path
+            elif os.path.exists(new_value):
+                # hide the label cause we're all good
+                label.setVisible(False)
 
-        else: # but if it was invalid...
-            self._mark_invalid_path(label)
+            else: # but if it was invalid...
+                self._mark_invalid_path(label)
 
             ## nahhhhh....
             # show a messagebox asking if they would like to create it
