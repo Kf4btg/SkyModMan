@@ -230,7 +230,7 @@ class ConfigManager(Submanager, BaseConfigManager):
         ## check that mods directory exists, but only create it if the
         # location in the config is same as the default
         mdir = self.mainmanager.Folders['mods'].path
-        if not mdir.exists() and str(mdir) == _DEFAULT_CONFIG_[_SECTION_DIRS][_KEY_MODDIR]:
+        if mdir and not mdir.exists() and str(mdir) == _DEFAULT_CONFIG_[_SECTION_DIRS][_KEY_MODDIR]:
             mdir.mkdir(parents=True)
 
         # self.paths.check_exists(_KEY_MODDIR,
@@ -395,7 +395,9 @@ class ConfigManager(Submanager, BaseConfigManager):
         method directly.
         """
         # use current_path to bypass override, if any
-        self.update_value(_SECTION_DIRS, path_key, str(self.mainmanager.Folders[path_key].current_path or ""))
+        self.update_value(_SECTION_DIRS,
+                          path_key,
+                          self.mainmanager.Folders[path_key].get_path())
         # self.update_value(_SECTION_DIRS, path_key, self.paths[path_key])
 
     ## path information will be queried via the pathmanager
