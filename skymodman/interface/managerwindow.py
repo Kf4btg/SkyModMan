@@ -217,11 +217,11 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # keep local ref
         self.Manager = Manager()
 
-        # do an initial check of the Manager directories
-        self.Manager.check_dirs()
-
         # connect to signals
         self.Manager.alertsChanged.connect(self.update_alerts)
+
+        # do an initial check of the Manager directories
+        self.Manager.check_dirs()
 
         # perform some setup that requires the manager
         self._setup_data_interface()
