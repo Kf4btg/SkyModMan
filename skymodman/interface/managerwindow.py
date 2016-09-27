@@ -1386,7 +1386,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # if the main mods directory is unset, just disable the list
         # until the user corrects this
-        # if not self.Manager.get_directory(KeyStr_Dirs.MODS):
         if not self.Manager.Folders['mods']:
             self.filetree_modlist.setEnabled(False)
             self.filetree_modlist.setToolTip(
@@ -1414,7 +1413,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.alerts_view_widget.clear()
 
         if self.Manager.has_alerts:
-            # self.alerts_view_widget.clear()
 
             # get a bold font to use for labels
             bfont = QtGui.QFont()
@@ -1444,7 +1442,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 lbl_desc.setTextInteractionFlags(Qt.TextSelectableByMouse)
                 self.alerts_view_widget.setItemWidget(desc, 1, lbl_desc)
 
-
                 # ditto
                 fix = QTreeWidgetItem(alert_title, ["Fix:"])
                 fix.setTextAlignment(0, Qt.AlignTop)
@@ -1459,12 +1456,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.alerts_view_widget.setItemWidget(fix, 1, lbl_fix)
                 alert_title.setExpanded(True)
 
-                # sd = lbl_desc.size()
-                # print(sd.height(), sd.width(), sep=", ")
-                # sf = lbl_fix.size()
-                # print(sf.height(), sf.width(), sep=", ")
-
-
             self.LOGGER << "Show alerts indicator"
             self.action_show_alerts.setVisible(True)
 
@@ -1477,8 +1468,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             m.setMinimumHeight(h)
             m.setMaximumHeight(h)
         else:
-            # self.alerts_view_widget.clear()
-
             self.LOGGER << "Hide alerts indicator"
             # have to hide using action, not button
             # (See docs for qtoolbar.addWidget...)
