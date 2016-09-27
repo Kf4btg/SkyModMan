@@ -330,13 +330,28 @@ class AppFolder:
             self.set_override(new_path, False)
 
     def iter_contents(self, dirs_only=False):
-        """Return an iterator over the contents of this folder"""
+        """
+        Return an iterator over the contents of this folder; contents
+        will be returned as path objects.
+        """
         if not self.path or not self.path.exists():
             raise StopIteration
         if dirs_only:
             yield from (d for d in self.path.iterdir() if d.is_dir())
         else:
             yield from self.path.iterdir()
+
+    def __iter__(self):
+        """
+        Iterate over the names (as strings) of the subdirectories
+        contained within this appfolder. For path objects or all files,
+        use the ``iter_contents()`` method
+        """
+        if not self.path or not self.path.exists():
+            raise StopIteration
+
+        yield from (d.name for d in self.path.iterdir() if d.is_dir())
+
 
 
     ##=============================================
