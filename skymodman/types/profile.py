@@ -3,7 +3,7 @@ from functools import partialmethod
 from configparser import ConfigParser as confparser
 from collections import namedtuple
 
-from skymodman import exceptions
+from skymodman import exceptions, Manager
 from skymodman.constants import FALLBACK_PROFILE
 from skymodman.constants.keystrings import (Section as kstr_section,
                                             Dirs as kstr_dirs,
@@ -145,6 +145,23 @@ class Profile:
     def settings(self):
         return self.folder / SETTINGS
 
+    ##=================================
+    ## status
+    ##---------------------------------
+
+    @property
+    def is_active(self):
+        """Return True if this profile is the currently active profile"""
+        m = Manager()
+        return m and m.profile is self
+
+    @property
+    def is_default(self):
+        """Return true if this profile is the currently configured
+        default profile"""
+        m = Manager()
+        return m and m.default_profile == self.name
+
     def overrides(self, ignore_enabled=False):
         """return a mapping of folder keys to paths for the currently
         enabled overrides for this profile"""
@@ -158,7 +175,7 @@ class Profile:
     ## Directory Overrides
     ##=============================================
 
-    def diroverride(self, dirkey, ignore_enabled=False):
+    def get_override_path(self, dirkey, ignore_enabled=False):
         """
         Return the value of the profile's override for the given
         directory, if that override is currently enabled.
@@ -178,7 +195,7 @@ class Profile:
 
         return ""
 
-    def setoverride(self, dirkey, path, enable=None):
+    def set_override_path(self, dirkey, path, enable=None):
         """
         Set a path override. Note that no path verification is performed
         here.
@@ -189,6 +206,7 @@ class Profile:
             for this override will be updated to that value. If omitted
             or None, no change will be made to the enabled status.
         """
+        self.LOGGER << "Setting override: ({}, {}, {})".format(dirkey, path, enable)
 
         if dirkey in self._overrides:
             enabled = self._overrides[dirkey].enabled \
@@ -203,8 +221,21 @@ class Profile:
 
             # save updated config to disk
             self._save_profile_settings()
+
+            # if this is the active profile, update the AppFolder with
+            # this override if it has been enabled
+            if self.is_active and self._overrides[dirkey].enabled:
+                Manager().Folders[dirkey].set_override(
+                    self._overrides[dirkey].path)
+
         else:
             self.LOGGER.error("Attempted to set override for unrecognized path key '{}'".format(dirkey))
+
+    def diroverride(self, dirkey):
+        """Return the dir_override namedtuple object for the given key.
+        In general, this will not be what you want; you probably want
+        to use get_override_path()."""
+        return self._overrides[dirkey]
 
 
     def override_enabled(self, dirkey, setenabled=None):
@@ -217,10 +248,22 @@ class Profile:
         :return:
         """
 
-        if setenabled is not None:
+        if (setenabled is not None
+            and self._overrides[dirkey].enabled != setenabled):
+            # if setenabled was provided and is different than the
+            # current enabled value:
+
             self._overrides[dirkey] = self._overrides[dirkey]._replace(enabled=setenabled)
 
             self.save_setting(kstr_section.OVR_ENABLED, dirkey, setenabled)
+
+            # if this is the active profile, [de-]activate this override
+            # on the corresponding appfolder as needed
+            if self.is_active:
+                if self._overrides[dirkey].enabled:
+                    self._set_appfolder_override(dirkey)
+                else:
+                    self._remove_appfolder_override(dirkey)
 
         return self._overrides[dirkey].enabled
 
@@ -228,7 +271,13 @@ class Profile:
     disable_override = partialmethod(override_enabled, setenabled=False)
     enable_override = partialmethod(override_enabled, setenabled=True)
 
-
+    # set/remove override on appfolders; only call these if this is the
+    # active profile
+    def _set_appfolder_override(self, dirkey):
+        Manager().Folders[dirkey].set_override(
+            self._overrides[dirkey].path)
+    def _remove_appfolder_override(self, dirkey):
+        Manager().Folders[dirkey].remove_override()
 
     ##=============================================
     ## File manipulation
