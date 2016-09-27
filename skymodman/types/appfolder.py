@@ -63,7 +63,6 @@ class AppFolder:
         ## listeners, if any ##
 
         # callables listening for a change in the path
-        # self._listeners = []
         self._listeners = set()
 
         if change_listeners is not None:
@@ -87,15 +86,28 @@ class AppFolder:
     def spath(self):
         """Returns the current path of this folder as a string"""
         return self.__str__()
-        # if self.current_path:
-        #     return str(self.current_path)
-        # return ""
+
+    ##=============================================
+    ## validation properties
+    ##=============================================
+
+    @property
+    def is_set(self):
+        """Return true if the current path for this folder is any
+        value other than None, even if it is not a valid filesystem
+        path."""
+        return self.path is not None
+
+    @property
+    def is_valid(self):
+        """Return True iff a path has been set and that path exists
+        on the filesystem."""
+        return self.is_set and self.path.exists()
 
     @property
     def is_overriden(self):
         """Return True if an override has been set and is active."""
         return self._override_active
-
 
     ##=============================================
     ## magic method overrides
@@ -121,29 +133,19 @@ class AppFolder:
             return NotImplemented
 
     def __bool__(self):
-        # return False if path() returns None
-        # return self.path is not None
+        """Shortcut to the ``is_valid`` property"""
         return self.is_valid
 
-    ##=============================================
-    ## validation properties
-    ##=============================================
+    def __iter__(self):
+        """
+        Iterate over the names (as strings) of the subdirectories
+        contained within this appfolder. For path objects or all files,
+        use the ``iter_contents()`` method
+        """
+        if not self.path or not self.path.exists():
+            raise StopIteration
 
-    @property
-    def is_set(self):
-        """Return true if the current path for this folder is any
-        value other than None, even if it is not a valid filesystem
-        path."""
-        # return self.current_path is not None
-        return self.path is not None
-
-    @property
-    def is_valid(self):
-        """Return True iff a path has been set and that path exists
-        on the filesystem."""
-        return self.is_set and self.path.exists()
-        # return self.current_path and self.current_path.exists()
-
+        yield from (d.name for d in self.path.iterdir() if d.is_dir())
 
     ##=============================================
     ## Modification
@@ -192,11 +194,6 @@ class AppFolder:
 
             if not validate or _new.exists():
                 self._change_current(_new)
-                # self.current_path = Path(new_path)
-                # self._notify(prev, self.spath)
-                # return True
-
-        # return False
 
     def set_override(self, path, validate=False):
         """
@@ -216,8 +213,6 @@ class AppFolder:
         if not path:
             self._override = None
         else:
-            # _new = Path(path)
-            # if not validate or _new.exists():
             self._override = Path(path)
 
         self._override_active = True
@@ -302,14 +297,9 @@ class AppFolder:
             there.
 
         """
-        # copy current
-        # current = Path(self.current_path)
 
-        if not new_path: return False
-
-        # _new = Path(new_path)
-
-        # if not _new.exists(): return False
+        if not new_path:
+            raise ValueError("new_path must have a valid value, not '{}'".format(new_path))
 
         try:
             fsutils.move_dir_contents(self.spath, str(new_path),
@@ -341,19 +331,6 @@ class AppFolder:
         else:
             yield from self.path.iterdir()
 
-    def __iter__(self):
-        """
-        Iterate over the names (as strings) of the subdirectories
-        contained within this appfolder. For path objects or all files,
-        use the ``iter_contents()`` method
-        """
-        if not self.path or not self.path.exists():
-            raise StopIteration
-
-        yield from (d.name for d in self.path.iterdir() if d.is_dir())
-
-
-
     ##=============================================
     ## change-event listeners
     ##=============================================
@@ -375,9 +352,7 @@ class AppFolder:
     def remove_listener(self, listener):
         """Remove a listener by providing the same callable object
         that was used to register it"""
-
         self._listeners.discard(listener)
-
 
     def _notify(self, old, new):
         """Invoke--in no particular or guaranteed order--all registered
