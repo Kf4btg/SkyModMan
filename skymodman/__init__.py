@@ -7,6 +7,8 @@ __manager = None
 def Manager():
     """
     Return the globally registered mod manager instance
+
+    :rtype: skymodman.managers.modmanager.ModManager
     """
     if not __manager:
         print("No manager registered", file=sys.stderr)

@@ -139,7 +139,7 @@ class PathManager(Submanager):
         if use_profile_override and key in overrideable_dirs:
             p = self.mainmanager.profile
             if p:
-                do = p.diroverride(key)
+                do = p.get_override_path(key)
                 if do: return Path(do)
 
         val = getattr(self, key)
@@ -164,8 +164,8 @@ class PathManager(Submanager):
 
         if profile_override:
             if key in overrideable_dirs and self.mainmanager.profile:
-                self.mainmanager.profile.setoverride(key,
-                    str(value) if value is not None else "")
+                self.mainmanager.profile.set_override_path(key,
+                                                           str(value) if value is not None else "")
 
             # if profile_override was True but the key was not a valid
             # overrideable directory, we still don't want to update the

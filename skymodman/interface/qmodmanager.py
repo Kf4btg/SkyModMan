@@ -82,7 +82,7 @@ class QModManager(QObject, ModManager):
     #     if isinstance(profile, str):
     #         profile = self.Profiler[profile]
     #
-    #     profile.setoverride(key, ovrd_path)
+    #     profile.set_override_path(key, ovrd_path)
 
 
     ##=============================================

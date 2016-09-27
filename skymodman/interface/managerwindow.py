@@ -5,6 +5,7 @@ from PyQt5 import QtWidgets, QtGui, QtCore
 # specifically import some frequently used names
 from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt5.QtWidgets import QMessageBox, QTreeWidgetItem, QLabel
+from PyQt5.QtWidgets import QSizePolicy
 
 from skymodman import exceptions, constants, Manager
 from skymodman.constants import qModels as M, qFilters as F, Tab as TAB
@@ -304,6 +305,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # use a tree widget to make collapsible items
         self.alerts_view_widget = QtWidgets.QTreeWidget(self.alerts_button)
+        # AbstractItemView.SelectionMode.NoSelection == 0
+        self.alerts_view_widget.setSelectionMode(0)
         self.alerts_view_widget.setMinimumWidth(400)
         self.alerts_view_widget.setColumnCount(2)
         self.alerts_view_widget.setObjectName("alerts_view_widget")
@@ -321,6 +324,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             }
             """
             )
+        self.alerts_view_widget.setSizeAdjustPolicy(
+            self.alerts_view_widget.AdjustToContents)
 
         # create the action that contains the popup
         action_show_alerts = QtWidgets.QWidgetAction(self.alerts_button)
@@ -1414,7 +1419,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             # get a bold font to use for labels
             bfont = QtGui.QFont()
             bfont.setBold(True)
-            for a in self.Manager.alerts:
+            for a in sorted(self.Manager.alerts, key=lambda al: al.label):
                 # the label/title as top-level item
                 alert_title = QTreeWidgetItem(self.alerts_view_widget,
                                               [a.label])
@@ -1429,9 +1434,16 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 # some QLabel shenanigans to work around the lack of
                 # word wrap in QTreeWidget
                 # FIXME: the label still only seems to 2 lines of text at most; a long-ish description can have its last few words cut off, depending on font size and width of the menu widget.
+                # ...update: setting the text interaction flags to
+                #    TextSelectableByMouse makes all the text visible...
+                #    and adds a bunch of empty space at the bottom of the
+                #    label. Just can't win.
                 lbl_desc = QLabel(a.desc)
                 lbl_desc.setWordWrap(True)
+                lbl_desc.setAlignment(Qt.AlignTop)
+                lbl_desc.setTextInteractionFlags(Qt.TextSelectableByMouse)
                 self.alerts_view_widget.setItemWidget(desc, 1, lbl_desc)
+
 
                 # ditto
                 fix = QTreeWidgetItem(alert_title, ["Fix:"])
@@ -1440,10 +1452,30 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
                 lbl_fix = QLabel(a.fix)
                 lbl_fix.setWordWrap(True)
+                lbl_fix.setAlignment(Qt.AlignTop)
+                lbl_fix.setTextInteractionFlags(Qt.TextSelectableByMouse)
+
+
                 self.alerts_view_widget.setItemWidget(fix, 1, lbl_fix)
+                alert_title.setExpanded(True)
+
+                # sd = lbl_desc.size()
+                # print(sd.height(), sd.width(), sep=", ")
+                # sf = lbl_fix.size()
+                # print(sf.height(), sf.width(), sep=", ")
+
 
             self.LOGGER << "Show alerts indicator"
             self.action_show_alerts.setVisible(True)
+
+            # adjust size of display treewidget and containing menu;
+            # have to set both Min and Max on the menu to get it to
+            # resize correctly
+            self.alerts_view_widget.adjustSize()
+            h = self.alerts_view_widget.size().height()
+            m = self.alerts_button.menu()
+            m.setMinimumHeight(h)
+            m.setMaximumHeight(h)
         else:
             # self.alerts_view_widget.clear()
 
@@ -1687,18 +1719,18 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                                     self.profile_selector.currentIndex())
 
         # connect some of the dialog's signals to the data managers
-        pdialog.defaultProfileChanged.connect(
-            self.Manager.set_default_profile)
+        # pdialog.defaultProfileChanged.connect(
+        #     self.Manager.set_default_profile)
 
         pdialog.beginModifyPaths.connect(self.Manager.begin_queue_signals)
         pdialog.endModifyPaths.connect(self.Manager.end_queue_signals)
 
-        pdialog.updateDirPath.connect(self.Manager.set_directory)
+        # pdialog.updateDirPath.connect(self.Manager.set_directory)
 
-        pdialog.moveAppFolder.connect(self.Manager.move_dir)
+        # pdialog.moveAppFolder.connect(self.Manager.move_dir)
 
         # and vice-versa
-        self.Manager.dirChanged.connect(pdialog.on_path_changed)
+        # self.Manager.dirChanged.connect(pdialog.on_path_changed)
 
         pdialog.exec_()
 

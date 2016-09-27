@@ -143,7 +143,7 @@ class ProfileManager(Submanager):
                 # check for and en/dis-able directory overrides as needed
                 for dkey in overrideable_dirs:
                     try:
-                        ovrd = self._current_profile.diroverride(dkey)
+                        ovrd = self._current_profile.get_override_path(dkey)
                     except KeyError as e:
                         self.LOGGER.exception(e)
                         self.mainmanager.Folders[dkey].remove_override()
