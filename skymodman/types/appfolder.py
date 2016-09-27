@@ -72,8 +72,6 @@ class AppFolder:
             elif callable(change_listeners):
                 self._listeners = {change_listeners}
 
-
-
     @property
     def path(self):
         """Returns the current path of this folder as a Path object"""
@@ -124,7 +122,8 @@ class AppFolder:
 
     def __bool__(self):
         # return False if path() returns None
-        return self.path is not None
+        # return self.path is not None
+        return self.is_valid
 
     ##=============================================
     ## validation properties
@@ -135,13 +134,15 @@ class AppFolder:
         """Return true if the current path for this folder is any
         value other than None, even if it is not a valid filesystem
         path."""
-        return self.current_path is not None
+        # return self.current_path is not None
+        return self.path is not None
 
     @property
     def is_valid(self):
         """Return True iff a path has been set and that path exists
         on the filesystem."""
-        return self.current_path and self.current_path.exists()
+        return self.is_set and self.path.exists()
+        # return self.current_path and self.current_path.exists()
 
 
     ##=============================================
