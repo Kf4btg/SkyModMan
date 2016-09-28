@@ -24,7 +24,6 @@ class ProfileManager(Submanager):
 
         super().__init__(*args, **kwargs)
 
-        # self._profiles_dir = directory
         self._current_profile = None # type: Profile
 
         _profiles_dir = self.mainmanager.Folders['profiles'].path

@@ -210,7 +210,7 @@ class Profile:
             for this override will be updated to that value. If omitted
             or None, no change will be made to the enabled status.
         """
-        self.LOGGER << "Setting override: ({}, {}, {})".format(dirkey, path, enable)
+        # self.LOGGER << "Setting override: ({}, {}, {})".format(dirkey, path, enable)
 
         if dirkey in self._overrides:
             enabled = self._overrides[dirkey].enabled \
@@ -228,7 +228,7 @@ class Profile:
 
             # if this is the active profile, update the AppFolder with
             # this override if it has been enabled
-            print(self.is_active, self._overrides[dirkey])
+            # print(self.is_active, self._overrides[dirkey])
             if self.is_active and self._overrides[dirkey].enabled:
                 Manager().Folders[dirkey].set_override(
                     self._overrides[dirkey].path)
@@ -241,7 +241,6 @@ class Profile:
         In general, this will not be what you want; you probably want
         to use get_override_path()."""
         return self._overrides[dirkey]
-
 
     def override_enabled(self, dirkey, setenabled=None):
         """

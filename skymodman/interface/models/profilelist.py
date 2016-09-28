@@ -13,9 +13,7 @@ class ProfileListModel(QAbstractListModel):
         super().__init__(**kwargs)
 
         self.profiles = [] # type: list [str]
-        # """:type: list[Profile]"""
 
-    # noinspection PyUnresolvedReferences
     def addProfile(self, new_profile):
         """
         implement my own API for adding stuff because the QCombobox is STUPID
@@ -54,7 +52,6 @@ class ProfileListModel(QAbstractListModel):
             return self.profiles[index.row()]
 
         if role==Qt.DisplayRole:
-            # return self.profiles[index.row()].name.capitalize()
             return self.profiles[index.row()].capitalize()
 
 
@@ -69,7 +66,7 @@ class ProfileListModel(QAbstractListModel):
         :return: boolean indicating success of the insertion
         :rtype: bool
         """
-        # beginInsertRows(self, QModelIndex, first, last)
+        #    beginInsertRows(self, QModelIndex, first, last)
         self.beginInsertRows(parent_index, self.rowCount(), self.rowCount())
         if data:
             _profile_name = data

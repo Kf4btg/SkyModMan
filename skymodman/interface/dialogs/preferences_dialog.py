@@ -20,11 +20,7 @@ from skymodman.utils.fsutils import check_path
 # because I'm lazy
 PLP = constants.ProfileLoadPolicy
 
-# MManager = None
 MManager = Manager()
-
-# ref to the ConfigManager
-# Config = Manager.Config
 
 ## text and style sheets for indicator labels
 _invalid_path_str = "Path not found"
@@ -45,15 +41,15 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
     """
 
     profilePolicyChanged = Signal(int, bool)
-    defaultProfileChanged = Signal(str)
+    # defaultProfileChanged = Signal(str)
     _pathEditFinished = Signal(str)
 
     beginModifyPaths = Signal()
     """emitted when changes to configured paths are about to be applied"""
     endModifyPaths = Signal()
     """emitted after changes to configured paths have been applied"""
-    updateDirPath = Signal(str, str, bool)
-    """emitted with the key and new path of an application directory"""
+    # updateDirPath = Signal(str, str, bool)
+    # """emitted with the key and new path of an application directory"""
 
     # moveAppFolder = Signal(str, str, bool, bool)
 
@@ -63,19 +59,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         # setup initial UI
         self.setupUi(self)
 
-        # hold on to reference to global manager
-        # global MManager
-        # MManager = Manager()
-
-        ## create mappings for all the component groups using ##
-        ## our constant key-strings ##
-
-
-
-
         ## Default Path values
-        # with nofail, returns empty strings for unset paths
-        # self.paths={p:MManager.get_directory(p, False, nofail=True) for p in D}
         self.paths={f:MManager.Folders[f].get_path() for f in D}
         self.defpaths = {f:MManager.Folders[f].get_default() for f in D}
 
@@ -146,22 +130,17 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         self.combo_profiles.setCurrentIndex(profilebox_index)
 
         # store the currently-selected Profile object
-        # self._selected_profile = self.combo_profiles.currentData()
         self._selected_profile = MManager.Profiler[self.combo_profiles.currentData()]
-        """:type: skymodman.types.profile.Profile"""
 
         # track when the user makes config changes so the buttons
         # can be enabled/disabled as needed
         # actually, right now it's enabled when anything is clicked/
         # edited and only disabled after Apply is clicked
         self._unchanged = True
-        # tracked changed elements by object id()
-        # ...I think this will work...
-        # self._changed = set()
 
 
         # mapping of profiles to values of overrides
-        # dict [profile_name: dict[dir_key: override_value]]
+        # dict [profile_name: (path, enabled)]
         self._override_paths = defaultdict(dict)
 
         # get easier references to ok/apply buttons
@@ -196,7 +175,6 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         # make sure the General tab is showing
         self.prefs_tabwidget.setCurrentIndex(0)
 
-
         ##=================================
         ## Tab 1: General/App dirs
         ##---------------------------------
@@ -210,7 +188,6 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         self.cbox_restore_pos.setChecked(
             app_settings.Get(UI.RESTORE_WINPOS))
         self.cbox_restore_pos.toggled.connect(self._mark_changed)
-
 
         # check the appropriate radio button based on current policy;
         # associate a change in the radio selection with updating
@@ -230,7 +207,6 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         # which updates _selected_plp
         self.profilePolicyChanged.connect(
             self.on_profile_policy_changed)
-
 
         ##=================================
         ## Tab 3: Profiles
@@ -299,21 +275,14 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
                 # record current value of override
                 x[d] = self._selected_profile.diroverride(d)
-                # x[d] = dir_override({
-                #     'enabled': self._selected_profile.override_enabled(d),
-                #     'value': self._selected_profile.get_override_path(
-                #                         d, ignore_enabled=True)
-                # }
 
                 if x[d].path:
                     self.override_boxes[d].setText(x[d].path)
                 else:
                     self.override_boxes[d].clear()
-                # self.override_boxes[d].setText(x[d]['value'])
 
                 obtn = self.override_buttons[d]
                 is_enabled = x[d].enabled
-                # is_enabled = x[d]['enabled']
                 # if override is enabled in profile, check the button
                 obtn.setChecked(is_enabled)
 
@@ -336,7 +305,6 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
 
         # connect _pathEditFinished signal to our validation handler
-        # noinspection PyUnresolvedReferences
         # self._pathEditFinished.connect(self.on_path_edit)
 
         ## apply button ##
@@ -359,8 +327,6 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         if enabled:
             self._selected_plp = constants.ProfileLoadPolicy(value)
             self._mark_changed()
-
-
 
     @Slot()
     def change_profile(self):
@@ -402,10 +368,8 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
             # now set the text-box to show the current value
             self.override_boxes[d].setText(opdict[d].path or "")
-            # self.override_boxes[d].setText(opdict[d]['value'])
 
             is_enabled = opdict[d].enabled
-            # is_enabled = opdict[d]['enabled']
 
             # if override is enabled in profile, check the button
             self.override_buttons[d].setChecked(is_enabled)
@@ -445,21 +409,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                 self.cbox_default.setChecked(self._selected_profile.name == MManager.default_profile)
 
 
-    @Slot(str, bool)
-    def on_override_toggled(self, dirkey, enabled):
-        """
-        Update the profile to save the enabled status of the override
 
-        :param dirkey:
-        :param enabled:
-        """
-        om = self._override_mapping
-
-        # update the local mapping
-        om[dirkey] = om[dirkey]._replace(enabled=enabled)
-
-        ## XXX: should we wait until Apply to save this? or do it immediately like this?
-        self._selected_profile.override_enabled(dirkey, enabled)
 
     @Slot()
     def on_apply_button_pressed(self):
@@ -507,18 +457,13 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         for d, override_info in ovrdict.items():
             newovrd = override_info.path
 
-            # curr_ovrd = sp.get_override_path(d)
-            # self.LOGGER << "check override [{}]: {} =? {}".format(d, newovrd, curr_ovrd)
-
             if newovrd == sp.get_override_path(d):
                 # no change
                 continue
 
-            # if not newovrd or (os.path.isabs(newovrd)
-            #                    and os.path.exists(newovrd)):
-
+            # don't check for existence (the alerts view will show if
+            # the path is invalid)
             if not newovrd or os.path.isabs(newovrd):
-                # don't check for existence
                 self.LOGGER << "setting profile override"
                 # if the selected profile is also the active profile,
                 # this will also set the override on the AppFolder
@@ -562,22 +507,6 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             else:  # but if it was invalid...
                 self._mark_invalid_path(label)
 
-                ## nahhhhh....
-                # show a messagebox asking if they would like to create it
-                # if message(title='Path not found',
-                #            text="Would you like to create this directory?",
-                #            info_text=new_value):
-                #     create_dir(new_value)
-                #
-                #     # and just to make sure...
-                #     if os.path.exists(new_value):
-                #         label.setVisible(False)
-                #     else:
-                #         self._mark_invalid_path(label)
-                # # if they say no, mark it invalid
-                # else:
-                #     self._mark_invalid_path(label)
-
     def _handle_path_change(self, key, old_path, newpath):
         """Check for a change in the text-entry-box for the path and
         act accordingly: update config, create/move dirs as needed"""
@@ -601,7 +530,6 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                 do_move, remove_old = checkbox_message(
                     title="Transfer {} Data?".format(
                         MManager.Folders[key].display_name),
-                    # constants.DisplayNames[key]),
                     text="Would you like to move your existing "
                          "data to the new location?",
                     checkbox_text="Also remove original directory",
@@ -609,13 +537,10 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
             if do_move:
                 self._move_and_update_path(key, newpath, remove_old)
-                # MManager.Folders[key].move(newpath, remove_old, False)
-                # self.moveAppFolder.emit(key, newpath, remove_old, False)
             else:
                 # if the path is currently unset, invalid, or empty,
                 # nothing to move
 
-                # self.updateDirPath.emit(key, newpath, False)
                 self._update_path(key, newpath)
 
     def _move_and_update_path(self, key, newpath, remove_old):
@@ -686,13 +611,25 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
         dovrd = self._override_mapping[key]
 
-        # self.LOGGER << "on_override_edit [{}]: {} =? {}".format(key, new_value, dovrd.path )
-
-
         if new_value != dovrd.path:
             self._override_mapping[key] = dovrd._replace(path=new_value)
             self._mark_changed()
 
+    @Slot(str, bool)
+    def on_override_toggled(self, dirkey, enabled):
+        """
+        Update the profile to save the enabled status of the override
+
+        :param dirkey:
+        :param enabled:
+        """
+        om = self._override_mapping
+
+        # update the local mapping
+        om[dirkey] = om[dirkey]._replace(enabled=enabled)
+
+        ## XXX: should we wait until Apply to save this? or do it immediately like this?
+        self._selected_profile.override_enabled(dirkey, enabled)
 
     ##=============================================
     ## Choosing directories
@@ -737,8 +674,6 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
 
         start = self._override_mapping[folder].path if override else self.paths[folder]
-        # start = ovrdict[folder]['value'] if override else self.paths[folder]
-        # start = self._selected_profile.get_override_path(folder) if override else self.paths[folder]
 
         # noinspection PyTypeChecker
         chosen = QFileDialog.getExistingDirectory(self,
@@ -751,14 +686,12 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             if override:
                 self.override_boxes[folder].setText(chosen)
                 ovrdict[folder] = ovrdict[folder]._replace(path=chosen)
-                # ovrdict[folder]['value'] = chosen
             else:
                 self.path_boxes[folder].setText(chosen)
                 if folder in self.indicator_labels:
                     self.indicator_labels[folder].setVisible(False)
             # enable apply button if needed
             self._mark_changed()
-
 
 
     def _mark_invalid_path(self, qlabel):

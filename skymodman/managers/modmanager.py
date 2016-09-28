@@ -14,26 +14,6 @@ from skymodman.constants.keystrings import (Dirs as ks_dir,
 from skymodman.installer.common import FileState
 from skymodman.log import withlogger
 
-# __manager = None # type: ModManager
-
-#
-# Config = None   # type: _config.ConfigManager
-# Profiler = None # type: _profiles.ProfileManager
-# DB = None       # type: _database.DBManager
-
-# singleton Manager
-# def Manager():
-#     global __manager
-#     if __manager is None:
-#         global Config, Profiler, DB
-#         __manager = ModManager()
-#
-#         Config = __manager.Config
-#         Profiler = __manager.Profiler
-#         DB = __manager.DB
-#
-#     return __manager
-
 ## appfolder defaults
 appfolder_defaults = {
     # name is dict key
@@ -104,14 +84,8 @@ class ModManager:
 
         self._folders['mods'].register_change_listener(self.on_dir_change)
         self._folders['mods'].register_change_listener(self.refresh_modlist)
-        # self._moddir_changed = False
-        # self._folders['mods'].register_change_listener(lambda a,p,c: setattr(self, '_moddir_changed', p!=c))
 
         self._folders['skyrim'].register_change_listener(self.on_dir_change)
-        # self._skydir_changed=False
-        # self._folders['skyrim'].register_change_listener(lambda a,p,c: setattr(self, '_skydir_changed', p!=c))
-
-
         self._folders['profiles'].register_change_listener(self.on_dir_change)
         self._folders['vfs'].register_change_listener(self.on_dir_change)
 
@@ -120,8 +94,6 @@ class ModManager:
         self._configman = _config.ConfigManager(mcp=self)
 
         self._profileman = _profiles.ProfileManager(mcp = self)
-            # self._folders['profiles'].path, mcp=self)
-            # self._pathman.dir_profiles, mcp=self)
 
         # set up db, but do not load info until requested
         self._dbman = _database.DBManager(mcp=self)
@@ -193,17 +165,6 @@ class ModManager:
         Return a list of every mod directory located in the configured
         'Mods' storage folder
         """
-        # if self._modlist_needs_refresh:
-            # self._installed_mods = list(self.Folders['mods'].iter_contents(True))
-            # self.refresh_modlist(self._folders['mods'])
-
-            # try:
-            #     self._installed_mods = self._pathman.list_mod_folders()
-            # except exceptions.InvalidAppDirectoryError:
-            #     self._installed_mods = []
-            # finally:
-            #     self._modlist_needs_refresh = False
-
         return self._installed_mods
 
     def getdbcursor(self):
@@ -312,18 +273,6 @@ class ModManager:
             self.add_alert(self._diralerts[key])
             return False
 
-        # if self._pathman.is_valid(key, self.profile is not None):
-        #     # if we get a valid value back,
-        #     # remove the alert if it was present
-        #     self.remove_alert(self._diralerts[key])
-        #     return True
-        # else:
-        #     # otherwise, add the alert
-        #
-        #     self.add_alert(self._diralerts[key])
-        #     return False
-
-
     def check_dirs(self):
         """
         See if all the necessary directories are defined/present. Add
@@ -338,14 +287,6 @@ class ModManager:
         self.LOGGER << "Refreshing mods list"
         self._installed_mods = [n for n in modfolder]
 
-
-        # self._installed_mods = [d.name for d in modfolder.iter_contents(dirs_only=True)]
-        # self._installed_mods = list(
-        #     modfolder.iter_contents(True))
-            # self.Folders['mods'].iter_contents(True))
-
-        # self._modlist_needs_refresh = False
-
     # def on_dir_change(self, folder, previous, current):
     def on_dir_change(self, folder):
         """
@@ -358,9 +299,6 @@ class ModManager:
             self.add_alert(self._diralerts[folder.name])
         else:
             self.remove_alert(self._diralerts[folder.name])
-
-
-
 
     ##=============================================
     ## Profile Management Interface
@@ -405,7 +343,6 @@ class ModManager:
 
         # if we successfully made it here, update the config value
         # for the last-loaded profile and return True
-        # self.set_config_value(ks_ini.LAST_PROFILE, profile.name)
         self.set_config_value(ks_ini.LAST_PROFILE, profile)
 
         return True
@@ -645,20 +582,6 @@ class ModManager:
             self.LOGGER.error("Mods Folder is unset or could not be found")
             return False
 
-        # try:
-        #     # populate the mods table from the main mods directory
-        #     self._dbman.get_mod_data_from_directory()
-        # except exceptions.InvalidAppDirectoryError as e:
-        #     # unless the mod directory is somehow invalid, then
-        #     # return False
-        #     self.LOGGER.error(e)
-        #     return False
-        # else:
-        #     # and (re)generate the modinfo file using default values
-        #     self.save_mod_info()
-        #     # return success
-        #     return True
-
     ##=============================================
     ## Mod Information
     ##=============================================
@@ -817,20 +740,15 @@ class ModManager:
         # in all other situations, just
         # return the stored config value
 
+        # if section == ks_sec.GENERAL:
+
         val = self._configman.get_value(section, name)
 
+        # if the value stored in config was None (or some other
+        # False-like value), return the `default` parameter instead
         if not val: return default
         return val
 
-
-        # if section == ks_sec.GENERAL:
-        #     val = self._configman.get_genvalue(name)
-        #
-        #     # if the value stored in config was None (or some other
-        #     # False-like value), return the `default` parameter instead
-        #     return val if val else default
-        # else:
-        #     return self._configman.get_value(section, name)
 
     def set_config_value(self, name, value, section=ks_sec.GENERAL):
         """

@@ -782,7 +782,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         model = models.ProfileListModel()
 
-        # for profile in self.Manager.get_profiles(names=False):
         # Only store names in profile selector
         for profile in self.Manager.get_profiles():
             model.insertRows(data=profile)
@@ -1017,12 +1016,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             # if no active profile, just load the selected one.
             # if somehow selected the same profile, do nothing
 
-            # if self.Manager.profile and self.Manager.profile.name == new_profile.name:
             if self.Manager.profile and self.Manager.profile.name == new_profile:
                 return
 
-            # if Manager.profile is None or \
-            #                 new_profile != Manager.profile.name:
             # check for unsaved changes to the mod-list
             reply = self.table_prompt_if_unsaved()
 
@@ -1060,8 +1056,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                     # for s in self.undo_stacks:
                     #     s.clear()
 
-
-                    # self.newProfileLoaded.emit(new_profile.name)
                     self.newProfileLoaded.emit(new_profile)
                 else:
                     self.LOGGER.error("Profile Activation failed.")
@@ -1160,7 +1154,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         Enable or disable buttons and actions that rely on having a
         selection in the mod table.
         """
-        # self.LOGGER << "modtable selection->{}".format(has_selection)
         for a in (self.mod_movement_group,
                   self.action_uninstall_mod,
                   self.action_reinstall_mod,
@@ -1177,7 +1170,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         :param bool clean: whether there are unsaved changes
         """
-        # self.LOGGER << "table status: {}".format("dirty" if unsaved_changes_present else "clean")
 
         for widgy in [self.save_cancel_btnbox,
                       self.action_save_changes,
@@ -1303,9 +1295,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # text was found or was '': reset style sheet if one is present
         self._clear_searchbox_style()
-        # if self.modtable_search_box.styleSheet():
-        #     self.modtable_search_box.setStyleSheet('')
-        #     self.status_bar.clearMessage()
 
     @pyqtSlot()
     def _clear_searchbox_style(self):
@@ -1712,18 +1701,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                                     self.profile_selector.currentIndex())
 
         # connect some of the dialog's signals to the data managers
-        # pdialog.defaultProfileChanged.connect(
-        #     self.Manager.set_default_profile)
 
         pdialog.beginModifyPaths.connect(self.Manager.begin_queue_signals)
         pdialog.endModifyPaths.connect(self.Manager.end_queue_signals)
-
-        # pdialog.updateDirPath.connect(self.Manager.set_directory)
-
-        # pdialog.moveAppFolder.connect(self.Manager.move_dir)
-
-        # and vice-versa
-        # self.Manager.dirChanged.connect(pdialog.on_path_changed)
 
         pdialog.exec_()
 
@@ -1731,7 +1711,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # now have the Manager check to see if all the directories
         # are valid, and update the alerts indicator if needed
-        self.Manager.check_dirs()
+        ## XXX: this should happen automatically now...hopefully
+        # self.Manager.check_dirs()
         # self.update_alerts()
 
 
@@ -1756,7 +1737,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         moddir = QtWidgets.QFileDialog.getExistingDirectory(
             self,
             "Choose Directory Containing Installed Mods",
-            # self.Manager.get_directory(KeyStr_Dirs.MODS, False)
             self.Manager.Folders['mods'].spath
         )
 
@@ -1765,14 +1745,10 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             mfolder = self.Manager.Folders[KeyStr_Dirs.MODS]
 
             mfolder.set_path(moddir)
-            # self.Manager.set_directory(KeyStr_Dirs.MODS, moddir, False)
 
             if mfolder.is_overriden:
                 mfolder.remove_override()
                 self.Manager.profile.disable_override(KeyStr_Dirs.MODS)
-
-            # if self.Manager.profile and self.Manager.profile.override_enabled(KeyStr_Dirs.MODS):
-            #     self.Manager.profile.disable_override(KeyStr_Dirs.MODS)
 
             # reverify and reload the mods.
             if not self.Manager.validate_mod_installs():

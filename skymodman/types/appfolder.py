@@ -218,9 +218,7 @@ class AppFolder:
         self._override_active = True
 
         # dont notify if override is same as current
-        print(prev, self.spath)
         if prev!=self.spath:
-            print("notifying")
             self._notify(prev, self.spath)
 
 
