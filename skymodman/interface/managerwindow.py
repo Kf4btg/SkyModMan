@@ -5,7 +5,6 @@ from PyQt5 import QtWidgets, QtGui, QtCore
 # specifically import some frequently used names
 from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt5.QtWidgets import QMessageBox, QTreeWidgetItem, QLabel
-from PyQt5.QtWidgets import QSizePolicy
 
 from skymodman import exceptions, constants, Manager
 from skymodman.constants import qModels as M, qFilters as F, Tab as TAB
@@ -783,7 +782,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         model = models.ProfileListModel()
 
-        for profile in self.Manager.get_profiles(names=False):
+        # for profile in self.Manager.get_profiles(names=False):
+        # Only store names in profile selector
+        for profile in self.Manager.get_profiles():
             model.insertRows(data=profile)
 
         self.profile_selector.setModel(model)
@@ -1009,13 +1010,15 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             # we have a problem...
             self.LOGGER.error("No profile chosen?!")
         else:
+            # use userRole to get the 'on-disk' name of the profile
             new_profile = self.profile_selector.currentData(
-                Qt.UserRole) # type == Profile
+                Qt.UserRole)
 
             # if no active profile, just load the selected one.
             # if somehow selected the same profile, do nothing
 
-            if self.Manager.profile and self.Manager.profile.name == new_profile.name:
+            # if self.Manager.profile and self.Manager.profile.name == new_profile.name:
+            if self.Manager.profile and self.Manager.profile.name == new_profile:
                 return
 
             # if Manager.profile is None or \
@@ -1038,7 +1041,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             else:
                 self.LOGGER.info(
                     "Activating profile '{}'".format(
-                        new_profile.name))
+                        new_profile))
 
                 if self.Manager.activate_profile(new_profile):
 
@@ -1058,7 +1061,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                     #     s.clear()
 
 
-                    self.newProfileLoaded.emit(new_profile.name)
+                    # self.newProfileLoaded.emit(new_profile.name)
+                    self.newProfileLoaded.emit(new_profile)
                 else:
                     self.LOGGER.error("Profile Activation failed.")
                     self.profile_selector.setCurrentIndex(old_index)

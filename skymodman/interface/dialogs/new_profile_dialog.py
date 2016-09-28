@@ -35,7 +35,8 @@ class NewProfileDialog(QDialog,  Ui_NewProfileDialog):
         # faster than checking against a RegExp--even a compiled RE,
         # and even if you pre-process the word to check each time
         # (e.g.: word.lower() in wordlist)
-        self.name_list = [p.name.lower() for p in combobox_model.profiles]
+        self.name_list = [p.lower() for p in combobox_model.profiles]
+        # self.name_list = [p.name.lower() for p in combobox_model.profiles]
 
         # this validator ensures that no spaces or invalid characters can be entered.
         # (only letters, numbers, underscores, hyphens, and periods)

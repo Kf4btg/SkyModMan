@@ -368,9 +368,9 @@ class ModManager:
 
     def activate_profile(self, profile):
         """
-        Set the active profile to given profile object
+        Set the active profile to the profile with the given name
 
-        :param profile:
+        :param str profile:
         """
 
         # TODO: would it be possible...to make a context manager for
@@ -396,7 +396,7 @@ class ModManager:
                 # we can't be sure quite how far the activation process
                 # made it before failing, so just do a fresh assignment
                 # of the old_profile
-                self._load_profile(old_profile)
+                self._load_profile(old_profile.name)
             else:
                 # if we came from no profile, make sure we're back there
                 self._profileman.set_active_profile(None)
@@ -405,8 +405,8 @@ class ModManager:
 
         # if we successfully made it here, update the config value
         # for the last-loaded profile and return True
-        self.set_config_value(ks_ini.LAST_PROFILE, profile.name)
-        # self._configman.last_profile = profile.name
+        # self.set_config_value(ks_ini.LAST_PROFILE, profile.name)
+        self.set_config_value(ks_ini.LAST_PROFILE, profile)
 
         return True
 
@@ -416,7 +416,7 @@ class ModManager:
         optionally copying config files from the `copy_from` Profile
 
         :param str name:
-        :param skymodman.types.Profile copy_from:
+        :param str copy_from:
         :return: new Profile object
         """
         return self._profileman.new_profile(name, copy_from)
@@ -425,7 +425,7 @@ class ModManager:
         """
         Remove profile folder and all contained files from disk.
 
-        :param profile:
+        :param str profile:
         """
         self._profileman.delete_profile(profile)
 
@@ -453,7 +453,7 @@ class ModManager:
             self._configman.update_genvalue(ks_ini.LAST_PROFILE,
                                             profile.name)
 
-    def get_profiles(self, names=True, objects=True):
+    def get_profiles(self, names=True, objects=False):
         """
         Generator that iterates over all existing profiles.
 
@@ -470,7 +470,7 @@ class ModManager:
         if names and objects:
             yield from self._profileman.profiles_by_name()
         elif names:
-            yield from (n for n in self._profileman.profile_names)
+            yield from self._profileman.profile_names
         elif objects:
             yield from self._profileman.iter_profiles()
 
@@ -505,24 +505,20 @@ class ModManager:
 
         if profile_name in self._profileman.profile_names:
             self.set_config_value(ks_ini.DEFAULT_PROFILE, profile_name)
-            # self._configman.default_profile = profile_name
 
     ##=================================
     ## Internal profile mgmt
     ##---------------------------------
 
-    def _load_profile(self, profile):
+    def _load_profile(self, profile:str):
         """internal handler for assigning new profile"""
         self.LOGGER << "<==Method called"
 
-        # if isinstance(profile_name, Profile):
-        profile_name = profile.name
-
         # if we have no active profile, treat this as a 'first run'
         if not self.profile:
-            self._load_first_profile(profile_name)
+            self._load_first_profile(profile)
         else:
-            self._change_profile(profile_name)
+            self._change_profile(profile)
 
     def _load_first_profile(self, profile_name):
         """Called when the first profile is selected (and any time we
@@ -558,33 +554,14 @@ class ModManager:
         # keep references to currently (soon to be previously)
         # configured directories
         prev_dirs = {d: self._folders[d].path for d in ks_dir}
-        # prev_dirs = {d: self.get_directory(d, nofail=True)
-        #              for d in overrideable_dirs}
 
-        # this will enable any profile overrides there may be,
-        # and also set self._[mod|sky]dir_changed
+        # this will enable any profile overrides there may be
         self._profileman.set_active_profile(profile_name)
 
         # ...only the MODS dir is ever checked; is there actually a
         # need (other than setting alerts) to track them all here?
         # Or is setting alerts a good-enough reason?
 
-        # see if configured dirs changed:
-        # dir_changed = {}
-        # for d in overrideable_dirs:
-        #     try:
-        #         dir_changed[d] = self.get_directory(d) != prev_dirs[d]
-        #     except exceptions.InvalidAppDirectoryError:
-        #         # add alert on invalid new dir
-        #         self.add_alert(self._diralerts[d])
-        #         # dir has changed only if previous was valid
-        #         dir_changed[d] = bool(prev_dirs[d])
-        #     else:
-        #         # remove any alerts if dir is valid
-        #         self.remove_alert(self._diralerts[d])
-
-        # moddir_changed = self._modlist_needs_refresh = prev_dirs['mods'] != self.Folders['mods']
-        # skydir_changed = dir_changed[ks_dir.SKYRIM]
         moddir_changed = prev_dirs['mods']   != self._folders['mods']
         skydir_changed = prev_dirs['skyrim'] != self._folders['skyrim']
 

@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from skymodman import exceptions
 from skymodman.managers.base import Submanager
 from skymodman.types import Profile, diqt
@@ -94,7 +92,7 @@ class ProfileManager(Submanager):
 
         :param str profilename:
             name of profile to load.
-        :param Profile copy_from:
+        :param str copy_from:
             If `copy_from` is specified and is the name of a currently
             existing profile, settings will be copied from that profile
             to the new one rather than creating the typical default
@@ -112,10 +110,25 @@ class ProfileManager(Submanager):
             self.LOGGER.info("Profile {} found in cache;"
                              " returning cached object.".format(
                 profilename))
+        elif copy_from:
+            try:
+                based_on=self[copy_from]
+            except exceptions.ProfileDoesNotExistError as e:
+                # copy_from was invalid...just ignore it
+                self.LOGGER.error(e)
+                self.__cache.append(profilename,
+                                    Profile(self._profiles_dir,
+                                            profilename,
+                                            create_on_enoent=create))
+            else:
+                self.__cache.append(profilename,
+                                Profile(self._profiles_dir, profilename,
+                                        copy_profile=based_on,
+                                            create_on_enoent=create))
         else:
             self.__cache.append(profilename,
-                                Profile(self._profiles_dir, profilename,
-                                        copy_profile=copy_from,
+                                Profile(self._profiles_dir,
+                                        profilename,
                                         create_on_enoent=create))
 
 
@@ -196,7 +209,7 @@ class ProfileManager(Submanager):
         :param str profile_name:
             name of new profile. Must not already exist or an Exception
             will be raised
-        :param Profile copy_from:
+        :param str copy_from:
             if not None, copy settings from the specified pre-existing
             profile to the newly created one
         :return: the Profile object for the newly created profile

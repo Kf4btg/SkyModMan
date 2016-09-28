@@ -146,7 +146,8 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         self.combo_profiles.setCurrentIndex(profilebox_index)
 
         # store the currently-selected Profile object
-        self._selected_profile = self.combo_profiles.currentData()
+        # self._selected_profile = self.combo_profiles.currentData()
+        self._selected_profile = MManager.Profiler[self.combo_profiles.currentData()]
         """:type: skymodman.types.profile.Profile"""
 
         # track when the user makes config changes so the buttons
@@ -359,74 +360,6 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             self._selected_plp = constants.ProfileLoadPolicy(value)
             self._mark_changed()
 
-    @Slot(str)
-    def on_path_edit(self, key):
-        """
-        Called when the user manually edits a path box
-        """
-        new_value = self.path_boxes[key].text()
-        label = self.indicator_labels[key]
-
-
-
-        if new_value != self.paths[key]:
-            # this will only matter the first time, but still...
-            # if the user edits the path box and the new value
-            # is different than the current path, enable apply button
-            self._mark_changed()
-
-        # if they cleared the box, mark it missing
-        # if not new_value:
-        #     self._mark_missing_path(label)
-
-        # if they cleared the box, the default will be active
-        # ...unless there isn't one
-        if not new_value:
-            if not self.defpaths[key]:
-                self._mark_missing_path(label)
-        else:
-            if not os.path.isabs(new_value):
-                # then they didn't enter an absolute path
-                self._mark_nonabs_path(label)
-
-            # if they entered a valid path
-            elif os.path.exists(new_value):
-                # hide the label cause we're all good
-                label.setVisible(False)
-
-            else: # but if it was invalid...
-                self._mark_invalid_path(label)
-
-            ## nahhhhh....
-            # show a messagebox asking if they would like to create it
-            # if message(title='Path not found',
-            #            text="Would you like to create this directory?",
-            #            info_text=new_value):
-            #     create_dir(new_value)
-            #
-            #     # and just to make sure...
-            #     if os.path.exists(new_value):
-            #         label.setVisible(False)
-            #     else:
-            #         self._mark_invalid_path(label)
-            # # if they say no, mark it invalid
-            # else:
-            #     self._mark_invalid_path(label)
-
-    @Slot(str)
-    def on_override_edit(self, key):
-        """
-        Called when an override path is manually edited. Determines if
-        the apply button should be activated.
-
-        :param key:
-        """
-        new_value = self.override_boxes[key].text()
-
-        dovrd = self._override_mapping[key]
-
-        if new_value != dovrd.path:
-            self._mark_changed()
 
 
     @Slot()
@@ -435,7 +368,10 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         Update the data on the profiles tab to reflect the data from
         the selected profile.
         """
-        self._selected_profile = self.combo_profiles.currentData()
+
+        # profile-selector model now only stores strings; pull
+        # the object from the Profile Manager
+        self._selected_profile = MManager.Profiler[self.combo_profiles.currentData()]
         self.check_default()
         self._update_override_boxes()
 
@@ -462,12 +398,6 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             # value of the profile's override
             if first_time_seen:
                 opdict[d] = self._selected_profile.diroverride(d)
-                # opdict[d] = {
-                #     'enabled': self._selected_profile.override_enabled(
-                #         d),
-                #     'value':   self._selected_profile.get_override_path(
-                #         d, ignore_enabled=True)
-                # }
             # otherwise, we'll be using the previously stored info
 
             # now set the text-box to show the current value
@@ -500,12 +430,8 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         if checked:
             if self._selected_profile:
                 MManager.set_default_profile(self._selected_profile.name)
-                # self.defaultProfileChanged.emit(self._selected_profile.name)
-                # Manager.Config.default_profile = self._selected_profile.name
         else:
             MManager.set_default_profile(constants.FALLBACK_PROFILE)
-            # self.defaultProfileChanged.emit(constants.FALLBACK_PROFILE)
-            # Manager.Config.default_profile = constants.FALLBACK_PROFILE
 
     def check_default(self):
         """
@@ -527,8 +453,6 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         :param dirkey:
         :param enabled:
         """
-        # self._override_paths[self._selected_profile.name][
-        #     dirkey]['enabled'] = enabled
         om = self._override_mapping
 
         # update the local mapping
@@ -577,33 +501,86 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         sp = self._selected_profile
         ovrdict = self._override_mapping
         # ovrdict = self._override_paths[sp.name]
-        # print(ovrdict)
 
         # use values held in the override_paths collection;
         # NOTE: this only updates the profile that is currently selected at the time this method is called. Is this how it should work? Should we save all changes? should we reset any changes made when the profile is changed without hitting apply?
         for d, override_info in ovrdict.items():
-            self.LOGGER << "check override {}: {}".format(d, override_info)
-            # newovrd = override_info['value']
             newovrd = override_info.path
+
+            # curr_ovrd = sp.get_override_path(d)
+            # self.LOGGER << "check override [{}]: {} =? {}".format(d, newovrd, curr_ovrd)
 
             if newovrd == sp.get_override_path(d):
                 # no change
                 continue
 
-            if not newovrd or (os.path.isabs(newovrd)
-                               and os.path.exists(newovrd)):
+            # if not newovrd or (os.path.isabs(newovrd)
+            #                    and os.path.exists(newovrd)):
+
+            if not newovrd or os.path.isabs(newovrd):
+                # don't check for existence
                 self.LOGGER << "setting profile override"
-                # we can't just call Manager.set_directory(...,...,True)
-                # because that method only sets overrides for the active
-                # profile, which is not necessarily the same as the
-                # selected profile here
+                # if the selected profile is also the active profile,
+                # this will also set the override on the AppFolder
+                # and update the alerts-view/anything else that wants
+                # to know about the change
                 sp.set_override_path(d, newovrd)
 
+    ##=============================================
+    ## Updating default paths
+    ##=============================================
+
+    @Slot(str)
+    def on_path_edit(self, key):
+        """
+        Called when the user manually edits a path box
+        """
+        new_value = self.path_boxes[key].text()
+        label = self.indicator_labels[key]
+
+        if new_value != self.paths[key]:
+            # this will only matter the first time, but still...
+            # if the user edits the path box and the new value
+            # is different than the current path, enable apply button
+            self._mark_changed()
+
+        # if they cleared the box, the default will be active
+        if not new_value:
+            # ...unless there isn't one. then mark it missing
+            if not self.defpaths[key]:
+                self._mark_missing_path(label)
+        else:
+            if not os.path.isabs(new_value):
+                # then they didn't enter an absolute path
+                self._mark_nonabs_path(label)
+
+            # if they entered a valid path
+            elif os.path.exists(new_value):
+                # hide the label cause we're all good
+                label.setVisible(False)
+
+            else:  # but if it was invalid...
+                self._mark_invalid_path(label)
+
+                ## nahhhhh....
+                # show a messagebox asking if they would like to create it
+                # if message(title='Path not found',
+                #            text="Would you like to create this directory?",
+                #            info_text=new_value):
+                #     create_dir(new_value)
+                #
+                #     # and just to make sure...
+                #     if os.path.exists(new_value):
+                #         label.setVisible(False)
+                #     else:
+                #         self._mark_invalid_path(label)
+                # # if they say no, mark it invalid
+                # else:
+                #     self._mark_invalid_path(label)
 
     def _handle_path_change(self, key, old_path, newpath):
         """Check for a change in the text-entry-box for the path and
         act accordingly: update config, create/move dirs as needed"""
-        # newpath = self.path_boxes[key].text()
 
         # allow changing if the path is valid or cleared
         if not newpath:
@@ -685,28 +662,41 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             # no errors!
             self.paths[key] = MManager.Folders[key].get_path()
 
-
-        # self.paths[key] = str(MManager.Folders[key].current_path)
-
-
     def _update_path(self, key, newpath):
         MManager.Folders[key].set_path(newpath)
 
-        # emit this signal which should be connected to the Manager's
-        # set_directory() method
-        # self.updateDirPath.emit(key, newpath, False)
-        # Manager.set_directory(key, newpath)
-        # self.paths[key] = newpath
         self.paths[key] = str(MManager.Folders[key].current_path)
 
-    # def _move_dir(self, key, newpath, remove_old):
+    ##=============================================
+    ## Updating overrides
+    ##=============================================
 
-    # @Slot(str, str)
-    # def on_path_changed(self, key, path):
-    #     self.paths[key] = path
-    #
-    #     if self.path_boxes[key].text()!=path:
-    #         self.path_boxes[key].setText(path)
+    @Slot(str)
+    def on_override_edit(self, key):
+        """
+        Called when an override path is manually edited. Determines if
+        the apply button should be activated.
+
+        :param key:
+        """
+        # TODO: this should probably be called on every change made to
+        # the path box, not just on edit finish...or maybe on a short delay
+
+        new_value = self.override_boxes[key].text()
+
+        dovrd = self._override_mapping[key]
+
+        # self.LOGGER << "on_override_edit [{}]: {} =? {}".format(key, new_value, dovrd.path )
+
+
+        if new_value != dovrd.path:
+            self._override_mapping[key] = dovrd._replace(path=new_value)
+            self._mark_changed()
+
+
+    ##=============================================
+    ## Choosing directories
+    ##=============================================
 
     @Slot(str)
     def choose_override_dir(self, folder):

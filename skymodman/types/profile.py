@@ -153,6 +153,10 @@ class Profile:
     def is_active(self):
         """Return True if this profile is the currently active profile"""
         m = Manager()
+
+        ## this should work...now, anyway. Could just compare names,
+        ## but if the names are equal and this isn't true then there's
+        ## a problem...
         return m and m.profile is self
 
     @property
@@ -224,6 +228,7 @@ class Profile:
 
             # if this is the active profile, update the AppFolder with
             # this override if it has been enabled
+            print(self.is_active, self._overrides[dirkey])
             if self.is_active and self._overrides[dirkey].enabled:
                 Manager().Folders[dirkey].set_override(
                     self._overrides[dirkey].path)
