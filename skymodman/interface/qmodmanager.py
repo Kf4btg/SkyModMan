@@ -7,9 +7,6 @@ from skymodman.managers.modmanager import ModManager
 from skymodman.interface.ui_utils import blocked_signals
 from skymodman.interface.dialogs import message
 
-
-
-
 class QModManager(QObject, ModManager):
     """
     This is a QObject-wrapper around the non-GUI ModManager class that
@@ -71,19 +68,6 @@ class QModManager(QObject, ModManager):
         # compare old and new
         if self.alerts != prev_alerts:
             self.emit_signal(self.alertsChanged)
-
-    ##=============================================
-    ## Profile proxy
-    ##=============================================
-
-    # def set_profile_override(self, profile, key, ovrd_path):
-    #
-    #     # if we just got the name
-    #     if isinstance(profile, str):
-    #         profile = self.Profiler[profile]
-    #
-    #     profile.set_override_path(key, ovrd_path)
-
 
     ##=============================================
     ## Config-change slots

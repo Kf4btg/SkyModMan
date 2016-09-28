@@ -1,13 +1,13 @@
 from pathlib import Path
 
-from skymodman import exceptions
+# from skymodman import exceptions
 from skymodman.types import ModEntry, Alert, AppFolder
 from skymodman.managers import (config as _config,
                                 database as _database,
-                                profiles as _profiles,
-                                paths as _paths
+                                profiles as _profiles
+                                # , paths as _paths
                                 )
-from skymodman.constants import db_fields as _db_fields, db_field_order as _field_order #overrideable_dirs,
+from skymodman.constants import db_fields as _db_fields, db_field_order as _field_order, APPNAME, MAIN_CONFIG #overrideable_dirs,
 from skymodman.constants.keystrings import (Dirs as ks_dir,
                                             Section as ks_sec,
                                             INI as ks_ini)
@@ -49,12 +49,20 @@ class ModManager:
 
         # first, initialize the alerts
         self._diralerts={}
-        self._init_diralerts()
+        self.alerts = set() # type: Set [Alert]
+        # self._init_diralerts()
 
         # the order here matters; profileManager requires config,
         # config requires Paths...
-        self._pathman = _paths.PathManager(mcp=self)
+        # self._pathman = _paths.PathManager(mcp=self)
 
+        # init attributes for submanagers
+        self._configman = None
+        """:type: skymodman.managers.config.ConfigManager"""
+        self._profileman = None
+        """:type: skymodman.managers.profiles.ProfileManager"""
+        self._dbman = None
+        """:type: skymodman.managers.database.DBManager"""
 
         ##=================================
         ## set up Folders
@@ -63,40 +71,36 @@ class ModManager:
         ## need a separate manager; they
         ## should pretty much manage themselves.
 
-        ## TODO: integrate the AppFolder objects into the project
-
-        ## XXX: should these be in the pathmanager? I'm inclined to think not. Does the pathmanager even need to exist now? It really only handles the path to the main config file (which should prob. just be handled by the config manager) and the base directories for the folders below...
-
         self._folders = {} # type: dict [str, AppFolder]
-        _appdata = str(self._pathman.dir_data)
-        _appconf = str(self._pathman.dir_config)
+        # _appdata = str(self._pathman.dir_data)
+        # _appconf = str(self._pathman.dir_config)
+        #
+        # # use defaults-skeleton to construct objects
+        # for name, info in appfolder_defaults.items():
+        #     self._folders[name] = AppFolder(
+        #         name,
+        #         info['display_name'],
+        #         # fill in placeholders
+        #         default_path=info['default_path']
+        #             .replace('%APPDATADIR%', _appdata)
+        #             .replace('%APPCONFIGDIR%', _appconf)
+        #     )
 
-        # use defaults-skeleton to construct objects
-        for name, info in appfolder_defaults.items():
-            self._folders[name] = AppFolder(
-                name,
-                info['display_name'],
-                # fill in placeholders
-                default_path=info['default_path']
-                    .replace('%APPDATADIR%', _appdata)
-                    .replace('%APPCONFIGDIR%', _appconf)
-            )
-
-        self._folders['mods'].register_change_listener(self.on_dir_change)
-        self._folders['mods'].register_change_listener(self.refresh_modlist)
-
-        self._folders['skyrim'].register_change_listener(self.on_dir_change)
-        self._folders['profiles'].register_change_listener(self.on_dir_change)
-        self._folders['vfs'].register_change_listener(self.on_dir_change)
+        # self._folders['mods'].register_change_listener(self.on_dir_change)
+        # self._folders['mods'].register_change_listener(self.refresh_modlist)
+        #
+        # self._folders['skyrim'].register_change_listener(self.on_dir_change)
+        # self._folders['profiles'].register_change_listener(self.on_dir_change)
+        # self._folders['vfs'].register_change_listener(self.on_dir_change)
 
         ##config ##
 
-        self._configman = _config.ConfigManager(mcp=self)
-
-        self._profileman = _profiles.ProfileManager(mcp = self)
-
-        # set up db, but do not load info until requested
-        self._dbman = _database.DBManager(mcp=self)
+        # self._configman = _config.ConfigManager(mcp=self)
+        #
+        # self._profileman = _profiles.ProfileManager(mcp = self)
+        #
+        # # set up db, but do not load info until requested
+        # self._dbman = _database.DBManager(mcp=self)
 
         # used when the installer needs to query mod state
         self._enabledmods = None
@@ -107,17 +111,71 @@ class ModManager:
         # self._modlist_needs_refresh = True
 
         # set of issues that arise during operation
-        self.alerts = set() # type: Set [Alert]
 
         # make sure we have a valid profiles directory
         # self.check_dir(ks_dir.PROFILES)
         # self.check_dirs()
 
-    ## Sub-manager access properties ##
+    ##=============================================
+    ## Setup
+    ##=============================================
 
-    @property
-    def Paths(self):
-        return self._pathman
+    def setup(self):
+        """Initialize the subcomponents and load all required data."""
+        # use appdirs to get base paths
+        import appdirs
+        _appdata = appdirs.user_data_dir(APPNAME)
+        _appconf = appdirs.user_config_dir(APPNAME)
+
+        self._init_diralerts()
+        self._setup_folders(_appdata, _appconf)
+
+        ## sub-managers ##
+
+        self._configman = _config.ConfigManager(config_dir=_appconf,
+                                                data_dir=_appdata,
+                                                config_file_name=MAIN_CONFIG,
+                                                mcp=self)
+
+        self._profileman = _profiles.ProfileManager(mcp=self)
+
+        # set up db, but do not load info until requested
+        self._dbman = _database.DBManager(mcp=self)
+
+        del appdirs
+
+
+    def _setup_folders(self, appdata, appconf):
+        for name, info in appfolder_defaults.items():
+            self._folders[name] = AppFolder(
+                name,
+                info['display_name'],
+                # fill in placeholders
+                default_path=info['default_path']
+                    .replace('%APPDATADIR%', appdata)
+                    .replace('%APPCONFIGDIR%', appconf)
+            )
+
+        # listen for changes to folder paths
+        self._folders['mods'].register_change_listener(
+            self.on_dir_change)
+        self._folders['mods'].register_change_listener(
+            self.refresh_modlist)
+
+        self._folders['skyrim'].register_change_listener(
+            self.on_dir_change)
+        self._folders['profiles'].register_change_listener(
+            self.on_dir_change)
+        self._folders['vfs'].register_change_listener(
+            self.on_dir_change)
+
+    ##=============================================
+    ## Sub-manager access properties
+    ##=============================================
+
+    # @property
+    # def Paths(self):
+    #     return self._pathman
 
     @property
     def Folders(self):
@@ -230,20 +288,23 @@ class ModManager:
         preconstructed instances prevents duplication of alerts when
         stored by their hash-value, such as in a set or dict."""
 
+        ## TODO: remove 'check' attribute (or find a real use for it)
         self._diralerts={
             ks_dir.SKYRIM: Alert(
                 level=Alert.HIGH,
                 label="Skyrim not found",
                 desc="The main Skyrim installation folder could not be found or is not defined.",
                 fix="Choose an existing folder in the Preferences dialog.",
-                check=lambda: not self.get_directory(ks_dir.SKYRIM, nofail=True)),
-
+                check=lambda: None
+                # check=lambda: not self.get_directory(ks_dir.SKYRIM, nofail=True)),
+            ),
             ks_dir.MODS: Alert(
                 level=Alert.HIGH,
                 label="Mods Directory not found",
                 desc="The mod installation directory could not be found or is not defined.",
                 fix="Choose an existing folder in the Preferences dialog.",
-                check=lambda: not self.get_directory(ks_dir.MODS, nofail=True)
+                check=lambda: None
+                # check=lambda: not self.get_directory(ks_dir.MODS, nofail=True)
             ),
 
             ks_dir.VFS: Alert(
@@ -251,14 +312,16 @@ class ModManager:
                 label="Virtual Filesystem mount not found",
                 desc="The mount point for the virtual filesystem could not be found or is not defined.",
                 fix="Choose an existing folder in the Preferences dialog.",
-                check=lambda: not self.get_directory(ks_dir.VFS, nofail=True)
+                check=lambda: None
+                # check=lambda: not self.get_directory(ks_dir.VFS, nofail=True)
             ),
             ks_dir.PROFILES: Alert(
                 level=Alert.HIGH,
                 label="Profiles directory not found",
                 desc="Profiles directory must be present for proper operation.",
                 fix="Choose an existing folder in the Preferences dialog.",
-                check=lambda: not self.get_directory(ks_dir.PROFILES, nofail=True)
+                check=lambda: None
+                # check=lambda: not self.get_directory(ks_dir.PROFILES, nofail=True)
             )
         }
 
@@ -767,51 +830,51 @@ class ModManager:
         # else:
         #     raise exceptions.InvalidConfigSectionError(section)
 
-    def set_directory(self, key, path, profile_override=False):
-        """
-        Update the configured value of the directory indicated by `key`
-        (from constants.keystrings.Dirs) to the new value given in `path`
+    # def set_directory(self, key, path, profile_override=False):
+    #     """
+    #     Update the configured value of the directory indicated by `key`
+    #     (from constants.keystrings.Dirs) to the new value given in `path`
+    #
+    #     :param key:
+    #     :param str path:
+    #     :param profile_override:
+    #     """
+    #     # record in path manager
+    #     self._pathman.set_path(key, path, profile_override)
+    #
+    #     if not profile_override and key in ks_dir:
+    #         # if it's a configurable directory, make sure
+    #         # it's also recorded in the main Config file.
+    #         self._configman.update_dirpath(key)
+    #
+    #     # check if dirs valid
+    #     self.check_dir(key)
 
-        :param key:
-        :param str path:
-        :param profile_override:
-        """
-        # record in path manager
-        self._pathman.set_path(key, path, profile_override)
-
-        if not profile_override and key in ks_dir:
-            # if it's a configurable directory, make sure
-            # it's also recorded in the main Config file.
-            self._configman.update_dirpath(key)
-
-        # check if dirs valid
-        self.check_dir(key)
-
-    def get_directory(self, key, use_profile_override=True, *,
-                      aspath=False, nofail=False):
-        """
-        Get the stored path for the app directory referenced by `key`.
-        If use_profile_override is True and an override is set in the
-        currently active profile for this directory, that override will
-        be returned. In all other cases, the value from the default
-        config will be returned.
-
-        :param key: constants.ks_dir.WHATEVER
-        :param use_profile_override: Return the path-override from the
-            currently active profile, if one is set.
-        :param aspath: set ``True`` to return the value as a Path object
-        :param nofail: If set to ``True``, suppress an invalidDirectory
-            exception and return an empty string instead (or ``None``
-            if `aspath`==``True``)
-        :return:
-        """
-        try:
-            p = self._pathman.path(key, use_profile_override)
-            return p if aspath else str(p)
-        except exceptions.InvalidAppDirectoryError:
-            if nofail:
-                return None if aspath else ""
-            raise
+    # def get_directory(self, key, use_profile_override=True, *,
+    #                   aspath=False, nofail=False):
+    #     """
+    #     Get the stored path for the app directory referenced by `key`.
+    #     If use_profile_override is True and an override is set in the
+    #     currently active profile for this directory, that override will
+    #     be returned. In all other cases, the value from the default
+    #     config will be returned.
+    #
+    #     :param key: constants.ks_dir.WHATEVER
+    #     :param use_profile_override: Return the path-override from the
+    #         currently active profile, if one is set.
+    #     :param aspath: set ``True`` to return the value as a Path object
+    #     :param nofail: If set to ``True``, suppress an invalidDirectory
+    #         exception and return an empty string instead (or ``None``
+    #         if `aspath`==``True``)
+    #     :return:
+    #     """
+    #     try:
+    #         p = self._pathman.path(key, use_profile_override)
+    #         return p if aspath else str(p)
+    #     except exceptions.InvalidAppDirectoryError:
+    #         if nofail:
+    #             return None if aspath else ""
+    #         raise
 
     ##=============================================
     ## Installation

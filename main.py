@@ -60,6 +60,8 @@ if __name__ == '__main__':
         from skymodman.interface.qmodmanager import QModManager
         mmanager = QModManager()
         register_manager(mmanager)
+        # perform setup of sub-managers
+        mmanager.setup()
 
         w.manager_ready()
         # w.assign_modmanager(mmanager)

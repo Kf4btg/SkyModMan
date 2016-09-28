@@ -5,6 +5,7 @@ from collections import defaultdict
 from skymodman import exceptions
 from skymodman.managers.base import Submanager, BaseConfigManager
 from skymodman.log import withlogger
+from skymodman.utils import fsutils
 from skymodman.utils.fsutils import check_path
 from skymodman.constants import EnvVars, FALLBACK_PROFILE, keystrings
 
@@ -38,11 +39,19 @@ _DEFAULT_CONFIG_={
 @withlogger
 class ConfigManager(Submanager, BaseConfigManager):
 
-    def __init__(self, mcp, *args, **kwargs):
+    def __init__(self, config_dir, data_dir, config_file_name, mcp, *args, **kwargs):
+        """
 
+        :param str config_dir: path of Application configuration folder (e.g. ~/.config/appname/)
+        :param str data_dir: path of Application data directory (e.g. ~/.local/share/appname/)
+        :param str config_file_name:
+        """
         # easier reference to pathmanager
         # XXX: this is now only used for config file and config dir...
-        self.paths = mcp.Paths
+        # self.paths = mcp.Paths
+
+        self._config_dir = config_dir
+        self._data_dir = data_dir
 
         # put defaults into template
 
@@ -60,7 +69,8 @@ class ConfigManager(Submanager, BaseConfigManager):
 
         super().__init__(
             template = _DEFAULT_CONFIG_,
-            config_file = self.paths.file_main,
+            config_file = fsutils.join_path(self._config_dir, config_file_name),
+            # config_file = self.paths.file_main,
             environ_vars = EnvVars,
             mcp=mcp, *args, **kwargs)
 
@@ -96,39 +106,6 @@ class ConfigManager(Submanager, BaseConfigManager):
         # if all else fails return none
         return None
 
-    # @property
-    # def last_profile(self) -> str:
-    #     """
-    #     :return: Name of most recently active profile
-    #     """
-    #     return self.get_value(_SECTION_GENERAL, _KEY_LASTPRO)
-    #
-    # @last_profile.setter
-    # def last_profile(self, name):
-    #     """
-    #     Set `name` as the value of the 'lastproifile;' cobfig key
-    #     and write the change to the configuration file
-    #
-    #     :param name:
-    #     """
-    #     self.update_value(_SECTION_GENERAL, _KEY_LASTPRO, name)
-    #
-    # @property
-    # def default_profile(self):
-    #     """
-    #     :return: Name of the profile marked as default
-    #     """
-    #     return self.get_value(_SECTION_GENERAL, _KEY_DEFPRO)
-    #
-    # @default_profile.setter
-    # def default_profile(self, name):
-    #     """
-    #     Set `name` as the value of the 'default_profile' config key
-    #     and write the change to the configuration file
-    #     :param str name:
-    #     """
-    #     self.update_value(_SECTION_GENERAL, _KEY_DEFPRO, name)
-
     ##=============================================
     ## Setup and Sanity Checks
     ##=============================================
@@ -137,6 +114,33 @@ class ConfigManager(Submanager, BaseConfigManager):
         """
         Make sure that all the required files and directories exist,
         creating them if not.
+
+        Breakdown of what will be done here:
+            * Check that the main configuration directory for the
+              application exists; if not, create it.
+
+            * Likewise, check that the main configuration file exists
+              within that dir, and create it with default values if it
+              does not.
+
+            * Read the main configuration file, getting the (possibly
+              user-customized) paths for various folders used by the app,
+              as well as info on the default and most-recently-used profile
+
+            * Make sure that Profiles directory exists; create if not
+
+            * Ensure that a 'fallback' profile folder exists, so that
+              the app is never running without ANY profile at all.
+
+            * Track any missing sections/keys that should have been
+              present in the config file but for some reason were not;
+              default values will be generated for these missing keys and
+              inserted into the file.
+
+            * See if the configured directory for mod-storage exists; if
+              it does not, create it ONLY if the path has not been changed
+              from the default location.
+
         """
 
         ## set up paths ##
@@ -146,9 +150,13 @@ class ConfigManager(Submanager, BaseConfigManager):
         ##---------------------------------
 
         ## check that config dir exists, create if missing ##
-        self.paths.check_exists('dir_config',
-                                use_profile=False,
-                                create=True)
+        p=Path(self._config_dir)
+        if not(p.exists()):
+            p.mkdir(parents=True)
+
+        # self.paths.check_exists('dir_config',
+        #                         use_profile=False,
+        #                         create=True)
 
         ## check that main config file exists ##
         if not Path(self.config_file).exists():
@@ -259,7 +267,8 @@ class ConfigManager(Submanager, BaseConfigManager):
 
                 config[s][k] = self.current_values[s][k]
 
-            with self.paths.file_main.open('w') as f:
+            # with self.paths.file_main.open('w') as f:
+            with open(self.config_file, 'w') as f:
                 config.write(f)
 
     def _check_for_profile_dir(self, key):
