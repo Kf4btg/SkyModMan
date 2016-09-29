@@ -46,9 +46,6 @@ class ConfigManager(Submanager, BaseConfigManager):
         :param str data_dir: path of Application data directory (e.g. ~/.local/share/appname/)
         :param str config_file_name:
         """
-        # easier reference to pathmanager
-        # XXX: this is now only used for config file and config dir...
-        # self.paths = mcp.Paths
 
         self._config_dir = config_dir
         self._data_dir = data_dir
