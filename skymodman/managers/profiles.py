@@ -19,7 +19,6 @@ class ProfileManager(Submanager):
     # only hold the 5 most recently loaded profiles (this session)
     __cache = diqt(maxlen_=5)
 
-
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
@@ -83,8 +82,6 @@ class ProfileManager(Submanager):
         """
 
         return self.load_profile(profilename, create=False)
-
-
 
     def load_profile(self, profilename, copy_from = None, create=True) -> Profile:
         """
@@ -265,7 +262,9 @@ class ProfileManager(Submanager):
 
     def rename_profile(self, profile, new_name):
         """
-        Moves the directory containing the configuration files for Profile `profile` to a new directory with the name `new_name`, and updates all occurrences of the old name to the new.
+        Moves the directory containing the configuration files for
+        Profile `profile` to a new directory with the name `new_name`,
+        and updates all occurrences of the old name to the new.
 
         :param profile:
         :param new_name:

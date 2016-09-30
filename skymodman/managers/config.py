@@ -34,7 +34,6 @@ _DEFAULT_CONFIG_={
     }
 }
 
-
 # @humanize
 @withlogger
 class ConfigManager(Submanager, BaseConfigManager):
@@ -67,7 +66,6 @@ class ConfigManager(Submanager, BaseConfigManager):
         super().__init__(
             template = _DEFAULT_CONFIG_,
             config_file = fsutils.join_path(self._config_dir, config_file_name),
-            # config_file = self.paths.file_main,
             environ_vars = EnvVars,
             mcp=mcp, *args, **kwargs)
 
@@ -82,7 +80,8 @@ class ConfigManager(Submanager, BaseConfigManager):
 
     def __getitem__(self, config_var):
         """
-        Use dict-access to get the value of any of items in this config instance by property name. E.g:
+        Use dict-access to get the value of any of items in this config
+        instance by property name. E.g:
 
         >>> config['mods']
         '/path/to/mod/install/directory'
@@ -151,17 +150,12 @@ class ConfigManager(Submanager, BaseConfigManager):
         if not(p.exists()):
             p.mkdir(parents=True)
 
-        # self.paths.check_exists('dir_config',
-        #                         use_profile=False,
-        #                         create=True)
-
         ## check that main config file exists ##
         if not Path(self.config_file).exists():
             #TODO: perhaps just include a default config file and copy it in place.
 
             self.LOGGER.info("Creating default configuration file.")
             self.create_config_file()
-
 
         ## Load settings from main config file ##
         config = self.read_config()
@@ -176,28 +170,23 @@ class ConfigManager(Submanager, BaseConfigManager):
         try:
             self.mainmanager.Folders['profiles'].path = self._get_value_from(
                 config, _SECTION_DIRS, _KEY_PROFDIR)
-            # self.paths.profiles = Path(self._get_value_from(config, _SECTION_DIRS, _KEY_PROFDIR))
-
 
         except (exceptions.MissingConfigKeyError,
                     exceptions.MissingConfigSectionError) as e:
             # XXX: on thinking about this, it may actually be beneficial to ignore a missing key here and just implicitly use the default. If the user ever customizes the path in the preferences dialog, we can write it to the config file then. This may prevent accidental changes to the path or even issues if some sort of upgrade changes the default.
-            # self.missing_keys.append(exceptions.MissingConfigKeyError(_KEY_PROFDIR, _SECTION_DIRS))
             self.missing_keys.append((e.section, _KEY_PROFDIR))
 
             self.LOGGER.warning("Key for profiles directory missing; using default.")
             ## Should be default already
 
         ## check that profiles dir exists, create if missing ##
-        # if not self.paths.check_exists(_KEY_PROFDIR, False, True):
         pdir = self.mainmanager.Folders['profiles'].path
         if not pdir.exists():
             pdir.mkdir(parents=True)
-            # if it was missing, also create the folder for the default/fallback profile
+            # if it was missing, also create the folder
+            # for the default/fallback profile
             self.LOGGER.info("Creating directory for default profile.")
             (pdir / FALLBACK_PROFILE).mkdir()
-            # (self.paths.profiles / FALLBACK_PROFILE).mkdir()
-
 
         ##=================================
         ## Last/Default profile
@@ -221,7 +210,6 @@ class ConfigManager(Submanager, BaseConfigManager):
                 # and now check that the folders for those dirs exist
                 self._check_for_profile_dir(key)
 
-
         ##=================================
         ## Game-Data Storage Folders*
         ##---------------------------------
@@ -235,14 +223,9 @@ class ConfigManager(Submanager, BaseConfigManager):
         ## check that mods directory exists, but only create it if the
         # location in the config is same as the default
         mdir = self.mainmanager.Folders['mods'].path
-        if mdir and not mdir.exists() and str(mdir) == _DEFAULT_CONFIG_[_SECTION_DIRS][_KEY_MODDIR]:
+        if mdir and not mdir.exists() and str(mdir) == _DEFAULT_CONFIG_[
+            _SECTION_DIRS][_KEY_MODDIR]:
             mdir.mkdir(parents=True)
-
-        # self.paths.check_exists(_KEY_MODDIR,
-        #                         use_profile=False,
-        #                         create=self.paths[_KEY_MODDIR] ==
-        #                              _DEFAULT_CONFIG_[_SECTION_DIRS]
-        #                              [_KEY_MODDIR])
 
         ## and finally, let's fill in any blank spots in the config.
         ## note that this does NOT overwrite any _invalid_ settings,
@@ -254,17 +237,15 @@ class ConfigManager(Submanager, BaseConfigManager):
 
         if self.missing_keys:
             for s, k in self.missing_keys:
-                # s, k = e.section, e.key
 
                 # check if the section itself is missing
                 if s not in config:
                     config[s] = {}
-                print(s, k)
-                print(self.current_values[s][k])
+                # print(s, k)
+                # print(self.current_values[s][k])
 
                 config[s][k] = self.current_values[s][k]
 
-            # with self.paths.file_main.open('w') as f:
             with open(self.config_file, 'w') as f:
                 config.write(f)
 
@@ -276,7 +257,6 @@ class ConfigManager(Submanager, BaseConfigManager):
         :param key:
         """
         pname = self.get_value(_SECTION_GENERAL, key)
-        # pdir = self.paths.profiles / pname
         pdir = self.mainmanager.Folders['profiles'].path / pname
 
         if not pdir.exists():
@@ -305,7 +285,6 @@ class ConfigManager(Submanager, BaseConfigManager):
         :param configparser.ConfigParser config:
         """
 
-
         for evar, path_key in (
                 (EnvVars.SKYDIR, _KEY_SKYDIR),
                 (EnvVars.MOD_DIR, _KEY_MODDIR),
@@ -324,7 +303,9 @@ class ConfigManager(Submanager, BaseConfigManager):
             # if they didn't or it didn't exist, pull the config value
             if p is None:
                 try:
-                    config_val = self._get_value_from(config, _SECTION_DIRS, path_key)
+                    config_val = self._get_value_from(config,
+                                                      _SECTION_DIRS,
+                                                      path_key)
                 except exceptions.MissingConfigKeyError as e:
                     self.missing_keys.append((e.section, path_key))
                 else:
@@ -353,19 +334,11 @@ class ConfigManager(Submanager, BaseConfigManager):
             # it on the PathManager
             if p is not None:
                 self.mainmanager.Folders[path_key].path = p
-                ## use setattr to avoid circular reference during setup
-                # setattr(self.paths, path_key, p)
 
             # and update config-file mirror
-            # note -- have to use strings to keep config parser
-            #         happy
-            self._set_value(_SECTION_DIRS, path_key, "" if not p else str(p))
-
-            # update config-file mirror
-            # print("==>Method invoke: BaseConfig._set_value(", _SECTION_DIRS, path_key, p, ")")
-
-            # self._set_value(_SECTION_DIRS, path_key, p)
-            # self._set_value(_SECTION_DIRS, path_key, self.paths[path_key])
+            # note -- have to use strings to keep config parser happy
+            self._set_value(_SECTION_DIRS, path_key,
+                            "" if not p else str(p))
 
         if self.path_errors:
             for att, errlist in self.path_errors.items():
@@ -400,13 +373,9 @@ class ConfigManager(Submanager, BaseConfigManager):
         through there and one need not worry about ever calling this
         method directly.
         """
-        # use current_path to bypass override, if any
         self.update_value(_SECTION_DIRS,
                           path_key,
                           self.mainmanager.Folders[path_key].get_path())
-        # self.update_value(_SECTION_DIRS, path_key, self.paths[path_key])
-
-    ## path information will be queried via the pathmanager
 
     def update_genvalue(self, key, value):
         """

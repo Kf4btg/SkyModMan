@@ -214,7 +214,6 @@ class ModManager:
         self.alerts.add(alert)
         return True
 
-
     def remove_alert(self, alert):
         """
         Remove the given Alert object from the list of alerts.
@@ -264,7 +263,6 @@ class ModManager:
                 check=lambda: None
                 # check=lambda: not self.get_directory(ks_dir.MODS, nofail=True)
             ),
-
             ks_dir.VFS: Alert(
                 level=Alert.HIGH,
                 label="Virtual Filesystem mount not found",

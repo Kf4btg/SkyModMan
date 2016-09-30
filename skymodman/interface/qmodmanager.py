@@ -3,7 +3,7 @@ from collections import deque
 from PyQt5.QtCore import QObject, pyqtSignal as Signal, pyqtSlot as Slot
 
 from skymodman.managers.modmanager import ModManager
-from skymodman.interface.ui_utils import blocked_signals
+# from skymodman.interface.ui_utils import blocked_signals
 
 class QModManager(QObject, ModManager):
     """
@@ -46,6 +46,7 @@ class QModManager(QObject, ModManager):
 
     def check_alerts(self):
         # copy current alerts
+
         prev_alerts = set(self.alerts)
 
         super().check_alerts()
@@ -56,60 +57,22 @@ class QModManager(QObject, ModManager):
 
     def check_dirs(self):
         # copy current alerts
-        prev_alerts = set(self.alerts)
+        # prev_alerts = set(self.alerts)
 
         # block signals on self since remove/add will be called several
         # times
-        with blocked_signals(self):
-            super().check_dirs()
+        # with blocked_signals(self):
+        #     super().check_dirs()
+
+        # rather than blocking signals, queue them up
+        self.begin_queue_signals()
+        super().check_dirs()
+        # this will emit any queued signals (once per type)
+        self.end_queue_signals()
 
         # compare old and new
-        if self.alerts != prev_alerts:
-            self.emit_signal(self.alertsChanged)
-
-    ##=============================================
-    ## Config-change slots
-    ##=============================================
-
-    # @Slot(str, str, bool, bool)
-    # def move_dir(self, key, new_path, remove_old, override=False):
-    #     """
-    #     Attempt to move the folder for the given key from its current
-    #     location to `new_path`. If successful, update the configured
-    #     path. Show error dialogs if something goes wrong.
-    #
-    #     :param key:
-    #     :param new_path:
-    #     :param remove_old:
-    #     :return:
-    #     """
-    #     try:
-    #         self.Folders[key].move(new_path, remove_old, override)
-    #     except exceptions.FileDeletionError as e:
-    #         # this means the movement operation succeeded, but for some
-    #         # reason the original folder could not be deleted. Go ahead
-    #         # and update the configured path in this case.
-    #         message('warning',
-    #                 "Could not remove original folder.",
-    #                 "The following error occurred:",
-    #                 detailed_text=str(e), buttons='ok',
-    #                 default_button='ok')
-    #     except exceptions.FileAccessError as e:
-    #         message('critical',
-    #                 "Cannot perform move operation.",
-    #                 "The following error occurred:",
-    #                 detailed_text=str(e), buttons='ok',
-    #                 default_button='ok')
-    #     except exceptions.MultiFileError as mfe:
-    #         s = ""
-    #         for file, exc in mfe.errors:
-    #             self.LOGGER.exception(exc)
-    #             s += "{0}: {1}\n".format(file, exc)
-    #         message('critical',
-    #                 title="Errors during move operation",
-    #                 text="The move operation may not have fully completed. The following errors were encountered: ",
-    #                 buttons='ok', default_button='ok',
-    #                 detailed_text=s)
+        # if self.alerts != prev_alerts:
+        #     self.emit_signal(self.alertsChanged)
 
     ##=============================================
     ## The signal queue
@@ -137,17 +100,29 @@ class QModManager(QObject, ModManager):
         same signal with the same arguments has already been added to
         the queue, it will not be added again."""
 
-        # create tuple of the signal and its arguments
+        ## create tuple of the signal and its arguments
         siginfo=(signal, *args)
+        ## and of the signature of the signal
+        # -- the 'signal' property is the 'signature of the signal that
+        # would be returned by SIGNAL()'; it is a string that appears
+        # like '2alertsChanged()' or '2newProfileLoaded(QString)' (and
+        # no, I don't know why there's a 2 on the front). It should serve
+        # as a unique string that can identify whether 2 signals represent
+        # the same class attr
+        sigsig = (signal.signal, *args)
+
         # check if we've already got a sig+args combo that matches
-        if siginfo not in self._qmembers:
+        if sigsig not in self._qmembers:
             # if not, queue it up
             # -- appendleft() so we can just pop() the first items
             #    off the right side later
             self.sigqueue.appendleft(siginfo)
-            # and add it to the member set, too
-            self._qmembers.add(self.sigqueue[0])
 
+            # and add it to the member set, too
+            ## Use signal signatures names to track membership because
+            # (apparently) two bound signals of the same type do not
+            # compare equal
+            self._qmembers.add(sigsig)
 
     def process_queue(self):
         """Emit any signals that were queued up"""
