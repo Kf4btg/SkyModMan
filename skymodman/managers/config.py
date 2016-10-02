@@ -377,6 +377,15 @@ class ConfigManager(Submanager, BaseConfigManager):
                           path_key,
                           self.mainmanager.Folders[path_key].get_path())
 
+    def update_folderpath(self, folder):
+        """Update the saved value of a configurable dir path from the
+        given AppFolder instance
+
+        :param skymodman.types.AppFolder folder:"""
+        self.LOGGER << "update folderpath: {}".format(folder.name)
+
+        self.update_value(_SECTION_DIRS, folder.name, folder.get_path())
+
     def update_genvalue(self, key, value):
         """
         Update the value of a General setting

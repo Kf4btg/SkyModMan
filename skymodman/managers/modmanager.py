@@ -71,6 +71,10 @@ class ModManager:
         # cached list of mods in mod directory
         self._installed_mods = []
 
+        # track when we're switching profiles
+        self.in_profile_switch=False
+
+
 
 
     ##=============================================
@@ -119,17 +123,20 @@ class ModManager:
             )
 
         # listen for changes to folder paths
-        self._folders['mods'].register_change_listener(
-            self.on_dir_change)
+        for f in ('mods', 'skyrim', 'profiles', 'vfs'):
+            self._folders[f].register_change_listener(self.on_dir_change)
+
         self._folders['mods'].register_change_listener(
             self.refresh_modlist)
 
-        self._folders['skyrim'].register_change_listener(
-            self.on_dir_change)
-        self._folders['profiles'].register_change_listener(
-            self.on_dir_change)
-        self._folders['vfs'].register_change_listener(
-            self.on_dir_change)
+        # self._folders['mods'].register_change_listener(
+        #     self.on_dir_change)
+        # self._folders['skyrim'].register_change_listener(
+        #     self.on_dir_change)
+        # self._folders['profiles'].register_change_listener(
+        #     self.on_dir_change)
+        # self._folders['vfs'].register_change_listener(
+        #     self.on_dir_change)
 
     ##=============================================
     ## Sub-manager access properties
@@ -314,10 +321,15 @@ class ModManager:
         :param AppFolder folder:
         """
 
+        # an appfolder instance is "False" if the path is unset or invalid
         if not folder:
             self.add_alert(self._diralerts[folder.name])
         else:
             self.remove_alert(self._diralerts[folder.name])
+
+        if self._configman and not self.in_profile_switch and not folder.is_overriden:
+            self._configman.update_folderpath(folder)
+            # self.set_config_value(folder.name, folder.path, ks_sec.DIRECTORIES)
 
     ##=============================================
     ## Profile Management Interface
@@ -341,6 +353,12 @@ class ModManager:
         # old_profile = self.profile.name if self.profile else None
         old_profile = self.profile
 
+        # flag that tells us we're in the middle of switching profiles;
+        # this is mainly so that a dir-changed notification from an
+        # AppFolder does not incorrectly update the config file
+        self.in_profile_switch = True
+
+        success = True
         try:
             self._load_profile(profile)
 
@@ -358,13 +376,16 @@ class ModManager:
                 # if we came from no profile, make sure we're back there
                 self._profileman.set_active_profile(None)
 
-            return False
 
-        # if we successfully made it here, update the config value
-        # for the last-loaded profile and return True
-        self.set_config_value(ks_ini.LAST_PROFILE, profile)
+            success = False
+        else:
+            # if we successfully made it here, update the config value
+            # for the last-loaded profile and return True
+            self.set_config_value(ks_ini.LAST_PROFILE, profile)
+        finally:
+            self.in_profile_switch = False
 
-        return True
+        return success
 
     def new_profile(self, name, copy_from=None):
         """
