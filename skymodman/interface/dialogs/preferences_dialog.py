@@ -1,5 +1,5 @@
 from functools import partial
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 import os
 
 from PyQt5.QtWidgets import QDialog, QFileDialog, QDialogButtonBox
@@ -20,17 +20,26 @@ from skymodman.utils.fsutils import check_path
 # because I'm lazy
 PLP = constants.ProfileLoadPolicy
 
+# main manager instance
 MManager = Manager()
 
 ## text and style sheets for indicator labels
-_invalid_path_str = "Path not found"
-_invalid_path_style = "QLabel {color: red; font-size: 10pt;}"
+_label_spec = namedtuple("_label_spec", "text style")
 
-_missing_path_str = "Path is required"
-_missing_path_style = "QLabel {color: orange; font-size: 10pt; " \
-                      "font-style: italic; }"
-
-_notabs_path_str = "Path must be absolute"
+_path_error_labels = {
+    'invalid': _label_spec(text="Path not found",
+                           style="QLabel {color: red; font-size: 10pt;}"),
+    'missing': _label_spec(text = "Path is required",
+                           style =
+                            "QLabel { "
+                                "color: orange; "
+                                "font-size: 10pt; "
+                                "font-style: italic; "
+                            "}"),
+    'notabs': _label_spec(text = "Path must be absolute",
+                          # same style as invalid
+                          style="QLabel {color: red; font-size: 10pt;}")
+}
 
 # noinspection PyArgumentList
 @withlogger
@@ -41,17 +50,11 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
     """
 
     profilePolicyChanged = Signal(int, bool)
-    # defaultProfileChanged = Signal(str)
-    _pathEditFinished = Signal(str)
 
     beginModifyPaths = Signal()
     """emitted when changes to configured paths are about to be applied"""
     endModifyPaths = Signal()
     """emitted after changes to configured paths have been applied"""
-    # updateDirPath = Signal(str, str, bool)
-    # """emitted with the key and new path of an application directory"""
-
-    # moveAppFolder = Signal(str, str, bool, bool)
 
     def __init__(self, profilebox_model, profilebox_index, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -71,12 +74,17 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             D.VFS:      self.le_dirvfs
         }
 
+        ## and the corresponding 'choose-folder' buttons
         self.path_choosers = {
             D.PROFILES: self.btn_choosedir_profiles,
             D.SKYRIM:   self.btn_choosedir_skyrim,
             D.MODS:     self.btn_choosedir_mods,
             D.VFS:      self.btn_choosedir_vfs
         }
+
+        # create a dict that will hold the current value of a text box
+        # (for comparing old->new text when user manually edits box)
+        self.current_text = { }
 
         ## associate checkboxes w/ preference names
         self.checkboxes = {
@@ -259,11 +267,11 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                 # handle indicator labels
                 lbl = self.indicator_labels[d]
                 if not dpath:
-                    self._mark_missing_path(lbl)
+                    self._set_label_status(lbl, 'missing')
                 elif not os.path.isabs(dpath):
-                    self._mark_nonabs_path(lbl)
+                    self._set_label_status(lbl, 'notabs')
                 elif not check_path(dpath):
-                    self._mark_invalid_path(lbl)
+                    self._set_label_status(lbl, 'invalid')
                 else:
                     # hide the label for valid paths
                     lbl.hide()
@@ -311,9 +319,19 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                 self.override_choosers[d].clicked.connect(
                     partial(self.choose_override_dir, d))
 
+        # record initial text
+        self.current_text = {
+            D.PROFILES: self.le_profdir.text(),
+            D.SKYRIM:   self.le_dirskyrim.text(),
+            D.MODS:     self.le_dirmods.text(),
+            D.VFS:      self.le_dirvfs.text()
+        }
 
-        # connect _pathEditFinished signal to our validation handler
-        # self._pathEditFinished.connect(self.on_path_edit)
+        # disable profile-dir chooser (no validation is currently
+        # performed on it and having an invalid profiles directory would
+        # cause some serious problems, so don't allow it to be changed
+        # until we implement all that)
+        self._gbox_appdirs.setEnabled(False)
 
         ## apply button ##
         self.btn_apply.clicked.connect(self.on_apply_button_pressed)
@@ -491,32 +509,52 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         """
         Called when the user manually edits a path box
         """
-        new_value = self.path_boxes[key].text()
+        new_path = new_value = self.path_boxes[key].text()
+        old_value = self.current_text[key]
         label = self.indicator_labels[key]
+        # curr_path = self.paths[key]
 
-        if new_value != self.paths[key]:
+        if new_value != old_value:
+            # enable 'Apply' button if newly entered text
+            # does not match old text
+            self._mark_changed()
+
+
+        # if new_value != curr_path and curr_path != self.defpaths[key]:
             # this will only matter the first time, but still...
             # if the user edits the path box and the new value
             # is different than the current path, enable apply button
-            self._mark_changed()
+            # self._mark_changed()
 
         # if they cleared the box, the default will be active
+        # ...unless there isn't one. then it will be marked missing
         if not new_value:
-            # ...unless there isn't one. then mark it missing
-            if not self.defpaths[key]:
-                self._mark_missing_path(label)
+            new_path = self.defpaths[key]
+            # if not self.defpaths[key]:
+            #     self._mark_missing_path(label)
+
+        # now check 'new_path', whether it's the text entered or
+        # the default value
+        if not new_path:
+            self._set_label_status(label, 'missing')
+            # self._mark_missing_path(label)
         else:
-            if not os.path.isabs(new_value):
+            if not os.path.isabs(new_path):
                 # then they didn't enter an absolute path
-                self._mark_nonabs_path(label)
+                self._set_label_status(label, 'notabs')
+                # self._mark_nonabs_path(label)
 
             # if they entered a valid path
-            elif os.path.exists(new_value):
+            elif os.path.exists(new_path):
                 # hide the label cause we're all good
                 label.setVisible(False)
 
             else:  # but if it was invalid...
-                self._mark_invalid_path(label)
+                self._set_label_status(label, 'invalid')
+                # self._mark_invalid_path(label)
+
+        # finally, update text-tracker (make sure to use entered text):
+        self.current_text[key] = new_value
 
     def _handle_path_change(self, key, old_path, newpath):
         """Check for a change in the text-entry-box for the path and
@@ -705,19 +743,20 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             self._mark_changed()
 
 
-    def _mark_invalid_path(self, qlabel):
-        # takes given indicator label and sets it to 'invalid' status
-        qlabel.setText(_invalid_path_str)
-        qlabel.setStyleSheet(_invalid_path_style)
-        qlabel.setVisible(True)
-    def _mark_missing_path(self, qlabel):
-        # takes given indicator label and sets it to 'missing' status
-        qlabel.setText(_missing_path_str)
-        qlabel.setStyleSheet(_missing_path_style)
-        qlabel.setVisible(True)
-    def _mark_nonabs_path(self, qlabel):
-        # takes given indicator label and sets it to 'not absolute' status
-        qlabel.setText(_notabs_path_str)
-        qlabel.setStyleSheet(_invalid_path_style)
-        qlabel.setVisible(True)
+    def _set_label_status(self, qlabel, err_type):
+        """
+        sets indicator label to show a message according to `err_type`
+
+        :param qlabel:
+        :param err_type: valid values are 'invalid', 'missing', 'notabs'
+        """
+        try:
+            spec = _path_error_labels[err_type]
+        except KeyError as e:
+            # don't crash
+            self.LOGGER.error(e)
+        else:
+            qlabel.setText(spec.text)
+            qlabel.setStyleSheet(spec.style)
+            qlabel.setVisible(True)
 
