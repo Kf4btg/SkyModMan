@@ -81,14 +81,14 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         ## associate checkboxes w/ preference names
         self.checkboxes = {
             UI.RESTORE_WINSIZE: self.cbox_restore_size,
-            UI.RESTORE_WINPOS: self.cbox_restore_pos
+            UI.RESTORE_WINPOS:  self.cbox_restore_pos
         }
 
         ## Setup Profile Load Policy radiobuttons
         self.radios = {
-            PLP.last: self.rad_load_last_profile,
+            PLP.last:    self.rad_load_last_profile,
             PLP.default: self.rad_load_default_profile,
-            PLP.none: self.rad_load_no_profile
+            PLP.none:    self.rad_load_no_profile
         }
 
         #-- "path is valid" indicator labels

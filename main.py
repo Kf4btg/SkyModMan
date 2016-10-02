@@ -6,12 +6,10 @@ import asyncio
 # from skymodman.managers import modmanager
 from skymodman import constants, log, register_manager
 
+# module-level QApplication reference
+app = None
 
-def main():
-    pass
-    # from skymodman import skylog
-    # MM = ModManager()
-    # skylog.stop_listener()
+
 
 
 USE_QT_GUI = os.getenv(constants.EnvVars.USE_QT.value, True)
@@ -30,50 +28,56 @@ USE_QT_GUI = os.getenv(constants.EnvVars.USE_QT.value, True)
 #
 #     sys.exit()
 
+def main():
+    from PyQt5.QtWidgets import QApplication
+    # from PyQt5.QtGui import QGuiApplication
+    import quamash
+
+    # setup application and quamash event-loop
+    ## use module-level application reference to avoid crashes on exit
+    ## (see http://pyqt.sourceforge.net/Docs/PyQt5/gotchas.html#crashes-on-exit)
+    global app
+    app = QApplication(sys.argv)
+    loop = quamash.QEventLoop(app)
+    asyncio.set_event_loop(loop)
+
+    # initialize the main window
+    from skymodman.interface.managerwindow import ModManagerWindow
+    w = ModManagerWindow()
+
+    # after creation of the window, create and assign the backend
+    from skymodman.interface.qmodmanager import QModManager
+    mmanager = QModManager()
+    register_manager(mmanager)
+
+    # perform setup of sub-managers
+    mmanager.setup()
+
+    # notify main window backend is ready
+    w.manager_ready()
+
+    # show the window
+    w.show()
+
+    # run the event loop
+    try:
+        with loop:
+            loop.run_forever()
+    finally:
+        mmanager.DB.shutdown()
+        log.stop_listener()
+    # from skymodman import skylog
+    # MM = ModManager()
+    # skylog.stop_listener()
+
+def main_nogui():
+    pass
 
 if __name__ == '__main__':
     # sys.excepthook = myexcepthook
 
     if USE_QT_GUI:
-        from PyQt5.QtWidgets import QApplication
-        # from PyQt5.QtGui import QGuiApplication
-        import quamash
-
-        app = QApplication(sys.argv)
-        loop = quamash.QEventLoop(app)
-        asyncio.set_event_loop(loop)
-
-        # initialize the main ModManager; this causes the Manager()
-        # method to return the same instance everytime it is invoked
-        # for the rest of the program's run
-        # mmanager = modmanager.Manager()
-
-        # import this after the manager invokation to ensure that
-        # the manager is already created at the time the managerwindow
-        # module obtains a reference to it.
-        from skymodman.interface.managerwindow import ModManagerWindow
-
-
-        w = ModManagerWindow()
-
-        # after creation of the window, create and assign the backend
-        from skymodman.interface.qmodmanager import QModManager
-        mmanager = QModManager()
-        register_manager(mmanager)
-        # perform setup of sub-managers
-        mmanager.setup()
-
-        w.manager_ready()
-        # w.assign_modmanager(mmanager)
-
-        w.show()
-
-        try:
-            with loop:
-                loop.run_forever()
-        finally:
-            mmanager.DB.shutdown()
-            log.stop_listener()
-    else:
         main()
+    else:
+        main_nogui()
 
