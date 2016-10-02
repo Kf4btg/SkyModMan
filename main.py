@@ -9,11 +9,6 @@ from skymodman import constants, log, register_manager
 # module-level QApplication reference
 app = None
 
-
-
-
-USE_QT_GUI = os.getenv(constants.EnvVars.USE_QT.value, True)
-
 #
 # def myexcepthook(type, value, tb):
 #     import traceback
@@ -75,6 +70,7 @@ def main_nogui():
 
 if __name__ == '__main__':
     # sys.excepthook = myexcepthook
+    USE_QT_GUI = os.getenv(constants.EnvVars.USE_QT.value, True)
 
     if USE_QT_GUI:
         main()
