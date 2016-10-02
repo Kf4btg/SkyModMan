@@ -92,7 +92,6 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         }
 
         #-- "path is valid" indicator labels
-
         self.indicator_labels = {
             D.SKYRIM: self.lbl_skydir_status,
             D.MODS:   self.lbl_moddir_status,
@@ -100,19 +99,16 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         }
 
         ## dir-override boxes
-
         self.override_buttons = {
             D.SKYRIM: self.btn_enable_skydir_override,
             D.MODS:   self.btn_enable_moddir_override,
             D.VFS:    self.btn_enable_vfsdir_override
         }
-
         self.override_boxes = {
             D.SKYRIM: self.le_skydir_override,
             D.MODS:   self.le_moddir_override,
             D.VFS:    self.le_vfsdir_override
         }
-
         self.override_choosers = {
             D.SKYRIM: self.btn_choose_skydir_override,
             D.MODS:   self.btn_choose_moddir_override,
@@ -127,7 +123,15 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
         # reuse the main profile-combobox-model for this one here
         self.combo_profiles.setModel(profilebox_model)
-        self.combo_profiles.setCurrentIndex(profilebox_index)
+
+
+        if profilebox_index >= 0:
+            # show the currently-active profile on the profile tab
+            self.combo_profiles.setCurrentIndex(profilebox_index)
+        else:
+            # since it's possible that there may not be an active profile,
+            # fallback to showing the default profile.
+            self.combo_profiles.setCurrentIndex(self.combo_profiles.findData(constants.FALLBACK_PROFILE))
 
         # store the currently-selected Profile object
         self._selected_profile = MManager.Profiler[self.combo_profiles.currentData()]
@@ -158,6 +162,10 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         """get the dir_key:dir_override mapping for the selected profile"""
         return self._override_paths[self._selected_profile.name]
 
+    @property
+    def _num_profiles(self):
+        """ number of available profiles"""
+        return self.combo_profiles.model().rowCount()
 
     @Slot()
     def _mark_changed(self):
@@ -193,7 +201,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         # associate a change in the radio selection with updating
         # _selected_plp
         for plp, rb in self.radios.items():
-            if plp == self._selected_plp:
+            if plp.value == self._selected_plp:
                 rb.setChecked(True)
 
             # chain each button's toggled(bool) signal to the
@@ -325,7 +333,8 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         """
 
         if enabled:
-            self._selected_plp = constants.ProfileLoadPolicy(value)
+            # self._selected_plp = constants.ProfileLoadPolicy(value)
+            self._selected_plp = value
             self._mark_changed()
 
     @Slot()
@@ -406,10 +415,12 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         if self._selected_profile:
             # don't want unchecking this to trigger changing the default profile
             with ui_utils.blocked_signals(self.cbox_default):
-                self.cbox_default.setChecked(self._selected_profile.name == MManager.default_profile)
+                self.cbox_default.setChecked(
+                    self._selected_profile.name == MManager.default_profile
+                )
 
-
-
+        # if there is only 1 profile, disable the checkbox
+        self.cbox_default.setEnabled(self._num_profiles > 1)
 
     @Slot()
     def on_apply_button_pressed(self):

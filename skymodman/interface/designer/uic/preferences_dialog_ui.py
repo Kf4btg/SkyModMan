@@ -266,7 +266,7 @@ class Ui_Preferences_Dialog(object):
         self.btn_enable_moddir_override.toggled['bool'].connect(self.btn_choose_moddir_override.setEnabled)
         self.btn_enable_vfsdir_override.toggled['bool'].connect(self.le_vfsdir_override.setEnabled)
         self.btn_enable_vfsdir_override.toggled['bool'].connect(self.btn_choose_vfsdir_override.setEnabled)
-        QtCore.QMetaObject.connectSlotsByName(Preferences_Dialog)
+        # QtCore.QMetaObject.connectSlotsByName(Preferences_Dialog)
 
     def retranslateUi(self, Preferences_Dialog):
         _translate = QtCore.QCoreApplication.translate

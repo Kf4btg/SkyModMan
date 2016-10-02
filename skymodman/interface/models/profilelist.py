@@ -39,11 +39,11 @@ class ProfileListModel(QAbstractListModel):
 
     def data(self, index, role=Qt.UserRole):
         """
-        Return name for DisplayRole, whole Profile object for UserRole
+        Return capitalized name for DisplayRole, on-disk folder name
+        for UserRole
 
         :param QModelIndex index:
         :param role:
-        :return:
         """
         if not index.isValid(): # or not (0<index.row()<len(self.profiles)):
             return
