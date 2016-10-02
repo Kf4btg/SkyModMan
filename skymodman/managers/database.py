@@ -154,6 +154,11 @@ class DBManager(BaseDBManager, Submanager):
                 self.conn.execute("DELETE FROM mods")
                 self._empty['mods'] = True
 
+                global _mcount
+                # reset counter so that mod-ordinal is determined by the order
+                # in which the entries are read from the file
+                _mcount = count()
+
             if files and not self._empty['modfiles']:
                 self.conn.execute("DELETE FROM modfiles")
                 self._empty['modfiles'] = True
@@ -185,10 +190,7 @@ class DBManager(BaseDBManager, Submanager):
 
         :param str|Path json_source: path to modinfo.json file
         """
-        global _mcount
-        # reset counter so that mod-ordinal is determined by the order
-        # in which the entries are read from the file
-        _mcount = count()
+
 
         if not isinstance(json_source, Path):
             json_source = Path(json_source)
@@ -619,19 +621,91 @@ class DBManager(BaseDBManager, Submanager):
 
         # if self.count("modfiles", directory='Skyrim')
 
+        self.LOGGER << "adding files from Skyrim Data directory"
         if self.count("modfiles", directory='Skyrim'):
             # if so, clear them out
             self.remove_files('Skyrim')
 
-        with self.conn:
-            for f in skyrim_dir.iterdir():
-                if f.is_dir() and f.name.lower() == "data":
-                    # add files to db under mod-name "Skyrim"
-                    # TODO: make sure all parts of the application treat these items as a special case (since the files listed here obviously won't be under the 'normal' mods directory)
-                    self.add_files_from_dir('Skyrim', str(f))
-                    break
+        # with self.conn:
+        for f in skyrim_dir.iterdir():
+            if f.is_dir() and f.name.lower() == "data":
+                # add files to db under mod-name "Skyrim"
+                # TODO: make sure all parts of the application treat these items as a special case (since the files listed here obviously won't be under the 'normal' mods directory)
+                # self.add_files_from_dir('Skyrim', str(f))
+                self._add_files_from_skyrim_data(f)
+                break
 
         self._empty['modfiles'] = self.count("modfiles") < 1
+
+    def _add_files_from_skyrim_data(self, path, *,
+                           relpath = os.path.relpath,
+                           join = os.path.join):
+        """Special case: adding vanilla/manually-installed mods from Skyrim/Data
+
+        :param Path path:
+        """
+        mfiles = []
+
+
+        files_by_ext = defaultdict(list)
+
+        for f in path.iterdir():
+            if f.is_file():
+                # get extension (without leading period, in lowercase)
+                ext = f.suffix.lstrip('.').lower()
+                if ext:
+                    # create mapping of file names by extension; this
+                    # will let us easily determine if, e.g., we have
+                    # matching esm's/esp's and bsa's
+                    files_by_ext[ext].append(f.stem.lower())
+
+
+        s_mods = []
+        for ext, flist in files_by_ext.items():
+            # add faux-mods for found es[mp]'s and corresponding bsa's
+            if ext in ['esm', 'esp']:
+                for file in flist:
+                    # the 'mod' name will be the stem of the file
+                    m_name=file
+                    # first item of file list is the es[mp]
+                    to_add=[file+'.'+ext]
+
+                    # go through all OTHER extensions for matching files
+                    for e2, fl2 in files_by_ext.items():
+                        if e2!=ext and m_name in fl2:
+                            to_add.append(m_name+'.'+e2)
+
+                    # TODO: store enabled status, custom-name for these; also see if version info can be pulled from files
+                    # create the fake mod; set up in format that can be
+                    # passed to to_row_tuple()
+                    m_info=[("name", m_name),
+                            ("directory", m_name),
+                            ("modid", 0),
+                            ("version", ""),
+                            ("enabled", 1)]
+
+                    # s_mods.append(self.to_row_tuple(m_info))
+
+                    with self.conn:
+                        # add the "mod"
+                        self.conn.execute(
+                            "INSERT INTO mods({}) VALUES ({})".format(
+                                ", ".join(db_fields_noerror),
+                                ", ".join("?" * len(db_fields_noerror))
+                            ),
+                            self.to_row_tuple(m_info)
+                        )
+                        # and now the mod files
+                        self.conn.executemany(
+                            "INSERT INTO modfiles VALUES (?, ?)",
+                            zip(repeat(m_name), to_add))
+
+
+
+
+        # for root, dirs, files in os.walk(path):
+        #     mfiles.extend(
+        #         relpath(join(root, f), path).lower() for f in files)
 
 
     # noinspection PyIncorrectDocstring
@@ -654,6 +728,8 @@ class DBManager(BaseDBManager, Submanager):
             #   'meshes/whatever.nif'
             mfiles.extend(
                 relpath(join(root, f), mod_root).lower() for f in files)
+
+        print("files:", mfiles)
 
         # put the mod's files in the db, with the mod name as the first
         # field (e.g. 'CoolMod42'), and the filepath as the second (e.g.
