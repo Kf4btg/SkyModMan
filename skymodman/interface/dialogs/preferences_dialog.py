@@ -280,7 +280,6 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                 # when editing is finished that contains their key-string
                 self.path_boxes[d].editingFinished.connect(
                     partial(self.on_path_edit, d))
-                    # partial(self._pathEditFinished.emit, d))
 
                 ##---------------------##
                 # override buttons/choosers
@@ -351,7 +350,6 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         """
 
         if enabled:
-            # self._selected_plp = constants.ProfileLoadPolicy(value)
             self._selected_plp = value
             self._mark_changed()
 
@@ -512,37 +510,25 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         new_path = new_value = self.path_boxes[key].text()
         old_value = self.current_text[key]
         label = self.indicator_labels[key]
-        # curr_path = self.paths[key]
 
         if new_value != old_value:
             # enable 'Apply' button if newly entered text
             # does not match old text
             self._mark_changed()
 
-
-        # if new_value != curr_path and curr_path != self.defpaths[key]:
-            # this will only matter the first time, but still...
-            # if the user edits the path box and the new value
-            # is different than the current path, enable apply button
-            # self._mark_changed()
-
         # if they cleared the box, the default will be active
         # ...unless there isn't one. then it will be marked missing
         if not new_value:
             new_path = self.defpaths[key]
-            # if not self.defpaths[key]:
-            #     self._mark_missing_path(label)
 
         # now check 'new_path', whether it's the text entered or
         # the default value
         if not new_path:
             self._set_label_status(label, 'missing')
-            # self._mark_missing_path(label)
         else:
             if not os.path.isabs(new_path):
                 # then they didn't enter an absolute path
                 self._set_label_status(label, 'notabs')
-                # self._mark_nonabs_path(label)
 
             # if they entered a valid path
             elif os.path.exists(new_path):
@@ -551,7 +537,6 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
             else:  # but if it was invalid...
                 self._set_label_status(label, 'invalid')
-                # self._mark_invalid_path(label)
 
         # finally, update text-tracker (make sure to use entered text):
         self.current_text[key] = new_value

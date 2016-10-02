@@ -204,6 +204,8 @@ class _AppSettings:
 
         settings.beginGroup(_qs_group)
 
+        # TODO: gracefully handle the stored value being of the wrong type (by doing something like overwriting the invalid value with the default value...ok maybe that's not so graceful, but at least it won't crash)
+
         for p in self.properties:
             if p.type is None:
                 # read without the type parameter,

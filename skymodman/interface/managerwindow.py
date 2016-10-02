@@ -118,6 +118,18 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # Call the setup methods which do not rely on the data backend
         self._setup_ui_interface()
 
+        # this map is used during 'update_enabled_actions()'
+        self._action_components = {
+            "mmg": self.mod_movement_group,     # 0
+            "atm": self.action_toggle_mod,      # 1
+            "asc": self.action_save_changes,    # 2
+            "arc": self.action_revert_changes,  # 3
+            "afn": self.action_find_next,       # 4
+            "afp": self.action_find_previous,   # 5
+            "aum": self.action_uninstall_mod,   # 6
+            "acm": self.action_clear_missing,
+        }
+
         # define and read the application settings
         self.init_settings()
 
@@ -148,22 +160,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         app_settings.add(KeyStr_UI.RESTORE_WINPOS, True)
 
-        ## apply() function for the profile_load_policy pref:
-        ## loads either the last-used profile or the default profile,
-        ## based on the stored value of the policy
-        # def _load_profile(prof_policy):
-        #     # don't do anything if no policy was stored
-        #     if prof_policy:
-        #         val = {
-        #             constants.ProfileLoadPolicy.last:
-        #                 KeyStr_INI.LAST_PROFILE,
-        #             constants.ProfileLoadPolicy.default:
-        #                 KeyStr_INI.DEFAULT_PROFILE
-        #         }[prof_policy]
-        #         self.load_profile_by_name(
-        #             self.Manager.get_config_value(val,
-        #                                      KeyStr_Section.GENERAL))
-
         ## setup window-state prefs ##
 
         # define some functions to pass as on_read callbacks
@@ -186,8 +182,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # TODO: handle and prioritize the SMM_PROFILE env var
         app_settings.add(KeyStr_UI.PROFILE_LOAD_POLICY,
                          constants.ProfileLoadPolicy.last.value, int)
-                         # ,
-                         # apply=_load_profile)
 
         ## ----------------------------------------------------- ##
         ## Now that we've defined them all, time to read them in ##
@@ -196,8 +190,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         #  a) move the window
         #  b) resize the window
         app_settings.read_and_apply()
-
-
 
     ##===============================================
     ## Setup UI Functionality (called once on first load)
@@ -442,11 +434,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         self.LOGGER.debug("_setup_table_UI")
 
-        # Manager.load_active_profile_data()
-
-        ## moved assigning model to ``assign_modmanager()``
-
-
         # setup the animation to show/hide the search bar
         self.animate_show_search = QtCore.QPropertyAnimation(
             self.modtable_search_box, b"maximumWidth")
@@ -484,8 +471,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         ## resize 'name' column to be larger at first than 'path' column
         self.filetree_fileviewer.header().resizeSection(0, 400)
         # todo: remember user column resizes
-        # self.models[M.file_viewer].rootPathChanged.connect(
-        #   self.on_filetree_fileviewer_rootpathchanged)
 
     def _setupui_actions(self):
         """Connect all the actions to their appropriate slots/whatevers
@@ -971,18 +956,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # also change the current undo stack
         self.undoManager.setActiveStack(
             self.undo_stacks[self.current_tab])
-
-
-    # @pyqtSlot()
-    # def on_show_alerts(self):
-    #     """
-    #     When there are active alerts and the user clicks the alerts
-    #     indicator, show a tooltip-like popup listing the current alerts
-    #     """
-    #     self.LOGGER << "on_show_alerts"
-
-        # for a in Manager.alerts:
-        #     print(a)
 
     @pyqtSlot(int)
     def on_profile_select(self, index):
@@ -1490,23 +1463,14 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         for comp, isvis in zip(all_components, visible[self.current_tab]):
             comp.setVisible(isvis)
 
-
     def _update_enabled_actions(self):
         """
         Some manager actions should be disabled on certain tabs
         """
         # tab=self.current_tab
 
-        all_components = {
-            "mmg": self.mod_movement_group,     # 0
-            "atm": self.action_toggle_mod,      # 1
-            "asc": self.action_save_changes,    # 2
-            "arc": self.action_revert_changes,  # 3
-            "afn": self.action_find_next,       # 4
-            "afp": self.action_find_previous,   # 5
-            "aum": self.action_uninstall_mod,   # 6
-            "acm": self.action_clear_missing,
-        }
+        # use pre-constructed mapping of actions we want to consider
+        all_components = self._action_components
 
         # this is a selector that, depending on how it is
         # modified below, will allow us to set every
