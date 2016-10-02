@@ -185,7 +185,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # TODO: handle and prioritize the SMM_PROFILE env var
         app_settings.add(KeyStr_UI.PROFILE_LOAD_POLICY,
-                         constants.ProfileLoadPolicy.last)
+                         constants.ProfileLoadPolicy.last.value, int)
                          # ,
                          # apply=_load_profile)
 
@@ -226,15 +226,16 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # perform some setup that requires the manager
         self._setup_data_interface()
 
+        PLP = constants.ProfileLoadPolicy
         # load profile as indicated by settings
         pload_policy = app_settings.Get(KeyStr_UI.PROFILE_LOAD_POLICY)
 
         if pload_policy:
+            # convert to enum type from int
+            pload_policy = PLP(pload_policy)
             to_load = {
-                constants.ProfileLoadPolicy.last:
-                    KeyStr_INI.LAST_PROFILE,
-                constants.ProfileLoadPolicy.default:
-                    KeyStr_INI.DEFAULT_PROFILE
+                PLP.last: KeyStr_INI.LAST_PROFILE,
+                PLP.default: KeyStr_INI.DEFAULT_PROFILE
             }[pload_policy]
             # get the name of the default/last profile and load its data
             self.load_profile_by_name(
@@ -332,7 +333,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # set popup view as default widget
         action_show_alerts.setDefaultWidget(self.alerts_view_widget)
 
-
         # add the action to the menu of the alerts button;
         # this causes the "menu" to consist wholly of the display widget
         self.alerts_button.menu().addAction(action_show_alerts)
@@ -349,7 +349,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # initially hide the alerts indicator since there is no manager yet
         self.action_show_alerts.setVisible(False)
-        # self.action_show_alerts.setVisible(Manager.has_alerts)
 
     def _setupui_toolbar(self):
         """We've got a few things to add to the toolbar:

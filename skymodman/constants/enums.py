@@ -40,7 +40,7 @@ class qFilters(Enum):
     mod_list, file_viewer, mod_table = range(3)
 
 class ProfileLoadPolicy(Enum):
-    last, default, none = range(3)
+    none, last, default = range(3)
 
 class OverwriteMode(Enum):
     """
