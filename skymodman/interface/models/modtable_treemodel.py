@@ -38,6 +38,8 @@ Qt_CheckStateRole = Qt.CheckStateRole
 Qt_EditRole       = Qt.EditRole
 Qt_ToolTipRole    = Qt.ToolTipRole
 Qt_DecorationRole = Qt.DecorationRole
+Qt_ForegroundRole = Qt.ForegroundRole
+Qt_FontRole       = Qt.FontRole
 
 Qt_Checked   = Qt.Checked
 # Qt_Unchecked = Qt.Unchecked
@@ -116,9 +118,14 @@ class ModTable_TreeModel(QAbstractItemModel):
         # entries have been modified
         self._modifications = deque()
 
+        # the 'disabled' text color
         self.disabled_foreground = QtGui.QBrush(
             QtGui.QPalette().color(QtGui.QPalette.Disabled,
                                    QtGui.QPalette.Text))
+
+        # italic font for unmanaged mods
+        self.unmanaged_font = QtGui.QFont()
+        self.unmanaged_font.setItalic(True)
 
         self.LOGGER << "init ModTable_TreeModel"
 
@@ -253,9 +260,13 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         # But this is simple. And works. You can take your Right Way
         # and shove it.
-        if role == Qt.ForegroundRole and not mod.enabled:
-            # TODO: change appearance of "unmanaged-mods". This will of course require that we first start tracking unmanaged mods...
+        if role == Qt_ForegroundRole and not mod.enabled:
             return self.disabled_foreground
+
+        # show unmanaged mods in italic font
+        # XXX: maybe this...should be in a custom delegate...?
+        if role == Qt_FontRole and not mod.managed:
+            return self.unmanaged_font
 
         # handle errors first
         if col == COL_ERRORS:

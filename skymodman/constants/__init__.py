@@ -37,13 +37,13 @@ overrideable_dirs = (_keystr.Dirs.SKYRIM, _keystr.Dirs.MODS, _keystr.Dirs.VFS)
 
 ## definitions of database fields and order, including a version w/o
 ## the "Error" field
-_dbflds_noerr = _nt("_dbflds_noerr", "FLD_ORD FLD_DIR FLD_NAME FLD_MODID FLD_VER FLD_ENAB")
+_dbflds_noerr = _nt("_dbflds_noerr", "FLD_ORD FLD_DIR FLD_NAME FLD_MODID FLD_VER FLD_ENAB FLD_MNGD")
 #
 _dbflds = _nt("_dbflds", _dbflds_noerr._fields + ("FLD_ERR",))
 
 
 ## Definitions for actual string values of database field names
-db_fields_noerror = _dbflds_noerr("ordinal", "directory", "name", "modid", "version", "enabled")
+db_fields_noerror = _dbflds_noerr("ordinal", "directory", "name", "modid", "version", "enabled", "managed")
 db_fields = _dbflds(*(db_fields_noerror + ("error",)))
 
 ## And a reverse-lookup to find the correct in-order index of a given field

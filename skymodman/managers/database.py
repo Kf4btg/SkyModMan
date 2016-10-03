@@ -27,6 +27,7 @@ _SCHEMA = """
             modid     INTEGER,        --nexus id, or 0 if none
             version   TEXT,           --arbitrary, set by mod author
             enabled   INTEGER default 1,  --effectively a boolean value (0,1)
+            managed   INTEGER default 1,  --boolean; is this in our mods folder?
             error     INTEGER default 0 -- Type code for errors encountered during load
         );
         CREATE TABLE hiddenfiles (
@@ -57,6 +58,7 @@ class DBManager(BaseDBManager, Submanager):
         "modid": lambda v: 0,
         "version": lambda v: "",
         "enabled": lambda v: 1,
+        "managed": lambda v: 1,
     }
         # "error": lambda v: ModError.NONE
 
@@ -678,11 +680,16 @@ class DBManager(BaseDBManager, Submanager):
                     # TODO: store enabled status, custom-name for these; also see if version info can be pulled from files
                     # create the fake mod; set up in format that can be
                     # passed to to_row_tuple()
-                    m_info=[("name", m_name),
-                            ("directory", m_name),
-                            ("modid", 0),
-                            ("version", ""),
-                            ("enabled", 1)]
+                    m_info = self.make_mod_entry(ordinal=next(_mcount),
+                                                 name=m_name,
+                                                 directory=m_name,
+                                                 managed=0
+                                                 )
+                    # m_info=[("name", m_name),
+                    #         ("directory", m_name),
+                    #         ("modid", 0),
+                    #         ("version", ""),
+                    #         ("enabled", 1)]
 
                     # s_mods.append(self.to_row_tuple(m_info))
 
@@ -693,7 +700,8 @@ class DBManager(BaseDBManager, Submanager):
                                 ", ".join(db_fields_noerror),
                                 ", ".join("?" * len(db_fields_noerror))
                             ),
-                            self.to_row_tuple(m_info)
+                            m_info
+                            # self.to_row_tuple(m_info)
                         )
                         # and now the mod files
                         self.conn.executemany(
@@ -728,8 +736,6 @@ class DBManager(BaseDBManager, Submanager):
             #   'meshes/whatever.nif'
             mfiles.extend(
                 relpath(join(root, f), mod_root).lower() for f in files)
-
-        print("files:", mfiles)
 
         # put the mod's files in the db, with the mod name as the first
         # field (e.g. 'CoolMod42'), and the filepath as the second (e.g.
@@ -846,10 +852,9 @@ class DBManager(BaseDBManager, Submanager):
         row = []
 
         for field in db_fields_noerror:
-            row.append(kwargs.get(field, self.__defaults
-                                  .get(field, lambda v: "")(kwargs)
-                                )
-                     )
+            row.append(kwargs.get(field,
+                                  self.__defaults.get(
+                                      field, lambda v: "")(kwargs)))
         return tuple(row)
 
     def validate_mods_list(self, installed_mods):
