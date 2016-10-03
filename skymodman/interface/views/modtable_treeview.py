@@ -36,6 +36,9 @@ class ModTable_TreeView(qtW.QTreeView):
         self.handle_move_signals = True
         # self.LOGGER << "Init ModTable_TreeView"
 
+        # debugging: print modentry on click
+        # self.clicked.connect(lambda i: print(i.internalPointer()))
+
         # a bitwise-OR combination of the types of errors currently
         # found in the table
         self._err_types = ModError.NONE

@@ -918,3 +918,36 @@ class ModManager:
             self._enabledmods = list(self.enabled_mods())
 
         return mod_directory in self._enabledmods
+
+
+def vanilla_mods():
+    """
+    return pre-constructed ModEntries for the vanilla skyrim files
+    """
+
+    from skymodman.constants import SkyrimGameInfo as skyinfo
+
+    # XXX: only DLC should appear in mod list (skyrim/update do not,
+    # though their files will appear in archives/files lists)
+
+    mods= {
+        "Skyrim": {
+            'name': "Skyrim",
+            'directory': 'Skyrim', # should be 'data'?
+            'managed': 0,
+            'files': [*skyinfo.masters, *skyinfo.skyrim_archives],
+        }
+    }
+
+    # some or all of these may not be present
+    dlc_mods = {
+        "Dawnguard": {
+            "managed": 0,
+            "name": "Dawnguard",
+            "files": ["Dawnguard.esm"]
+        }
+
+    }
+
+
+

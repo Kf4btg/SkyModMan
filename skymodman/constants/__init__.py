@@ -75,23 +75,27 @@ class SkyrimGameInfo:
     ini_files = ("skyrim.ini", "skyrimprefs.ini")
 
     masters = ("skyrim.esm", "update.esm")
-    dlc_masters = ("Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm",
-                   "HighResTexturePack01.esp",
+    dlc_masters = ("Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm")
+
+    HR_texpacks = ("HighResTexturePack01.esp",
                    "HighResTexturePack02.esp",
                    "HighResTexturePack03.esp")
 
-    vanilla_archives = ("Skyrim - Misc.bsa",
+    skyrim_archives = ("Skyrim - Misc.bsa",
                         "Skyrim - Shaders.bsa",
                         "Skyrim - Textures.bsa",
-                        "HighResTexturePack01.bsa",
-                        "HighResTexturePack02.bsa",
-                        "HighResTexturePack03.bsa",
                         "Skyrim - Interface.bsa",
                         "Skyrim - Animations.bsa",
                         "Skyrim - Meshes.bsa",
                         "Skyrim - Sounds.bsa",
                         "Skyrim - Voices.bsa",
                         "Skyrim - VoicesExtra.bsa")
+
+    HR_texarchives = ("HighResTexturePack01.bsa",
+                        "HighResTexturePack02.bsa",
+                        "HighResTexturePack03.bsa")
+
+    vanilla_archives = skyrim_archives + HR_texarchives
 
     ## After about two months of working on this, this was my first time
     # diving into the ModOrganizer code to search for the answer to a
