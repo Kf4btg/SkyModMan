@@ -69,7 +69,7 @@ class ModManager:
         self._enabledmods = None
 
         # cached list of mods in mod directory
-        self._installed_mods = []
+        self._managed_mods = []
 
         # track when we're switching profiles
         self.in_profile_switch=False
@@ -183,12 +183,14 @@ class ModManager:
         return self.get_config_value(ks_ini.LAST_PROFILE)
 
     @property
-    def installed_mods(self):
+    def managed_mod_folders(self):
         """
         Return a list of every mod directory located in the configured
-        'Mods' storage folder
+        'Mods' storage folder. This may not be every 'installed' mod,
+        as it does not take into account unmanaged mods in the skyrim
+        data folder
         """
-        return self._installed_mods
+        return self._managed_mods
 
     def getdbcursor(self):
         """
@@ -311,7 +313,7 @@ class ModManager:
     def refresh_modlist(self, modfolder: AppFolder):
         """Regenerate the cached list of installed mods"""
         self.LOGGER << "Refreshing mods list"
-        self._installed_mods = [n for n in modfolder]
+        self._managed_mods = [n for n in modfolder]
 
     # def on_dir_change(self, folder, previous, current):
     def on_dir_change(self, folder):
@@ -668,7 +670,7 @@ class ModManager:
         self.LOGGER << "Validating installed mods"
 
         # try:
-        return self._dbman.validate_mods_list(self.installed_mods)
+        return self._dbman.validate_mods_list(self.managed_mod_folders)
         # except exceptions.InvalidAppDirectoryError as e:
         #     self.LOGGER.error(e)
         #     return False
@@ -920,34 +922,6 @@ class ModManager:
         return mod_directory in self._enabledmods
 
 
-def vanilla_mods():
-    """
-    return pre-constructed ModEntries for the vanilla skyrim files
-    """
-
-    from skymodman.constants import SkyrimGameInfo as skyinfo
-
-    # XXX: only DLC should appear in mod list (skyrim/update do not,
-    # though their files will appear in archives/files lists)
-
-    mods= {
-        "Skyrim": {
-            'name': "Skyrim",
-            'directory': 'Skyrim', # should be 'data'?
-            'managed': 0,
-            'files': [*skyinfo.masters, *skyinfo.skyrim_archives],
-        }
-    }
-
-    # some or all of these may not be present
-    dlc_mods = {
-        "Dawnguard": {
-            "managed": 0,
-            "name": "Dawnguard",
-            "files": ["Dawnguard.esm"]
-        }
-
-    }
 
 
 

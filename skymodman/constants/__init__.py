@@ -89,13 +89,16 @@ class SkyrimGameInfo:
                         "Skyrim - Meshes.bsa",
                         "Skyrim - Sounds.bsa",
                         "Skyrim - Voices.bsa",
-                        "Skyrim - VoicesExtra.bsa")
+                        "Skyrim - VoicesExtra.bsa",
+                        "update.bsa")
+
+    dlc_archives = ("Dawnguard.bsa", "HearthFires.bsa", "Dragonborn.bsa")
 
     HR_texarchives = ("HighResTexturePack01.bsa",
                         "HighResTexturePack02.bsa",
                         "HighResTexturePack03.bsa")
 
-    vanilla_archives = skyrim_archives + HR_texarchives
+    vanilla_archives = skyrim_archives + dlc_archives + HR_texarchives
 
     ## After about two months of working on this, this was my first time
     # diving into the ModOrganizer code to search for the answer to a

@@ -19,6 +19,9 @@ _mcount = count()
 _SQLMAX=900
 
 # DB schema definition
+# note -- if 'managed' is 0/False, the mod should be in <skyrim-install>/Data/
+# rather than <mods-folder>/<directory>
+# XXX: 'directory' should probably be renamed, then, since it's not accurate for unmanaged mods
 _SCHEMA = """
         CREATE TABLE mods (
             ordinal   INTEGER unique, --mod's rank in the install order
@@ -77,6 +80,16 @@ class DBManager(BaseDBManager, Submanager):
         self._empty = {tn:True for tn in self._tablenames}
 
         # self._con.set_trace_callback(print)
+
+        # track which dlc are present
+        self.dlc_present = {
+            'dawnguard': False,
+            'hearthfires': False,
+            'dragonborn': False,
+            'highrestexturepack01': False,
+            'highrestexturepack02': False,
+            'highrestexturepack03': False,
+        }
 
         # These are created from the database, so it seems like it may
         # be best just to store them in this class:
@@ -509,7 +522,7 @@ class DBManager(BaseDBManager, Submanager):
         #                                           aspath=True)
 
         # list of installed mod folders
-        installed_mods = self.mainmanager.installed_mods
+        installed_mods = self.mainmanager.managed_mod_folders
 
         import configparser as _config
 
@@ -558,6 +571,10 @@ class DBManager(BaseDBManager, Submanager):
 
         del _config
 
+    def get_unmanaged_mods(self, skyrim_dir):
+        """Check the skyrim/data folder for the vanilla game files, dlc,
+        and any mods the user installed into the game folder manually."""
+
     def load_all_mod_files(self, mods_dir=None):
         """
         Here's an experiment to load ALL files from disk when the
@@ -582,14 +599,15 @@ class DBManager(BaseDBManager, Submanager):
                 mods_dir = Path(mods_dir)
         else:
             # mods_dir = self.mainmanager.get_directory(keystrings.Dirs.MODS, aspath=True)
-            mods_dir = self.mainmanager.Folders[keystrings.Dirs.MODS].path
+            mods_dir = self.mainmanager.Folders['mods'].path
+            sky_dir = self.mainmanager.Folders['skyrim'].path
             # verify that mods dir is set
             # if not mods_dir:
             #     raise exceptions.InvalidAppDirectoryError(keystrings.Dirs.MODS, mods_dir)
 
 
 
-        installed_mods = self.mainmanager.installed_mods
+        installed_mods = self.mainmanager.managed_mod_folders
 
         # go through each folder indivually
         with self.conn:
@@ -622,6 +640,8 @@ class DBManager(BaseDBManager, Submanager):
         # self.LOGGER << "Skyfile count: {}".format(c)
 
         # if self.count("modfiles", directory='Skyrim')
+
+        # vanilla_mods(skyrim_dir)
 
         self.LOGGER << "adding files from Skyrim Data directory"
         if self.count("modfiles", directory='Skyrim'):
@@ -818,8 +838,12 @@ class DBManager(BaseDBManager, Submanager):
                     ) dups ON f.filepath=dups.filepath
                     ORDER BY f.filepath, f.ordinal
                     """):
+
+                # detects when we 'switch' files
                 if r['filepath'] != file:
                     file=r['filepath']
+
+                # identity of mod containing this occurrence of 'file'
                 mod=r['directory']
 
                 # a dictionary of file conflicts to an ordered
@@ -904,7 +928,7 @@ class DBManager(BaseDBManager, Submanager):
             # anything left over is missing from the disk
             not_found = dblist
 
-        else: # len(dblist) <= len(installed_mods):
+        else: # len(dblist) <= len(managed_mod_folders):
             for modname in dblist:
                 try:
                     im_list.remove(modname)
@@ -977,3 +1001,101 @@ class DBManager(BaseDBManager, Submanager):
             s[1] for s in sorted(pairs,
                                  key=lambda p: db_field_order[p[0]]))
 
+
+
+def vanilla_mods(skyrim_dir, *,
+                           relpath = os.path.relpath,
+                           join = os.path.join):
+    """
+    return pre-constructed ModEntries for the vanilla skyrim files
+
+    :param Path skyrim_dir: Path of skyrim installation
+    """
+
+    from skymodman.constants import SkyrimGameInfo as skyinfo
+
+    # XXX: only DLC should appear in mod list (skyrim/update do not,
+    # though their files will appear in archives/files lists)
+
+    # get 'skyrim/data'
+    datadir=None
+    for f in skyrim_dir.iterdir():
+        if f.is_dir() and f.name.lower() == "data":
+            datadir=str(f)
+            break
+
+
+
+    skyrim_mod = {
+        'name': "Skyrim",
+        'directory': 'Skyrim', # should be 'data'?
+        'managed': 0,
+        'ordinal': -1, # is this a good idea? Just to designate this is always first
+        'files': [*skyinfo.masters, *skyinfo.skyrim_archives],
+        'missing': [] # any missing files
+    }
+
+    # walk the data directory for all files
+    um_files = []
+    for root, dirs, files in os.walk(datadir):
+        um_files.extend(
+            relpath(join(root, f), datadir).lower() for f in files
+        )
+
+    # print(um_files)
+
+    for f in skyrim_mod['files']:
+        # mark any files that should be there but aren't
+        try:
+            # attempt to remove an expected file from list
+            um_files.remove(f.lower())
+        except ValueError:
+        # if f.lower() not in um_files:
+            skyrim_mod['missing'].append(f)
+
+
+    # some or all of these may not be present
+    dlc_mods = {}
+
+    for n in ("Dawnguard", "HearthFires", "Dragonborn"):
+        dlc_mods[n] = {
+            "name": n,
+            "managed": 0,
+            "files": [n+".esm", n+".bsa"],
+            "present": False, # set to True if dlc is installed
+            "missing": [] # if the dlc is Partially present, record missing files
+        }
+
+    for n in ("HighResTexturePack01", "HighResTexturePack02", "HighResTexturePack03"):
+        dlc_mods[n] = {
+            "name": n,
+            "managed": 0,
+            "files": [n+".esp", n+".bsa"],
+            "present": False,
+            "missing": []
+        }
+
+    for dlc, info in dlc_mods:
+        p = False # present?
+        for f in info['files']:
+            try:
+                um_files.remove(f.lower())
+                p=True
+            except KeyError:
+                # if f.lower() not in um_files:
+                p|=False
+                info['missing'].append(f)
+
+        info['present'] = p
+
+    # any remaining files can be aggregated into 'Data'
+    data_mod = {
+        'name': "Unmanaged Data",
+        'directory': 'data',
+        'managed': 0,
+        'files': um_files
+    }
+
+
+
+    del skyinfo
