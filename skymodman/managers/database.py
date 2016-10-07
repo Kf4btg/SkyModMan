@@ -50,6 +50,14 @@ _SCHEMA = """
 
 File_Conflict_Map = namedtuple("File_Conflict_Map", "by_file by_mod")
 
+_defaults = {
+    "name": lambda v: v["directory"],
+    "modid": lambda v: 0,
+    "version": lambda v: "",
+    "enabled": lambda v: 1,
+    "managed": lambda v: 1,
+}
+
 
 # from skymodman.utils import humanizer
 # @humanizer.humanize
@@ -206,6 +214,8 @@ class DBManager(BaseDBManager, Submanager):
         :param str|Path json_source: path to modinfo.json file
         """
 
+        self.LOGGER << "<==Method call"
+
 
         if not isinstance(json_source, Path):
             json_source = Path(json_source)
@@ -215,7 +225,7 @@ class DBManager(BaseDBManager, Submanager):
             # read from json file and convert mappings
             # to ordered tuples for sending to sqlite
             try:
-                mods = json.load(f, object_pairs_hook=DBManager.to_row_tuple)
+                mods = json.load(f, object_pairs_hook=_to_row_tuple)
                 self.fill_mods_table(mods)
 
             except json.decoder.JSONDecodeError:
@@ -394,6 +404,8 @@ class DBManager(BaseDBManager, Submanager):
         :param Iterable[tuple] mod_list:
         """
 
+        self.LOGGER << "<==Method call"
+
         if not self._empty['mods']:
             raise exceptions.DatabaseError("Attempted to populate "
                                            "non-empty table 'mods'")
@@ -447,7 +459,6 @@ class DBManager(BaseDBManager, Submanager):
 
         with json_target.open('w') as f:
             json.dump(modinfo, f, indent=1)
-
 
     # db-query convenience methods
     def enabled_mods(self, name_only = False):
@@ -505,7 +516,6 @@ class DBManager(BaseDBManager, Submanager):
         if raw_cursor:
             return cur
         yield from cur
-
 
     def get_mod_data_from_directory(self, mods_dir):
         """
@@ -734,7 +744,6 @@ class DBManager(BaseDBManager, Submanager):
         # for root, dirs, files in os.walk(path):
         #     mfiles.extend(
         #         relpath(join(root, f), path).lower() for f in files)
-
 
     # noinspection PyIncorrectDocstring
     def add_files_from_dir(self, mod_name, mod_root, *,
@@ -981,26 +990,30 @@ class DBManager(BaseDBManager, Submanager):
         with json_target.open('w') as f:
             json.dump(pyobject, f, indent=1)
 
+def _to_row_tuple(pairs):
+    """
+    Used as object_pair_hook for json.load(). Takes the mod
+    information loaded from the json file and converts it
+    to a tuple of just the field values in the
+    correct order for feeding to the sqlite database.
 
-    @staticmethod
-    def to_row_tuple(pairs):
-        """
-        Used as object_pair_hook for json.load(). Takes the mod
-        information loaded from the json file and converts it
-        to a tuple of just the field values in the
-        correct order for feeding to the sqlite database.
-
-        :param typing.Sequence[tuple[str, Any]] pairs:
-        :return: Tuple containing just the values of the fields
-        """
+    :param typing.Sequence[tuple[str, Any]] pairs:
+    :return: Tuple containing just the values of the fields
+    # """
+    # print(dict(pairs))
+    return _row_tuple(ordinal=next(_mcount), **dict(pairs))
 
         # value for ordinal is taken from global incrementer as it is not
         # stored in the modinfo file and is instead dependent on the
         # order in which items are read from said file
-        return (next(_mcount),) + tuple(
-            s[1] for s in sorted(pairs,
-                                 key=lambda p: db_field_order[p[0]]))
+        # return (next(_mcount),) + tuple(
+        #     s[1] for s in sorted(pairs,
+        #                          key=lambda p: db_field_order[p[0]]))
 
+def _row_tuple(**kwargs):
+    return tuple(kwargs.get(field, _defaults.get(
+                             field, lambda v: "")(kwargs))
+                             for field in db_fields_noerror)
 
 
 def vanilla_mods(skyrim_dir, *,
