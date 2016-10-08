@@ -49,10 +49,14 @@ class ModFileTreeModel(QAbstractItemModel):
         # noinspection PyArgumentList
         super().__init__(parent=parent,**kwargs)
         self._parent = parent
+        self.manager = manager
         self.DB = manager.DB
         self.rootpath = None #type: str
         self.modname = None #type: str
         self.rootitem = None #type: QFSItem
+
+        self.mod = None
+        """:type: skymodman.types.ModEntry"""
 
 
 
@@ -60,9 +64,9 @@ class ModFileTreeModel(QAbstractItemModel):
         # but we have no custom view for the file tree, so...here it is
         self.undostack = QUndoStack()
 
-    @property
-    def root_path(self):
-        return self.rootpath
+    # @property
+    # def root_path(self):
+    #     return self.rootpath
 
     @property
     def root_item(self):
@@ -76,49 +80,91 @@ class ModFileTreeModel(QAbstractItemModel):
     def has_unsaved_changes(self):
         return self.DB.in_transaction
 
-    def setRootPath(self, path=None):
-        """
-        Using this instead of a setter just for API-similarity with
-        QFileSystemModel. That's the same reason rootPathChanged is
-        emitted at the end of the method, as well.
+    def setMod(self, mod_entry):
+        """Set the mod that this model is focusing on to `mod_entry`.
+        Pass ``None`` to reset the model to empty"""
 
-        :param str path: the absolute filesystem path to the active
-            mod's data folder. If passed as ``None``, the model is
-            reset to empty
-        """
+        if mod_entry is self.mod: return
 
-        if path == self.rootpath: return
-
-        # commit any changes we've made so far
         self.save()
 
-        # drop the undo stack
         self.undostack.clear()
 
-        if path is None: # reset Model to show nothing
-            self.beginResetModel()
-            self.rootpath=None
+        self.beginResetModel()
+        self.mod = mod_entry
+
+        if mod_entry is None: # reset Model to show nothing
+            # self.beginResetModel()
+            # self.rootpath=None
             self.rootitem=None
             self.modname=None
-            self.rootPathChanged.emit(path)
-            self.endResetModel()
+            # self.rootPathChanged.emit("")
+            # self.endResetModel()
 
-        elif check_path(path):
-
+        else:
             # tells the view to get ready to redisplay its contents
-            self.beginResetModel()
+            # self.beginResetModel()
 
-            self.rootpath = path
-            self.modname = os.path.basename(path)
+            # the mod's _unique_ name
+            self.modname = self.mod.directory
 
             self._setup_or_reload_tree()
 
             # tells the view it should get new
             # data from model & reset itself
-            self.endResetModel()
+            # self.endResetModel()
 
             # emit notifier signal
-            self.rootPathChanged.emit(path)
+            # self.rootPathChanged.emit(path)
+
+        self.endResetModel()
+
+
+        # self.mod = mod_entry
+
+    # def setRootPath(self, path=None):
+    #     """
+    #     Using this instead of a setter just for API-similarity with
+    #     QFileSystemModel. That's the same reason rootPathChanged is
+    #     emitted at the end of the method, as well.
+    #
+    #     :param str path: the absolute filesystem path to the active
+    #         mod's data folder. If passed as ``None``, the model is
+    #         reset to empty
+    #     """
+    #
+    #     if path == self.rootpath: return
+    #
+    #     # commit any changes we've made so far
+    #     self.save()
+    #
+    #     # drop the undo stack
+    #     self.undostack.clear()
+    #
+    #     if path is None: # reset Model to show nothing
+    #         self.beginResetModel()
+    #         self.rootpath=None
+    #         self.rootitem=None
+    #         self.modname=None
+    #         self.rootPathChanged.emit(path)
+    #         self.endResetModel()
+    #
+    #     elif check_path(path):
+    #
+    #         # tells the view to get ready to redisplay its contents
+    #         self.beginResetModel()
+    #
+    #         self.rootpath = path
+    #         self.modname = os.path.basename(path)
+    #
+    #         self._setup_or_reload_tree()
+    #
+    #         # tells the view it should get new
+    #         # data from model & reset itself
+    #         self.endResetModel()
+    #
+    #         # emit notifier signal
+    #         self.rootPathChanged.emit(path)
 
     def _setup_or_reload_tree(self):
         """
@@ -135,15 +181,17 @@ class ModFileTreeModel(QAbstractItemModel):
     def _load_tree(self):
         """
         Build the tree from the rootitem
-        :return:
         """
         # name for this item is never actually seen
         self.rootitem = QFSItem(path="", name="data", parent=None)
-        self.rootitem.load_children(self.rootpath, namefilter=lambda
-            n: n.lower() == 'meta.ini')
+
+        self.rootitem.build_children(self.mod.filetree, name_filter=lambda
+                    n: n.lower() == 'meta.ini')
+
+        # self.rootitem.load_children(self.rootpath, namefilter=lambda
+        #     n: n.lower() == 'meta.ini')
 
     def _mark_hidden_files(self):
-
 
         hfiles = list(r['filepath'] for r in self.DB.select(
             "hiddenfiles",
@@ -434,7 +482,8 @@ class ModFileTreeModel(QAbstractItemModel):
 
         self.undostack.push(
             ChangeHiddenFilesCommand(self.rootitem,
-                                     os.path.basename(self.rootpath),
+                                     # os.path.basename(self.rootpath),
+                                     self.mod.directory,
                                      self.DB,
                                      post_redo_callback=cb,
                                      post_undo_callback=cb

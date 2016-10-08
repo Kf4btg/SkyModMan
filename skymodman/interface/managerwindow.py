@@ -1347,7 +1347,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.filetree_filefilter.clear()
 
         # clear the file tree view
-        self.models[M.file_viewer].setRootPath(None)
+        # self.models[M.file_viewer].setRootPath(None)
+        self.models[M.file_viewer].setMod(None)
 
         # if the main mods directory is unset, just disable the list
         # until the user corrects this
@@ -1561,16 +1562,19 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         if not indexCur.isValid(): return
 
-        moddir = indexCur.internalPointer().directory
+        mod = indexCur.internalPointer()
+        self.models[M.file_viewer].setMod(mod)
+
+        # moddir = indexCur.internalPointer().directory
 
         # add the name of the mod directory to the path of the
         # main mods folder
 
-        modstorage = self.Manager.Folders['mods']
-        if modstorage:
-            p = join_path(modstorage.spath, moddir)
+        # modstorage = self.Manager.Folders['mods']
+        # if modstorage:
+        #     p = join_path(modstorage.spath, moddir)
 
-            self.models[M.file_viewer].setRootPath(p)
+            # self.models[M.file_viewer].setRootPath(p)
         # if the main mods-storage directory is unset, don't attempt
         # to show anything
 

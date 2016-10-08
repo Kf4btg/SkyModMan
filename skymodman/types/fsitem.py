@@ -1,4 +1,6 @@
 from pathlib import Path
+from os.path import join
+from itertools import count
 
 # @humanizer.humanize
 class FSItem:
@@ -140,6 +142,34 @@ class FSItem:
                     yield from child.iterchildren(True)
         else:
             yield from self._children
+
+    def build_children(self, file_tree, name_filter=None):
+        """Build the fs-item tree from a tree of path names
+
+        :param skymodman.utils.tree.AutoTree file_tree:
+        """
+
+        if name_filter is None:
+            name_filter = lambda n: False
+
+        row=count()
+        # recurse=False; do it manually by passing child tree to child item
+        for dirs, files in file_tree.walk(recurse=False):
+            for d in dirs:
+                if name_filter(d): continue # skip names that match filter
+                child=type(self)(path=join(self.path, d), name=d, parent=self, isdir=True)
+                child.build_children(file_tree[d], name_filter)
+                child.row = next(row)
+                self.children.append(child)
+                self._childnames.append(child.name)
+            for f in files:
+                if name_filter(f): continue
+                child = type(self)(path=join(self.path, f), name=f,
+                                   parent=self, isdir=False)
+                child.row=next(row)
+                self.children.append(child)
+                self._childnames.append(child.name)
+
 
     #TODO: This doc comment makes no freaking sense...absolute relative rel_root path name?? WHAT??
     def load_children(self, rel_root, namefilter = None):

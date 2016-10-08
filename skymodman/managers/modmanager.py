@@ -1,4 +1,7 @@
-from pathlib import Path
+from pathlib import Path, PurePath
+from functools import lru_cache
+
+from skymodman.utils import tree
 
 # from skymodman import exceptions
 from skymodman.types import ModEntry, Alert, AppFolder
@@ -805,6 +808,49 @@ class ModManager:
         #     self._configman.update_genvalue(name, value)
         # else:
         #     raise exceptions.InvalidConfigSectionError(section)
+
+    # cache the results of the ... most recent queries
+    # TODO: evaluate the effectiveness of this
+    @lru_cache(12)
+    def get_mod_file_list(self, mod_ident):
+        """
+        Get the list of files contained in the given mod
+
+        :param str mod_ident: the unique identifier of the mod (the
+            mod's directory name, for managed mods)
+        """
+        return list(self.iter_mod_files(mod_ident))
+
+    @lru_cache(12)
+    def get_mod_file_tree(self, mod_ident):
+
+        ftree = tree.Tree()
+        for f in  self.iter_mod_files(mod_ident):
+            # convert to path
+            fpath = PurePath(f) # XXX: should we add mod root?
+            pathparts = fpath.parts[:-1]
+
+            ftree.insert(pathparts, fpath.name)
+
+        return ftree
+
+
+
+    def iter_mod_files(self, mod_ident):
+        """
+        Iterate over the files contained by the given mod as stored
+        in the database
+
+        :param str mod_ident: the unique identifier of the mod (the
+            mod's directory name, for managed mods)
+        """
+
+        yield from (r[0] for r in self._dbman.select('modfiles', 'filepath',
+                           where="directory = ?",
+                           params=(mod_ident, )))
+
+
+
 
     ##=============================================
     ## Installation

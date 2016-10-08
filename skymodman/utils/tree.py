@@ -113,6 +113,18 @@ class AutoTree(defaultdict):
         except ValueError:
             pass
 
+    def walk(self, recurse=True):
+        """Yields tuples of lists: (branch-names, leaves). This is similar
+        to os.walk(), but without the first 'dirpath' entry of the returned tuple"""
+        # sort by key name
+        # keys=sorted(self.keys)
+        dirs=[k for k in sorted(self.keys()) if k!=self.leaf_list_key]
+
+        yield dirs, self.leaves
+
+        if recurse:
+            for d in dirs:
+                yield from self[d].walk(recurse)
 
 
     def count(self, leaves_only=True):
