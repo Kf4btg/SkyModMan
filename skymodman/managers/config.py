@@ -384,6 +384,8 @@ class ConfigManager(Submanager, BaseConfigManager):
         :param skymodman.types.AppFolder folder:"""
         self.LOGGER << "update folderpath: {}".format(folder.name)
 
+        # TODO: [re]load skyrim fake-mods when skyrim dir is set/changed
+
         self.update_value(_SECTION_DIRS, folder.name, folder.get_path())
 
     def update_genvalue(self, key, value):

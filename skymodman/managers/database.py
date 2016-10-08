@@ -216,7 +216,6 @@ class DBManager(BaseDBManager, Submanager):
 
         self.LOGGER << "<==Method call"
 
-
         if not isinstance(json_source, Path):
             json_source = Path(json_source)
 
@@ -517,7 +516,7 @@ class DBManager(BaseDBManager, Submanager):
             return cur
         yield from cur
 
-    def get_mod_data_from_directory(self, mods_dir):
+    def get_mod_data_from_directory(self, mods_dir, include_skyrim=True, save_modinfo=False):
         """
         scan the actual mods-directory and populate the database from
         there instead of a cached json file.
@@ -531,16 +530,22 @@ class DBManager(BaseDBManager, Submanager):
         # mods_dir = self.mainmanager.get_directory(keystrings.Dirs.MODS,
         #                                           aspath=True)
 
+        self.logger.info("Reading mods from mod directory")
+
         # list of installed mod folders
         installed_mods = self.mainmanager.managed_mod_folders
 
         import configparser as _config
 
-        self.logger.info("Reading mods from mod directory")
         configP = _config.ConfigParser()
 
-
         mods_list = []
+
+        if include_skyrim:
+            # TODO: add the Skyrim "mods"
+            # TODO: check `save_modinfo` value and save the read-in mod data to disk if needed
+            skydir = self.mainmanager.Folders['skyrim']
+
         for dirname in installed_mods:
             moddir = mods_dir / dirname
 
@@ -652,6 +657,7 @@ class DBManager(BaseDBManager, Submanager):
         # if self.count("modfiles", directory='Skyrim')
 
         # vanilla_mods(skyrim_dir)
+        self.LOGGER << "<==Method call"
 
         self.LOGGER << "adding files from Skyrim Data directory"
         if self.count("modfiles", directory='Skyrim'):
@@ -674,11 +680,9 @@ class DBManager(BaseDBManager, Submanager):
                            join = os.path.join):
         """Special case: adding vanilla/manually-installed mods from Skyrim/Data
 
-        :param Path path:
+        :param Path path: path to the Data directory inside the Skyrim
+            installation folder
         """
-        mfiles = []
-
-
         files_by_ext = defaultdict(list)
 
         for f in path.iterdir():
@@ -710,11 +714,15 @@ class DBManager(BaseDBManager, Submanager):
                     # TODO: store enabled status, custom-name for these; also see if version info can be pulled from files
                     # create the fake mod; set up in format that can be
                     # passed to to_row_tuple()
-                    m_info = self.make_mod_entry(ordinal=next(_mcount),
-                                                 name=m_name,
-                                                 directory=m_name,
-                                                 managed=0
-                                                 )
+                    m_info = _row_tuple(ordinal=next(_mcount),
+                                         name=m_name,
+                                         directory=m_name,
+                                         managed=0)
+                    # m_info = self.make_mod_entry(ordinal=next(_mcount),
+                    #                              name=m_name,
+                    #                              directory=m_name,
+                    #                              managed=0
+                    #                              )
                     # m_info=[("name", m_name),
                     #         ("directory", m_name),
                     #         ("modid", 0),
@@ -1001,16 +1009,20 @@ def _to_row_tuple(pairs):
     :return: Tuple containing just the values of the fields
     # """
     # print(dict(pairs))
+    # value for ordinal is taken from global incrementer as it is not
+    # stored in the modinfo file and is instead dependent on the
+    # order in which items are read from said file
     return _row_tuple(ordinal=next(_mcount), **dict(pairs))
 
-        # value for ordinal is taken from global incrementer as it is not
-        # stored in the modinfo file and is instead dependent on the
-        # order in which items are read from said file
+
         # return (next(_mcount),) + tuple(
         #     s[1] for s in sorted(pairs,
         #                          key=lambda p: db_field_order[p[0]]))
 
 def _row_tuple(**kwargs):
+    """Pulls value from supplied keyword arguments (generated from the
+    on-disk json file), supplementing any missing fields with default
+    values."""
     return tuple(kwargs.get(field, _defaults.get(
                              field, lambda v: "")(kwargs))
                              for field in db_fields_noerror)
