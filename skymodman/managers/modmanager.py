@@ -687,19 +687,7 @@ class ModManager:
         """
         self.LOGGER << "Finding mod files on disk"
 
-        # if required, examine the disk for files.
-        if modfiles:
-            if self._folders['mods']:
-            # try:
-                self._dbman.load_all_mod_files(self._folders['mods'].path)
-            else:
-            # except exceptions.InvalidAppDirectoryError as e:
-                # don't fail-out in this case; continue w/ attempt
-                # to add files from skyrim dir
-                # self.LOGGER.error(e)
-                self.LOGGER.error("Mods directory is unset or could not be found")
-
-        # let's also add the files from the base
+        # add the files from the base
         # Skyrim Data folder to the db
         if skyfiles:
             if self._folders['skyrim']:
@@ -708,6 +696,15 @@ class ModManager:
                     #                    aspath=True))
             else:
                 self.LOGGER.warning("Skyrim directory is unset")
+
+        # if required, examine the disk for files.
+        if modfiles:
+            if self._folders['mods']:
+            # try:
+                self._dbman.load_all_mod_files(self._folders['mods'].path)
+            else:
+            # except exceptions.InvalidAppDirectoryError as e:
+                self.LOGGER.error("Mods directory is unset or could not be found")
 
     ##=============================================
     ## Data Persistence
