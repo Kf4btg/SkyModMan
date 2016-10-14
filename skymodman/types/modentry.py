@@ -6,7 +6,7 @@ from skymodman import Manager
 class ModEntry:
     __slots__ = ('enabled', 'name', 'modid', 'version',
                  'directory', 'ordinal', 'managed', 'error')
-    _fields= __slots__
+    _fields= __slots__ # to match the namedtuple interface
 
 
     def __init__(self, enabled=None, name=None, modid=None,
@@ -28,7 +28,6 @@ class ModEntry:
         """Return the list of files contained by this mod."""
         # recently-queried mods are cached by modmanager
         return Manager().get_mod_file_list(self.directory)
-        # return self._files
 
     @property
     def filetree(self):
@@ -46,6 +45,9 @@ class ModEntry:
     ##=============================================
 
     def _replace(self, **kwargs):
+        """Change the value of one or more of this objects attributes.
+        If an attribute does not exist, the attempt to set it will fail
+        silently."""
         for k,v in kwargs.items():
             try:
                 setattr(self, k, v)
@@ -53,6 +55,8 @@ class ModEntry:
 
     @classmethod
     def _make(cls, iterrible):
+        """Create a new instance of this class initialized from the
+        given iterable (either a Mapping or a Sequence)."""
         if hasattr(iterrible, "keys"):
             return cls(**iterrible)
         else:

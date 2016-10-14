@@ -1,4 +1,4 @@
-import os
+# import os
 from functools import partial
 from itertools import repeat
 
@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import QUndoStack
 
 
 from skymodman.log import withlogger #, tree
-from skymodman.utils.fsutils import check_path
+# from skymodman.utils.fsutils import check_path
 from skymodman.interface.qundo import UndoCmd
 from skymodman.interface.typedefs import QFSItem
 
@@ -34,7 +34,7 @@ class ModFileTreeModel(QAbstractItemModel):
     """
     #TODO: calculate and inform the user of any file-conflicts that will occur in their mod-setup to help them decide what needs to be hidden.
 
-    rootPathChanged = pyqtSignal(str)
+    # rootPathChanged = pyqtSignal(str)
     hasUnsavedChanges = pyqtSignal(bool)
 
     def __init__(self, parent, manager, **kwargs):
@@ -51,7 +51,7 @@ class ModFileTreeModel(QAbstractItemModel):
         self._parent = parent
         self.manager = manager
         self.DB = manager.DB
-        self.rootpath = None #type: str
+        # self.rootpath = None #type: str
         self.modname = None #type: str
         self.rootitem = None #type: QFSItem
 
@@ -72,9 +72,9 @@ class ModFileTreeModel(QAbstractItemModel):
     def root_item(self):
         return self.rootitem
 
-    @property
-    def current_mod(self):
-        return self.modname
+    # @property
+    # def current_mod(self):
+    #     return self.modname
 
     @property
     def has_unsaved_changes(self):
@@ -197,7 +197,7 @@ class ModFileTreeModel(QAbstractItemModel):
             "hiddenfiles",
             "filepath",
             where="directory = ?",
-            params=(self.modname,)
+            params=(self.mod.directory,)
         ))
 
         # only files (with their full paths relative to the root of
@@ -245,7 +245,7 @@ class ModFileTreeModel(QAbstractItemModel):
         return self.getitem(index).child_count if self.rootitem else 0
 
     def headerData(self, section, orient, role=None):
-        """Just one column, 'Name'. super() call should take care of the
+        """super() call should take care of the
         size hints &c.
 
         :param int section:
@@ -268,9 +268,10 @@ class ModFileTreeModel(QAbstractItemModel):
             if parent is invalid)
         """
 
-        parent_item = self.rootitem
         if parent.isValid():
             parent_item = parent.internalPointer()
+        else:
+            parent_item = self.rootitem
 
         child = parent_item[row]
         if child:

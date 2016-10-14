@@ -792,14 +792,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.models[M.mod_table] = tbl_model
 
-    def _setup_file_tree_models(self):
-        """
-        Initialize the models and filters used on the file tree tab
-        """
-
-        ##################################
-        ## Mods List
-        ##################################
+    def _setup_filestab_modlist(self):
 
         # setup filter proxy for active mods list
         mod_filter = self.filters[
@@ -823,9 +816,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.filetree_modlist.setModelColumn(
             constants.Column.NAME.value)
 
-        ##################################
-        ## File Viewer
-        ##################################
+    def _setup_filestab_treeviewer(self):
         ## model for tree view of files
         fileviewer_model = self.models[
             M.file_viewer] = models.ModFileTreeModel(
@@ -844,10 +835,21 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.filetree_fileviewer.setModel(fileviewer_filter)
 
         ## show new files when mod selection in list
+        mod_filter = self.filters[F.mod_list]
         self.filetree_modlist.selectionModel().currentChanged.connect(
             lambda curr, prev: self.viewer_show_file_tree(
                 mod_filter.mapToSource(curr),
                 mod_filter.mapToSource(prev)))
+
+    def _setup_file_tree_models(self):
+        """
+        Initialize the models and filters used on the file tree tab
+        """
+        ## Mods List
+        self._setup_filestab_modlist()
+
+        ## File Viewer
+        self._setup_filestab_treeviewer()
 
         ## have escape key unfocus the filter boxes
         for f in [self.filetree_modfilter, self.filetree_filefilter]:
@@ -876,8 +878,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # and setup label text for first display
         self.update_modlist_label(activeonly)
-
-
 
     def _setup_undo_manager(self):
         """

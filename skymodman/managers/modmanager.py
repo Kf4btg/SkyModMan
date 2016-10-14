@@ -1,7 +1,7 @@
 from pathlib import Path, PurePath
 from functools import lru_cache
 
-from skymodman.utils import tree
+from skymodman.utils import tree as _tree
 
 # from skymodman import exceptions
 from skymodman.types import ModEntry, Alert, AppFolder
@@ -76,9 +76,6 @@ class ModManager:
 
         # track when we're switching profiles
         self.in_profile_switch=False
-
-
-
 
     ##=============================================
     ## Setup
@@ -824,7 +821,7 @@ class ModManager:
     @lru_cache(12)
     def get_mod_file_tree(self, mod_ident):
 
-        ftree = tree.Tree()
+        ftree = _tree.Tree()
         for f in  self.iter_mod_files(mod_ident):
             # convert to path
             fpath = PurePath(f) # XXX: should we add mod root?
@@ -833,8 +830,6 @@ class ModManager:
             ftree.insert(pathparts, fpath.name)
 
         return ftree
-
-
 
     def iter_mod_files(self, mod_ident):
         """

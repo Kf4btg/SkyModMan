@@ -5,7 +5,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot, QItemSelectionModel as qISM
 from skymodman.constants import Column, ModError
 from skymodman.log import withlogger
 
-from skymodman.interface.models import ModTable_TreeModel
+# from skymodman.interface.models import ModTable_TreeModel
 from skymodman.interface.ui_utils import undomacro, blocked_signals
 
 qmenu = qtW.QMenu
@@ -31,7 +31,8 @@ class ModTable_TreeView(qtW.QTreeView):
         # noinspection PyArgumentList
         super().__init__(parent, *args, **kwargs)
 
-        self._model  = None  # type: ModTable_TreeModel
+        self._model  = None
+        """:type: skymodman.interface.models.ModTable_TreeModel"""
         self._selection_model = None # type: qISM
         self.handle_move_signals = True
         # self.LOGGER << "Init ModTable_TreeView"
