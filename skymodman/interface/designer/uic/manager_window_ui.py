@@ -91,7 +91,7 @@ class Ui_MainWindow(object):
         self.filetree_activeonlytoggle.setChecked(True)
         self.filetree_activeonlytoggle.setObjectName("filetree_activeonlytoggle")
         self.gridLayout_4.addWidget(self.filetree_activeonlytoggle, 1, 2, 1, 1)
-        self.filetree_modlist = QtWidgets.QListView(self.filetree_listbox)
+        self.filetree_modlist = FileTabModList(self.filetree_listbox)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
@@ -161,7 +161,7 @@ class Ui_MainWindow(object):
         self.gridLayout.addWidget(self.lower_group, 3, 0, 1, 5)
         MainWindow.setCentralWidget(self._centralwidget)
         self._menubar = QtWidgets.QMenuBar(MainWindow)
-        self._menubar.setGeometry(QtCore.QRect(0, 0, 800, 26))
+        self._menubar.setGeometry(QtCore.QRect(0, 0, 800, 34))
         self._menubar.setObjectName("_menubar")
         self.menu_file = QtWidgets.QMenu(self._menubar)
         self.menu_file.setObjectName("menu_file")
@@ -322,7 +322,7 @@ class Ui_MainWindow(object):
         self.profile_label.setBuddy(self.profile_selector)
 
         self.retranslateUi(MainWindow)
-        self.manager_tabs.setCurrentIndex(0)
+        self.manager_tabs.setCurrentIndex(1)
         self.action_show_search.triggered.connect(self.modtable_search_button.click)
         self.modtable_search_box.escapeLineEdit.connect(self.modtable_search_button.click)
         self.filetree_modfilter.escapeLineEdit.connect(self.filetree_modfilter.clear)
@@ -415,4 +415,5 @@ class Ui_MainWindow(object):
         self.action_manual_install.setShortcut(_translate("MainWindow", "Ctrl+Shift+I"))
 
 from skymodman.interface.designer.plugins.widgets.escapeablelineedit import EscapeableLineEdit
+from skymodman.interface.views.filetab_modlist import FileTabModList
 from skymodman.interface.views.modtable_treeview import ModTable_TreeView

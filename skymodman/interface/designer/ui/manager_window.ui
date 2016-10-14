@@ -18,7 +18,7 @@
     <item row="0" column="0" colspan="5">
      <widget class="QTabWidget" name="manager_tabs">
       <property name="currentIndex">
-       <number>0</number>
+       <number>1</number>
       </property>
       <widget class="QWidget" name="installed_mods_tab">
        <property name="sizePolicy">
@@ -185,7 +185,7 @@
              </widget>
             </item>
             <item row="3" column="1" colspan="2">
-             <widget class="QListView" name="filetree_modlist">
+             <widget class="FileTabModList" name="filetree_modlist">
               <property name="sizePolicy">
                <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
                 <horstretch>0</horstretch>
@@ -368,7 +368,7 @@
      <x>0</x>
      <y>0</y>
      <width>800</width>
-     <height>26</height>
+     <height>34</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_file">
@@ -805,6 +805,11 @@
    <class>ModTable_TreeView</class>
    <extends>QTreeView</extends>
    <header>skymodman.interface.views.modtable_treeview</header>
+  </customwidget>
+  <customwidget>
+   <class>FileTabModList</class>
+   <extends>QListView</extends>
+   <header>skymodman.interface.views.filetab_modlist</header>
   </customwidget>
  </customwidgets>
  <resources/>
