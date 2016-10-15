@@ -5,7 +5,7 @@ from itertools import repeat
 from PyQt5.QtCore import Qt, QModelIndex, QAbstractItemModel, pyqtSignal, pyqtSlot
 from PyQt5.QtWidgets import QUndoStack
 
-
+from skymodman import Manager
 from skymodman.log import withlogger #, tree
 # from skymodman.utils.fsutils import check_path
 from skymodman.interface.qundo import UndoCmd
@@ -37,20 +37,16 @@ class ModFileTreeModel(QAbstractItemModel):
     # rootPathChanged = pyqtSignal(str)
     hasUnsavedChanges = pyqtSignal(bool)
 
-    def __init__(self, parent, manager, **kwargs):
+    def __init__(self, parent, **kwargs):
         """
 
-        :param skymodman.managers.modmanager.ModManager manager:
-        :param kwargs: anything to pass on to base class
-        :return:
+        :param parent: parent widget (specifically, the file-viewer QTreeView)
         """
-
-
         # noinspection PyArgumentList
         super().__init__(parent=parent,**kwargs)
         self._parent = parent
-        self.manager = manager
-        self.DB = manager.DB
+        self.manager = Manager() # should be initialized by now
+        self.DB = self.manager.DB
         # self.rootpath = None #type: str
         self.modname = None #type: str
         self.rootitem = None #type: QFSItem
