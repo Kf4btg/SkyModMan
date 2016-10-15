@@ -1,32 +1,33 @@
 from PyQt5 import QtWidgets as qtW
-from PyQt5.QtCore import Qt, pyqtSignal as Signal, pyqtSlot as Slot
+from PyQt5.QtCore import Qt, QModelIndex, pyqtSignal as Signal, pyqtSlot as Slot
 
 from skymodman import constants, Manager
 from skymodman.constants.keystrings import INI, Section
-from skymodman.log import withlogger
+# from skymodman.log import withlogger
 
 # templates for text shown in label above list (depending on option)
 _lbl_text_allmods = "All Installed Mods ({shown}/{total})"
 _lbl_text_only_active = "Active Mods ({shown}/{total})"
 
-@withlogger
+# @withlogger
 class FileTabModList(qtW.QListView):
 
 
-    # emitted to tell when the 'only-show-enabled-mods' box should be
-    # entirely disabled/enabled
-    enableActiveOnlyCheckBox = Signal(bool)
+    # onlyShowActiveChanged = Signal(bool)
+    # """emitted when the active-only profile-setting is loaded or set"""
 
-    onlyShowActiveChanged = Signal(bool)
-    """emitted when the active-only profile-setting is loaded or set"""
+    # from docs: using the PyQt_PyObject signal type allows passing any
+    # python type via the signal. This way, we can easily pass a ModelIndex,
+    # ModEntry, or ``None``, as needed
+    selectedModChanged = Signal('PyQt_PyObject')
+    """When a new mod is selected--and IFF the new selection is valid--
+    this signal will be emitted with the ModEntry object of the newly-
+    selected mod"""
 
 
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
-
-        # flag for only showing 'enabled' mods
-        # self._activeonly = False
 
         # the source model
         self._srcmodel = None
@@ -131,9 +132,13 @@ class FileTabModList(qtW.QListView):
             self.on_filter_changed
         )
 
-        # havae escape key clear focus from filterbox
+        # have escape key clear focus from filterbox
         self._filterbox.escapeLineEdit.connect(self._filterbox.clearFocus)
 
+
+        ## The most important part: connect a change in the selection
+        # to emitting a signal indicating which mod was just selected
+        self.selectionModel().currentChanged.connect(self.on_selection_changed)
 
         # cleanup
         del ActiveModsListFilter
@@ -146,7 +151,7 @@ class FileTabModList(qtW.QListView):
         self._filterbox.clear()
 
         # disable list if main mods folder is inaccessible
-        ###...TODO: hmm...maybe we shouldn't do this; unless Skyrim dir is alo invalid...
+        ###...TODO: hmm...maybe we shouldn't do this; unless Skyrim dir is also invalid...
         if not Manager().Folders['mods']:
             self.setEnabled(False)
             self.setToolTip("Mods directory is currently invalid")
@@ -157,9 +162,6 @@ class FileTabModList(qtW.QListView):
         # update checkbox and label
         self.load_active_only_state()
         self.update_label()
-
-
-
 
     def load_active_only_state(self):
         """When something major changes (likely the active profile)
@@ -181,6 +183,9 @@ class FileTabModList(qtW.QListView):
 
         self._cbox.setChecked(self.only_show_active)
 
+        # self.onlyShowActiveChanged.emit(self.only_show_active)
+
+
 
     def update_label(self):
         """Based on whether all/active mods are shown, change the text
@@ -199,6 +204,9 @@ class FileTabModList(qtW.QListView):
         :param bool only_show_active:
         """
 
+        # ignore if somehow it's the same as before
+        if only_show_active == self.only_show_active: return
+
         # save to Profile
         Manager().set_profile_setting(INI.ACTIVE_ONLY, Section.FILEVIEWER, only_show_active)
 
@@ -207,6 +215,8 @@ class FileTabModList(qtW.QListView):
 
         # ... and label text
         self.update_label()
+
+        # self.onlyShowActiveChanged.emit(only_show_active)
 
     @Slot(str)
     def on_filter_changed(self, text):
@@ -219,6 +229,25 @@ class FileTabModList(qtW.QListView):
 
         self._filter.setFilterWildcard(text)
         self.update_label()
+
+
+    @Slot('QModelIndex', 'QModelIndex')
+    def on_selection_changed(self, current, previous):
+        """
+
+        :param QModelIndex current: the index just selected
+        :param QModelIndex previous: the index that was selected prior
+            to this change (currently unused)
+        """
+
+        real_index = self._filter.mapToSource(current)
+
+        if real_index.isValid():
+            # if a valid mod was selected, emit the modentry object
+            self.selectedModChanged.emit(real_index.internalPointer())
+        else:
+            # otherwise, emit ``None`` to clear the filetree
+            self.selectedModChanged.emit(None)
 
 
 

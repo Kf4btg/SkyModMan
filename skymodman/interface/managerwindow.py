@@ -753,8 +753,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         #     self.on_modlist_filterbox_textchanged)
 
         ## same for file tree
-        self.filetree_filefilter.textChanged.connect(
-            self.on_fileviewer_filter_textchanged)
+        # self.filetree_filefilter.textChanged.connect(
+        #     self.on_fileviewer_filter_textchanged)
         # self.filters[F.file_viewer].setFilterWildcard)
 
         # left the selectionModel() changed connection in the _setup
@@ -830,31 +830,31 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # self.filetree_modlist.setModelColumn(
         #     constants.Column.NAME.value)
 
-    def _setup_filestab_treeviewer(self):
-        ## model for tree view of files
-        fileviewer_model = self.models[
-            M.file_viewer] = models.ModFileTreeModel(
-            parent=self.filetree_fileviewer,
-            manager=self.Manager)
-
-        ## filter
-        fileviewer_filter = self.filters[
-            F.file_viewer] = models.FileViewerTreeFilter(
-            self.filetree_fileviewer)
-
-        fileviewer_filter.setSourceModel(fileviewer_model)
-        fileviewer_filter.setFilterCaseSensitivity(Qt.CaseInsensitive)
-
-        ## set model
-        self.filetree_fileviewer.setModel(fileviewer_filter)
-
-        ## show new files when mod selection in list
-        # mod_filter = self.filters[F.mod_list]
-        mod_filter = self.filetree_modlist.filter
-        self.filetree_modlist.selectionModel().currentChanged.connect(
-            lambda curr, prev: self.viewer_show_file_tree(
-                mod_filter.mapToSource(curr),
-                mod_filter.mapToSource(prev)))
+    # def _setup_filestab_treeviewer(self):
+    #     ## model for tree view of files
+    #     fileviewer_model = self.models[
+    #         M.file_viewer] = models.ModFileTreeModel(
+    #         parent=self.filetree_fileviewer,
+    #         manager=self.Manager)
+    #
+    #     ## filter
+    #     fileviewer_filter = self.filters[
+    #         F.file_viewer] = models.FileViewerTreeFilter(
+    #         self.filetree_fileviewer)
+    #
+    #     fileviewer_filter.setSourceModel(fileviewer_model)
+    #     fileviewer_filter.setFilterCaseSensitivity(Qt.CaseInsensitive)
+    #
+    #     ## set model
+    #     self.filetree_fileviewer.setModel(fileviewer_filter)
+    #
+    #     ## show new files when mod selection in list
+    #     # mod_filter = self.filters[F.mod_list]
+    #     mod_filter = self.filetree_modlist.filter
+    #     self.filetree_modlist.selectionModel().currentChanged.connect(
+    #         lambda curr, prev: self.viewer_show_file_tree(
+    #             mod_filter.mapToSource(curr),
+    #             mod_filter.mapToSource(prev)))
 
     def _setup_file_tree_models(self):
         """
@@ -868,11 +868,15 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                                     self.filetree_modfilter)
 
         ## File Viewer
-        self._setup_filestab_treeviewer()
+
+        self.filetree_fileviewer.setup(self.filetree_modlist,
+                                       self.filetree_filefilter)
+
+        # self._setup_filestab_treeviewer()
 
         ## have escape key unfocus the filter boxes
-        self.filetree_filefilter.escapeLineEdit.connect(
-            self.filetree_filefilter.clearFocus)
+        # self.filetree_filefilter.escapeLineEdit.connect(
+        #     self.filetree_filefilter.clearFocus)
 
         # for f in [self.filetree_modfilter, self.filetree_filefilter]:
         #     f.escapeLineEdit.connect(f.clearFocus)
@@ -943,7 +947,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.undoManager.addStack(self.mod_table.undo_stack)
         self.undo_stacks[TAB.MODTABLE] = self.mod_table.undo_stack
 
-        self.undo_stacks[TAB.FILETREE] = self.models[M.file_viewer].undostack
+        # self.undo_stacks[TAB.FILETREE] = self.models[M.file_viewer].undostack
+        self.undo_stacks[TAB.FILETREE] = self.filetree_fileviewer.undo_stack
         self.undoManager.addStack(self.undo_stacks[TAB.FILETREE])
 
         # noinspection PyUnresolvedReferences
@@ -1205,36 +1210,36 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     #     self.filetree_modlist.filter.setFilterWildcard(text)
     #     self.update_modlist_label(self.filetree_modlist.only_show_active)
 
-    @pyqtSlot('QString')
-    def on_fileviewer_filter_textchanged(self, text):
-        """
-        Query the modfiles table in the db for files matching the filter
-        string given by `text`. The resulting matches are fed to the
-        proxy filter on the file viewer which uses them to make sure
-        that matching files are shown in the tree regardless of whether
-        their parent directories match the filter or not.
-
-        :param str text:
-        """
-        # don't bother querying db for empty string,
-        # the filter will ignore the matched files anyway
-        if not text:
-            self.filters[F.file_viewer].setFilterWildcard(text)
-        else:
-            # db = self.Manager.DB.conn
-            db = self.Manager.getdbcursor()
-
-            sqlexpr = r'%' + text.replace('?', '_').replace('*',
-                                                            r'%') + r'%'
-
-            matches = [r[0] for r in db.execute(
-                "SELECT filepath FROM modfiles WHERE directory=? AND filepath LIKE ?",
-                (self.models[M.file_viewer].modname, sqlexpr))]
-
-            self.filters[F.file_viewer].setMatchingFiles(matches)
-
-            self.filters[F.file_viewer].setFilterWildcard(text)
-            self.filetree_fileviewer.expandAll()
+    # @pyqtSlot('QString')
+    # def on_fileviewer_filter_textchanged(self, text):
+    #     """
+    #     Query the modfiles table in the db for files matching the filter
+    #     string given by `text`. The resulting matches are fed to the
+    #     proxy filter on the file viewer which uses them to make sure
+    #     that matching files are shown in the tree regardless of whether
+    #     their parent directories match the filter or not.
+    #
+    #     :param str text:
+    #     """
+    #     # don't bother querying db for empty string,
+    #     # the filter will ignore the matched files anyway
+    #     if not text:
+    #         self.filters[F.file_viewer].setFilterWildcard(text)
+    #     else:
+    #         # db = self.Manager.DB.conn
+    #         db = self.Manager.getdbcursor()
+    #
+    #         sqlexpr = r'%' + text.replace('?', '_').replace('*',
+    #                                                         r'%') + r'%'
+    #
+    #         matches = [r[0] for r in db.execute(
+    #             "SELECT filepath FROM modfiles WHERE directory=? AND filepath LIKE ?",
+    #             (self.models[M.file_viewer].modname, sqlexpr))]
+    #
+    #         self.filters[F.file_viewer].setMatchingFiles(matches)
+    #
+    #         self.filters[F.file_viewer].setFilterWildcard(text)
+    #         self.filetree_fileviewer.expandAll()
 
     @pyqtSlot()
     def on_save_command(self):
@@ -1245,7 +1250,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if self.current_tab == TAB.MODTABLE:
             self.mod_table.save_changes()
         elif self.current_tab == TAB.FILETREE:
-            self.models[M.file_viewer].save()
+            self.filetree_fileviewer.save()
+            # self.models[M.file_viewer].save()
 
     @pyqtSlot()
     def on_revert_command(self):
@@ -1257,7 +1263,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.mod_table.revert_changes()
 
         elif self.current_tab == TAB.FILETREE:
-            self.models[M.file_viewer].revert()
+            self.filetree_fileviewer.revert()
+            # self.models[M.file_viewer].revert()
 
     @pyqtSlot()
     def on_undo(self):
@@ -1373,14 +1380,15 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def _reset_file_tree(self):
 
         self.filetree_modlist.reset_view()
+        self.filetree_fileviewer.reset_view()
 
         # clear the filter boxes
         # self.filetree_modfilter.clear()
-        self.filetree_filefilter.clear()
+        # self.filetree_filefilter.clear()
 
         # clear the file tree view
         # self.models[M.file_viewer].setRootPath(None)
-        self.models[M.file_viewer].setMod(None)
+        # self.models[M.file_viewer].setMod(None)
 
         # if the main mods directory is unset, just disable the list
         # until the user corrects this
@@ -1516,7 +1524,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             s["afn"] = s["afp"] = bool(self._search_text)
             s["acm"] = bool(self.mod_table.errors_present & constants.ModError.DIR_NOT_FOUND)
         elif self.current_tab == TAB.FILETREE:
-            s["asc"] = s["arc"] = self.models[M.file_viewer].has_unsaved_changes
+            # s["asc"] = s["arc"] = self.models[M.file_viewer].has_unsaved_changes
+            s["asc"] = s["arc"] = self.filetree_fileviewer.has_unsaved_changes
 
 
         for comp, select in s.items():
@@ -1584,18 +1593,18 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     #     self.filetree_fileviewer.resizeColumnToContents(0)
 
     # noinspection PyUnusedLocal
-    def viewer_show_file_tree(self, indexCur, indexPre):
-        """
-        When the currently selected item changes in the modlist, change
-        the fileviewer to show the files from the new mod's folder.
-
-        :param QModelIndex indexCur: Currently selected index
-        :param QModelIndex indexPre: Previously selected index
-        """
-        if not indexCur.isValid(): return
-
-        mod = indexCur.internalPointer()
-        self.models[M.file_viewer].setMod(mod)
+    # def viewer_show_file_tree(self, indexCur, indexPre):
+    #     """
+    #     When the currently selected item changes in the modlist, change
+    #     the fileviewer to show the files from the new mod's folder.
+    #
+    #     :param QModelIndex indexCur: Currently selected index
+    #     :param QModelIndex indexPre: Previously selected index
+    #     """
+    #     if not indexCur.isValid(): return
+    #
+    #     mod = indexCur.internalPointer()
+    #     self.models[M.file_viewer].setMod(mod)
 
         # moddir = indexCur.internalPointer().directory
 

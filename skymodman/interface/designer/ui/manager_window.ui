@@ -233,7 +233,7 @@
              <number>6</number>
             </property>
             <item>
-             <widget class="QTreeView" name="filetree_fileviewer">
+             <widget class="FileTabTreeView" name="filetree_fileviewer">
               <property name="horizontalScrollBarPolicy">
                <enum>Qt::ScrollBarAlwaysOff</enum>
               </property>
@@ -810,6 +810,11 @@
    <class>FileTabModList</class>
    <extends>QListView</extends>
    <header>skymodman.interface.views.filetab_modlist</header>
+  </customwidget>
+  <customwidget>
+   <class>FileTabTreeView</class>
+   <extends>QTreeView</extends>
+   <header>skymodman.interface.views.filetab_treeview</header>
   </customwidget>
  </customwidgets>
  <resources/>

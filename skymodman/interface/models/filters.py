@@ -80,9 +80,11 @@ class FileViewerTreeFilter(QSortFilterProxyModel):
 
     def filterAcceptsRow(self, row, parent):
         """
-        This uses the results from a db query to basically ignore the filter on directories
-        and make sure any directory which contains a matching file is shown in the tree.
+        This uses the results from a db query to basically ignore the
+        filter on directories and make sure any directory which contains
+        a matching file is shown in the tree.
         A directory with no matching files will be hidden.
+
         :param int row:
         :param QModelIndex parent: parent of row in the source
         :return:

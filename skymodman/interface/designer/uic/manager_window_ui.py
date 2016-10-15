@@ -111,7 +111,7 @@ class Ui_MainWindow(object):
         self.fileviewer_box = QtWidgets.QVBoxLayout(self.filetree_filebox)
         self.fileviewer_box.setContentsMargins(6, 6, 6, 6)
         self.fileviewer_box.setObjectName("fileviewer_box")
-        self.filetree_fileviewer = QtWidgets.QTreeView(self.filetree_filebox)
+        self.filetree_fileviewer = FileTabTreeView(self.filetree_filebox)
         self.filetree_fileviewer.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.filetree_fileviewer.setUniformRowHeights(True)
         self.filetree_fileviewer.setObjectName("filetree_fileviewer")
@@ -416,4 +416,5 @@ class Ui_MainWindow(object):
 
 from skymodman.interface.designer.plugins.widgets.escapeablelineedit import EscapeableLineEdit
 from skymodman.interface.views.filetab_modlist import FileTabModList
+from skymodman.interface.views.filetab_treeview import FileTabTreeView
 from skymodman.interface.views.modtable_treeview import ModTable_TreeView

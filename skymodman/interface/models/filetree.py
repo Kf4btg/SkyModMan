@@ -54,8 +54,6 @@ class ModFileTreeModel(QAbstractItemModel):
         self.mod = None
         """:type: skymodman.types.ModEntry"""
 
-
-
         # the mod table has this stored on the custom view,
         # but we have no custom view for the file tree, so...here it is
         self.undostack = QUndoStack()
