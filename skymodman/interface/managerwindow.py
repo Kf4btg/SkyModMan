@@ -258,7 +258,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self._setup_profile_selector()
         self._setup_table_model()
-        self._setup_file_tree_models()
+        self._setup_files_tab_views()
 
         # undo manager relies (for now) on the undo stack of both
         # the mod table and file viewer tabs being setup. The fileviewer
@@ -612,7 +612,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.action_find_previous.triggered.connect(
             partial(self.on_table_search, -1))
 
-
        # --------------------------
 
         ## clear missing-from-disk mods
@@ -733,36 +732,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         ## File Tree Tab
         ##-----------------------------------
 
-        ## connect signals from mod-list listview
-
-        # enable/disable checkbox per this signal
-        # self.filetree_modlist.enableActiveOnlyCheckBox.connect(
-        #     lambda e: self.filetree_activeonlytoggle.setEnabled(e))
-
-        # self.filetree_modlist.onlyShowActiveChanged.connect(
-        #     self.on_modlist_activeonly_changed
-        # )
-
-        # connect the checkbox directly to the filter property
-        # self.filetree_activeonlytoggle.toggled[
-        #     'bool'].connect(
-        #     self.on_modlist_activeonly_toggle)
-
-        # connect proxy to textchanged of filter box on listview
-        # self.filetree_modfilter.textChanged.connect(
-        #     self.on_modlist_filterbox_textchanged)
-
-        ## same for file tree
-        # self.filetree_filefilter.textChanged.connect(
-        #     self.on_fileviewer_filter_textchanged)
-        # self.filters[F.file_viewer].setFilterWildcard)
-
-        # left the selectionModel() changed connection in the _setup
-        # function; it's just easier to handle it there
-
-        # self.models[M.file_viewer].hasUnsavedChanges.connect(
-        #     self.on_table_unsaved_change)
-
     #</editor-fold>
 
     #<editor-fold desc="data-dependent setup">
@@ -802,108 +771,19 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.models[M.mod_table] = tbl_model
 
-    # def _setup_filestab_modlist(self):
-
-
-        # this initializes the filter
-        # self.filetree_modlist.setup(self.models[M.mod_table])
-
-        # setup filter proxy for active mods list
-        # mod_filter = self.filters[
-        #     F.mod_list] = models.ActiveModsListFilter(
-        #     self.filetree_modlist)
-
-        # use the main mod-table model as the source
-        # mod_filter.setSourceModel(self.models[M.mod_table])
-        # ignore case when filtering
-        # mod_filter.setFilterCaseSensitivity(Qt.CaseInsensitive)
-
-        # tell filter to read mod name column
-        # mod_filter.setFilterKeyColumn(constants.Column.NAME.value)
-
-        # load and apply saved setting for 'activeonly' toggle
-        # self._update_modlist_filter_state()
-
-        # finally, set the filter as the model for the modlist
-        # self.filetree_modlist.setModel(mod_filter)
-        # make sure we're just showing the mod name
-        # self.filetree_modlist.setModelColumn(
-        #     constants.Column.NAME.value)
-
-    # def _setup_filestab_treeviewer(self):
-    #     ## model for tree view of files
-    #     fileviewer_model = self.models[
-    #         M.file_viewer] = models.ModFileTreeModel(
-    #         parent=self.filetree_fileviewer,
-    #         manager=self.Manager)
-    #
-    #     ## filter
-    #     fileviewer_filter = self.filters[
-    #         F.file_viewer] = models.FileViewerTreeFilter(
-    #         self.filetree_fileviewer)
-    #
-    #     fileviewer_filter.setSourceModel(fileviewer_model)
-    #     fileviewer_filter.setFilterCaseSensitivity(Qt.CaseInsensitive)
-    #
-    #     ## set model
-    #     self.filetree_fileviewer.setModel(fileviewer_filter)
-    #
-    #     ## show new files when mod selection in list
-    #     # mod_filter = self.filters[F.mod_list]
-    #     mod_filter = self.filetree_modlist.filter
-    #     self.filetree_modlist.selectionModel().currentChanged.connect(
-    #         lambda curr, prev: self.viewer_show_file_tree(
-    #             mod_filter.mapToSource(curr),
-    #             mod_filter.mapToSource(prev)))
-
-    def _setup_file_tree_models(self):
+    def _setup_files_tab_views(self):
         """
         Initialize the models and filters used on the file tree tab
         """
         ## Mods List
-        # self._setup_filestab_modlist()
         self.filetree_modlist.setup(self.models[M.mod_table],
                                     self.filetree_listlabel,
                                     self.filetree_activeonlytoggle,
                                     self.filetree_modfilter)
 
         ## File Viewer
-
         self.filetree_fileviewer.setup(self.filetree_modlist,
                                        self.filetree_filefilter)
-
-        # self._setup_filestab_treeviewer()
-
-        ## have escape key unfocus the filter boxes
-        # self.filetree_filefilter.escapeLineEdit.connect(
-        #     self.filetree_filefilter.clearFocus)
-
-        # for f in [self.filetree_modfilter, self.filetree_filefilter]:
-        #     f.escapeLineEdit.connect(f.clearFocus)
-
-    # def _update_modlist_filter_state(self):
-    #
-    #     filter_=self.filters[F.mod_list]
-    #
-    #     activeonly = self.Manager.get_profile_setting(
-    #         KeyStr_INI.ACTIVE_ONLY,
-    #         KeyStr_Section.FILEVIEWER)
-    #
-    #     if activeonly is None:
-    #         # if no profile loaded, set it unchecked and disable it
-    #         activeonly=False
-    #         self.filetree_activeonlytoggle.setEnabled(False)
-    #     else:
-    #         self.filetree_activeonlytoggle.setEnabled(True)
-    #
-    #     filter_.onlyShowActive = activeonly
-    #
-    #     # apply setting to box
-    #     self.filetree_activeonlytoggle.setCheckState(
-    #         Qt.Checked if activeonly else Qt.Unchecked)
-    #
-    #     # and setup label text for first display
-    #     self.update_modlist_label(activeonly)
 
     def _setup_undo_manager(self):
         """
@@ -947,7 +827,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.undoManager.addStack(self.mod_table.undo_stack)
         self.undo_stacks[TAB.MODTABLE] = self.mod_table.undo_stack
 
-        # self.undo_stacks[TAB.FILETREE] = self.models[M.file_viewer].undostack
         self.undo_stacks[TAB.FILETREE] = self.filetree_fileviewer.undo_stack
         self.undoManager.addStack(self.undo_stacks[TAB.FILETREE])
 
@@ -1174,73 +1053,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                       self.action_revert_changes]:
             widgy.setEnabled(not clean)
 
-    # @pyqtSlot(bool)
-    # def on_modlist_activeonly_changed(self, only_show_active):
-    #     """Invoked when the 'active-only' setting is changed via some
-    #     manner other than the user toggling the checkbox (e.g. due to
-    #     a change in active profile)."""
-    #     self.filetree_activeonlytoggle.setChecked(only_show_active)
-    #     self.update_modlist_label(only_show_active)
-
-    # @pyqtSlot(bool)
-    # def on_modlist_activeonly_toggle(self, checked):
-    #     """
-    #     Toggle showing/hiding inactive mods in the Mods list on the
-    #     file-tree tab
-    #
-    #     :param checked: state of the checkbox
-    #     """
-    #     # self.LOGGER << "ActiveOnly toggled->{}".format(checked)
-    #
-    #     self.filters[F.mod_list].setOnlyShowActive(checked)
-    #     self.update_modlist_label(checked)
-    #     self.Manager.set_profile_setting(KeyStr_INI.ACTIVE_ONLY,
-    #                                 KeyStr_Section.FILEVIEWER,
-    #                                 checked)
-
-    # @pyqtSlot('QString')
-    # def on_modlist_filterbox_textchanged(self, text):
-    #     """
-    #     Updates the proxy filtering, and notifies the label
-    #     to change its 'mods shown' count.
-    #     :param text:
-    #     """
-    #
-    #     # filt = self.filters[F.mod_list]
-    #     self.filetree_modlist.filter.setFilterWildcard(text)
-    #     self.update_modlist_label(self.filetree_modlist.only_show_active)
-
-    # @pyqtSlot('QString')
-    # def on_fileviewer_filter_textchanged(self, text):
-    #     """
-    #     Query the modfiles table in the db for files matching the filter
-    #     string given by `text`. The resulting matches are fed to the
-    #     proxy filter on the file viewer which uses them to make sure
-    #     that matching files are shown in the tree regardless of whether
-    #     their parent directories match the filter or not.
-    #
-    #     :param str text:
-    #     """
-    #     # don't bother querying db for empty string,
-    #     # the filter will ignore the matched files anyway
-    #     if not text:
-    #         self.filters[F.file_viewer].setFilterWildcard(text)
-    #     else:
-    #         # db = self.Manager.DB.conn
-    #         db = self.Manager.getdbcursor()
-    #
-    #         sqlexpr = r'%' + text.replace('?', '_').replace('*',
-    #                                                         r'%') + r'%'
-    #
-    #         matches = [r[0] for r in db.execute(
-    #             "SELECT filepath FROM modfiles WHERE directory=? AND filepath LIKE ?",
-    #             (self.models[M.file_viewer].modname, sqlexpr))]
-    #
-    #         self.filters[F.file_viewer].setMatchingFiles(matches)
-    #
-    #         self.filters[F.file_viewer].setFilterWildcard(text)
-    #         self.filetree_fileviewer.expandAll()
-
     @pyqtSlot()
     def on_save_command(self):
         """
@@ -1251,7 +1063,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.mod_table.save_changes()
         elif self.current_tab == TAB.FILETREE:
             self.filetree_fileviewer.save()
-            # self.models[M.file_viewer].save()
 
     @pyqtSlot()
     def on_revert_command(self):
@@ -1264,7 +1075,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         elif self.current_tab == TAB.FILETREE:
             self.filetree_fileviewer.revert()
-            # self.models[M.file_viewer].revert()
 
     @pyqtSlot()
     def on_undo(self):
@@ -1378,30 +1188,11 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
 
     def _reset_file_tree(self):
+        """Reset the views on the 'Files' tab"""
 
         self.filetree_modlist.reset_view()
         self.filetree_fileviewer.reset_view()
 
-        # clear the filter boxes
-        # self.filetree_modfilter.clear()
-        # self.filetree_filefilter.clear()
-
-        # clear the file tree view
-        # self.models[M.file_viewer].setRootPath(None)
-        # self.models[M.file_viewer].setMod(None)
-
-        # if the main mods directory is unset, just disable the list
-        # until the user corrects this
-        # if not self.Manager.Folders['mods']:
-        #     self.filetree_modlist.setEnabled(False)
-        #     self.filetree_modlist.setToolTip(
-        #         "Mods directory is currently invalid")
-        # else:
-        #     self.filetree_modlist.setEnabled(True)
-        #     self.filetree_modlist.setToolTip(None)
-
-        # update the label and checkbox on the modlist
-        # self._update_modlist_filter_state()
 
     ##===============================================
     ## UI Helper Functions
@@ -1508,8 +1299,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         Some manager actions should be disabled on certain tabs
         """
-        # tab=self.current_tab
-
         # use pre-constructed mapping of actions we want to consider
         all_components = self._action_components
 
@@ -1524,7 +1313,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             s["afn"] = s["afp"] = bool(self._search_text)
             s["acm"] = bool(self.mod_table.errors_present & constants.ModError.DIR_NOT_FOUND)
         elif self.current_tab == TAB.FILETREE:
-            # s["asc"] = s["arc"] = self.models[M.file_viewer].has_unsaved_changes
             s["asc"] = s["arc"] = self.filetree_fileviewer.has_unsaved_changes
 
 
@@ -1572,52 +1360,10 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.modtable_search_box.clearFocus()
             self.modtable_search_box.clear()
 
-    # def update_modlist_label(self, inactive_hidden):
-    #     """
-    #     Change the label beside the "hide inactive mods" check box to
-    #     reflect its current state.
-    #
-    #     :param inactive_hidden:
-    #     """
-    #     if inactive_hidden:
-    #         text = "Active Mods ({shown}/{total})"
-    #     else:
-    #         text = "All Installed Mods ({shown}/{total})"
-    #     self.filetree_listlabel.setText(
-    #         text.format(
-    #             shown=self.filters[F.mod_list].rowCount(),
-    #             total=self.models[M.mod_list].rowCount()))
 
     # todo: change window title (or something) to reflect current folder
     # def on_filetree_fileviewer_rootpathchanged(self, newpath):
     #     self.filetree_fileviewer.resizeColumnToContents(0)
-
-    # noinspection PyUnusedLocal
-    # def viewer_show_file_tree(self, indexCur, indexPre):
-    #     """
-    #     When the currently selected item changes in the modlist, change
-    #     the fileviewer to show the files from the new mod's folder.
-    #
-    #     :param QModelIndex indexCur: Currently selected index
-    #     :param QModelIndex indexPre: Previously selected index
-    #     """
-    #     if not indexCur.isValid(): return
-    #
-    #     mod = indexCur.internalPointer()
-    #     self.models[M.file_viewer].setMod(mod)
-
-        # moddir = indexCur.internalPointer().directory
-
-        # add the name of the mod directory to the path of the
-        # main mods folder
-
-        # modstorage = self.Manager.Folders['mods']
-        # if modstorage:
-        #     p = join_path(modstorage.spath, moddir)
-
-            # self.models[M.file_viewer].setRootPath(p)
-        # if the main mods-storage directory is unset, don't attempt
-        # to show anything
 
     def table_prompt_if_unsaved(self):
         """
