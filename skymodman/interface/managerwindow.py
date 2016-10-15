@@ -7,9 +7,8 @@ from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt5.QtWidgets import QMessageBox, QTreeWidgetItem, QLabel
 
 from skymodman import exceptions, constants, Manager
-from skymodman.constants import qModels as M, qFilters as F, Tab as TAB
-from skymodman.constants.keystrings import (Section as KeyStr_Section,
-                                            Dirs as KeyStr_Dirs,
+from skymodman.constants import qModels as M, Tab as TAB
+from skymodman.constants.keystrings import (Dirs as KeyStr_Dirs,
                                             INI as KeyStr_INI,
                                             UI as KeyStr_UI)
 
@@ -17,15 +16,9 @@ from skymodman.interface import models, app_settings #, ui_utils
 from skymodman.interface.dialogs import message
 from skymodman.interface.install_helpers import InstallerUI
 from skymodman.log import withlogger #, icons
-from skymodman.utils.fsutils import check_path, join_path
+from skymodman.utils.fsutils import check_path #, join_path
 
 from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow
-
-# M = constants.qModels
-# F = constants.qFilters
-# TAB = constants.Tab
-
-# Manager = None # type: modmanager.ModManager
 
 ## Interestingly, using the icon font as a font works just fine;
 ## One can do things like:
@@ -58,8 +51,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         super().__init__(**kwargs)
 
-        # global Manager
-        # Manager = modmanager.Manager()
         # this field will contain the reference to the main ModManager
         # backend (encapsulated in a QObject wrapper)
         self.Manager = None
