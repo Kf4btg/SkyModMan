@@ -512,18 +512,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     # noinspection PyUnresolvedReferences
     def _setupui_local_signals_connections(self):
         """
-        SIGNALS:
-
-        modListModified
-        modListSaved
-
-        windowInitialized
-
-        newProfileLoaded
-
-        moveMods
-        moveModsToTop
-        moveModsToBottom
+        Connect signals to slots, whether they're local (an attribute
+        of the main window) or non-local (part of a sub-component)
 
         """
         self.LOGGER.debug("_setup_signals_and_slots")
@@ -554,57 +544,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         for signal, slot in connections:
             signal.connect(slot)
-
-        # self.newProfileLoaded.connect(self.on_profile_load)
-
-        # self.moveMods.connect(
-        #     self.mod_table.move_selection)
-        # self.moveModsToBottom.connect(
-        #     self.mod_table.move_selection_to_bottom)
-        # self.moveModsToTop.connect(
-        #     self.mod_table.move_selection_to_top)
-
-
-    def _setupui_slot_connections(self):
-        """
-        SLOTS:
-        self._enable_mod_move_actions
-
-        on_new_profile_action
-        on_remove_profile_action
-        on_profile_select
-
-        on_modlist_activeonly_toggle
-        on_modlist_filterbox_textchanged
-
-        self.on_table_unsaved_change
-        self.on_make_or_clear_mod_selection
-        self.on_undo_redo_event
-        """
-        self.LOGGER.debug("_setup_slots")
-
-        ##===================================
-        ## General/Main Window
-        ##-----------------------------------
-
-        # ensure the UI is properly updated when the tab changes
-        # self.manager_tabs.currentChanged.connect(
-        #     self.on_tab_changed)
-        #
-        # ##===================================
-        # ## Mod Table Tab
-        # ##-----------------------------------
-        #
-        # # depending on selection in table, the movement actions will be
-        # # enabled or disabled
-        # self.mod_table.enableModActions.connect(
-        #     self.on_make_or_clear_mod_selection)
-        # self.mod_table.canMoveItems.connect(
-        #     self._enable_mod_move_actions)
-
-        ##===================================
-        ## File Tree Tab
-        ##-----------------------------------
 
     #</editor-fold>
 
