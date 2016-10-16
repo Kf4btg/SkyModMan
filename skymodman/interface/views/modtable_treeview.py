@@ -1,4 +1,4 @@
-from PyQt5 import QtWidgets as qtW
+from PyQt5 import QtWidgets as qtW, QtCore
 
 from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot, QItemSelectionModel as qISM
 
@@ -22,7 +22,13 @@ class ModTable_TreeView(qtW.QTreeView):
 
     enableModActions = pyqtSignal(bool)
 
+    enableSearchActions = pyqtSignal(bool)
+    """emitted to enable/disable the find-next/previous buttons"""
+
     canMoveItems = pyqtSignal(bool, bool)
+
+    setStatusMessage = pyqtSignal(str)
+    """emitted when the table would like to update the main window status bar"""
 
     # TODO: this could likely be more generic; it's meant to inform the main window to reanalyze which actions are active (in particular, the clear_missing_mods action)
     errorsChanged = pyqtSignal(int)
@@ -40,6 +46,12 @@ class ModTable_TreeView(qtW.QTreeView):
         # debugging: print modentry on click
         # self.clicked.connect(lambda i: print(i.internalPointer()))
 
+        # placeholder for the associated search box and animation
+        self._searchbox = None
+        """:type: qtW.QLineEdit"""
+        self.animate_show_search = None
+        """:type: QtCore.QPropertyAnimation"""
+
         # a bitwise-OR combination of the types of errors currently
         # found in the table
         self._err_types = ModError.NONE
@@ -54,6 +66,51 @@ class ModTable_TreeView(qtW.QTreeView):
     @property
     def errors_present(self):
         return self._err_types
+
+    @property
+    def search_text(self):
+        try:
+            return self._searchbox.text()
+        except AttributeError:
+            # searchbox not assigned yet
+            return ""
+
+    ##=============================================
+    ## Setup
+    ##=============================================
+
+    def setupui(self, search_box):
+        """Setup searchbox functionality, make some UI adjustments"""
+        ## setup search box ##
+
+        self._searchbox = search_box
+
+        # setup the animation to show/hide the search bar
+        self.animate_show_search = QtCore.QPropertyAnimation(
+            self._searchbox, b"maximumWidth")
+        self.animate_show_search.setDuration(300)
+        self._searchbox.setMaximumWidth(0)
+
+        self._searchbox.textChanged.connect(
+            self._clear_searchbox_style)
+
+        # i prefer searching only when i'm ready
+        self._searchbox.returnPressed.connect(
+            self._on_searchbox_return)
+
+        ## some final UI adjustments ##
+
+        # hide directory column by default
+        self.setColumnHidden(Column.DIRECTORY, True)
+
+        # stretch the Name section
+        self.header().setSectionResizeMode(Column.NAME,
+                                           qtW.QHeaderView.Stretch)
+
+    def reset_view(self):
+        """Clears the search box and reloads the table data"""
+        self._searchbox.clear()
+        self.load_data()
 
     ##=============================================
     ## Qt Overrides
@@ -70,15 +127,6 @@ class ModTable_TreeView(qtW.QTreeView):
 
         # only show error col if there are errors
         self._model.errorsAnalyzed.connect(self._analyze_errors)
-
-        ## some final UI adjustments ##
-
-        # hide directory column by default
-        self.setColumnHidden(Column.DIRECTORY, True)
-
-        # stretch the Name section
-        self.header().setSectionResizeMode(Column.NAME,
-                                           qtW.QHeaderView.Stretch)
 
     def selectionChanged(self, selected=None, deselected=None):
 
@@ -136,20 +184,37 @@ class ModTable_TreeView(qtW.QTreeView):
         menu.exec_(event.globalPos())
 
     ##=============================================
-    ## "Public Slots"
+    ## Searching
     ##=============================================
 
-    def load_data(self):
+    @pyqtSlot()
+    def toggle_search_box(self):
         """
-        Load date from disk into the model and adjust the table for the
-        new content.
+        Show or hide the search box based on its current state.
         """
-        self._model.load_data()
-        # self.resize_columns_to_contents()
+        # 0=hidden, 1=shown
+        state = 0 if self._searchbox.width() > 0 else 1
 
-        # this is the only place we use this, so no need for a method
-        for i in range(self._model.columnCount()):
-            self.resizeColumnToContents(i)
+        # ref to QAnimationProperty
+        an = self.animate_show_search
+
+        # animate expansion from 0px -> 300px width when showing;
+        # animate collapse from 300->0 when hiding
+        an.setStartValue([300,0][state])
+        an.setEndValue([0,300][state])
+        an.start()
+
+        # also, focus the text field if we're showing it
+        if state:
+            self._searchbox.setFocus()
+        else:
+            # or clear the focus and styling if we're hiding
+            self._searchbox.clearFocus()
+            self._searchbox.clear()
+
+    def clear_search(self):
+        """simply clears the search box"""
+        self._searchbox.clear()
 
     def search(self, text, direction=1):
         """
@@ -170,12 +235,71 @@ class ModTable_TreeView(qtW.QTreeView):
                 # to differentiate it.
                 return None
 
-            self._selection_model.select(result, qISM.ClearAndSelect)
+            self._selection_model.select(result,
+                                         qISM.ClearAndSelect)
             self.scrollTo(result,
                           qtW.QAbstractItemView.PositionAtCenter)
             self.setCurrentIndex(result)
             return True
         return False
+
+    def _on_searchbox_return(self):
+        """called when the user hits return in the search box"""
+        self.enableSearchActions.emit(bool(self.search_text))
+        # self.action_find_next.setEnabled(e)
+        # self.action_find_previous.setEnabled(e)
+        self.on_table_search()
+
+    def on_table_search(self, direction=1):
+        """
+        Tell the view to search for 'text'; depending on success, we
+        will change the appearance of the search text and the status
+        bar message
+        """
+
+        text = self.search_text
+
+        if text:
+            found = self.search(text, direction)
+
+            if not found:
+                if found is None:
+                    # this means we DID find the text, but it was the same
+                    # row that we started on
+                    # TODO: don't hardcode these colors
+                    self._searchbox.setStyleSheet(
+                        'QLineEdit { color: gray }')
+                    self.setStatusMessage.emit(
+                        "No more results found")
+                else:
+                    # found was False
+                    self._searchbox.setStyleSheet(
+                        'QLineEdit { color: tomato }')
+                    self.setStatusMessage.emit("No results found")
+                return
+
+        # text was found or was '': reset style sheet if one is present
+        self._clear_searchbox_style()
+
+    @pyqtSlot()
+    def _clear_searchbox_style(self):
+        if self._searchbox.styleSheet():
+            self._searchbox.setStyleSheet('')
+            self.setStatusMessage.emit('')
+
+    ##=============================================
+    ## "Public Slots"
+    ##=============================================
+
+    def load_data(self):
+        """
+        Load data from disk into the model and adjust the table for the
+        new content.
+        """
+        self._model.load_data()
+
+        for i in range(self._model.columnCount()):
+            self.resizeColumnToContents(i)
 
     def toggle_selection_checkstate(self):
         """

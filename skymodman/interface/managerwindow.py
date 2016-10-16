@@ -1,7 +1,7 @@
 from functools import partial
 import asyncio
 
-from PyQt5 import QtWidgets, QtGui, QtCore
+from PyQt5 import QtWidgets, QtGui
 # specifically import some frequently used names
 from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt5.QtWidgets import QMessageBox, QTreeWidgetItem, QLabel
@@ -79,8 +79,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # make sure the correct initial pages are showing
         self.manager_tabs.setCurrentIndex(self._currtab.value)
-
-        self._search_text=''
 
         ## The undo framework.
         ## Each tab will have its own UndoStack; when the user changes
@@ -425,25 +423,16 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         self.LOGGER.debug("_setup_table_UI")
 
-        # setup the animation to show/hide the search bar
-        self.animate_show_search = QtCore.QPropertyAnimation(
-            self.modtable_search_box, b"maximumWidth")
-        self.animate_show_search.setDuration(300)
-        self.modtable_search_box.setMaximumWidth(0)
+        self.mod_table.setupui(self.modtable_search_box)
 
-        self.modtable_search_box.textChanged.connect(
-            self._clear_searchbox_style)
+        # handler for dis-/en-abling the search actions
+        def on_enable_searchactions(enable):
+            self.action_find_next.setEnabled(enable)
+            self.action_find_previous.setEnabled(enable)
 
-        def on_search_box_return():
-            self._search_text = self.modtable_search_box.text()
-            e = bool(self._search_text)
-            self.action_find_next.setEnabled(e)
-            self.action_find_previous.setEnabled(e)
-            self.on_table_search()
-
-        # i prefer searching only when i'm ready
-        self.modtable_search_box.returnPressed.connect(
-            on_search_box_return)
+        # connect signals from table
+        self.mod_table.enableSearchActions.connect(on_enable_searchactions)
+        self.mod_table.setStatusMessage.connect(self.on_status_text_change_request)
 
         # we don't actually use this yet...
         self.filters_dropdown.setVisible(False)
@@ -597,11 +586,11 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # find next
         self.action_find_next.setShortcut(QtGui.QKeySequence.FindNext)
         self.action_find_next.triggered.connect(
-            partial(self.on_table_search, 1))
+            partial(self.mod_table.on_table_search, 1))
         # find prev
         self.action_find_previous.setShortcut(QtGui.QKeySequence.FindPrevious)
         self.action_find_previous.triggered.connect(
-            partial(self.on_table_search, -1))
+            partial(self.mod_table.on_table_search, -1))
 
        # --------------------------
 
@@ -647,7 +636,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # bool argument (which means nothing in this context
         # but messes up the callback)
         self.modtable_search_button.released.connect(
-            self.toggle_search_box)
+            self.mod_table.toggle_search_box)
 
 
     # inspector complains about alleged lack of "connect" function
@@ -942,8 +931,14 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.check_enable_profile_delete()
 
-        self._reset_table()  # this also loads the new data
-        self._reset_file_tree()
+        ## Reset the views
+        self.mod_table.reset_view() # this also loads the new data
+        self.filetree_modlist.reset_view()
+        self.filetree_fileviewer.reset_view()
+
+        # self._reset_table()  # this also loads the new data
+        # self._reset_file_tree()
+
         self._update_visible_components()
         self._update_enabled_actions()
 
@@ -1076,46 +1071,20 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def on_redo(self):
         self.undoManager.redo()
 
-    def on_table_search(self, direction=1):
-        """
-        Tell the view to search for 'text'; depending on success, we
-        will change the appearance of the search text and the status
-        bar message
-        """
-
-        if self._search_text:
-            found = self.mod_table.search(self._search_text,
-                                          direction)
-
-            if not found:
-                if found is None:
-                    # this means we DID find the text, but it was the same
-                    # row that we started on
-                    self.modtable_search_box.setStyleSheet(
-                        'QLineEdit { color: gray }')
-                    self.status_bar.showMessage(
-                        "No more results found")
-                else:
-                    # found was False
-                    self.modtable_search_box.setStyleSheet(
-                        'QLineEdit { color: tomato }')
-                    self.status_bar.showMessage("No results found")
-                return
-
-        # text was found or was '': reset style sheet if one is present
-        self._clear_searchbox_style()
-
-    @pyqtSlot()
-    def _clear_searchbox_style(self):
-        if self.modtable_search_box.styleSheet():
-            self.modtable_search_box.setStyleSheet('')
-            self.status_bar.clearMessage()
 
     # </editor-fold>
 
     ##=============================================
     ## Statusbar operations
     ##=============================================
+
+    @pyqtSlot(str)
+    def on_status_text_change_request(self, text):
+        """Allow other components to request updating the status text"""
+        if text:
+            self.status_bar.showMessage(text)
+        else:
+            self.status_bar.clearMessage()
 
     def show_statusbar_progress(self, text="Working:",
                                 minimum=0, maximum=0,
@@ -1164,26 +1133,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         self.sb_progress_bar.setVisible(False)
         self.sb_progress_label.setVisible(False)
-
-    ##=============================================
-    ## Reset UI components
-    ##=============================================
-
-    def _reset_table(self):
-        """
-        Called when a new profile is loaded or some other major
-        change occurs
-        """
-        self.mod_table.load_data()
-        self.modtable_search_box.clear() # might be good enough
-
-
-    def _reset_file_tree(self):
-        """Reset the views on the 'Files' tab"""
-
-        self.filetree_modlist.reset_view()
-        self.filetree_fileviewer.reset_view()
-
 
     ##===============================================
     ## UI Helper Functions
@@ -1301,7 +1250,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if self.current_tab == TAB.MODTABLE:
             s["mmg"] = s["atm"] = s["aum"] = self.mod_table.selectionModel().hasSelection()
             s["asc"] = s["arc"] = not self.undoManager.isClean()
-            s["afn"] = s["afp"] = bool(self._search_text)
+            s["afn"] = s["afp"] = bool(self.mod_table.search_text)
             s["acm"] = bool(self.mod_table.errors_present & constants.ModError.DIR_NOT_FOUND)
         elif self.current_tab == TAB.FILETREE:
             s["asc"] = s["arc"] = self.filetree_fileviewer.has_unsaved_changes
@@ -1326,30 +1275,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         for action in [self.action_move_mod_to_top,
                        self.action_move_mod_up]:
             action.setEnabled(enable_moveup)
-
-    def toggle_search_box(self):
-        """
-        Show or hide the search box based on its current state.
-        """
-        # 0=hidden, 1=shown
-        state = 0 if self.modtable_search_box.width() > 0 else 1
-
-        # ref to QAnimationProperty
-        an = self.animate_show_search
-
-        # animate expansion from 0px -> 300px width when showing;
-        # animate collapse from 300->0 when hiding
-        an.setStartValue([300,0][state])
-        an.setEndValue([0,300][state])
-        an.start()
-
-        # also, focus the text field if we're showing it
-        if state:
-            self.modtable_search_box.setFocus()
-        else:
-            # or clear the focus and styling if we're hiding
-            self.modtable_search_box.clearFocus()
-            self.modtable_search_box.clear()
 
 
     # todo: change window title (or something) to reflect current folder
