@@ -1,4 +1,3 @@
-# import os
 from functools import partial
 from itertools import repeat
 
@@ -7,11 +6,10 @@ from PyQt5.QtWidgets import QUndoStack
 
 from skymodman import Manager
 from skymodman.log import withlogger #, tree
-# from skymodman.utils.fsutils import check_path
 from skymodman.interface.qundo import UndoCmd
 from skymodman.interface.typedefs import QFSItem
 
-# actually provides a slight (but noticeable) speedup
+# actually provides a small (but noticeable) speedup
 # Qt_Checked = Qt.Checked
 Qt_Unchecked = Qt.Unchecked
 # Qt_PartiallyChecked = Qt.PartiallyChecked
@@ -80,85 +78,29 @@ class ModFileTreeModel(QAbstractItemModel):
 
         if mod_entry is self.mod: return
 
+        # commit any changes we've made so far
         self.save()
 
+        # drop the undo stack
         self.undostack.clear()
 
+        # tells the view to get ready to redisplay its contents
         self.beginResetModel()
         self.mod = mod_entry
 
         if mod_entry is None: # reset Model to show nothing
-            # self.beginResetModel()
-            # self.rootpath=None
             self.rootitem=None
             self.modname=None
-            # self.rootPathChanged.emit("")
-            # self.endResetModel()
 
         else:
-            # tells the view to get ready to redisplay its contents
-            # self.beginResetModel()
-
             # the mod's _unique_ name
             self.modname = self.mod.directory
 
             self._setup_or_reload_tree()
 
-            # tells the view it should get new
-            # data from model & reset itself
-            # self.endResetModel()
-
-            # emit notifier signal
-            # self.rootPathChanged.emit(path)
-
+        # tells the view it should get new
+        # data from model & reset itself
         self.endResetModel()
-
-
-        # self.mod = mod_entry
-
-    # def setRootPath(self, path=None):
-    #     """
-    #     Using this instead of a setter just for API-similarity with
-    #     QFileSystemModel. That's the same reason rootPathChanged is
-    #     emitted at the end of the method, as well.
-    #
-    #     :param str path: the absolute filesystem path to the active
-    #         mod's data folder. If passed as ``None``, the model is
-    #         reset to empty
-    #     """
-    #
-    #     if path == self.rootpath: return
-    #
-    #     # commit any changes we've made so far
-    #     self.save()
-    #
-    #     # drop the undo stack
-    #     self.undostack.clear()
-    #
-    #     if path is None: # reset Model to show nothing
-    #         self.beginResetModel()
-    #         self.rootpath=None
-    #         self.rootitem=None
-    #         self.modname=None
-    #         self.rootPathChanged.emit(path)
-    #         self.endResetModel()
-    #
-    #     elif check_path(path):
-    #
-    #         # tells the view to get ready to redisplay its contents
-    #         self.beginResetModel()
-    #
-    #         self.rootpath = path
-    #         self.modname = os.path.basename(path)
-    #
-    #         self._setup_or_reload_tree()
-    #
-    #         # tells the view it should get new
-    #         # data from model & reset itself
-    #         self.endResetModel()
-    #
-    #         # emit notifier signal
-    #         self.rootPathChanged.emit(path)
 
     def _setup_or_reload_tree(self):
         """
@@ -181,9 +123,6 @@ class ModFileTreeModel(QAbstractItemModel):
 
         self.rootitem.build_children(self.mod.filetree, name_filter=lambda
                     n: n.lower() == 'meta.ini')
-
-        # self.rootitem.load_children(self.rootpath, namefilter=lambda
-        #     n: n.lower() == 'meta.ini')
 
     def _mark_hidden_files(self):
 
@@ -304,7 +243,6 @@ class ModFileTreeModel(QAbstractItemModel):
 
         :param QModelIndex index:
         """
-        # item = self.getitem(index)
         return self.getitem(index).itemflags
 
     def data(self, index, role=Qt.DisplayRole):
@@ -344,36 +282,6 @@ class ModFileTreeModel(QAbstractItemModel):
             elif role == Qt_DecorationRole:
                 return item.icon
 
-        # if col == COL_PATH:
-        #     if role == Qt.DisplayRole: #second column is path
-        #         return item.parent.path + "/"
-        #
-        # elif col == COL_CONFLICTS: # third column is conflicts
-        #     if role == Qt.DisplayRole:
-        #         try:
-        #             if item.lpath in self.DB.file_conflicts.by_mod[self.modname]:
-        #                 return "Yes"
-        #
-        #         # if the mod was not in the conflict map, then return none as usual
-        #         except KeyError:
-        #             pass
-        #         # self.modname in self.DB.file_conflicts.by_mod \
-        #         #     and item.lpath in self.DB.file_conflicts.by_file:
-        #         # self.modname in self.Manager.mods_with_conflicting_files \
-        #         #     and item.lpath in self.Manager.file_conflicts:
-        #         # return "Yes"
-
-
-        # else: # column must be Name
-        #     if role == Qt.DisplayRole:
-        #         return item.name
-        #     elif role == Qt_CheckStateRole:
-        #         # hides the complexity of the tristate workings
-        #         return item.checkState
-        #     elif role == Qt.DecorationRole:
-        #         return item.icon
-
-    # noinspection PyTypeChecker
     def setData(self, index, value, role=Qt_CheckStateRole):
         """Only the checkStateRole can be edited in this model.
         Most of the machinery for that is in the QFSItem class
@@ -453,10 +361,6 @@ class ModFileTreeModel(QAbstractItemModel):
 
         self.DB.rollback()
         self.undostack.clear()
-
-        # while self.undostack.canUndo() and not self.undostack.isClean():
-        #     self.undostack.undo()
-
 
         self._setup_or_reload_tree()
 
@@ -648,100 +552,5 @@ class ChangeHiddenFilesCommand(UndoCmd):
                     self.checked.append(child)
 
 if __name__ == '__main__':
-    # from skymodman.managers import ModManager
     # noinspection PyUnresolvedReferences
     from sqlite3 import Row
-
-
-
-
-        # directory = os.path.basename(self.rootpath)
-        #
-        # # here's a list of the CURRENTLY hidden filepaths for this mod,
-        # # as known to the database
-        # nowhiddens = list(self.DB.files_hidden(directory))
-        #
-        # # let's forget all that silly complicated stuff and do this:
-        # hiddens, unhiddens = self._get_hidden_states(len(nowhiddens) > 0)
-        #
-        # if nowhiddens:
-        #     # to remove will be empty if either of now/un-hiddens is empty
-        #     toremove = list(filter(unhiddens.__contains__, nowhiddens))
-        #
-        #     # don't want to add items twice, so remove any already in db
-        #     # (not quite sure how that would happen...but let's play it
-        #     # safe for now)
-        #     toadd = list(filterfalse(nowhiddens.__contains__, hiddens))
-        # else:
-        #     toremove = []
-        #     toadd = hiddens
-        #
-        # if toremove:
-        #     self.DB.remove_hidden_files(directory, toremove)
-        # if toadd:
-        #     self.DB.insert(2, "hiddenfiles",
-        #                       params=zip(repeat(directory), toadd))
-
-
-    # def _get_hidden_states(self, track_unhidden = True):
-    #     """
-    #
-    #     :param bool track_unhidden: whether we care about tracking
-    #         unhidden files; For example, if the hiddenfiles database
-    #         table has no entries for this mod, we wouldn't care because
-    #         there's nothing to reset
-    #     """
-    #     hBasket=[]   #holds hidden files
-    #     uhBasket=[]  #holds non-hidden files
-    #
-    #     def _(base):
-    #         for child in base.iterchildren():
-    #             cs = child.checkState
-    #             if cs==Qt_PartiallyChecked:
-    #                 # this is a directory, we need to go deeper
-    #                 _(child)
-    #
-    #             elif cs==Qt_Unchecked:
-    #                 if child.isdir:
-    #                     # if we found an unchecked folder, just add
-    #                     # all its children
-    #                     hBasket.extend(c.lpath
-    #                                    for c in child.iterchildren(True)
-    #                                    if not c.isdir)
-    #                 else:
-    #                     hBasket.append(child.lpath)
-    #
-    #             elif track_unhidden:
-    #                 if child.isdir:
-    #                     uhBasket.extend(c.lpath for c
-    #                                     in child.iterchildren(True)
-    #                                     if not c.isdir)
-    #                 else:
-    #                     uhBasket.append(child.lpath)
-    #
-    #
-    #     _(self.root_item)
-    #     return hBasket, uhBasket
-
-
-
-# def dumpsHidden(self):
-    #     """Return a string containing the hidden files of this mod in a form suitable
-    #     for serializing to json"""
-    #
-    #     hiddens = tree.Tree()
-    #     for child in self.root_item.iterchildren(True): #type: QFSItem
-    #         # skip any fully-checked items
-    #         if child.checkState == Qt_Checked:
-    #             continue
-    #
-    #         elif child.checkState == Qt_Unchecked:
-    #             pathparts = [os.path.basename(self.rootpath)]+list(child.ppath.parts[:-1])
-    #             # add unchecked dirs, but todo: do not descend
-    #             if child.isdir:
-    #                 tree.insert(hiddens, pathparts) # todo: don't descend; just mark folder excluded, assume contents
-    #             else:
-    #                 tree.insert(hiddens, pathparts, child.name)
-    #
-    #     # return json.dumps(hiddens, indent=1)
-    #     return tree.toString(hiddens)

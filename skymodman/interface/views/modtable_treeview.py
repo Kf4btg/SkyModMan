@@ -1,4 +1,4 @@
-from PyQt5 import QtWidgets as qtW, QtCore
+from PyQt5 import QtWidgets, QtCore
 
 from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot, QItemSelectionModel as qISM
 
@@ -8,17 +8,18 @@ from skymodman.log import withlogger
 # from skymodman.interface.models import ModTable_TreeModel
 from skymodman.interface.ui_utils import undomacro, blocked_signals
 
-qmenu = qtW.QMenu
+qmenu = QtWidgets.QMenu
 
 Qt_Checked   = Qt.Checked
 Qt_Unchecked = Qt.Unchecked
 Qt_CheckStateRole = Qt.CheckStateRole
+PositionAtCenter = QtWidgets.QAbstractItemView.PositionAtCenter
 
 COL_ENABLED = Column.ENABLED.value
 
 
 @withlogger
-class ModTable_TreeView(qtW.QTreeView):
+class ModTable_TreeView(QtWidgets.QTreeView):
 
     enableModActions = pyqtSignal(bool)
 
@@ -48,7 +49,7 @@ class ModTable_TreeView(qtW.QTreeView):
 
         # placeholder for the associated search box and animation
         self._searchbox = None
-        """:type: qtW.QLineEdit"""
+        """:type: QtWidgets.QLineEdit"""
         self.animate_show_search = None
         """:type: QtCore.QPropertyAnimation"""
 
@@ -57,7 +58,7 @@ class ModTable_TreeView(qtW.QTreeView):
         self._err_types = ModError.NONE
 
         # create an undo stack for the mods tab
-        self._undo_stack = qtW.QUndoStack()
+        self._undo_stack = QtWidgets.QUndoStack()
 
     @property
     def undo_stack(self):
@@ -80,7 +81,7 @@ class ModTable_TreeView(qtW.QTreeView):
     ##=============================================
 
     def setupui(self, search_box):
-        """Setup searchbox functionality, make some UI adjustments"""
+        """Setup searchbox functionality"""
         ## setup search box ##
 
         self._searchbox = search_box
@@ -98,14 +99,7 @@ class ModTable_TreeView(qtW.QTreeView):
         self._searchbox.returnPressed.connect(
             self._on_searchbox_return)
 
-        ## some final UI adjustments ##
 
-        # hide directory column by default
-        self.setColumnHidden(Column.DIRECTORY, True)
-
-        # stretch the Name section
-        self.header().setSectionResizeMode(Column.NAME,
-                                           qtW.QHeaderView.Stretch)
 
     def reset_view(self):
         """Clears the search box and reloads the table data"""
@@ -127,6 +121,15 @@ class ModTable_TreeView(qtW.QTreeView):
 
         # only show error col if there are errors
         self._model.errorsAnalyzed.connect(self._analyze_errors)
+
+        ## some final UI adjustments ##
+
+        # hide directory column by default
+        self.setColumnHidden(Column.DIRECTORY, True)
+
+        # stretch the Name section
+        self.header().setSectionResizeMode(Column.NAME,
+                                           QtWidgets.QHeaderView.Stretch)
 
     def selectionChanged(self, selected=None, deselected=None):
 
@@ -226,6 +229,9 @@ class ModTable_TreeView(qtW.QTreeView):
         :return:
         """
         cindex = self.currentIndex()
+
+        # FIXME: selected row is off by 1
+
         result = self._model.search(text, cindex, direction)
 
         if result.isValid():
@@ -237,8 +243,7 @@ class ModTable_TreeView(qtW.QTreeView):
 
             self._selection_model.select(result,
                                          qISM.ClearAndSelect)
-            self.scrollTo(result,
-                          qtW.QAbstractItemView.PositionAtCenter)
+            self.scrollTo(result, PositionAtCenter)
             self.setCurrentIndex(result)
             return True
         return False
