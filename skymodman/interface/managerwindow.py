@@ -239,7 +239,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self._setupui_actions()
         self._setupui_button_connections()
         self._setupui_local_signals_connections()
-        self._setupui_slot_connections()
+        # self._setupui_slot_connections()
 
     def _setup_data_interface(self):
         """
@@ -315,12 +315,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                                       self.action_delete_profile])
 
 
-        # self.profile_group.addActions([self.action_new_profile,
-        #                               self.action_delete_profile])
-
         # Action Group for the mod-movement buttons.
         # this just makes it easier to enable/disable them all at once
-        # self.file_toolBar.addSeparator()
         # mmag => "Mod Movement Action Group"
         mmag = self.mod_movement_group = QtWidgets.QActionGroup(self)
 
@@ -409,146 +405,62 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # todo: remember user column resizes
 
     def _setupui_actions(self):
-        """Connect all the actions to their appropriate slots/whatevers
-
-        Actions:
-            * action_load_profile
-            * action_new_profile
-            * action_delete_profile
-            * action_rename_profile
-
-            * action_preferences
-            * action_quit
-
-            * action_install_mod
-            * action_reinstall_mod
-            * action_manual_install
-            * action_uninstall_mod
-            * action_choose_mod_folder
-
-            * action_edit_skyrim_ini
-            * action_edit_skyrimprefs_ini
-
-            * action_toggle_mod
-
-            * action_undo
-            * action_redo
-            * action_save_changes
-            * action_revert_changes
-
-            * action_move_mod_up
-            * action_move_mod_down
-            * action_move_mod_to_top
-            * action_move_mod_to_bottom
-            * action_move_mod_up
-
-            * action_show_search
-            * action_find_next
-            * action_find_previous
+        """
+        Connect all the actions to their appropriate slots/whatevers;
+        also set some shortcut sequences
         """
 
         self.LOGGER.debug("_setup_actions")
 
+        # create containers to enable easily setting up connections/
+        # shortcuts via simple loops
 
-        # action_new_profile
-        self.action_new_profile.triggered.connect(
-            self.on_new_profile_action)
+        # tuple(action, slot_on_trigger)
+        connections = [
+            (self.action_new_profile        , self.on_new_profile_action),
+            (self.action_delete_profile     , self.on_remove_profile_action),
+            (self.action_rename_profile     , self.on_rename_profile_action),
+            (self.action_preferences        , self.edit_preferences),
+            (self.action_quit               , self.close),
+            (self.action_install_mod        , self.install_mod_archive),
+            (self.action_manual_install     , partial(self.install_mod_archive, True)),
+            (self.action_reinstall_mod      , self.reinstall_mod),
+            (self.action_uninstall_mod      , self.uninstall_mod),
+            (self.action_choose_mod_folder  , self.choose_mod_folder),
+            (self.action_toggle_mod         , self.mod_table.toggle_selection_checkstate),
+            (self.action_save_changes       , self.on_save_command),
+            (self.action_revert_changes     , self.on_revert_command),
+            (self.action_move_mod_up        , partial(self.moveMods.emit, -1)),
+            (self.action_move_mod_down      , partial(self.moveMods.emit, 1)),
+            (self.action_move_mod_to_top    , self.moveModsToTop.emit),
+            (self.action_move_mod_to_bottom , self.moveModsToBottom.emit),
+            (self.action_find_next          , partial(self.mod_table.on_table_search, 1)),
+            (self.action_find_previous      , partial(self.mod_table.on_table_search, -1)),
+        ]
 
-        # action_delete_profile
-        self.action_delete_profile.triggered.connect(
-            self.on_remove_profile_action)
+        # tuple(action, shortcut-sequence)
+        qks = QtGui.QKeySequence
+        shortcuts = [
+            (self.action_quit, qks.Quit),
+            (self.action_save_changes, qks.Save),
+            (self.action_show_search, qks.Find),
+            (self.action_find_next, qks.FindNext),
+            (self.action_find_previous, qks.FindPrevious),
+        ]
 
-        # action_rename_profile
-        self.action_rename_profile.triggered.connect(
-            self.on_rename_profile_action)
+        ################################################
+        # connect all action triggers
+        for action, slot in connections:
+            action.triggered.connect(slot)
 
-        # --------------------------------------------------
+        # setup shortcuts
+        for action, shortcut in shortcuts:
+            action.setShortcut(shortcut)
 
-        # action_preferences
-        self.action_preferences.triggered.connect(
-            self.edit_preferences)
+        ################################################
 
-        # action_quit
-        self.action_quit.setShortcut(QtGui.QKeySequence.Quit)
-        # connect quit action to close event
-        self.action_quit.triggered.connect(self.close)
-
-        # --------------------------------------------------
-
-        # action_install_mod
-        self.action_install_mod.triggered.connect(
-            self.install_mod_archive)
-
-        self.action_manual_install.triggered.connect(
-            partial(self.install_mod_archive, True))
-
-        # action_reinstall_mod
-        self.action_reinstall_mod.triggered.connect(
-            self.reinstall_mod)
-
-        # action_uninstall_mod
-        self.action_uninstall_mod.triggered.connect(
-            self.uninstall_mod)
-
-        # action_choose_mod_folder
-        self.action_choose_mod_folder.triggered.connect(
-            self.choose_mod_folder)
-        # self.action_choose_mod_folder.setIcon(icons.get(
-        # 'folder', color_disabled=QPalette().color(QPalette.Midlight)))
-
-        # --------------------------------------------------
-
-        # action edit ... ini
-
-        # --------------------------------------------------
-
-        # action_toggle_mod
-        self.action_toggle_mod.triggered.connect(
-            self.mod_table.toggle_selection_checkstate)
-
-
-        # --------------------------------------------------
-
-        # action_save_changes
-        self.action_save_changes.setShortcut(
-            QtGui.QKeySequence.Save)
-        self.action_save_changes.triggered.connect(
-            self.on_save_command)
-
-        self.action_revert_changes.triggered.connect(
-            self.on_revert_command)
-
-        # --------------------------------------------------
-
-        # action_move_mod_up
-        # action_move_mod_down
-        self.action_move_mod_up.triggered.connect(
-            partial(self.moveMods.emit, -1))
-        self.action_move_mod_down.triggered.connect(
-            partial(self.moveMods.emit, 1))
-
-        # action_move_mod_to_top
-        # action_move_mod_to_bottom
-        self.action_move_mod_to_top.triggered.connect(
-            self.moveModsToTop.emit)
-        self.action_move_mod_to_bottom.triggered.connect(
-            self.moveModsToBottom.emit)
-
-        # --------------------------------------------------
-
-        # show search bar
-        self.action_show_search.setShortcut(QtGui.QKeySequence.Find)
-
-        # find next
-        self.action_find_next.setShortcut(QtGui.QKeySequence.FindNext)
-        self.action_find_next.triggered.connect(
-            partial(self.mod_table.on_table_search, 1))
-        # find prev
-        self.action_find_previous.setShortcut(QtGui.QKeySequence.FindPrevious)
-        self.action_find_previous.triggered.connect(
-            partial(self.mod_table.on_table_search, -1))
-
-       # --------------------------
+        # # self.action_choose_mod_folder.setIcon(icons.get(
+        # # 'folder', color_disabled=QPalette().color(QPalette.Midlight)))
 
         ## clear missing-from-disk mods
         # add to movement toolbar
@@ -614,18 +526,43 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         moveModsToBottom
 
         """
-        self.LOGGER.debug("_setup_signals")
+        self.LOGGER.debug("_setup_signals_and_slots")
 
-        self.newProfileLoaded.connect(self.on_profile_load)
+        connections = [
 
-        # connect the move up/down signal to the appropriate slot on view
-        self.moveMods.connect(
-            self.mod_table.move_selection)
-        # same for the move to top/button signals
-        self.moveModsToBottom.connect(
-            self.mod_table.move_selection_to_bottom)
-        self.moveModsToTop.connect(
-            self.mod_table.move_selection_to_top)
+            ## local signals -> local slots ##
+            ##-----
+            (self.newProfileLoaded, self.on_profile_load),
+
+            ## local signals -> non-local (on other components) slots ##
+            ## -----
+            # connect the move up/down signal to the appropriate slot on view
+            (self.moveMods, self.mod_table.move_selection),
+            # same for the move to top/bottom signals
+            (self.moveModsToBottom, self.mod_table.move_selection_to_bottom),
+            (self.moveModsToTop, self.mod_table.move_selection_to_top),
+
+            ## non-local signals -> local slots ##
+            ## -----
+            # ensure the UI is properly updated when the tab changes
+            (self.manager_tabs.currentChanged, self.on_tab_changed),
+            # depending on selection in table, the movement actions will be
+            # enabled or disabled
+            (self.mod_table.enableModActions, self.on_make_or_clear_mod_selection),
+            (self.mod_table.canMoveItems, self._enable_mod_move_actions),
+        ]
+
+        for signal, slot in connections:
+            signal.connect(slot)
+
+        # self.newProfileLoaded.connect(self.on_profile_load)
+
+        # self.moveMods.connect(
+        #     self.mod_table.move_selection)
+        # self.moveModsToBottom.connect(
+        #     self.mod_table.move_selection_to_bottom)
+        # self.moveModsToTop.connect(
+        #     self.mod_table.move_selection_to_top)
 
 
     def _setupui_slot_connections(self):
@@ -651,19 +588,19 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         ##-----------------------------------
 
         # ensure the UI is properly updated when the tab changes
-        self.manager_tabs.currentChanged.connect(
-            self.on_tab_changed)
-
-        ##===================================
-        ## Mod Table Tab
-        ##-----------------------------------
-
-        # depending on selection in table, the movement actions will be
-        # enabled or disabled
-        self.mod_table.enableModActions.connect(
-            self.on_make_or_clear_mod_selection)
-        self.mod_table.canMoveItems.connect(
-            self._enable_mod_move_actions)
+        # self.manager_tabs.currentChanged.connect(
+        #     self.on_tab_changed)
+        #
+        # ##===================================
+        # ## Mod Table Tab
+        # ##-----------------------------------
+        #
+        # # depending on selection in table, the movement actions will be
+        # # enabled or disabled
+        # self.mod_table.enableModActions.connect(
+        #     self.on_make_or_clear_mod_selection)
+        # self.mod_table.canMoveItems.connect(
+        #     self._enable_mod_move_actions)
 
         ##===================================
         ## File Tree Tab
