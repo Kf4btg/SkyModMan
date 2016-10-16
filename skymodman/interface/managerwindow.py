@@ -191,6 +191,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # make sure that whoever called this isn't lying
         if not Manager():
+            self.LOGGER.error("Manager NOT ready!")
             return
 
         self.LOGGER << "Notified Manager ready"
@@ -425,7 +426,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.mod_table.setupui(self.modtable_search_box)
 
-        # handler for dis-/en-abling the search actions
+        # handler for [dis|en]abling the search actions
         def on_enable_searchactions(enable):
             self.action_find_next.setEnabled(enable)
             self.action_find_previous.setEnabled(enable)
@@ -619,6 +620,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         btn_reset = self.save_cancel_btnbox.button(
             QtWidgets.QDialogButtonBox.Reset)
 
+        # connect the apply button to the 'save-changes' action
         btn_apply.clicked.connect(
             self.action_save_changes.trigger)
 
@@ -723,6 +725,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         self.LOGGER.debug("_setup_profile_selector")
 
+        # create the model
         model = models.ProfileListModel()
 
         # Only store names in profile selector
@@ -1166,9 +1169,13 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 desc.setFont(0, bfont)
                 desc.setTextAlignment(0, Qt.AlignTop)
 
-                # some QLabel shenanigans to work around the lack of
-                # word wrap in QTreeWidget
-                # FIXME: the label still only seems to 2 lines of text at most; a long-ish description can have its last few words cut off, depending on font size and width of the menu widget.
+                ## some QLabel shenanigans to work around the lack of
+                ## word wrap in QTreeWidget
+
+                # -F-I-X-M-E-: the label still only seems to 2 lines of
+                # text at most; a long-ish description can have its last
+                # few words cut off, depending on font size and width of
+                # the menu widget.
                 # ...update: setting the text interaction flags to
                 #    TextSelectableByMouse makes all the text visible...
                 #    and adds a bunch of empty space at the bottom of the
@@ -1324,7 +1331,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.action_delete_profile.setToolTip('Remove Profile')
             self.action_rename_profile.setEnabled(False)
 
-
         elif self.profile_name.lower() == 'default':
             self.action_delete_profile.setEnabled(False)
             self.action_delete_profile.setToolTip(
@@ -1396,12 +1402,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         to set up and enable a profile-specific override.
 
         """
-        # If a profile is currently loaded, this will set a directory
-        # override for the mods folder that applies to this profile only.
-        # The default directory can be set in the preferences dialog.
-        # When no profile is loaded, this will instead set the default
-        # directory.
-
 
         # noinspection PyTypeChecker
         moddir = QtWidgets.QFileDialog.getExistingDirectory(
