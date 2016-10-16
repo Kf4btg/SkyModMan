@@ -12,7 +12,7 @@ from skymodman.constants.keystrings import (Dirs as KeyStr_Dirs,
                                             INI as KeyStr_INI,
                                             UI as KeyStr_UI)
 
-from skymodman.interface import models, app_settings #, ui_utils
+from skymodman.interface import models, app_settings, profile_handler #, ui_utils
 from skymodman.interface.dialogs import message
 from skymodman.interface.widgets import alerts_button
 from skymodman.interface.install_helpers import InstallerUI
@@ -73,6 +73,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.filters = {} #type: dict [F,QtCore.QSortFilterProxyModel]
 
         self._currtab = TAB.MODTABLE
+
+        # get a helping hand...ler
+        self.profile_helper = profile_handler.ProfileHandler(self)
 
         self.profile_name = None # type: str
         # track currently selected profile by index as well
@@ -743,7 +746,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                     # Whether they clicked "no" or not, we
                     # don't bother reverting, mods list is getting
                     # reset; just disable the buttons
-                    self.mod_table.undo_stack.clear()
+                    # self.mod_table.undo_stack.clear()
                     # for s in self.undo_stacks:
                     #     s.clear()
 

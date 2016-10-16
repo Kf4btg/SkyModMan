@@ -102,8 +102,15 @@ class ModTable_TreeView(QtWidgets.QTreeView):
 
 
     def reset_view(self):
-        """Clears the search box and reloads the table data"""
+        """Clears the search box & undo stack, and reloads the table data"""
+
+        # clear search box
         self._searchbox.clear()
+
+        # reset undo stack
+        self.undo_stack.clear()
+
+        # (re)load (new?) data
         self.load_data()
 
     ##=============================================
