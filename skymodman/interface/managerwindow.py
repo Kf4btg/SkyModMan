@@ -4,7 +4,7 @@ import asyncio
 from PyQt5 import QtWidgets, QtGui
 # specifically import some frequently used names
 from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
-from PyQt5.QtWidgets import QMessageBox, QTreeWidgetItem, QLabel
+from PyQt5.QtWidgets import QMessageBox
 
 from skymodman import exceptions, constants, Manager
 from skymodman.constants import qModels as M, Tab as TAB
@@ -14,6 +14,7 @@ from skymodman.constants.keystrings import (Dirs as KeyStr_Dirs,
 
 from skymodman.interface import models, app_settings #, ui_utils
 from skymodman.interface.dialogs import message
+from skymodman.interface.widgets import alerts_button
 from skymodman.interface.install_helpers import InstallerUI
 from skymodman.log import withlogger #, icons
 from skymodman.utils.fsutils import check_path #, join_path
@@ -271,60 +272,15 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         be added to the toolbar.
         """
 
-        self.alerts_button = QtWidgets.QToolButton(self.file_toolBar)
+        self.alerts_button = alerts_button.AlertsButton(self.file_toolBar)
         self.alerts_button.setObjectName("alerts_button")
-
-        # noinspection PyTypeChecker,PyArgumentList
-        self.alerts_button.setIcon(QtGui.QIcon.fromTheme("dialog-warning"))
-        self.alerts_button.setText("Alerts")
-        self.alerts_button.setToolButtonStyle(Qt.ToolButtonFollowStyle)
-        self.alerts_button.setToolTip("View Alerts")
-        self.alerts_button.setStatusTip(
-            "There are issues which require your attention!")
-        self.alerts_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
-
-        self.alerts_button.setMenu(QtWidgets.QMenu(self.alerts_button))
-
-        # use a tree widget to make collapsible items
-        self.alerts_view_widget = QtWidgets.QTreeWidget(self.alerts_button)
-        # AbstractItemView.SelectionMode.NoSelection == 0
-        self.alerts_view_widget.setSelectionMode(0)
-        self.alerts_view_widget.setMinimumWidth(400)
-        self.alerts_view_widget.setColumnCount(2)
-        self.alerts_view_widget.setObjectName("alerts_view_widget")
-        self.alerts_view_widget.setHeaderHidden(True)
-
-        # hide the sub-itembranches that don't line up correctly with the
-        # top-aligned labels (note:: setting background: transparent
-        # on every ::branch makes the expansion arrow disappear
-        # for some reason. There may be a better way around that, but
-        # this is acceptable for now)
-        self.alerts_view_widget.setStyleSheet(
-            """
-            QTreeWidget::branch:!has-children {
-                background: transparent;
-            }
-            """
-            )
-        self.alerts_view_widget.setSizeAdjustPolicy(
-            self.alerts_view_widget.AdjustToContents)
-
-        # create the action that contains the popup
-        action_show_alerts = QtWidgets.QWidgetAction(self.alerts_button)
-
-        # set popup view as default widget
-        action_show_alerts.setDefaultWidget(self.alerts_view_widget)
-
-        # add the action to the menu of the alerts button;
-        # this causes the "menu" to consist wholly of the display widget
-        self.alerts_button.menu().addAction(action_show_alerts)
 
         ## OK...so, since QWidget.setVisible() does not work for items
         ## added to a toolbar with addWidget(?!), we need to save the
         ## action returned by the addWidget() method (who knew?!) and
         ## use its setVisible() &c. methods.
-        ## is this returned action the same as "action_show_alerts"
-        ## above? I have no idea!!
+        ## is this returned action the same as "show_popup_action"
+        ## of the button?? I have no idea!!!
         self.action_show_alerts = self.file_toolBar.addWidget(
             self.alerts_button)
         self.action_show_alerts.setObjectName("action_show_alerts")
@@ -403,7 +359,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         progress or activity of long-running processes.
         """
         self.LOGGER.debug("_setup_statusbar")
-
 
         # putting the bar and label together into a container
         # widget caused the 'busy' animation not to play...
@@ -939,9 +894,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.filetree_modlist.reset_view()
         self.filetree_fileviewer.reset_view()
 
-        # self._reset_table()  # this also loads the new data
-        # self._reset_file_tree()
-
         self._update_visible_components()
         self._update_enabled_actions()
 
@@ -1150,67 +1102,18 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # self.LOGGER << "update_alerts"
 
         # clear the list
-        self.alerts_view_widget.clear()
+        self.alerts_button.clear_widget()
 
         if self.Manager.has_alerts:
 
-            # get a bold font to use for labels
-            bfont = QtGui.QFont()
-            bfont.setBold(True)
-            for a in sorted(self.Manager.alerts, key=lambda al: al.label):
-                # the label/title as top-level item
-                alert_title = QTreeWidgetItem(self.alerts_view_widget,
-                                              [a.label])
-                alert_title.setFirstColumnSpanned(True)
-
-                # underneath the label, one can expand the item
-                # to view the description and suggested fix
-                desc = QTreeWidgetItem(alert_title, ["Desc:"])
-                desc.setFont(0, bfont)
-                desc.setTextAlignment(0, Qt.AlignTop)
-
-                ## some QLabel shenanigans to work around the lack of
-                ## word wrap in QTreeWidget
-
-                # -F-I-X-M-E-: the label still only seems to 2 lines of
-                # text at most; a long-ish description can have its last
-                # few words cut off, depending on font size and width of
-                # the menu widget.
-                # ...update: setting the text interaction flags to
-                #    TextSelectableByMouse makes all the text visible...
-                #    and adds a bunch of empty space at the bottom of the
-                #    label. Just can't win.
-                lbl_desc = QLabel(a.desc)
-                lbl_desc.setWordWrap(True)
-                lbl_desc.setAlignment(Qt.AlignTop)
-                lbl_desc.setTextInteractionFlags(Qt.TextSelectableByMouse)
-                self.alerts_view_widget.setItemWidget(desc, 1, lbl_desc)
-
-                # ditto
-                fix = QTreeWidgetItem(alert_title, ["Fix:"])
-                fix.setTextAlignment(0, Qt.AlignTop)
-                fix.setFont(0, bfont)
-
-                lbl_fix = QLabel(a.fix)
-                lbl_fix.setWordWrap(True)
-                lbl_fix.setAlignment(Qt.AlignTop)
-                lbl_fix.setTextInteractionFlags(Qt.TextSelectableByMouse)
-
-
-                self.alerts_view_widget.setItemWidget(fix, 1, lbl_fix)
-                alert_title.setExpanded(True)
+            self.alerts_button.update_widget(self.Manager.alerts)
 
             self.LOGGER << "Show alerts indicator"
             self.action_show_alerts.setVisible(True)
 
-            # adjust size of display treewidget and containing menu;
-            # have to set both Min and Max on the menu to get it to
-            # resize correctly
-            self.alerts_view_widget.adjustSize()
-            h = self.alerts_view_widget.size().height()
-            m = self.alerts_button.menu()
-            m.setMinimumHeight(h)
-            m.setMaximumHeight(h)
+            # readjust drop-down menu size to fit items
+            self.alerts_button.adjust_display_size()
+
         else:
             self.LOGGER << "Hide alerts indicator"
             # have to hide using action, not button
