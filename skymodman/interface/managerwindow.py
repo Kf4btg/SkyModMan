@@ -77,9 +77,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # get a helping hand...ler
         self.profile_helper = profile_handler.ProfileHandler(self)
 
-        self.profile_name = None # type: str
+        # self.profile_name = None # type: # str
         # track currently selected profile by index as well
-        self.profile_selector_index = -1
+        # self.profile_selector_index = -1
 
         # make sure the correct initial pages are showing
         self.manager_tabs.setCurrentIndex(self._currtab.value)
@@ -212,20 +212,25 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # perform some setup that requires the manager
         self._setup_data_interface()
 
-        PLP = constants.ProfileLoadPolicy
-        # load profile as indicated by settings
-        pload_policy = app_settings.Get(KeyStr_UI.PROFILE_LOAD_POLICY)
+        # load the initial profile (or not, depending on profile load policy)
+        self.profile_helper.load_initial_profile(
+            app_settings.Get(KeyStr_UI.PROFILE_LOAD_POLICY)
+        )
 
-        if pload_policy:
-            # convert to enum type from int
-            pload_policy = PLP(pload_policy)
-            to_load = {
-                PLP.last: KeyStr_INI.LAST_PROFILE,
-                PLP.default: KeyStr_INI.DEFAULT_PROFILE
-            }[pload_policy]
-            # get the name of the default/last profile and load its data
-            self.load_profile_by_name(
-                self.Manager.get_config_value(to_load))
+        # PLP = constants.ProfileLoadPolicy
+        # # load profile as indicated by settings
+        # pload_policy = app_settings.Get(KeyStr_UI.PROFILE_LOAD_POLICY)
+        #
+        # if pload_policy:
+        #     # convert to enum type from int
+        #     pload_policy = PLP(pload_policy)
+        #     to_load = {
+        #         PLP.last: KeyStr_INI.LAST_PROFILE,
+        #         PLP.default: KeyStr_INI.DEFAULT_PROFILE
+        #     }[pload_policy]
+        #     # get the name of the default/last profile and load its data
+        #     self.load_profile_by_name(
+        #         self.Manager.get_config_value(to_load))
 
 
     def _setup_ui_interface(self):
@@ -420,9 +425,13 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # tuple(action, slot_on_trigger)
         connections = [
-            (self.action_new_profile        , self.on_new_profile_action),
-            (self.action_delete_profile     , self.on_remove_profile_action),
-            (self.action_rename_profile     , self.on_rename_profile_action),
+            (self.action_new_profile        ,
+                self.profile_helper.on_new_profile_action),
+            (self.action_delete_profile     ,
+                self.profile_helper.on_remove_profile_action),
+            (self.action_rename_profile     ,
+                self.profile_helper.on_rename_profile_action),
+
             (self.action_preferences        , self.edit_preferences),
             (self.action_quit               , self.close),
             (self.action_install_mod        , self.install_mod_archive),
@@ -525,7 +534,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
             ## local signals -> local slots ##
             ##-----
-            (self.newProfileLoaded, self.on_profile_load),
 
             ## local signals -> non-local (on other components) slots ##
             ## -----
@@ -537,6 +545,13 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
             ## non-local signals -> local slots ##
             ## -----
+
+            # listen to profile helper for new profile
+            (self.profile_helper.newProfileLoaded, self.on_profile_load),
+
+            # enable/disable rename/remove-profile actions as needed
+            (self.profile_helper.enableProfileActions, self.update_profile_actions),
+
             # ensure the UI is properly updated when the tab changes
             (self.manager_tabs.currentChanged, self.on_tab_changed),
             # depending on selection in table, the movement actions will be
@@ -559,23 +574,25 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         self.LOGGER.debug("_setup_profile_selector")
 
+        self.profile_helper.setup(self.Manager, self.profile_selector)
+
         # create the model
-        model = models.ProfileListModel()
+        # model = models.ProfileListModel()
 
         # Only store names in profile selector
-        for profile in self.Manager.get_profiles():
-            model.insertRows(data=profile)
+        # for profile in self.Manager.get_profiles():
+        #     model.insertRows(data=profile)
 
-        self.profile_selector.setModel(model)
+        # self.profile_selector.setModel(model)
 
         # start with no selection
-        self.profile_selector.setCurrentIndex(-1)
+        # self.profile_selector.setCurrentIndex(-1)
         # call this to make sure the delete button is inactive
-        self.check_enable_profile_delete()
-
-        # can't activate this signal until after the selector is populated
-        self.profile_selector.currentIndexChanged.connect(
-            self.on_profile_select)
+        # self.check_enable_profile_delete()
+        #
+        # # can't activate this signal until after the selector is populated
+        # self.profile_selector.currentIndexChanged.connect(
+        #     self.on_profile_select)
 
     def _setup_table_model(self):
         """
@@ -679,81 +696,81 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.undoManager.setActiveStack(
             self.undo_stacks[self.current_tab])
 
-    @pyqtSlot(int)
-    def on_profile_select(self, index):
-        """
-        When a new profile is chosen from the dropdown list, load all
-        the appropriate data for that profile and replace the current
-        data with it. Also show a message about unsaved changes to the
-        current profile.
-
-        :param int index:
-        """
-
-        old_index = self.profile_selector_index
-
-        if index == old_index:
-            # ignore this; it just means that the user clicked cancel
-            # in the "save changes" dialog and we're resetting the
-            # displayed profile name.
-            self.LOGGER.debug("Resetting profile name")
-            return
-
-        if index < 0:
-            # we have a problem...
-            self.LOGGER.error("No profile chosen?!")
-        else:
-            # use userRole to get the 'on-disk' name of the profile
-            new_profile = self.profile_selector.currentData(
-                Qt.UserRole)
-
-            # if no active profile, just load the selected one.
-            # if somehow selected the same profile, do nothing
-
-            if self.Manager.profile and self.Manager.profile.name == new_profile:
-                return
-
-            # check for unsaved changes to the mod-list
-            reply = self.table_prompt_if_unsaved()
-
-            # only continue to change profile if user does NOT
-            # click cancel (or if there are no changes to save)
-            if reply == QtWidgets.QMessageBox.Cancel:
-                # reset the text in the profile selector;
-                # this SHOULDn't enter an infinite loop because,
-                # since we haven't yet changed
-                # self.profile_selector_index, now 'index' will be
-                # the same as 'old_index' at the top of this
-                # function and nothing else in the program will
-                # change (just the name shown in the profile
-                # selector)
-                self.profile_selector.setCurrentIndex(old_index)
-            else:
-                self.LOGGER.info(
-                    "Activating profile '{}'".format(
-                        new_profile))
-
-                if self.Manager.activate_profile(new_profile):
-
-                    self.logger << "Resetting views for new profile"
-
-                    # update our variable which tracks the current index
-                    self.profile_selector_index = index
-
-                    # No => "Don't save changes, drop them"
-                    # if reply == QtWidgets.QMessageBox.No:
-
-                    # Whether they clicked "no" or not, we
-                    # don't bother reverting, mods list is getting
-                    # reset; just disable the buttons
-                    # self.mod_table.undo_stack.clear()
-                    # for s in self.undo_stacks:
-                    #     s.clear()
-
-                    self.newProfileLoaded.emit(new_profile)
-                else:
-                    self.LOGGER.error("Profile Activation failed.")
-                    self.profile_selector.setCurrentIndex(old_index)
+    # @pyqtSlot(int)
+    # def on_profile_select(self, index):
+    #     """
+    #     When a new profile is chosen from the dropdown list, load all
+    #     the appropriate data for that profile and replace the current
+    #     data with it. Also show a message about unsaved changes to the
+    #     current profile.
+    #
+    #     :param int index:
+    #     """
+    #
+    #     old_index = self.profile_selector_index
+    #
+    #     if index == old_index:
+    #         # ignore this; it just means that the user clicked cancel
+    #         # in the "save changes" dialog and we're resetting the
+    #         # displayed profile name.
+    #         self.LOGGER.debug("Resetting profile name")
+    #         return
+    #
+    #     if index < 0:
+    #         # we have a problem...
+    #         self.LOGGER.error("No profile chosen?!")
+    #     else:
+    #         # use userRole to get the 'on-disk' name of the profile
+    #         new_profile = self.profile_selector.currentData(
+    #             Qt.UserRole)
+    #
+    #         # if no active profile, just load the selected one.
+    #         # if somehow selected the same profile, do nothing
+    #
+    #         if self.Manager.profile and self.Manager.profile.name == new_profile:
+    #             return
+    #
+    #         # check for unsaved changes to the mod-list
+    #         reply = self.table_prompt_if_unsaved()
+    #
+    #         # only continue to change profile if user does NOT
+    #         # click cancel (or if there are no changes to save)
+    #         if reply == QtWidgets.QMessageBox.Cancel:
+    #             # reset the text in the profile selector;
+    #             # this SHOULDn't enter an infinite loop because,
+    #             # since we haven't yet changed
+    #             # self.profile_selector_index, now 'index' will be
+    #             # the same as 'old_index' at the top of this
+    #             # function and nothing else in the program will
+    #             # change (just the name shown in the profile
+    #             # selector)
+    #             self.profile_selector.setCurrentIndex(old_index)
+    #         else:
+    #             self.LOGGER.info(
+    #                 "Activating profile '{}'".format(
+    #                     new_profile))
+    #
+    #             if self.Manager.activate_profile(new_profile):
+    #
+    #                 self.logger << "Resetting views for new profile"
+    #
+    #                 # update our variable which tracks the current index
+    #                 self.profile_selector_index = index
+    #
+    #                 # No => "Don't save changes, drop them"
+    #                 # if reply == QtWidgets.QMessageBox.No:
+    #
+    #                 # Whether they clicked "no" or not, we
+    #                 # don't bother reverting, mods list is getting
+    #                 # reset; just disable the buttons
+    #                 # self.mod_table.undo_stack.clear()
+    #                 # for s in self.undo_stacks:
+    #                 #     s.clear()
+    #
+    #                 self.newProfileLoaded.emit(new_profile)
+    #             else:
+    #                 self.LOGGER.error("Profile Activation failed.")
+    #                 self.profile_selector.setCurrentIndex(old_index)
 
     @pyqtSlot('QString')
     def on_profile_load(self, profile_name):
@@ -764,9 +781,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         :param str profile_name:
         """
-        self.profile_name = profile_name
+        # self.profile_helper.profile_name = profile_name
 
-        self.check_enable_profile_delete()
+        # self.check_enable_profile_delete()
 
         ## Reset the views
         self.mod_table.reset_view() # this also loads the new data
@@ -779,71 +796,71 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # also recheck alerts when loading new profile
         # self.update_alerts()
 
-    @pyqtSlot()
-    def on_new_profile_action(self):
-        """
-        When the 'add profile' button is clicked, create and show a
-        small dialog for the user to choose a name for the new profile.
-        """
+    # @pyqtSlot()
+    # def on_new_profile_action(self):
+    #     """
+    #     When the 'add profile' button is clicked, create and show a
+    #     small dialog for the user to choose a name for the new profile.
+    #     """
+    #
+    #     from skymodman.interface.dialogs.new_profile_dialog \
+    #         import NewProfileDialog
+    #
+    #     popup = NewProfileDialog(
+    #         combobox_model=self.profile_selector.model())
+    #
+    #     # display popup, wait for close and check signal
+    #     if popup.exec_() == popup.Accepted:
+    #         # add new profile if they clicked ok
+    #         new_profile = self.Manager.new_profile(popup.final_name,
+    #                                           popup.copy_from)
+    #
+    #         self.profile_selector.model().addProfile(new_profile)
+    #
+    #         # set new profile as active and load data
+    #         self.load_profile_by_name(new_profile.name)
+    #
+    #     del NewProfileDialog
 
-        from skymodman.interface.dialogs.new_profile_dialog \
-            import NewProfileDialog
+    # @pyqtSlot()
+    # def on_remove_profile_action(self):
+    #     """
+    #     Show a warning about irreversibly deleting the profile, then, if
+    #     the user accept the warning, proceed to delete the profile from
+    #     disk and remove its entry from the profile selector.
+    #     """
+    #     profile = self.Manager.profile
+    #
+    #     if message('warning', 'Confirm Delete Profile',
+    #                'Delete "' + profile.name + '"?',
+    #                'Choosing "Yes" below will remove this profile '
+    #                'and all saved information within it, including '
+    #                'customized load-orders, ini-edits, etc. Note '
+    #                'that installed mods will not be affected. This '
+    #                'cannot be undone. Do you wish to continue?'):
+    #         self.Manager.delete_profile(
+    #             self.profile_selector.currentData())
+    #         self.profile_selector.removeItem(
+    #             self.profile_selector.currentIndex())
 
-        popup = NewProfileDialog(
-            combobox_model=self.profile_selector.model())
-
-        # display popup, wait for close and check signal
-        if popup.exec_() == popup.Accepted:
-            # add new profile if they clicked ok
-            new_profile = self.Manager.new_profile(popup.final_name,
-                                              popup.copy_from)
-
-            self.profile_selector.model().addProfile(new_profile)
-
-            # set new profile as active and load data
-            self.load_profile_by_name(new_profile.name)
-
-        del NewProfileDialog
-
-    @pyqtSlot()
-    def on_remove_profile_action(self):
-        """
-        Show a warning about irreversibly deleting the profile, then, if
-        the user accept the warning, proceed to delete the profile from
-        disk and remove its entry from the profile selector.
-        """
-        profile = self.Manager.profile
-
-        if message('warning', 'Confirm Delete Profile',
-                   'Delete "' + profile.name + '"?',
-                   'Choosing "Yes" below will remove this profile '
-                   'and all saved information within it, including '
-                   'customized load-orders, ini-edits, etc. Note '
-                   'that installed mods will not be affected. This '
-                   'cannot be undone. Do you wish to continue?'):
-            self.Manager.delete_profile(
-                self.profile_selector.currentData())
-            self.profile_selector.removeItem(
-                self.profile_selector.currentIndex())
-
-    @pyqtSlot()
-    def on_rename_profile_action(self):
-        """
-        Query the user for a new name, then ask the mod-manager backend
-        to rename the profile folder.
-        """
-
-        # noinspection PyTypeChecker,PyArgumentList
-        newname = QtWidgets.QInputDialog.getText(self,
-                                       "Rename Profile",
-                                       "New name")[0]
-
-        if newname:
-            try:
-                self.Manager.rename_profile(newname)
-            except exceptions.ProfileError as pe:
-                message('critical', "Error During Rename Operation",
-                        text=str(pe), buttons='ok')
+    # @pyqtSlot()
+    # def on_rename_profile_action(self):
+    #     """
+    #     Query the user for a new name, then ask the mod-manager backend
+    #     to rename the profile folder.
+    #     """
+    #
+    #     # noinspection PyTypeChecker,PyArgumentList
+    #     newname = QtWidgets.QInputDialog.getText(self,
+    #                                    "Rename Profile",
+    #                                    "New name")[0]
+    #
+    #     if newname:
+    #         try:
+    #             self.Manager.rename_profile(newname)
+    #         except exceptions.ProfileError as pe:
+    #             message('critical', "Error During Rename Operation",
+    #                     text=str(pe), buttons='ok')
 
     @pyqtSlot(bool)
     def on_make_or_clear_mod_selection(self, has_selection):
@@ -1101,41 +1118,55 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # may contine as normal
         return None
 
-    def check_enable_profile_delete(self):
-        """
-        enable the remove and rename actions unless there is no profile
-        loaded or the profile name matches that of the default profile
-        (likely 'default')
+    @pyqtSlot(bool, str, bool)
+    def update_profile_actions(self, enable_remove, remove_tooltip, enable_rename):
         """
 
-        if self.profile_name is None:
-            self.action_delete_profile.setEnabled(False)
-            self.action_delete_profile.setToolTip('Remove Profile')
-            self.action_rename_profile.setEnabled(False)
-
-        elif self.profile_name.lower() == 'default':
-            self.action_delete_profile.setEnabled(False)
-            self.action_delete_profile.setToolTip(
-                'Cannot Remove Default Profile')
-            self.action_rename_profile.setEnabled(False)
-        else:
-            self.action_delete_profile.setEnabled(True)
-            self.action_delete_profile.setToolTip('Remove Profile')
-            self.action_rename_profile.setEnabled(True)
-
-    def load_profile_by_name(self, name):
+        :param bool enable_remove: whether to enable the 'delete profile' button
+        :param str remove_tooltip: tooltip for the delete profile button
+        :param bool enable_rename: whether to enable the 'rename profile' button
         """
-        Programatically update the profile selector to select the
-        profile given by `name`, triggering the ``on_profile_select``
-        slot.
 
-        :param name:
-        """
-        # set new profile as active and load data;
-        # search the selector's model for a name that matches the arg
-        self.profile_selector.setCurrentIndex(
-            self.profile_selector.findText(name,
-                                           Qt.MatchFixedString))
+        self.action_delete_profile.setEnabled(enable_remove)
+        self.action_delete_profile.setToolTip(remove_tooltip)
+        self.action_rename_profile.setEnabled(enable_rename)
+
+
+    # def check_enable_profile_delete(self):
+    #     """
+    #     enable the remove and rename actions unless there is no profile
+    #     loaded or the profile name matches that of the default profile
+    #     (likely 'default')
+    #     """
+    #
+    #     if self.profile_name is None:
+    #         self.action_delete_profile.setEnabled(False)
+    #         self.action_delete_profile.setToolTip('Remove Profile')
+    #         self.action_rename_profile.setEnabled(False)
+    #
+    #     elif self.profile_name.lower() == 'default':
+    #         self.action_delete_profile.setEnabled(False)
+    #         self.action_delete_profile.setToolTip(
+    #             'Cannot Remove Default Profile')
+    #         self.action_rename_profile.setEnabled(False)
+    #     else:
+    #         self.action_delete_profile.setEnabled(True)
+    #         self.action_delete_profile.setToolTip('Remove Profile')
+    #         self.action_rename_profile.setEnabled(True)
+
+    # def load_profile_by_name(self, name):
+    #     """
+    #     Programatically update the profile selector to select the
+    #     profile given by `name`, triggering the ``on_profile_select``
+    #     slot.
+    #
+    #     :param name:
+    #     """
+    #     # set new profile as active and load data;
+    #     # search the selector's model for a name that matches the arg
+    #     self.profile_selector.setCurrentIndex(
+    #         self.profile_selector.findText(name,
+    #                                        Qt.MatchFixedString))
 
     ###=============================================
     ## Actions
@@ -1155,8 +1186,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         from skymodman.interface.dialogs.preferences_dialog \
             import PreferencesDialog
 
-        pdialog = PreferencesDialog(self.profile_selector.model(),
-                                    self.profile_selector.currentIndex())
+        pdialog = PreferencesDialog(self.profile_helper.model,
+                                    self.profile_helper.selector_index)
 
         # connect some of the dialog's signals to the data managers
 

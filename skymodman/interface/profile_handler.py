@@ -14,6 +14,8 @@ class ProfileHandler(QtCore.QObject):
 
     newProfileLoaded = Signal(str)
 
+    enableProfileActions = Signal(bool, str, bool)
+
     def __init__(self, parent, *args, **kwargs):
 
         self._parent = parent # the main window
@@ -22,7 +24,7 @@ class ProfileHandler(QtCore.QObject):
 
         self.Manager = None
 
-        self.profile_name = None # type: str
+        self._profile_name = None # type: str
         self.selector_index = -1
 
         # initialized model that will be used for all components
@@ -52,6 +54,13 @@ class ProfileHandler(QtCore.QObject):
             # start with no selection
             self._selector.setCurrentIndex(-1)
 
+            # call this to make sure the delete button is inactive
+            self.check_enable_actions()
+
+            # can't activate this signal until after the selector is populated
+            self._selector.currentIndexChanged.connect(
+                self.on_profile_select)
+
 
     def check_enable_actions(self):
         """performs checks to determine whether the delete and rename
@@ -62,13 +71,16 @@ class ProfileHandler(QtCore.QObject):
             for the delete action; 3rd item is whether the rename action
             should be enabled"""
 
-        if self.profile_name is None:
-            return False, "Remove Profile", False
-        elif self.profile_name.lower() == 'default':
-            return False, "Cannot Remove Default Profile", False
+        if self._profile_name is None:
+            self.enableProfileActions.emit(
+                False, "Remove Profile", False)
+        elif self._profile_name.lower() == 'default':
+            self.enableProfileActions.emit(
+                False, "Cannot Remove Default Profile", False)
+        else:
+            self.enableProfileActions.emit(True, "Remove Profile", True)
 
-        return True, "Remove Profile", True
-
+    @Slot(int)
     def on_profile_select(self, index):
         """
         When a new profile is chosen from the dropdown list, load all
@@ -139,12 +151,19 @@ class ProfileHandler(QtCore.QObject):
                     # for s in self.undo_stacks:
                     #     s.clear()
 
+                    # update name
+                    self._profile_name = new_profile
+                    # disable/enable buttons as needed
+                    self.check_enable_actions()
+
+                    # tell rest of app about new profile
                     self.newProfileLoaded.emit(new_profile)
                 else:
                     self.LOGGER.error("Profile Activation failed.")
                     self._selector.setCurrentIndex(old_index)
 
 
+    @Slot()
     def on_new_profile_action(self):
         """
         When the 'add profile' button is clicked, create and show a
@@ -170,6 +189,7 @@ class ProfileHandler(QtCore.QObject):
         del NewProfileDialog
 
 
+    @Slot()
     def on_remove_profile_action(self):
         """
         Show a warning about irreversibly deleting the profile, then, if
@@ -191,7 +211,7 @@ class ProfileHandler(QtCore.QObject):
             self._selector.removeItem(
                 self._selector.currentIndex())
 
-
+    @Slot()
     def on_rename_profile_action(self):
         """
         Query the user for a new name, then ask the mod-manager backend
