@@ -148,8 +148,6 @@ class ProfileHandler(QtCore.QObject):
                     # don't bother reverting, mods list is getting
                     # reset; just disable the buttons
                     # self.mod_table.undo_stack.clear()
-                    # for s in self.undo_stacks:
-                    #     s.clear()
 
                     # update name
                     self._profile_name = new_profile
