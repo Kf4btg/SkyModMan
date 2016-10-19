@@ -6,7 +6,7 @@ from PyQt5 import QtWidgets, QtGui
 from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
 from PyQt5.QtWidgets import QMessageBox
 
-from skymodman import exceptions, constants, Manager
+from skymodman import constants, Manager
 from skymodman.constants import qModels as M, Tab as TAB
 from skymodman.constants.keystrings import (Dirs as KeyStr_Dirs,
                                             # INI as KeyStr_INI,
@@ -963,7 +963,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             import PreferencesDialog
 
         pdialog = PreferencesDialog(self.profile_helper.model,
-                                    self.profile_helper.selector_index)
+                                    self.profile_helper.current_index)
 
         # connect some of the dialog's signals to the data managers
 

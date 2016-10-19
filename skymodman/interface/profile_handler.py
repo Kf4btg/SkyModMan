@@ -25,7 +25,8 @@ class ProfileHandler(QtCore.QObject):
         self.Manager = None
 
         self._profile_name = None # type: str
-        self.selector_index = -1
+
+        # self.selector_index = -1
 
         # initialized model that will be used for all components
         # needing a list of available profiles
@@ -34,6 +35,12 @@ class ProfileHandler(QtCore.QObject):
         # Profile Selector combobox
         self._selector = None
         """:type: QtWidgets.QComboBox"""
+        # currently selected index in the profile-selector box
+        self._selidx = -1
+
+    @property
+    def current_index(self):
+        return self._selidx
 
     def setup(self, manager, selector):
         """Once the Manager has been initialized, call this to populate
@@ -61,6 +68,19 @@ class ProfileHandler(QtCore.QObject):
             self._selector.currentIndexChanged.connect(
                 self.on_profile_select)
 
+            # connect name-changed signal from model to manager
+
+            def on_name_changed(old, new):
+                try:
+                    self.Manager.rename_profile(new, old)
+
+                except exceptions.ProfileError as pe:
+                    message('critical', "Error During Rename Operation",
+                            text=str(pe), buttons='ok')
+
+
+            self.model.profileNameChanged.connect(on_name_changed)
+
 
     def check_enable_actions(self):
         """performs checks to determine whether the delete and rename
@@ -80,6 +100,20 @@ class ProfileHandler(QtCore.QObject):
         else:
             self.enableProfileActions.emit(True, "Remove Profile", True)
 
+    def selector_index_by_name(self, pname):
+        """Get the index in the profile-selector combobox of the profile
+        with the given name"""
+
+        return self._selector.findData(pname, Qt.UserRole,
+                                    # we know the data stored is a string
+                                    Qt.MatchFixedString)
+
+        # self._selector.findText(pname, Qt.MatchFixedString)
+
+    ##=============================================
+    ## Profile Action slots
+    ##=============================================
+
     @Slot(int)
     def on_profile_select(self, index):
         """
@@ -91,7 +125,7 @@ class ProfileHandler(QtCore.QObject):
         :param int index:
         """
 
-        old_index = self.selector_index
+        old_index = self._selidx
 
         if index == old_index:
             # ignore this; it just means that the user clicked cancel
@@ -139,7 +173,7 @@ class ProfileHandler(QtCore.QObject):
                     self.LOGGER << "Resetting views for new profile"
 
                     # update our variable which tracks the current index
-                    self.selector_index = index
+                    self._selidx = index
 
                     # No => "Don't save changes, drop them"
                     # if reply == QtWidgets.QMessageBox.No:
@@ -179,7 +213,8 @@ class ProfileHandler(QtCore.QObject):
             new_profile = self.Manager.new_profile(popup.final_name,
                                                    popup.copy_from)
 
-            self.model.addProfile(new_profile)
+            # add profile name to model
+            self.model.addProfile(new_profile.name)
 
             # set new profile as active and load data
             self.load_profile_by_name(new_profile.name)
@@ -209,25 +244,41 @@ class ProfileHandler(QtCore.QObject):
             self._selector.removeItem(
                 self._selector.currentIndex())
 
+    # this function is overloaded to accept either no argument or
+    # a single string argument
     @Slot()
-    def on_rename_profile_action(self):
+    @Slot(str)
+    def on_rename_profile_action(self, profile_name=None):
         """
         Query the user for a new name, then ask the mod-manager backend
         to rename the profile folder.
+
+        :param str profile_name: if provided, rename the profile
+            that has this current name; if omitted, rename the active
+            profile.
         """
 
-        # noinspection PyTypeChecker,PyArgumentList
-        newname = QtWidgets.QInputDialog.getText(self._parent,
-                                                 "Rename Profile",
-                                                 "New name")[0]
-
-        ## FIXME: this does NOT currently update the model or selector! This can lead to *duplicating* profiles and other horrible, horrible things!!
-        if newname:
+        # if None or ""
+        if not profile_name:
             try:
-                self.Manager.rename_profile(newname)
-            except exceptions.ProfileError as pe:
-                message('critical', "Error During Rename Operation",
-                        text=str(pe), buttons='ok')
+                profile_name = self.Manager.profile.name
+            except AttributeError as e:
+                # either no profile or no manager;
+                self.LOGGER.exception(e)
+                # can't really continue, so abort
+                return
+
+        # noinspection PyTypeChecker,PyArgumentList
+        newname = QtWidgets.QInputDialog.getText(
+            self._parent,
+            "Rename Profile '{}'".format(profile_name),
+            "New name")[0]
+
+        if newname:
+            # just update the model; the ProfileNameChanged signal
+            # should handle getting the Manager to do the real work
+            if not self.model.rename_profile(profile_name, newname):
+                self.LOGGER.error("Profile List model update failed!")
 
     def load_profile_by_name(self, name):
         """
@@ -239,8 +290,7 @@ class ProfileHandler(QtCore.QObject):
         """
         # set new profile as active and load data;
         # search the selector's model for a name that matches the arg
-        self._selector.setCurrentIndex(
-            self._selector.findText(name, Qt.MatchFixedString))
+        self._selector.setCurrentIndex(self.selector_index_by_name(name))
 
 
     def load_initial_profile(self, load_policy):

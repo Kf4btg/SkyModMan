@@ -1,5 +1,5 @@
 from PyQt5.Qt import QModelIndex
-from PyQt5.QtCore import Qt, QAbstractListModel
+from PyQt5.QtCore import Qt, QAbstractListModel, pyqtSignal
 
 from skymodman.log import withlogger
 
@@ -8,6 +8,8 @@ class ProfileListModel(QAbstractListModel):
     """Contains a list of names of the available profiles. The UserRole
     contains the on-disk name, while the DisplayRole contains a
     capitalized version that will appear in the selector"""
+
+    profileNameChanged = pyqtSignal(str, str)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -33,6 +35,25 @@ class ProfileListModel(QAbstractListModel):
         new_index = self.createIndex(current_rows, 0)
         self.dataChanged.emit(new_index, new_index)
 
+    def rename_profile(self, current_name, new_name):
+        """Convenience wrapper for setData so callers don't need to go
+        about determining the correct QModelIndex themselves"""
+
+        # to avoid setting a profile name to an empty string
+        if not (current_name and new_name):
+            self.LOGGER.error("Arguments must be valid strings")
+            return False
+
+        try:
+            row = self.profiles.index(current_name)
+
+        except ValueError as e:
+            # name not found
+            self.LOGGER.error("Profile '{}' not found".format(
+                current_name))
+            return False
+
+        return self.setData(self.index(row), new_name)
 
     def rowCount(self, *args, **kwargs) -> int:
         return len(self.profiles)
@@ -46,7 +67,7 @@ class ProfileListModel(QAbstractListModel):
         :param role:
         """
         if not index.isValid(): # or not (0<index.row()<len(self.profiles)):
-            return
+            return None
 
         if role==Qt.UserRole:
             return self.profiles[index.row()]
@@ -54,6 +75,36 @@ class ProfileListModel(QAbstractListModel):
         if role==Qt.DisplayRole:
             return self.profiles[index.row()].capitalize()
 
+    def setData(self, index, value, role=Qt.UserRole):
+        """
+        Allow changing the UserRole to support renaming profiles
+        via the model
+
+        :param QModelIndex index:
+        :param str value:
+        :param role:
+        """
+
+        # for a valid index & role, update the name if a non-empty
+        # string was passed
+        if index.isValid() and role == Qt.UserRole and value:
+            row = index.row()
+
+            # remember current value
+            old_name = self.profiles[row]
+
+            # update to new value
+            self.profiles[row] = value
+
+            # emit signal with old_name, new_name
+            self.profileNameChanged.emit(old_name, self.profiles[row])
+
+            # notify attached views
+            self.dataChanged.emit(index, index)
+
+            return True
+
+        return False
 
     def insertRows(self, row=0, count=1, parent_index=QModelIndex(), data=None, *args, **kwargs):
         """
