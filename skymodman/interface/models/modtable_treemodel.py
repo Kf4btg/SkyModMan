@@ -379,11 +379,15 @@ class ModTable_TreeModel(QAbstractItemModel):
                             re.escape(text))
                        )
 
+        # compile for performance
         regex = re.compile(regex, re.IGNORECASE)
 
+        # setup function to compare a mod's name with the regex
         def findstr(modentry):
             return regex.search(modentry.name)
 
+        # and set that function as the first arg for the method that
+        # searches parts of the list
         searcher = partial(self._search_slice, findstr)
 
         try:

@@ -115,6 +115,12 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             "afp": self.action_find_previous,   # 5
             "aum": self.action_uninstall_mod,   # 6
             "acm": self.action_clear_missing,
+            "asa": self.action_select_all,
+            "asn": self.action_select_none,
+
+            # can't use this on the mod table; might be able to use it
+            # on the fileview?
+            # "asi": self.action_select_inverse,
         }
 
         # define and read the application settings
@@ -425,6 +431,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             (self.action_move_mod_to_bottom , self.moveModsToBottom.emit),
             (self.action_find_next          , partial(self.mod_table.on_table_search, 1)),
             (self.action_find_previous      , partial(self.mod_table.on_table_search, -1)),
+            (self.action_select_all         , self.on_select_all),
+            (self.action_select_none        , self.on_select_none),
+
         ]
 
         # tuple(action, shortcut-sequence)
@@ -435,6 +444,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             (self.action_show_search, qks.Find),
             (self.action_find_next, qks.FindNext),
             (self.action_find_previous, qks.FindPrevious),
+            (self.action_select_all, qks.SelectAll),
+            (self.action_select_none, qks.Deselect),
         ]
 
         ################################################
@@ -535,6 +546,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             # enabled or disabled
             (self.mod_table.enableModActions, self.on_make_or_clear_mod_selection),
             (self.mod_table.canMoveItems, self._enable_mod_move_actions),
+
         ]
 
         for signal, slot in connections:
@@ -684,7 +696,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         for a in (self.mod_movement_group,
                   self.action_uninstall_mod,
                   self.action_reinstall_mod,
-                  self.action_toggle_mod):
+                  self.action_toggle_mod,
+                  self.action_select_none):
             a.setEnabled(has_selection)
 
     @pyqtSlot(bool)
@@ -735,6 +748,16 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def on_redo(self):
         self.undoManager.redo()
 
+    @pyqtSlot()
+    def on_select_all(self):
+        if self.current_tab == TAB.MODTABLE:
+            self.mod_table.selectAll()
+
+    @pyqtSlot()
+    def on_select_none(self):
+        """Deselect"""
+        if self.current_tab == TAB.MODTABLE:
+            self.mod_table.clearSelection()
 
     # </editor-fold>
 
@@ -867,7 +890,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         s = {c:False for c in all_components.keys()}
 
         if self.current_tab == TAB.MODTABLE:
-            s["mmg"] = s["atm"] = s["aum"] = self.mod_table.selectionModel().hasSelection()
+            s["asa"] = self.mod_table.item_count > 0
+            s["mmg"] = s["atm"] = s["aum"] = s["asn"] = self.mod_table.has_selection
             s["asc"] = s["arc"] = not self.undoManager.isClean()
             s["afn"] = s["afp"] = bool(self.mod_table.search_text)
             s["acm"] = bool(self.mod_table.errors_present & constants.ModError.DIR_NOT_FOUND)

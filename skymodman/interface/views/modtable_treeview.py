@@ -31,6 +31,9 @@ class ModTable_TreeView(QtWidgets.QTreeView):
     setStatusMessage = pyqtSignal(str)
     """emitted when the table would like to update the main window status bar"""
 
+    # itemsLoaded = pyqtSignal(int)
+    # """emitted with the number of items in the table after loading is finished"""
+
     # TODO: this could likely be more generic; it's meant to inform the main window to reanalyze which actions are active (in particular, the clear_missing_mods action)
     errorsChanged = pyqtSignal(int)
 
@@ -67,6 +70,20 @@ class ModTable_TreeView(QtWidgets.QTreeView):
     @property
     def errors_present(self):
         return self._err_types
+
+    @property
+    def has_selection(self):
+        try:
+            return self._selection_model.hasSelection()
+        except AttributeError:
+            return False
+
+    @property
+    def item_count(self):
+        try:
+            return self._model.rowCount()
+        except AttributeError:
+            return 0
 
     @property
     def search_text(self):
@@ -235,9 +252,13 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         :param int direction: positive for up, negative for down
         :return:
         """
+
         cindex = self.currentIndex()
 
         # FIXME: selected row is off by 1
+        # fixme: searching again always seem to return the
+        # same index (I suspect this is directly related to
+        # the off-by-1 error)
 
         result = self._model.search(text, cindex, direction)
 
@@ -312,6 +333,15 @@ class ModTable_TreeView(QtWidgets.QTreeView):
 
         for i in range(self._model.columnCount()):
             self.resizeColumnToContents(i)
+
+        # set the current index to the first item in the
+        # table WITHOUT selecting it; this allows searching
+        # to work properly without first clicking on an item
+        self._selection_model.setCurrentIndex(
+            self._model.index(0),
+            qISM.NoUpdate)
+
+        # self.itemsLoaded.emit(self._model.rowCount())
 
     def toggle_selection_checkstate(self):
         """

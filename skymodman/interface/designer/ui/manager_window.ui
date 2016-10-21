@@ -18,7 +18,7 @@
     <item row="0" column="0" colspan="5">
      <widget class="QTabWidget" name="manager_tabs">
       <property name="currentIndex">
-       <number>1</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="installed_mods_tab">
        <property name="sizePolicy">
@@ -407,6 +407,9 @@
     <addaction name="action_save_changes"/>
     <addaction name="action_revert_changes"/>
     <addaction name="separator"/>
+    <addaction name="action_select_all"/>
+    <addaction name="action_select_none"/>
+    <addaction name="separator"/>
     <addaction name="menu_ini_files"/>
    </widget>
    <widget class="QMenu" name="menu_mod">
@@ -792,6 +795,39 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+Shift+I</string>
+   </property>
+  </action>
+  <action name="action_select_all">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="icon">
+    <iconset theme="edit-select-all"/>
+   </property>
+   <property name="text">
+    <string>Select All</string>
+   </property>
+  </action>
+  <action name="action_select_none">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="icon">
+    <iconset theme="edit-select-none"/>
+   </property>
+   <property name="text">
+    <string>Clear Selection</string>
+   </property>
+  </action>
+  <action name="action_select_inverse">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="icon">
+    <iconset theme="edit-select-invert"/>
+   </property>
+   <property name="text">
+    <string>Invert Selection</string>
    </property>
   </action>
  </widget>
