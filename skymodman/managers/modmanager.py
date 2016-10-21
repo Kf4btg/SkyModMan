@@ -512,7 +512,7 @@ class ModManager:
 
         # self.check_dirs()
 
-        if self._update_modinfo(True):
+        if self._update_modinfo(True, True):
             self.find_all_mod_files(True, True)
             self._dbman.detect_file_conflicts()
 
@@ -538,14 +538,13 @@ class ModManager:
         self._profileman.set_active_profile(profile_name)
 
         # ...only the MODS dir is ever checked; is there actually a
-        # need (other than setting alerts) to track them all here?
-        # Or is setting alerts a good-enough reason?
+        # need  to track them all here?
 
         moddir_changed = prev_dirs['mods']   != self._folders['mods']
         skydir_changed = prev_dirs['skyrim'] != self._folders['skyrim']
 
         # load/generate modinfo and mod table, as needed
-        if self._update_modinfo(moddir_changed) and (
+        if self._update_modinfo(moddir_changed, skydir_changed) and (
                     moddir_changed or skydir_changed):
             # if we successfully managed to load/generate mod info,
             # find all mod-related files on disk (if required) and
@@ -562,7 +561,7 @@ class ModManager:
         # finally, clear the "list of enabled mods" cache (used by installer)
         self._enabledmods = None
 
-    def _update_modinfo(self, moddir_changed):
+    def _update_modinfo(self, moddir_changed, skydir_changed):
         """
         When a new (or the first) profile is loaded, rebuild the mods
         table from that profile's modinfo file. Compare the information
@@ -586,7 +585,7 @@ class ModManager:
         self.LOGGER << "<==Method called"
 
         # first, reinitialize the db tables
-        self._dbman.reinit(files=moddir_changed)
+        self._dbman.reinit(files=moddir_changed, sky=skydir_changed)
 
         # try to read modinfo file (populates "mods" table)
         if self._dbman.load_mod_info(self.profile.modinfo):
@@ -615,7 +614,8 @@ class ModManager:
 
         if self._folders['mods']:
             # populate the mods table from the main mods directory
-            self._dbman.get_mod_data_from_directory(self._folders['mods'].path)
+            # self._dbman.get_mod_data_from_directory(self._folders['mods'].path)
+            self._dbman.gen_mod_info_from_disk(self._folders['mods'].path)
             # and (re)generate the modinfo file using default values
             self.save_mod_info()
             # return success
@@ -644,6 +644,9 @@ class ModManager:
         Obtain an iterator over all the rows in the database which yields
         _all_ the info for a mod as a dict, intended for feeding to
         ModEntry(**d) or using directly.
+
+        This ignores the fake 'Skyrim' mod, though it is still
+        accessible in the database table
 
         :rtype: __generator[dict[str, sqlite3.Row], Any, None]
         """
@@ -691,7 +694,8 @@ class ModManager:
         # Skyrim Data folder to the db
         if skyfiles:
             if self._folders['skyrim']:
-                self._dbman.load_skyfiles(self._folders['skyrim'].path)
+                self._dbman.get_unmanaged_mod_files(self._folders['skyrim'].path)
+                # self._dbman.load_skyfiles(self._folders['skyrim'].path)
                     # self.get_directory(ks_dir.SKYRIM,
                     #                    aspath=True))
             else:

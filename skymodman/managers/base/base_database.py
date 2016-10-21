@@ -237,10 +237,12 @@ class BaseDBManager:
 
         :param int values_count: number of ? to use for the values
         :param str table: name of table
-        :param fields: optional field names for table
+        :param fields: optional field names for table (if any are
+            provided, the total number provided must equal `values_count`)
         :param params:
-        :param many:
-        :return:
+        :param many: if True (the default) use an executemany() command
+            rather than an execute() command
+        :return: cursor created by execution
         """
         self.checktx()
 
@@ -265,9 +267,9 @@ class BaseDBManager:
             raise KeyError(table)
 
         if not kwargs:
-            return self._con.execute(
+            return int(self._con.execute(
                 "SELECT COUNT(*) FROM {}".format(table)
-            ).fetchone()[0]
+            ).fetchone()[0])
         else:
             q = "SELECT COUNT(*) FROM {} WHERE ".format(table)
             keys = []
@@ -279,4 +281,4 @@ class BaseDBManager:
                 vals.append(v)
 
             q += ", ".join(["{} = ?".format(k) for k in keys])
-            return self._con.execute(q, vals).fetchone()[0]
+            return int(self._con.execute(q, vals).fetchone()[0])
