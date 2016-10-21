@@ -255,11 +255,6 @@ class ModTable_TreeView(QtWidgets.QTreeView):
 
         cindex = self.currentIndex()
 
-        # FIXME: selected row is off by 1
-        # fixme: searching again always seem to return the
-        # same index (I suspect this is directly related to
-        # the off-by-1 error)
-
         result = self._model.search(text, cindex, direction)
 
         if result.isValid():

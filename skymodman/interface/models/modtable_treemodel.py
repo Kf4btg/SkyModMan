@@ -408,7 +408,7 @@ class ModTable_TreeModel(QAbstractItemModel):
                 return QModelIndex()
 
         if next_result:
-            return self.createIndex(next_result.ordinal-1, COL_NAME)
+            return self.createIndex(next_result.ordinal, COL_NAME)
 
         # i don't think we'll ever reach here...
         # but better safe than sorry, I guess
