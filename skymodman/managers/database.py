@@ -216,6 +216,8 @@ class DBManager(BaseDBManager, Submanager):
 
         self.LOGGER << "<==Method call"
 
+
+        # FIXME: after first load, unmanaged mods (other than skyrim) are in modinfo file; but since we add them here, there's a conflict on the UNIQUE constraint when the modinfo file is read. We need them to be in the modinfo file so we can know whether they've been disabled or had their load order changed, but we also need to make sure they're correctly generated if they're missing from the modinfo file...Find a way to reconcile this!
         # first off, load the vanilla mods
         if self.mainmanager.Folders['skyrim']:
             self.get_unmanaged_mods(self.mainmanager.Folders['skyrim'].path)
@@ -897,7 +899,7 @@ class DBManager(BaseDBManager, Submanager):
                           .format(num_removed))
 
         dblist = [r["directory"] for r in
-                  self.conn.execute("SELECT directory FROM mods")]
+                  self.conn.execute("SELECT directory FROM mods WHERE managed = 1")]
 
         # make a copy of the mods list since we may be
         # modifying its contents

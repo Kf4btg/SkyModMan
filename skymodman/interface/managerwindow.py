@@ -887,7 +887,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # this is a selector that, depending on how it is
         # modified below, will allow us to set every
         # component to its appropriate enabled state
-        s = {c:False for c in all_components.keys()}
+        s = {c:False for c in all_components}
 
         if self.current_tab == TAB.MODTABLE:
             s["asa"] = self.mod_table.item_count > 0
