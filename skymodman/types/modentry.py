@@ -1,8 +1,11 @@
 # from collections import namedtuple
 # TModEntry = namedtuple("TModEntry", ['enabled', 'name', 'modid', 'version', 'directory', 'ordinal'])
+from functools import total_ordering
+
 from skymodman import Manager
 
 
+@total_ordering
 class ModEntry:
     __slots__ = ('enabled', 'name', 'modid', 'version',
                  'directory', 'ordinal', 'managed', 'error')
@@ -12,6 +15,24 @@ class ModEntry:
     def __init__(self, enabled=None, name=None, modid=None,
                  version=None, directory=None, ordinal=None,
                  managed=None, error=None):
+        """
+
+        :param int enabled: 0/1; togglable by user
+        :param str name: Customizable by user
+        :param int modid: Nexus id (might need to rename this field)
+        :param str version: arbitrary, set by mod author
+        :param str directory: arbitrary, must be unique among all other
+            mod entries
+        :param int ordinal: should generally be any integer >=0; not
+            tied to this mod, but must still be unique amongst all other
+            entries (i.e. if this changes, other entries must be changed
+            accordingly)
+        :param int managed: 0/1, determined by installation location
+        :param int error: bitwise-combination of constants.enums.ModError values
+        """
+
+        # TODO: it really sounds like the 'ordinal' should be external to the mod entry and looked up on query
+
         self.enabled   = enabled
         self.name      = name
         self.modid     = modid
@@ -19,20 +40,32 @@ class ModEntry:
         self.directory = directory
         self.ordinal   = ordinal
         self.managed   = managed
-        # Error is a bitwise-combination of MOD_ERROR types
+        # Error is a bitwise-combination of constants.enums.ModError values
         self.error     = error
 
+    @property
+    def key(self):
+        """Return a unique identifier for this modentry; for managed
+        mods, that will be the name of the mod's directory in the mod-
+        storage folder. For unmanaged vanilla "mods", it will likely be
+        something like the name of the DLC (e.g. 'HearthFires'). For
+        unmanaged, non-vanilla mods (files discovered in the skyrim
+        data folder that were manually installed by the user), it will
+        be the name of the main plugin."""
+
+        # at the moment, we're still calling this 'directory'
+        return self.directory
 
     @property
     def filelist(self):
         """Return the list of files contained by this mod."""
         # recently-queried mods are cached by modmanager
-        return Manager().get_mod_file_list(self.directory)
+        return Manager().get_mod_file_list(self.key)
 
     @property
     def filetree(self):
         """Return the files contained by this mod as a tree"""
-        return Manager().get_mod_file_tree(self.directory)
+        return Manager().get_mod_file_tree(self.key)
 
 
     # @filelist.setter
@@ -65,3 +98,19 @@ class ModEntry:
 
     def __repr__(self):
         return self.__class__.__name__ + "(enabled={0.enabled}, name='{0.name}', modid={0.modid}, version='{0.version}', directory='{0.directory}', ordinal={0.ordinal}, managed={0.managed}, error={0.error})".format(self)
+
+    ##=============================================
+    ## comparison
+    ##=============================================
+
+    def __eq__(self, other):
+        if isinstance(other, ModEntry):
+            return other.key == self.key
+        return NotImplemented
+
+    # this should be all we need to do; let 'total_ordering' decorator
+    # handle the rest
+    def __lt__(self, other):
+        return self.ordinal < other.ordinal #ordinal is unique, but not constant
+    def __gt__(self, other):
+        return self.ordinal > other.ordinal
