@@ -6,10 +6,12 @@ from pathlib import Path, PurePath
 from itertools import count, repeat
 from collections import defaultdict, namedtuple
 
-from skymodman import exceptions
+# from skymodman import exceptions
 from skymodman.managers.base import Submanager, BaseDBManager
-from skymodman.constants import (db_fields, db_fields_noerror,
-                                 db_field_order, ModError, keystrings)
+
+from skymodman.types.modcollection import ModCollection
+from skymodman.types import ModEntry
+from skymodman.constants import db_fields, db_fields_noerror, ModError #, db_field_order, keystrings
 from skymodman.log import withlogger
 from skymodman.utils import tree
 
@@ -101,6 +103,9 @@ class DBManager(BaseDBManager, Submanager):
 
         # temporary storage for info about unmanaged mods
         self._vanilla_mod_info = []
+
+        ## Try populating the modcollection on load
+        self._collection = ModCollection()
 
         # These are created from the database, so it seems like it may
         # be best just to store them in this class:
@@ -202,268 +207,41 @@ class DBManager(BaseDBManager, Submanager):
             return self.conn.execute(
                 "UPDATE mods SET error = 0 WHERE error != 0").rowcount
 
-    ##################
-    ## DATA LOADING ##
-    ##################
-
-    def load_mod_info(self, json_source):
+    def remove_files(self, for_mod):
         """
-        read the saved mod information from a json file and
-        populate the in-memory database
+        Remove all data rows from the modfiles table that belong to the
+        specified mod
 
-        :param str|Path json_source: path to modinfo.json file
+        :param for_mod: Name of mod's directory on disk (i.e. the ID
+            under which they are keyed in the db)
         """
+        if not self._empty['modfiles']:
+            self.LOGGER << "Removing files for mod '{}' from database".format(
+                for_mod)
 
-        self.LOGGER << "<==Method call"
+            with self.conn:
+                self.conn.execute(
+                    "DELETE FROM modfiles WHERE directory = ?",
+                    (for_mod,))
 
+        if not self._empty['missingfiles']:
+            with self.conn:
+                self.conn.execute(
+                    "DELETE FROM missingfiles WHERE directory = ?",
+                    (for_mod,))
 
-        # FIXME: after first load, unmanaged mods (other than skyrim) are in modinfo file; but since we add them here, there's a conflict on the UNIQUE constraint when the modinfo file is read. We need them to be in the modinfo file so we can know whether they've been disabled or had their load order changed, but we also need to make sure they're correctly generated if they're missing from the modinfo file...Find a way to reconcile this!
-        # first off, load the vanilla mods
-        if self.mainmanager.Folders['skyrim']:
-            self.get_unmanaged_mods(self.mainmanager.Folders['skyrim'].path)
+        if not self._empty['hiddenfiles']:
+            with self.conn:
+                self.conn.execute(
+                    "DELETE FROM hiddenfiles WHERE directory = ?",
+                    (for_mod,))
 
-        if not isinstance(json_source, Path):
-            json_source = Path(json_source)
+    ##=============================================
+    ## DB Querying/analysis
+    ## ---------------------
+    ## Mostly convenenience methods
+    ##=============================================
 
-        success = True
-        with json_source.open('r') as f:
-            # read from json file and convert mappings
-            # to ordered tuples for sending to sqlite
-            try:
-                mods = json.load(f, object_pairs_hook=_to_row_tuple)
-                self.add_to_mods_table(mods)
-                # self.fill_mods_table(mods)
-
-            except json.decoder.JSONDecodeError:
-                self.LOGGER.error("No mod information present in {}, "
-                                  "or file is malformed."
-                                  .format(json_source))
-                success = False
-        return success
-
-
-    def load_hidden_files(self, json_source):
-        """
-
-        :param str|Path json_source:
-        :return: success of operation
-        """
-        self.LOGGER.info("Analyzing hidden files")
-
-        if not isinstance(json_source, Path):
-            json_source = Path(json_source)
-        success = False
-
-        with json_source.open('r') as f:
-            try:
-                hiddenfiles = json.load(f)
-                if hiddenfiles:
-                    # if there were any listed, mark table non-empty
-                    self._empty['hiddenfiles'] = False
-
-                    for mod, files in hiddenfiles.items():
-                        # gethiddenfiles returns a list of 1-tuples,
-                        # each one with a filepath
-                        hfiles = self._gethiddenfiles(files, "", [])
-
-                        # we're committing to the db after each mod is
-                        # handled; waiting until the end might speed things
-                        # up, but doing it this way means that if there's a
-                        # problem with one of the mods, we only rollback
-                        # that one transaction instead of losing the info
-                        # for EVERY mod. Savepoints may be another approach.
-                        with self._con:
-                            self._con.executemany(
-                                "INSERT INTO hiddenfiles VALUES (?, ?)",
-                                zip(repeat(mod), hfiles)
-                            )
-
-                # [print(*r, sep="\t|\t") for r in
-                #  self._con.execute("select * from hiddenfiles")]
-                success=True
-
-            except json.decoder.JSONDecodeError:
-                self.LOGGER.warning("No hidden files listed in {}, "
-                                    "or file is malformed."
-                                    .format(json_source))
-
-        return success
-
-    def _gethiddenfiles(self, basedict, currpath, flist, join=os.path.join):
-        """
-        Recursive helper for loading the list of hiddenfiles from disk
-
-        :param basedict:
-        :param currpath:
-        :param flist:
-        :param join: speed up execution by locally binding os.path.join
-        :return: list of hidden files
-        """
-        for key, value in basedict.items():
-            if isinstance(value, list):
-                flist.extend(join(currpath, fname) for fname in value)
-            else:
-                flist = self._gethiddenfiles(value, join(currpath, key), flist)
-
-        return flist
-    ###################################
-
-    def save_hidden_files(self):
-        """
-        Save the contents of the hiddenfiles table to the
-        `hiddenfiles.json` file of the current profile
-
-        :return:
-        """
-        if self.mainmanager.profile:
-            self.save_hidden_files_to(self.mainmanager.profile.hidden_files)
-
-
-    def save_hidden_files_to(self, json_target):
-        """
-        Serialize the contents of the hiddenfiles table to a file in
-        json format
-
-        :param str|Path json_target: path to hiddenfiles.json file for current profile
-        """
-
-        # Note: I notice ModOrganizer adds a '.mohidden' extension to every file it hides (or to the parent directory); hmm...I'd like to avoid changing the files on disk if possible
-
-        if not isinstance(json_target, Path):
-            json_target = Path(json_target)
-
-        # build a tree from the database and jsonify it to disk
-        htree = tree.Tree()
-
-        for row in self.conn.execute(
-            "SELECT * FROM hiddenfiles ORDER BY directory, filepath"):
-            p = PurePath(row['directory'], row['filepath'])
-            pathparts = p.parts[:-1]
-
-            htree.insert(pathparts, p.name)
-
-        with json_target.open('w') as f:
-            f.write(str(htree))
-
-        # print(tree.to_string(2))
-
-    def remove_hidden_files(self, mod_dir, file_list):
-        """
-        Remove the items (filepaths) in file list from the hiddenfiles
-        db table. If `file_list` contains more than 900 items, they
-        will be deleted in batches of 900 (999 is parameter
-        limit in sqlite)
-
-        :param mod_dir: directory name of the mod from which to delete
-        :param file_list: list of files
-        """
-
-        self.checktx()
-
-        _q = "DELETE FROM hiddenfiles" \
-             " WHERE directory = '{mdir}'" \
-             " AND filepath IN ({paths})"
-
-        c = self.conn.cursor()
-
-        if len(file_list) <= _SQLMAX:
-            # nothing special
-            _q=_q.format(mdir=mod_dir,
-                         paths=", ".join("?" * len(file_list)))
-            c.execute(_q, file_list)
-        else:
-            # something special
-            sections, remainder = divmod(len(file_list), _SQLMAX)
-            for i in range(sections):
-                s = _SQLMAX * i
-                query = _q.format(mdir=mod_dir,
-                                  paths=", ".join('?' * _SQLMAX))
-                c.execute(query, file_list[s:s + _SQLMAX])
-            if remainder:
-                query = _q.format(mdir=mod_dir,
-                                  paths=", ".join('?' * remainder))
-                c.execute(query, file_list[sections * _SQLMAX:])
-
-        return c
-
-    def files_hidden(self, for_mod):
-        """
-        Yield paths of currently hidden files for the given mod
-
-        :param for_mod: directory name of the mod
-        """
-
-        yield from (r["filepath"]
-                    for r in self.conn.execute(
-            "SELECT * FROM hiddenfiles WHERE directory = ?",
-            (for_mod, )
-        ))
-
-    def add_to_mods_table(self, mod_list):
-        """
-        Dynamically build the INSERT statement from the list of fields,
-        then insert the values from mod_list (a sequence of tuples) into
-        the database. The changes are committed after all values have
-        been inserted.
-
-        Does not check for an empty mods table.
-
-        :param mod_list:
-        """
-        self.LOGGER << "<==Method call"
-
-        # ignore the error field for now
-        with self.conn:
-            # insert the list of row-tuples into the in-memory db
-            self.conn.executemany(
-                "INSERT INTO mods({}) VALUES ({})".format(
-                    ", ".join(db_fields_noerror),
-                    ", ".join("?" * len(db_fields_noerror))
-                ),
-                mod_list)
-
-            # mark db as initialized (if it wasn't already)
-            self._empty['mods'] = False
-
-    ############
-    ## Saving ##
-    ############
-
-    def save_mod_info(self, json_target):
-        """
-        Write the data from the in-memory database to a
-        json file on disk. The file will be overwritten, or
-        created if it does not exist
-
-        :param str|Path json_target: path to modinfo.json file
-        """
-
-        if not isinstance(json_target, Path):
-            json_target = Path(json_target)
-
-        # we don't save the ordinal rank, so we need to get a list (set)
-        # of the fields without "ordinal" Using sets here is OK because
-        # field order doesn't matter when saving
-        noord_fields = set(db_fields) - {db_fields.FLD_ORD, db_fields.FLD_ERR}
-
-        modinfo = []
-
-        # select (all fields other than ordinal & error)
-        # from a subquery of (all fields ordered by ordinal).
-        # ignore 'skyrim' mod
-        for row in self.conn.execute(
-                "SELECT {} FROM (SELECT * FROM mods WHERE directory != 'Skyrim' ORDER BY ordinal)"
-                        .format(", ".join(noord_fields))):
-
-            # then, for each row (mod entry),
-            # zip fields names and values up and convert to dict
-            # to create json-able object
-            modinfo.append(dict(zip(noord_fields, row)))
-
-        with json_target.open('w') as f:
-            json.dump(modinfo, f, indent=1)
-
-    # db-query convenience methods
     def enabled_mods(self, name_only = False):
         """
         Fetches all mods from the mod database that are marked as enabled.
@@ -507,7 +285,7 @@ class DBManager(BaseDBManager, Submanager):
         yield from self.conn.execute(
             "SELECT * FROM mods WHERE error = ?", (error_type, ))
 
-    def get_mod_info(self, raw_cursor = False) :
+    def get_mod_info(self, raw_cursor = False):
         """
         Yields Row objects containing all information about installed mods
 
@@ -523,269 +301,11 @@ class DBManager(BaseDBManager, Submanager):
             return cur
         yield from cur
 
-    def gen_mod_info_from_disk(self, include_skyrim=True, save_modinfo=False):
-        """
-        scan the actual mods-directory and populate the database from
-        there instead of a cached json file.
-
-        Will need to do this on first run and periodically to make sure
-        cache is in sync.
-
-        :param include_skyrim:
-        :param save_modinfo:
-        :return:
-        """
-        # TODO: Perhaps this should be run on every startup? At least to make sure it matches the stored data.
-
-
-        global _mcount
-        # reset the ordinal counter
-        _mcount = count()
-
-        if include_skyrim:
-            # the unmanaged mods
-            skydir = self.mainmanager.Folders['skyrim']
-            if not skydir:
-                self.LOGGER.error("Skyrim directory unset or invalid")
-
-            self.get_unmanaged_mods(skydir.path)
-
-        # list of installed mod folders
-        installed_mods = self.mainmanager.managed_mod_folders
-
-        mods_list = []
-
-        # main mod-install directory
-        mods_dir = self.mainmanager.Folders['mods']
-
-        if not mods_dir:
-            self.LOGGER.error("Mod directory unset or invalid")
-            return
-
-        mods_dir = mods_dir.path
-
-        # use config parser to read modinfo 'meta.ini' files, if present
-        import configparser as _config
-        configP = _config.ConfigParser()
-
-        # for managed mods, mod_key is the directory name
-        for mod_key in installed_mods:
-            mod_dir = mods_dir / mod_key
-
-            # support loading information read from meta.ini
-            # (ModOrganizer) file
-            # TODO: check case-insensitively
-            meta_ini_path = mod_dir / "meta.ini"
-
-            if meta_ini_path.exists():
-                configP.read(str(meta_ini_path))
-                try:
-                    modid = configP['General']['modid']
-                    version = configP['General']['version']
-                except KeyError:
-                    # if the meta.ini file was malformed or something,
-                    # ignore it
-                    mods_list.append(_row_tuple(ordinal = next(_mcount),
-                                                directory=mod_key))
-                else:
-                    mods_list.append(_row_tuple(ordinal = next(_mcount),
-                                                directory=mod_key,
-                                                modid=modid,
-                                                version=version
-                                                ))
-            else:
-                # no meta file
-                mods_list.append(_row_tuple(ordinal=next(_mcount),
-                                            directory=mod_key))
-
-        # get rid of import
-        del _config
-
-        # finally, populate the table with the discovered mods
-        if mods_list:
-            self.add_to_mods_table(mods_list)
-        else:
-            self.LOGGER << "Mods directory empty"
-
-
-    def get_unmanaged_mods(self, skyrim_dir):
-        """Check the skyrim/data folder for the vanilla game files, dlc,
-        and any mods the user installed into the game folder manually."""
-        # TODO: store enabled status, custom-name for these; also see if version info can be pulled from files
-
-        um_mods = []
-
-        if not self._vanilla_mod_info:
-            self._vanilla_mod_info = vanilla_mods(skyrim_dir)
-
-        # v_mods = vanilla_mods(skyrim_dir)
-
-        present_mods = [t for t in self._vanilla_mod_info if (t[0] == 'Skyrim' or t[1]['present'])]
-
-        for m_name, m_info in present_mods:
-            # if m_name == 'Skyrim' or m_info['present']:
-                # get a mod-entry tuple for the 'Mod'
-                m_tuple = _row_tuple(
-                    # keep 'Skyrim' entry first
-                    ordinal=-1 if m_name == 'Skyrim' else next(_mcount),
-                    name=m_name,
-                    managed=m_info['managed'],
-
-                    # this is not exactly accurate...
-                    # I really need to change 'directory' to something else
-                    directory=m_name,
-                )
-                um_mods.append(m_tuple)
-
-        if um_mods:
-            self.add_to_mods_table(um_mods)
-
-    def get_unmanaged_mod_files(self, skyrim_dir):
-        """Record the files for the unmanaged 'Vanilla' files"""
-
-        if not self._vanilla_mod_info:
-            self._vanilla_mod_info = vanilla_mods(skyrim_dir)
-
-        present_mods = [t for t in self._vanilla_mod_info if
-                        (t[0] == 'Skyrim' or t[1]['present'])]
-
-        # now add the files
-        for m_name, m_info in present_mods:
-            if m_info['files']:
-                self.add_to_files_table(m_name, m_info['files'])
-
-            # if we know that some files are missing, record that
-            if m_info['missing']:
-                self.add_to_missing_files_table(m_name,
-                                                m_info['missing'])
-
-        self._empty['modfiles'] = self.count("modfiles") < 1
-        self._empty['missingfiles'] = self.count("missingfiles") < 1
-
-
-    def load_all_mod_files(self, mods_dir=None):
-        """
-        Here's an experiment to load ALL files from disk when the
-        program starts up...let's see how long it takes
-
-        Update: about 12 seconds to load info for 223 mods from an
-        ntfs-3g partition on a 7200rpm WD-Black...
-        not the horriblest, but still likely needs to be shunted to
-        another thread.  Especially since that was pretty much just
-        reading file names; no operations such as checking for conflicts
-        was done Also, dumping the db to disk (in txt form) made a
-        2.7 MB file.
-
-        Update to update: 2nd time around, didn't even take 2 seconds. I
-        did make some tweaks to the code, but still...I'm guessing the
-        files were still in the system RAM?
-
-        """
-
-        if mods_dir:
-            if isinstance(mods_dir, str):
-                mods_dir = Path(mods_dir)
-        else:
-            # mods_dir = self.mainmanager.get_directory(keystrings.Dirs.MODS, aspath=True)
-            mods_dir = self.mainmanager.Folders['mods'].path
-            # verify that mods dir is set
-            # if not mods_dir:
-            #     raise exceptions.InvalidAppDirectoryError(keystrings.Dirs.MODS, mods_dir)
-
-        installed_mods = self.mainmanager.managed_mod_folders
-
-        # go through each folder individually
-        with self.conn:
-            for mdir in installed_mods:
-                self.add_files_from_dir(mdir, str(mods_dir / mdir))
-
-        self._empty['modfiles'] = self.count("modfiles") < 1
-
-
 
                 # self.LOGGER << "dumping db contents to disk"
         # with open('res/test2.dump.sql', 'w') as f:
         #     for l in self._con.iterdump():
         #         f.write(l+'\n')
-
-    def add_to_files_table(self, mod_key, file_list):
-        """
-
-        :param str mod_key: The unique identifier for the mod (directory
-            for managed mods)
-        :param collections.abc.Iterable file_list:
-        """
-
-        if file_list:
-            with self.conn:
-                self.conn.executemany("INSERT INTO modfiles VALUES (?, ?)",
-                                      zip(repeat(mod_key), file_list))
-
-    def add_to_missing_files_table(self, mod_key, file_list):
-        """
-
-        :param str mod_key: The unique identifier for the mod (directory,
-            for managed mods)
-        :param collections.abc.Iterable file_list: known missing filepaths
-        """
-
-        if file_list:
-            with self.conn:
-                self.conn.executemany("INSERT INTO missingfiles VALUES (?, ?)",
-                                      zip(repeat(mod_key), file_list))
-
-    def add_files_from_dir(self, mod_name, mod_root):
-        """
-        Given a directory `mod_root` containing files for a mod named `mod_name`, add those files to the modfiles table.
-        :param mod_name:
-        :param str mod_root:
-        :return:
-        """
-
-        mfiles = []
-        for root, dirs, files in os.walk(mod_root):
-            # this gets the lowercase path to each file, starting at the
-            # root of this mod folder. So:
-            #   '/path/to/modstorage/CoolMod42/Meshes/WhatEver.NIF'
-            # becomes:
-            #   'meshes/whatever.nif'
-            mfiles.extend(
-                _relpath(_join(root, f), mod_root).lower() for f in files)
-
-        # put the mod's files in the db, with the mod name as the first
-        # field (e.g. 'CoolMod42'), and the filepath as the second (e.g.
-        # 'meshes/whatever.nif')
-        if mfiles:
-            self._con.executemany(
-                "INSERT INTO modfiles VALUES (?, ?)",
-                zip(repeat(mod_name), mfiles))
-
-
-        # try: mfiles.remove('meta.ini') #don't care about these
-        # except ValueError: pass
-
-    def remove_files(self, for_mod):
-        """
-        Remove all data rows from the modfiles table that belong to the
-        specified mod
-
-        :param for_mod: Name of mod's directory on disk (i.e. the ID
-            under which they are keyed in the db)
-        """
-        if not self._empty['modfiles']:
-            self.LOGGER << "Removing files for mod '{}' from database".format(for_mod)
-
-            with self.conn:
-                self.conn.execute("DELETE FROM modfiles WHERE directory = ?", (for_mod, ))
-
-        if not self._empty['missingfiles']:
-            with self.conn:
-                self.conn.execute("DELETE FROM missingfiles WHERE directory = ?", (for_mod, ))
-
-        if not self._empty['hiddenfiles']:
-            with self.conn:
-                self.conn.execute("DELETE FROM hiddenfiles WHERE directory = ?", (for_mod, ))
-
 
     def detect_file_conflicts(self):
         """
@@ -958,8 +478,354 @@ class DBManager(BaseDBManager, Submanager):
             # 999...do we?
             query += ", ".join("?" * len(dir_list)) + ")"
 
-            # make it so.
             self.conn.execute(query, dir_list)
+
+    ##=============================================
+    ## Data loading
+    ##=============================================
+
+    def load_mod_info(self, json_source):
+        """
+        read the saved mod information from a json file and
+        populate the in-memory database
+
+        :param str|Path json_source: path to modinfo.json file
+        """
+
+        self.LOGGER << "<==Method call"
+
+        # FIXME: after first load, unmanaged mods (other than skyrim) are in modinfo file; but since we add them here, there's a conflict on the UNIQUE constraint when the modinfo file is read. We need them to be in the modinfo file so we can know whether they've been disabled or had their load order changed, but we also need to make sure they're correctly generated if they're missing from the modinfo file...Find a way to reconcile this!
+        # first off, load the vanilla mods
+        if self.mainmanager.Folders['skyrim']:
+            self.load_unmanaged_mods(
+                self.mainmanager.Folders['skyrim'].path)
+
+        if not isinstance(json_source, Path):
+            json_source = Path(json_source)
+
+        success = True
+        with json_source.open('r') as f:
+            # read from json file and convert mappings
+            # to ordered tuples for sending to sqlite
+            try:
+                mods = json.load(f, object_pairs_hook=_to_row_tuple)
+                self.add_to_mods_table(mods)
+                # self.fill_mods_table(mods)
+
+            except json.decoder.JSONDecodeError:
+                self.LOGGER.error("No mod information present in {}, "
+                                  "or file is malformed."
+                                  .format(json_source))
+                success = False
+        return success
+
+    def load_mod_info_from_disk(self, include_skyrim=True,
+                                save_modinfo=False):
+        """
+        scan the actual mods-directory and populate the database from
+        there instead of a cached json file.
+
+        Will need to do this on first run and periodically to make sure
+        cache is in sync.
+
+        :param include_skyrim:
+        :param save_modinfo:
+        :return:
+        """
+        # TODO: Perhaps this should be run on every startup? At least to make sure it matches the stored data.
+
+
+        global _mcount
+        # reset the ordinal counter
+        _mcount = count()
+
+        if include_skyrim:
+            # the unmanaged mods
+            skydir = self.mainmanager.Folders['skyrim']
+            if not skydir:
+                self.LOGGER.error("Skyrim directory unset or invalid")
+
+            self.load_unmanaged_mods(skydir.path)
+
+        # list of installed mod folders
+        installed_mods = self.mainmanager.managed_mod_folders
+
+        mods_list = []
+
+        # main mod-install directory
+        mods_dir = self.mainmanager.Folders['mods']
+
+        if not mods_dir:
+            self.LOGGER.error("Mod directory unset or invalid")
+            return
+
+        mods_dir = mods_dir.path
+
+        # use config parser to read modinfo 'meta.ini' files, if present
+        import configparser as _config
+        configP = _config.ConfigParser()
+
+        # for managed mods, mod_key is the directory name
+        for mod_key in installed_mods:
+            mod_dir = mods_dir / mod_key
+
+            # support loading information read from meta.ini
+            # (ModOrganizer) file
+            # TODO: check case-insensitively
+            meta_ini_path = mod_dir / "meta.ini"
+
+            if meta_ini_path.exists():
+                configP.read(str(meta_ini_path))
+                try:
+                    modid = configP['General']['modid']
+                    version = configP['General']['version']
+                except KeyError:
+                    # if the meta.ini file was malformed or something,
+                    # ignore it
+                    mods_list.append(_row_tuple(ordinal=next(_mcount),
+                                                directory=mod_key))
+                else:
+                    mods_list.append(_row_tuple(ordinal=next(_mcount),
+                                                directory=mod_key,
+                                                modid=modid,
+                                                version=version
+                                                ))
+            else:
+                # no meta file
+                mods_list.append(_row_tuple(ordinal=next(_mcount),
+                                            directory=mod_key))
+
+        # get rid of import
+        del _config
+
+        # finally, populate the table with the discovered mods
+        if mods_list:
+            self.add_to_mods_table(mods_list)
+        else:
+            self.LOGGER << "Mods directory empty"
+
+    def load_unmanaged_mods(self, skyrim_dir):
+        """Check the skyrim/data folder for the vanilla game files, dlc,
+        and any mods the user installed into the game folder manually."""
+        # TODO: store enabled status, custom-name for these; also see if version info can be pulled from files
+
+        um_mods = []
+
+        if not self._vanilla_mod_info:
+            self._vanilla_mod_info = vanilla_mods(skyrim_dir)
+
+        # v_mods = vanilla_mods(skyrim_dir)
+
+        present_mods = [t for t in self._vanilla_mod_info if
+                        (t[0] == 'Skyrim' or t[1]['present'])]
+
+        for m_name, m_info in present_mods:
+            # if m_name == 'Skyrim' or m_info['present']:
+            # get a mod-entry tuple for the 'Mod'
+            m_tuple = _row_tuple(
+                # keep 'Skyrim' entry first
+                ordinal=-1 if m_name == 'Skyrim' else next(_mcount),
+                name=m_name,
+                managed=m_info['managed'],
+
+                # this is not exactly accurate...
+                # I really need to change 'directory' to something else
+                directory=m_name,
+            )
+            um_mods.append(m_tuple)
+
+        if um_mods:
+            self.add_to_mods_table(um_mods)
+
+    def load_all_mod_files(self, mods_dir=None):
+        """
+        Here's an experiment to load ALL files from disk when the
+        program starts up...let's see how long it takes
+
+        Update: about 12 seconds to load info for 223 mods from an
+        ntfs-3g partition on a 7200rpm WD-Black...
+        not the horriblest, but still likely needs to be shunted to
+        another thread.  Especially since that was pretty much just
+        reading file names; no operations such as checking for conflicts
+        was done Also, dumping the db to disk (in txt form) made a
+        2.7 MB file.
+
+        Update to update: 2nd time around, didn't even take 2 seconds. I
+        did make some tweaks to the code, but still...I'm guessing the
+        files were still in the system RAM?
+
+        """
+
+        if mods_dir:
+            if isinstance(mods_dir, str):
+                mods_dir = Path(mods_dir)
+        else:
+            # mods_dir = self.mainmanager.get_directory(keystrings.Dirs.MODS, aspath=True)
+            mods_dir = self.mainmanager.Folders['mods'].path
+            # verify that mods dir is set
+            # if not mods_dir:
+            #     raise exceptions.InvalidAppDirectoryError(keystrings.Dirs.MODS, mods_dir)
+
+        installed_mods = self.mainmanager.managed_mod_folders
+
+        # go through each folder individually
+        with self.conn:
+            for mdir in installed_mods:
+                self.add_files_from_dir(mdir, str(mods_dir / mdir))
+
+        self._empty['modfiles'] = self.count("modfiles") < 1
+
+
+    def load_unmanaged_mod_files(self, skyrim_dir):
+        """Record the files for the unmanaged 'Vanilla' files"""
+
+        if not self._vanilla_mod_info:
+            self._vanilla_mod_info = vanilla_mods(skyrim_dir)
+
+        present_mods = [t for t in self._vanilla_mod_info if
+                        (t[0] == 'Skyrim' or t[1]['present'])]
+
+        # now add the files
+        for m_name, m_info in present_mods:
+            if m_info['files']:
+                self.add_to_files_table(m_name, m_info['files'])
+
+            # if we know that some files are missing, record that
+            if m_info['missing']:
+                self.add_to_missing_files_table(m_name,
+                                                m_info['missing'])
+
+        self._empty['modfiles'] = self.count("modfiles") < 1
+        self._empty['missingfiles'] = self.count("missingfiles") < 1
+
+
+    ##=============================================
+    ## Table population
+    ##=============================================
+
+    def add_to_mods_table(self, mod_list):
+        """
+        Dynamically build the INSERT statement from the list of fields,
+        then insert the values from mod_list (a sequence of tuples) into
+        the database. The changes are committed after all values have
+        been inserted.
+
+        Does not check for an empty mods table.
+
+        :param mod_list:
+        """
+        self.LOGGER << "<==Method call"
+
+        # build the modcollection here, too
+        for m in mod_list:
+            self._collection.add(ModEntry(*m))
+
+        # ignore the error field for now
+        with self.conn:
+            # insert the list of row-tuples into the in-memory db
+            self.conn.executemany(
+                "INSERT INTO mods({}) VALUES ({})".format(
+                    ", ".join(db_fields_noerror),
+                    ", ".join("?" * len(db_fields_noerror))
+                ),
+                mod_list)
+
+            # mark db as initialized (if it wasn't already)
+            self._empty['mods'] = False
+
+
+    def add_to_files_table(self, mod_key, file_list):
+        """
+
+        :param str mod_key: The unique identifier for the mod (directory
+            for managed mods)
+        :param collections.abc.Iterable file_list:
+        """
+
+        if file_list:
+            with self.conn:
+                self.conn.executemany(
+                    "INSERT INTO modfiles VALUES (?, ?)",
+                    zip(repeat(mod_key), file_list))
+
+    def add_to_missing_files_table(self, mod_key, file_list):
+        """
+
+        :param str mod_key: The unique identifier for the mod (directory,
+            for managed mods)
+        :param collections.abc.Iterable file_list: known missing filepaths
+        """
+
+        if file_list:
+            with self.conn:
+                self.conn.executemany(
+                    "INSERT INTO missingfiles VALUES (?, ?)",
+                    zip(repeat(mod_key), file_list))
+
+    def add_files_from_dir(self, mod_name, mod_root):
+        """
+        Given a directory `mod_root` containing files for a mod named `mod_name`, add those files to the modfiles table.
+        :param mod_name:
+        :param str mod_root:
+        :return:
+        """
+
+        mfiles = []
+        for root, dirs, files in os.walk(mod_root):
+            # this gets the lowercase path to each file, starting at the
+            # root of this mod folder. So:
+            #   '/path/to/modstorage/CoolMod42/Meshes/WhatEver.NIF'
+            # becomes:
+            #   'meshes/whatever.nif'
+            mfiles.extend(
+                _relpath(_join(root, f), mod_root).lower() for f in
+                files)
+
+        # put the mod's files in the db, with the mod name as the first
+        # field (e.g. 'CoolMod42'), and the filepath as the second (e.g.
+        # 'meshes/whatever.nif')
+        if mfiles:
+            self._con.executemany(
+                "INSERT INTO modfiles VALUES (?, ?)",
+                zip(repeat(mod_name), mfiles))
+
+    ##=============================================
+    ## Saving Data
+    ##=============================================
+
+    def save_mod_info(self, json_target):
+        """
+        Write the data from the in-memory database to a
+        json file on disk. The file will be overwritten, or
+        created if it does not exist
+
+        :param str|Path json_target: path to modinfo.json file
+        """
+
+        if not isinstance(json_target, Path):
+            json_target = Path(json_target)
+
+        # we don't save the ordinal rank, so we need to get a list (set)
+        # of the fields without "ordinal" Using sets here is OK because
+        # field order doesn't matter when saving
+        noord_fields = set(db_fields) - {db_fields.FLD_ORD,
+                                         db_fields.FLD_ERR}
+
+        modinfo = []
+
+        # select (all fields other than ordinal & error)
+        # from a subquery of (all fields ordered by ordinal).
+        # ignore 'skyrim' mod
+        for row in self.conn.execute(
+                "SELECT {} FROM (SELECT * FROM mods WHERE directory != 'Skyrim' ORDER BY ordinal)"
+                        .format(", ".join(noord_fields))):
+            # then, for each row (mod entry),
+            # zip fields names and values up and convert to dict
+            # to create json-able object
+            modinfo.append(dict(zip(noord_fields, row)))
+
+        with json_target.open('w') as f:
+            json.dump(modinfo, f, indent=1)
 
     @staticmethod
     def json_write(json_target, pyobject):
@@ -970,6 +836,177 @@ class DBManager(BaseDBManager, Submanager):
         """
         with json_target.open('w') as f:
             json.dump(pyobject, f, indent=1)
+
+    ##=============================================
+    ## Dealing with hidden files
+    ## -----------------------------------
+    ## conglomerate methods that deal w/ hidden files here
+    ##=============================================
+
+    def load_hidden_files(self, json_source):
+        """
+
+        :param str|Path json_source:
+        :return: success of operation
+        """
+        self.LOGGER.info("Analyzing hidden files")
+
+        if not isinstance(json_source, Path):
+            json_source = Path(json_source)
+        success = False
+
+        with json_source.open('r') as f:
+            try:
+                hiddenfiles = json.load(f)
+                if hiddenfiles:
+                    # if there were any listed, mark table non-empty
+                    self._empty['hiddenfiles'] = False
+
+                    for mod, files in hiddenfiles.items():
+                        # gethiddenfiles returns a list of 1-tuples,
+                        # each one with a filepath
+                        hfiles = self._gethiddenfiles(files, "", [])
+
+                        # we're committing to the db after each mod is
+                        # handled; waiting until the end might speed things
+                        # up, but doing it this way means that if there's a
+                        # problem with one of the mods, we only rollback
+                        # that one transaction instead of losing the info
+                        # for EVERY mod. Savepoints may be another approach.
+                        with self._con:
+                            self._con.executemany(
+                                "INSERT INTO hiddenfiles VALUES (?, ?)",
+                                zip(repeat(mod), hfiles)
+                            )
+
+                # [print(*r, sep="\t|\t") for r in
+                #  self._con.execute("select * from hiddenfiles")]
+                success = True
+
+            except json.decoder.JSONDecodeError:
+                self.LOGGER.warning("No hidden files listed in {}, "
+                                    "or file is malformed."
+                                    .format(json_source))
+
+        return success
+
+    def _gethiddenfiles(self, basedict, currpath, flist,
+                        join=os.path.join):
+        """
+        Recursive helper for loading the list of hiddenfiles from disk
+
+        :param basedict:
+        :param currpath:
+        :param flist:
+        :param join: speed up execution by locally binding os.path.join
+        :return: list of hidden files
+        """
+        for key, value in basedict.items():
+            if isinstance(value, list):
+                flist.extend(join(currpath, fname) for fname in value)
+            else:
+                flist = self._gethiddenfiles(value, join(currpath, key),
+                                             flist)
+
+        return flist
+
+    def save_hidden_files(self):
+        """
+        Save the contents of the hiddenfiles table to the
+        `hiddenfiles.json` file of the current profile
+
+        :return:
+        """
+        if self.mainmanager.profile:
+            self.save_hidden_files_to(
+                self.mainmanager.profile.hidden_files)
+
+    def save_hidden_files_to(self, json_target):
+        """
+        Serialize the contents of the hiddenfiles table to a file in
+        json format
+
+        :param str|Path json_target: path to hiddenfiles.json file for current profile
+        """
+
+        # Note: I notice ModOrganizer adds a '.mohidden' extension to every file it hides (or to the parent directory); hmm...I'd like to avoid changing the files on disk if possible
+
+        if not isinstance(json_target, Path):
+            json_target = Path(json_target)
+
+        # build a tree from the database and jsonify it to disk
+        htree = tree.Tree()
+
+        for row in self.conn.execute(
+                "SELECT * FROM hiddenfiles ORDER BY directory, filepath"):
+            p = PurePath(row['directory'], row['filepath'])
+            pathparts = p.parts[:-1]
+
+            htree.insert(pathparts, p.name)
+
+        with json_target.open('w') as f:
+            f.write(str(htree))
+
+            # print(tree.to_string(2))
+
+    def remove_hidden_files(self, mod_dir, file_list):
+        """
+        Remove the items (filepaths) in file list from the hiddenfiles
+        db table. If `file_list` contains more than 900 items, they
+        will be deleted in batches of 900 (999 is parameter
+        limit in sqlite)
+
+        :param mod_dir: directory name of the mod from which to delete
+        :param file_list: list of files
+        """
+
+        self.checktx()
+
+        _q = "DELETE FROM hiddenfiles" \
+             " WHERE directory = '{mdir}'" \
+             " AND filepath IN ({paths})"
+
+        c = self.conn.cursor()
+
+        if len(file_list) <= _SQLMAX:
+            # nothing special
+            _q = _q.format(mdir=mod_dir,
+                           paths=", ".join("?" * len(file_list)))
+            c.execute(_q, file_list)
+        else:
+            # something special
+            sections, remainder = divmod(len(file_list), _SQLMAX)
+            for i in range(sections):
+                s = _SQLMAX * i
+                query = _q.format(mdir=mod_dir,
+                                  paths=", ".join('?' * _SQLMAX))
+                c.execute(query, file_list[s:s + _SQLMAX])
+            if remainder:
+                query = _q.format(mdir=mod_dir,
+                                  paths=", ".join('?' * remainder))
+                c.execute(query, file_list[sections * _SQLMAX:])
+
+        return c
+
+    def files_hidden(self, for_mod):
+        """
+        Yield paths of currently hidden files for the given mod
+
+        :param for_mod: directory name of the mod
+        """
+
+        yield from (r["filepath"]
+                    for r in self.conn.execute(
+            "SELECT * FROM hiddenfiles WHERE directory = ?",
+            (for_mod,)
+        ))
+
+
+
+
+##=============================================
+## Module-level methods (should maybe be static?)
+##=============================================
 
 def _to_row_tuple(pairs):
     """

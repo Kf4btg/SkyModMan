@@ -615,7 +615,7 @@ class ModManager:
         if self._folders['mods']:
             # populate the mods table from the main mods directory
             # self._dbman.get_mod_data_from_directory(self._folders['mods'].path)
-            self._dbman.gen_mod_info_from_disk(self._folders['mods'].path)
+            self._dbman.load_mod_info_from_disk(self._folders['mods'].path)
             # and (re)generate the modinfo file using default values
             self.save_mod_info()
             # return success
@@ -694,7 +694,7 @@ class ModManager:
         # Skyrim Data folder to the db
         if skyfiles:
             if self._folders['skyrim']:
-                self._dbman.get_unmanaged_mod_files(self._folders['skyrim'].path)
+                self._dbman.load_unmanaged_mod_files(self._folders['skyrim'].path)
                 # self._dbman.load_skyfiles(self._folders['skyrim'].path)
                     # self.get_directory(ks_dir.SKYRIM,
                     #                    aspath=True))

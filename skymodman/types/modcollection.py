@@ -52,6 +52,9 @@ class ModCollection(MutableSequence):
         # these pointers are hard-refs so we don't lose our sentinel
         self._root.prev = self._root.next = self._root
 
+        if iterable is not None:
+            self.extend(iterable)
+
     ##=============================================
     ## Abstract methods
     ##=============================================
