@@ -53,7 +53,7 @@ class AppFolder:
         if current_path:
             if isinstance(current_path, str):
                 self.current_path = Path(current_path)
-            elif isinstance(default_path, Path):
+            elif isinstance(current_path, Path):
                 self.current_path = current_path
 
         ## placeholder for override ##
