@@ -3,7 +3,9 @@
 from functools import total_ordering
 
 from skymodman import Manager
+from skymodman.constants import db_fields
 
+# db_fields = "ordinal", "directory", "name", "modid", "version", "enabled", "managed", "error"
 
 @total_ordering
 class ModEntry:
@@ -12,8 +14,11 @@ class ModEntry:
     _fields= __slots__ # to match the namedtuple interface
 
 
-    def __init__(self, enabled=None, name=None, modid=None,
-                 version=None, directory=None, ordinal=None,
+    # def __init__(self, enabled=None, name=None, modid=None,
+    #              version=None, directory=None, ordinal=None,
+    #              managed=None, error=None):
+    def __init__(self, ordinal=None, directory=None, name=None,
+                 modid=None, version=None, enabled=None,
                  managed=None, error=None):
         """
 
@@ -33,12 +38,12 @@ class ModEntry:
 
         # TODO: it really sounds like the 'ordinal' should be external to the mod entry and looked up on query
 
-        self.enabled   = enabled
+        self.ordinal   = ordinal
+        self.directory = directory
         self.name      = name
         self.modid     = modid
         self.version   = version
-        self.directory = directory
-        self.ordinal   = ordinal
+        self.enabled   = enabled
         self.managed   = managed
         # Error is a bitwise-combination of constants.enums.ModError values
         self.error     = error
@@ -95,6 +100,18 @@ class ModEntry:
         else:
             return cls(*iterrible)
 
+    # def _asdict(self):
+    #     """Convert the ModEntry to an OrderedDict instance"""
+    #     from collections import OrderedDict
+    #
+    #     return OrderedDict((f, getattr(self, f)) for f in db_fields)
+
+    def __iter__(self):
+        """allows this object to be converted to tuple (or list, or other
+        sequence type)"""
+
+        # use db_fields to ensure proper order
+        yield from (getattr(self, f) for f in db_fields)
 
     def __repr__(self):
         return self.__class__.__name__ + "(enabled={0.enabled}, name='{0.name}', modid={0.modid}, version='{0.version}', directory='{0.directory}', ordinal={0.ordinal}, managed={0.managed}, error={0.error})".format(self)
