@@ -74,8 +74,10 @@ class ModCollection(MutableSequence):
             # will raise keyerror if 'index' is not a valid key
             key = index
         else:
-            # will raise indexerror if index too high, type error
+            # will raise indexerror if index out of range, type error
             # if it is not a number
+            index = self._get_real_index(index)
+
             key = self._order[index]
 
         # return the actual data stored in the node at that index
@@ -94,6 +96,7 @@ class ModCollection(MutableSequence):
 
         # check for unique key
         if key not in self._map:
+            index = self._get_real_index(index)
 
             # create new node for this item
             newnode = _Node()
@@ -102,32 +105,32 @@ class ModCollection(MutableSequence):
             newnode.key, newnode.data = key, value
 
             # check if we're replacing an item
-            if index in range(len(self._map)):
+            # if index in range(len(self._map)):
 
-                ## delete old item ##
+            ## delete old item ##
 
-                # don't have to shift anything if we're just replacing
-                # a single item
+            # don't have to shift anything if we're just replacing
+            # a single item
 
-                # get current key at this index
-                old_key = self._order[index]
+            # get current key at this index
+            old_key = self._order[index]
 
-                doomed = self._map[old_key]
-                _prev, _next = doomed.prev, doomed.next
+            doomed = self._map[old_key]
+            _prev, _next = doomed.prev, doomed.next
 
-                # add pointers to new node
-                newnode.prev, newnode.next = _prev, _next
+            # add pointers to new node
+            newnode.prev, newnode.next = _prev, _next
 
-                # adjust pointers on adjacent nodes
-                _prev.next = _next.prev = proxy(newnode)
+            # adjust pointers on adjacent nodes
+            _prev.next = _next.prev = proxy(newnode)
 
-                # clear all refs to replaced data
-                del self._index[old_key]
-                del self._map[old_key]
-                # and insert new
-                self._order[index] = key
-                self._index[key] = index
-                self._map[key] = value
+            # clear all refs to replaced data
+            del self._index[old_key]
+            del self._map[old_key]
+            # and insert new
+            self._order[index] = key
+            self._index[key] = index
+            self._map[key] = newnode
 
 
     def __len__(self):
@@ -143,7 +146,7 @@ class ModCollection(MutableSequence):
             key = index
         else:
             # assume index is int
-            idx = index
+            idx = self._get_real_index(index)
             key = self._order[index]
 
 
@@ -155,8 +158,7 @@ class ModCollection(MutableSequence):
         doomed = self._map[key]
         _prev, _next = doomed.prev, doomed.next
 
-        _prev.next = _next
-        _next.prev = _prev
+        _prev.next, _next.prev = _next, _prev
 
         # now delete node from main _map; weakref should allow it to be
         # garbage collected shortly
@@ -179,18 +181,17 @@ class ModCollection(MutableSequence):
         # that already exist; dict does, however...which to imitate?
         if key not in self._map:
 
-            _max = len(self._map)
 
-            if abs(index) > _max:
-                raise IndexError
-
-            if index == _max:
+            if index == len(self._map):
                 # an 'append' operation:
                 # the 'next' node will be the sentinel
                 _next = self._root
             else:
-                if index < 0: # negative indexing
-                    index += _max
+                # do this here since we want to allow the 'append'
+                # operation above, and this would throw IndexError
+                # on index==len(self); don't bother trying to allow
+                # '-len(self)' as a valid index because that's silly.
+                index = self._get_real_index(index)
 
                 # get current node at that index
                 _next = self._map[self._order[index]]
@@ -200,11 +201,8 @@ class ModCollection(MutableSequence):
 
             _prev = _next.prev
 
-            # new node
-            node = _Node()
-
             # assign data and pointers to new node
-            node.prev, node.next, node.key, node.data = _prev, _next, key, value
+            node = _Node(_prev, _next, key, value)
 
             # store pointers to new node as weak references
             _prev.next = _next.prev = proxy(node)
@@ -213,7 +211,9 @@ class ModCollection(MutableSequence):
             self._order[index] = key
             self._index[key] = index
 
-            # and finally add to map
+            # and finally add node to map (as strong reference, so we
+            # don't lose the node altogether on next gc collect; to
+            # release node we only have to remove from map)
             self._map[key] = node
 
 
@@ -252,6 +252,25 @@ class ModCollection(MutableSequence):
         self._index.clear()
         self._order.clear()
 
+    def extend(self, values):
+        # override extend to improve performance
+
+        m = self._map
+        o = self._order
+        i = self._index
+        r = self._root
+        c = len(self._map)
+
+        for v in values:
+            k = v.key
+            if k not in m:
+                p = r.prev
+                n = _Node(p, r, k, v)
+                r.prev = p.next = proxy(n)
+                m[k] = n
+                o[c] = k
+                i[k] = c
+                c+=1
 
     ##=============================================
     ## Additional mechanics
@@ -332,3 +351,23 @@ class ModCollection(MutableSequence):
 
                 # ...and record new position of moved key
                 self._index[key] = i
+
+
+    def _get_real_index(self, index):
+        """Translate an index (which could be out of range or negative)
+        into a usable index, or throw IndexError as needed"""
+
+        try:
+            if abs(index) >= len(self._map):
+                # out of range
+                raise IndexError
+        except TypeError:
+            # abs() check failed
+            raise TypeError("not a number") from None
+
+        if index < 0:
+            # indexing from end
+            return index + len(self._map)
+
+        # index is fine as is
+        return index
