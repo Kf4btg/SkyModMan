@@ -113,9 +113,9 @@ class DBManager(BaseDBManager, Submanager):
         # initialize empty file conflict map
         self._conflict_map = File_Conflict_Map({},{})
 
-    ################
-    ## Properties ##
-    ################
+    ##=============================================
+    ## Properties
+    ##=============================================
 
     @property
     def mods(self):
@@ -141,8 +141,6 @@ class DBManager(BaseDBManager, Submanager):
             * file_conflicts.by_mod: dict[str, list[str]] -- a mapping
                 of mod names to a list of files contained by that mod
                 which are in conflict with some other mod.
-
-        :return:
         """
         return self._conflict_map
 
@@ -161,13 +159,11 @@ class DBManager(BaseDBManager, Submanager):
         """
 
         with self.conn:
-            # take advantage of the "truncate optimization" feature in sqlite
-            # to remove all rows quicker and easier than dropping and recreating.
+            # take advantage of the "truncate optimization" feature in
+            # sqlite to remove all rows quicker and easier than
+            # dropping and recreating.
 
-            # self._con.execute("DELETE FROM ?", self._tablenames)
-            # Apparently you can't use ? parameters for table names??!?!?
-            # for n in self._tablenames:
-            #     self._con.execute("DELETE FROM {table}".format(table=n))
+            # Apparently you can't use ? parameters for table names??!?
 
             # security???
             if mods and not self._empty['mods']:
@@ -175,8 +171,8 @@ class DBManager(BaseDBManager, Submanager):
                 self._empty['mods'] = True
 
                 global _mcount
-                # reset counter so that mod-ordinal is determined by the order
-                # in which the entries are read from the file
+                # reset counter so that mod-ordinal is determined by the
+                # order in which the entries are read from the file
                 _mcount = count()
 
             if files and not self._empty['modfiles']:
@@ -293,14 +289,12 @@ class DBManager(BaseDBManager, Submanager):
         :return:   Tuple of mod info or sqlite3.cursor
         :rtype: __generator[sqlite3.Row, Any, None]|sqlite3.Cursor
         """
-        # cur = self.conn.execute("SELECT * FROM mods")
 
         # ignore the 'Skyrim' entry
         cur = self.conn.execute("SELECT * FROM mods WHERE directory != 'Skyrim'")
         if raw_cursor:
             return cur
         yield from cur
-
 
                 # self.LOGGER << "dumping db contents to disk"
         # with open('res/test2.dump.sql', 'w') as f:
@@ -317,7 +311,6 @@ class DBManager(BaseDBManager, Submanager):
         this before the user has actually had a chance to make any
         changes (or immediately after they've saved them)
         """
-
 
         # setup variables
         file=''
@@ -376,11 +369,8 @@ class DBManager(BaseDBManager, Submanager):
             self.LOGGER << "No files present in modfiles table"
 
         # convert to normal dicts when adding to conflict map
-        self._conflict_map = File_Conflict_Map(by_file=dict(conflicts),
-                                               by_mod=dict(mods_with_conflicts))
-
-        # self._file_conflicts = conflicts
-        # self.mods_with_conflicting_files = mods_with_conflicts
+        self._conflict_map = File_Conflict_Map(
+            by_file=dict(conflicts), by_mod=dict(mods_with_conflicts))
 
         # for c in mods_with_conflicts['Bethesda Hi-Res DLC Optimized']:
         #     print("other mods containing file '%s'" % c)
@@ -419,7 +409,8 @@ class DBManager(BaseDBManager, Submanager):
                           .format(num_removed))
 
         dblist = [r["directory"] for r in
-                  self.conn.execute("SELECT directory FROM mods WHERE managed = 1")]
+                  self.conn.execute(
+                      "SELECT directory FROM mods WHERE managed = 1")]
 
         # make a copy of the mods list since we may be
         # modifying its contents
@@ -446,7 +437,6 @@ class DBManager(BaseDBManager, Submanager):
                     not_found.append(modname)
             # if everything matched, this should be empty
             not_listed = im_list
-
 
         # i think inserting into the database is faster when done in
         # large chunks, so we accumulated the errors above and will
@@ -510,7 +500,6 @@ class DBManager(BaseDBManager, Submanager):
             try:
                 mods = json.load(f, object_pairs_hook=_to_row_tuple)
                 self.add_to_mods_table(mods)
-                # self.fill_mods_table(mods)
 
             except json.decoder.JSONDecodeError:
                 self.LOGGER.error("No mod information present in {}, "
@@ -534,7 +523,6 @@ class DBManager(BaseDBManager, Submanager):
         """
         # TODO: Perhaps this should be run on every startup? At least to make sure it matches the stored data.
 
-
         global _mcount
         # reset the ordinal counter
         _mcount = count()
@@ -552,7 +540,6 @@ class DBManager(BaseDBManager, Submanager):
 
         mods_list = []
 
-        # main mod-install directory
         mods_dir = self.mainmanager.Folders['mods']
 
         if not mods_dir:
@@ -582,18 +569,31 @@ class DBManager(BaseDBManager, Submanager):
                 except KeyError:
                     # if the meta.ini file was malformed or something,
                     # ignore it
-                    mods_list.append(_row_tuple(ordinal=next(_mcount),
-                                                directory=mod_key))
+                    add_me = _make_mod_entry(directory=mod_key,
+                                                managed=1)
+
+                    # mods_list.append(_row_tuple(ordinal=next(_mcount),
+                    #                             directory=mod_key,
+                    #                             managed=1))
                 else:
-                    mods_list.append(_row_tuple(ordinal=next(_mcount),
-                                                directory=mod_key,
+                    add_me = _make_mod_entry(directory=mod_key,
+                                                managed=1,
                                                 modid=modid,
-                                                version=version
-                                                ))
+                                                version=version)
+                    # mods_list.append(_row_tuple(ordinal=next(_mcount),
+                    #                             directory=mod_key,
+                    #                             managed=1,
+                    #                             modid=modid,
+                    #                             version=version))
             else:
                 # no meta file
-                mods_list.append(_row_tuple(ordinal=next(_mcount),
-                                            directory=mod_key))
+                add_me = _make_mod_entry(directory=mod_key,
+                                                managed=1)
+                # mods_list.append(_row_tuple(ordinal=next(_mcount),
+                #                             managed=1,
+                #                             directory=mod_key))
+
+            self._collection.append(add_me)
 
         # get rid of import
         del _config
@@ -609,7 +609,12 @@ class DBManager(BaseDBManager, Submanager):
         and any mods the user installed into the game folder manually."""
         # TODO: store enabled status, custom-name for these; also see if version info can be pulled from files
 
-        um_mods = []
+        # um_mods = []
+
+        # this lets us insert the items returned by vanilla_mods()
+        # in the order in which they're returned, but ignoring any
+        # items that may bot be present
+        default_order = count()
 
         if not self._vanilla_mod_info:
             self._vanilla_mod_info = vanilla_mods(skyrim_dir)
@@ -619,23 +624,51 @@ class DBManager(BaseDBManager, Submanager):
         present_mods = [t for t in self._vanilla_mod_info if
                         (t[0] == 'Skyrim' or t[1]['present'])]
 
+        # skyrim should be first item
         for m_name, m_info in present_mods:
             # if m_name == 'Skyrim' or m_info['present']:
             # get a mod-entry tuple for the 'Mod'
-            m_tuple = _row_tuple(
-                # keep 'Skyrim' entry first
-                ordinal=-1 if m_name == 'Skyrim' else next(_mcount),
-                name=m_name,
-                managed=m_info['managed'],
 
-                # this is not exactly accurate...
-                # I really need to change 'directory' to something else
-                directory=m_name,
-            )
-            um_mods.append(m_tuple)
+            # if m_name == 'Skyrim':
+                # always insert skyrim 'mod' as first entry
+                # self._collection.insert(0,
+                #     ModEntry(*_row_tuple(
+                #         name=m_name,
+                #         managed=0,
+                #         directory=m_name
+                #     ))
+                # )
+            # else:
 
-        if um_mods:
-            self.add_to_mods_table(um_mods)
+            # don't bother creating entries for mods already in coll;
+            # 'skyrim' should always be 1st item, and should always not
+            # be in the collection at this point; thus it will always
+            # be inserted at index 0
+            if m_name not in self._collection:
+                self._collection.insert(next(default_order),
+                                        ModEntry(*_row_tuple(
+                                            name=m_name,
+                                            managed=0,
+                                            directory=m_name
+                                        )))
+
+        #     m_tuple = _row_tuple(
+        #         # keep 'Skyrim' entry first
+        #         ordinal=-1 if m_name == 'Skyrim' else next(_mcount),
+        #         name=m_name,
+        #         managed=0,
+        #
+        #         # this is not exactly accurate...
+        #         # I really need to change 'directory' to something else
+        #         directory=m_name,
+        #     )
+        #     um_mods.append(m_tuple)
+        #
+        # if um_mods:
+        #     self._collection.add(
+        #         ModEntry(*m) for m in um_mods)
+
+            # self.add_to_mods_table(um_mods)
 
     def load_all_mod_files(self, mods_dir=None):
         """
@@ -660,11 +693,11 @@ class DBManager(BaseDBManager, Submanager):
             if isinstance(mods_dir, str):
                 mods_dir = Path(mods_dir)
         else:
-            # mods_dir = self.mainmanager.get_directory(keystrings.Dirs.MODS, aspath=True)
             mods_dir = self.mainmanager.Folders['mods'].path
             # verify that mods dir is set
             # if not mods_dir:
-            #     raise exceptions.InvalidAppDirectoryError(keystrings.Dirs.MODS, mods_dir)
+            #     raise exceptions.InvalidAppDirectoryError(
+            #       keystrings.Dirs.MODS, mods_dir)
 
         installed_mods = self.mainmanager.managed_mod_folders
 
@@ -718,7 +751,7 @@ class DBManager(BaseDBManager, Submanager):
 
         # build the modcollection here, too
         for m in mod_list:
-            self._collection.add(ModEntry(*m))
+            self._collection.append(ModEntry(*m))
 
         # ignore the error field for now
         with self.conn:
@@ -777,9 +810,8 @@ class DBManager(BaseDBManager, Submanager):
             #   '/path/to/modstorage/CoolMod42/Meshes/WhatEver.NIF'
             # becomes:
             #   'meshes/whatever.nif'
-            mfiles.extend(
-                _relpath(_join(root, f), mod_root).lower() for f in
-                files)
+            mfiles.extend(_relpath(
+                _join(root, f), mod_root).lower() for f in files)
 
         # put the mod's files in the db, with the mod name as the first
         # field (e.g. 'CoolMod42'), and the filepath as the second (e.g.
@@ -868,16 +900,16 @@ class DBManager(BaseDBManager, Submanager):
                         hfiles = self._gethiddenfiles(files, "", [])
 
                         # we're committing to the db after each mod is
-                        # handled; waiting until the end might speed things
-                        # up, but doing it this way means that if there's a
-                        # problem with one of the mods, we only rollback
-                        # that one transaction instead of losing the info
-                        # for EVERY mod. Savepoints may be another approach.
+                        # handled; waiting until the end might speed
+                        # things up, but doing it this way means that
+                        # if there's a problem with one of the mods, we
+                        # only rollback that one transaction instead of
+                        # losing the info for EVERY mod. Savepoints may
+                        # be another approach.
                         with self._con:
                             self._con.executemany(
                                 "INSERT INTO hiddenfiles VALUES (?, ?)",
-                                zip(repeat(mod), hfiles)
-                            )
+                                zip(repeat(mod), hfiles))
 
                 # [print(*r, sep="\t|\t") for r in
                 #  self._con.execute("select * from hiddenfiles")]
@@ -926,7 +958,8 @@ class DBManager(BaseDBManager, Submanager):
         Serialize the contents of the hiddenfiles table to a file in
         json format
 
-        :param str|Path json_target: path to hiddenfiles.json file for current profile
+        :param str|Path json_target: path to hiddenfiles.json file
+            for current profile
         """
 
         # Note: I notice ModOrganizer adds a '.mohidden' extension to every file it hides (or to the parent directory); hmm...I'd like to avoid changing the files on disk if possible
@@ -1001,9 +1034,6 @@ class DBManager(BaseDBManager, Submanager):
             (for_mod,)
         ))
 
-
-
-
 ##=============================================
 ## Module-level methods (should maybe be static?)
 ##=============================================
@@ -1037,6 +1067,9 @@ def _row_tuple(**kwargs):
                              field, lambda v: "")(kwargs))
                              for field in db_fields_noerror)
 
+def _make_mod_entry(**kwargs):
+    return ModEntry._make(_row_tuple(**kwargs))
+
 
 def vanilla_mods(skyrim_dir):
     """
@@ -1063,7 +1096,6 @@ def vanilla_mods(skyrim_dir):
     skyrim_mod = {
         'name': "Skyrim",
         'directory': 'Skyrim', # should be 'data'?
-        'managed': 0,
         'ordinal': -1, # is this a good idea? Just to designate this is always first
         'files': [*skyinfo.masters, *skyinfo.skyrim_archives],
         'missing': [] # any missing files
@@ -1099,7 +1131,6 @@ def vanilla_mods(skyrim_dir):
     for n in dlc_names[:3]:
         dlc_mods[n] = {
             "name": n,
-            "managed": 0,
             "files": [n+".esm", n+".bsa"],
             "present": False, # set to True if dlc is installed
             "missing": [] # if the dlc is Partially present, record missing files
@@ -1109,7 +1140,6 @@ def vanilla_mods(skyrim_dir):
     for n in dlc_names[3:]:
         dlc_mods[n] = {
             "name": n,
-            "managed": 0,
             "files": [n+".esp", n+".bsa"],
             "present": False,
             "missing": []
@@ -1132,7 +1162,6 @@ def vanilla_mods(skyrim_dir):
     data_mod = {
         'name': "Unmanaged Data",
         'directory': 'data',
-        'managed': 0,
         'files': um_files,
         'present': len(um_files) > 0,
         'missing': []

@@ -2,7 +2,7 @@
 from .enums import *
 from . import keystrings as _keystr
 
-from collections import namedtuple as _nt
+from collections import namedtuple as _namedtuple
 
 
 # what to show in the title-bar of the main window and some dialog
@@ -37,9 +37,9 @@ overrideable_dirs = (_keystr.Dirs.SKYRIM, _keystr.Dirs.MODS, _keystr.Dirs.VFS)
 
 ## definitions of database fields and order, including a version w/o
 ## the "Error" field
-_dbflds_noerr = _nt("_dbflds_noerr", "FLD_ORD FLD_DIR FLD_NAME FLD_MODID FLD_VER FLD_ENAB FLD_MNGD")
-#
-_dbflds = _nt("_dbflds", _dbflds_noerr._fields + ("FLD_ERR",))
+_dbflds_noerr = _namedtuple("_dbflds_noerr", "FLD_ORD FLD_DIR FLD_NAME FLD_MODID FLD_VER FLD_ENAB FLD_MNGD")
+
+_dbflds = _namedtuple("_dbflds", _dbflds_noerr._fields + ("FLD_ERR",))
 
 
 ## Definitions for actual string values of database field names

@@ -163,8 +163,8 @@ class ModCollection(MutableSequence):
         """Add a new item at the ordinal `index`"""
 
         # if the provided index is higher than the length of our map, just do an 'add'
-        if index > len(self._map):
-            self.add(value)
+        if index >= len(self._map):
+            self.append(value)
         elif value.key not in self._map:
 
             key = value.key
@@ -195,8 +195,6 @@ class ModCollection(MutableSequence):
             # and finally add to map
             self._map[key] = node
 
-
-
     ##=============================================
     ## overrides
     ##=============================================
@@ -223,7 +221,7 @@ class ModCollection(MutableSequence):
             yield curr.data
             curr = curr.next
 
-    def add(self, data):
+    def append(self, data):
         """Add `data` to the end of the collection. Key must be a unique
         value that can be used to identify this data"""
 
@@ -254,6 +252,10 @@ class ModCollection(MutableSequence):
             # built-in ``set`` type does not throw an error for elements
             # that already exist; dict does, however...
 
+    def clear(self):
+        self._map.clear()
+        self._index.clear()
+        self._order.clear()
 
 
     ##=============================================

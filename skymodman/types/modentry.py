@@ -1,13 +1,13 @@
 # from collections import namedtuple
 # TModEntry = namedtuple("TModEntry", ['enabled', 'name', 'modid', 'version', 'directory', 'ordinal'])
-from functools import total_ordering
+# from functools import total_ordering
 
 from skymodman import Manager
 from skymodman.constants import db_fields
 
 # db_fields = "ordinal", "directory", "name", "modid", "version", "enabled", "managed", "error"
 
-@total_ordering
+# @total_ordering
 class ModEntry:
     __slots__ = ('enabled', 'name', 'modid', 'version',
                  'directory', 'ordinal', 'managed', 'error')
@@ -17,7 +17,10 @@ class ModEntry:
     # def __init__(self, enabled=None, name=None, modid=None,
     #              version=None, directory=None, ordinal=None,
     #              managed=None, error=None):
-    def __init__(self, ordinal=None, directory=None, name=None,
+    # def __init__(self, ordinal=None, directory=None, name=None,
+    #              modid=None, version=None, enabled=None,
+    #              managed=None, error=None):
+    def __init__(self, directory=None, name=None,
                  modid=None, version=None, enabled=None,
                  managed=None, error=None):
         """
@@ -38,7 +41,7 @@ class ModEntry:
 
         # TODO: it really sounds like the 'ordinal' should be external to the mod entry and looked up on query
 
-        self.ordinal   = ordinal
+        # self.ordinal   = ordinal
         self.directory = directory
         self.name      = name
         self.modid     = modid
@@ -127,7 +130,7 @@ class ModEntry:
 
     # this should be all we need to do; let 'total_ordering' decorator
     # handle the rest
-    def __lt__(self, other):
-        return self.ordinal < other.ordinal #ordinal is unique, but not constant
-    def __gt__(self, other):
-        return self.ordinal > other.ordinal
+    # def __lt__(self, other):
+    #     return self.ordinal < other.ordinal #ordinal is unique, but not constant
+    # def __gt__(self, other):
+    #     return self.ordinal > other.ordinal
