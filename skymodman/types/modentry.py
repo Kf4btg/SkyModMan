@@ -3,15 +3,23 @@
 # from functools import total_ordering
 
 from skymodman import Manager
-from skymodman.constants import db_fields
+# from skymodman.constants import db_fields
 
 # db_fields = "ordinal", "directory", "name", "modid", "version", "enabled", "managed", "error"
 
 # @total_ordering
 class ModEntry:
-    __slots__ = ('enabled', 'name', 'modid', 'version',
-                 'directory', 'ordinal', 'managed', 'error')
+    __slots__ = ('directory', 'name', 'modid', 'version',
+                 'enabled', 'managed', 'error')
+    # __slots__ = ('enabled', 'name', 'modid', 'version',
+    #              'directory', 'ordinal', 'managed', 'error')
     _fields= __slots__ # to match the namedtuple interface
+
+    # set this to associate all ModEntry objects with a ModCollection
+    # instance; when set, the entries can use the collection to look up
+    # their ordinal
+    collection = None
+    """:type: skymodman.types.modcollection.ModCollection"""
 
 
     # def __init__(self, enabled=None, name=None, modid=None,
@@ -65,6 +73,15 @@ class ModEntry:
         return self.directory
 
     @property
+    def ordinal(self):
+        """Query the ModCollection (assuming one has been set) to
+        find out the current ordering of this mod entry"""
+        if ModEntry.collection:
+            return ModEntry.collection.index(self.key)
+        # if no collection is yet associated, always return -1
+        return -1
+
+    @property
     def filelist(self):
         """Return the list of files contained by this mod."""
         # recently-queried mods are cached by modmanager
@@ -113,8 +130,12 @@ class ModEntry:
         """allows this object to be converted to tuple (or list, or other
         sequence type)"""
 
-        # use db_fields to ensure proper order
-        yield from (getattr(self, f) for f in db_fields)
+        # yield ordinal first; this is to allow the ordinal to still
+        # be stored in the database, though the individual mods don't
+        # really care about it.
+        yield self.ordinal
+        # use _fields to ensure proper order
+        yield from (getattr(self, f) for f in self._fields)
 
     def __repr__(self):
         return self.__class__.__name__ + "(enabled={0.enabled}, name='{0.name}', modid={0.modid}, version='{0.version}', directory='{0.directory}', ordinal={0.ordinal}, managed={0.managed}, error={0.error})".format(self)
