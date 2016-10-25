@@ -11,14 +11,18 @@ from skymodman.managers.base import Submanager, BaseDBManager
 
 from skymodman.types.modcollection import ModCollection
 from skymodman.types import ModEntry
-from skymodman.constants import db_fields, db_fields_noerror, ModError #, db_field_order, keystrings
+# from skymodman.constants import db_fields, db_fields_noerror, ModError #, db_field_order, keystrings
+from skymodman.constants import  ModError #, db_field_order, keystrings, db_fields, db_fields_noerror,
 from skymodman.log import withlogger
 from skymodman.utils import tree
 
 _relpath = os.path.relpath
 _join = os.path.join
 
-_mcount = count()
+_db_fields = ('ordinal',) + ModEntry._fields
+_db_fields_noerr = _db_fields[:-1]
+
+# _mcount = count()
 
 # max number of vars for sqlite query is 999
 _SQLMAX=900
@@ -65,8 +69,8 @@ _defaults = {
     "version": lambda v: "",
     "enabled": lambda v: 1,
     "managed": lambda v: 1,
+    "error": lambda v: ModError.NONE
 }
-# "error": lambda v: ModError.NONE
 
 
 # from skymodman.utils import humanizer
@@ -106,6 +110,8 @@ class DBManager(BaseDBManager, Submanager):
 
         ## Try populating the modcollection on load
         self._collection = ModCollection()
+        # associate all modentries with this collection
+        ModEntry.collection = self._collection
 
         # These are created from the database, so it seems like it may
         # be best just to store them in this class:
@@ -170,10 +176,10 @@ class DBManager(BaseDBManager, Submanager):
                 self.conn.execute("DELETE FROM mods")
                 self._empty['mods'] = True
 
-                global _mcount
+                # global _mcount
                 # reset counter so that mod-ordinal is determined by the
                 # order in which the entries are read from the file
-                _mcount = count()
+                # _mcount = count()
 
             if files and not self._empty['modfiles']:
                 self.conn.execute("DELETE FROM modfiles")
@@ -484,12 +490,6 @@ class DBManager(BaseDBManager, Submanager):
 
         self.LOGGER << "<==Method call"
 
-        # FIXME: after first load, unmanaged mods (other than skyrim) are in modinfo file; but since we add them here, there's a conflict on the UNIQUE constraint when the modinfo file is read. We need them to be in the modinfo file so we can know whether they've been disabled or had their load order changed, but we also need to make sure they're correctly generated if they're missing from the modinfo file...Find a way to reconcile this!
-        # first off, load the vanilla mods
-        if self.mainmanager.Folders['skyrim']:
-            self.load_unmanaged_mods(
-                self.mainmanager.Folders['skyrim'].path)
-
         if not isinstance(json_source, Path):
             json_source = Path(json_source)
 
@@ -498,18 +498,33 @@ class DBManager(BaseDBManager, Submanager):
             # read from json file and convert mappings
             # to ordered tuples for sending to sqlite
             try:
-                mods = json.load(f, object_pairs_hook=_to_row_tuple)
-                self.add_to_mods_table(mods)
+                modentry_list = json.load(f, object_hook=_to_mod_entry)
+                # mods = json.load(f, object_pairs_hook=_to_row_tuple)
+                # self.add_to_mods_table(mods)
 
             except json.decoder.JSONDecodeError:
                 self.LOGGER.error("No mod information present in {}, "
                                   "or file is malformed."
                                   .format(json_source))
                 success = False
+            else:
+                self._collection.extend(modentry_list)
+
+        # now get unmanaged mods
+        if not self.load_unmanaged_mods():
+            # TODO: figure out what to do in this case; does this need to be in a separate method that is called individually by the Manager?
+            self.LOGGER.warning("Failed to load unmanaged data")
+
+        if success:
+            # assuming the ModCollection and ModEntry classes are
+            # written correctly... this should work just fine!
+            self.populate_mods_table(self._collection)
+            # self.add_to_mods_table(self._collection)
+
         return success
 
-    def load_mod_info_from_disk(self, include_skyrim=True,
-                                save_modinfo=False):
+    def load_mod_info_from_disk(self, include_skyrim=True):
+                                # save_modinfo=False):
         """
         scan the actual mods-directory and populate the database from
         there instead of a cached json file.
@@ -518,157 +533,120 @@ class DBManager(BaseDBManager, Submanager):
         cache is in sync.
 
         :param include_skyrim:
-        :param save_modinfo:
-        :return:
         """
+        # :param save_modinfo:
         # TODO: Perhaps this should be run on every startup? At least to make sure it matches the stored data.
 
-        global _mcount
-        # reset the ordinal counter
-        _mcount = count()
-
         if include_skyrim:
-            # the unmanaged mods
-            skydir = self.mainmanager.Folders['skyrim']
-            if not skydir:
-                self.LOGGER.error("Skyrim directory unset or invalid")
-
-            self.load_unmanaged_mods(skydir.path)
+            self.load_unmanaged_mods()
 
         # list of installed mod folders
         installed_mods = self.mainmanager.managed_mod_folders
 
-        mods_list = []
-
-        mods_dir = self.mainmanager.Folders['mods']
-
-        if not mods_dir:
-            self.LOGGER.error("Mod directory unset or invalid")
-            return
-
-        mods_dir = mods_dir.path
-
-        # use config parser to read modinfo 'meta.ini' files, if present
-        import configparser as _config
-        configP = _config.ConfigParser()
-
-        # for managed mods, mod_key is the directory name
-        for mod_key in installed_mods:
-            mod_dir = mods_dir / mod_key
-
-            # support loading information read from meta.ini
-            # (ModOrganizer) file
-            # TODO: check case-insensitively
-            meta_ini_path = mod_dir / "meta.ini"
-
-            if meta_ini_path.exists():
-                configP.read(str(meta_ini_path))
-                try:
-                    modid = configP['General']['modid']
-                    version = configP['General']['version']
-                except KeyError:
-                    # if the meta.ini file was malformed or something,
-                    # ignore it
-                    add_me = _make_mod_entry(directory=mod_key,
-                                                managed=1)
-
-                    # mods_list.append(_row_tuple(ordinal=next(_mcount),
-                    #                             directory=mod_key,
-                    #                             managed=1))
-                else:
-                    add_me = _make_mod_entry(directory=mod_key,
-                                                managed=1,
-                                                modid=modid,
-                                                version=version)
-                    # mods_list.append(_row_tuple(ordinal=next(_mcount),
-                    #                             directory=mod_key,
-                    #                             managed=1,
-                    #                             modid=modid,
-                    #                             version=version))
-            else:
-                # no meta file
-                add_me = _make_mod_entry(directory=mod_key,
-                                                managed=1)
-                # mods_list.append(_row_tuple(ordinal=next(_mcount),
-                #                             managed=1,
-                #                             directory=mod_key))
-
-            self._collection.append(add_me)
-
-        # get rid of import
-        del _config
-
-        # finally, populate the table with the discovered mods
-        if mods_list:
-            self.add_to_mods_table(mods_list)
-        else:
+        if not installed_mods:
             self.LOGGER << "Mods directory empty"
+        else:
 
-    def load_unmanaged_mods(self, skyrim_dir):
+            mods_dir = self.mainmanager.Folders['mods']
+
+            if not mods_dir:
+                self.LOGGER.error("Mod directory unset or invalid")
+                return
+
+            mods_dir = mods_dir.path
+
+            # use config parser to read modinfo 'meta.ini' files, if present
+            import configparser as _config
+            configP = _config.ConfigParser()
+
+            # for managed mods, mod_key is the directory name
+            for mod_key in installed_mods:
+                mod_dir = mods_dir / mod_key
+
+                # support loading information read from meta.ini
+                # (ModOrganizer) file
+                # TODO: check case-insensitively
+                meta_ini_path = mod_dir / "meta.ini"
+
+                if meta_ini_path.exists():
+                    configP.read(str(meta_ini_path))
+                    try:
+                        modid = configP['General']['modid']
+                        version = configP['General']['version']
+                    except KeyError:
+                        # if the meta.ini file was malformed or something,
+                        # ignore it
+                        add_me = _make_mod_entry(directory=mod_key,
+                                                    managed=1)
+                    else:
+                        add_me = _make_mod_entry(directory=mod_key,
+                                                    managed=1,
+                                                    modid=modid,
+                                                    version=version)
+                else:
+                    # no meta file
+                    add_me = _make_mod_entry(directory=mod_key,
+                                                    managed=1)
+
+                self._collection.append(add_me)
+
+            # get rid of import
+            del _config
+
+            # finally, populate the table with the discovered mods
+            self.populate_mods_table(self._collection)
+
+            # if mods_list:
+            #     self.add_to_mods_table(mods_list)
+            # else:
+                # self.LOGGER << "Mods directory empty"
+
+    def load_unmanaged_mods(self):
         """Check the skyrim/data folder for the vanilla game files, dlc,
         and any mods the user installed into the game folder manually."""
         # TODO: store enabled status, custom-name for these; also see if version info can be pulled from files
 
         # um_mods = []
 
+        success = False
+        if not self._vanilla_mod_info:
+            skydir = self.mainmanager.Folders['skyrim']
+            if skydir:
+                self._vanilla_mod_info = vanilla_mods(skydir.path)
+            else:
+                self.LOGGER.warning << "Could not access Skyrim folder"
+                # return False to indicate we couldn't load
+                return False
+
         # this lets us insert the items returned by vanilla_mods()
         # in the order in which they're returned, but ignoring any
-        # items that may bot be present
+        # items that may not be present
         default_order = count()
 
-        if not self._vanilla_mod_info:
-            self._vanilla_mod_info = vanilla_mods(skyrim_dir)
-
-        # v_mods = vanilla_mods(skyrim_dir)
-
+        # noinspection PyTypeChecker
         present_mods = [t for t in self._vanilla_mod_info if
                         (t[0] == 'Skyrim' or t[1]['present'])]
 
         # skyrim should be first item
         for m_name, m_info in present_mods:
-            # if m_name == 'Skyrim' or m_info['present']:
-            # get a mod-entry tuple for the 'Mod'
-
-            # if m_name == 'Skyrim':
-                # always insert skyrim 'mod' as first entry
-                # self._collection.insert(0,
-                #     ModEntry(*_row_tuple(
-                #         name=m_name,
-                #         managed=0,
-                #         directory=m_name
-                #     ))
-                # )
-            # else:
 
             # don't bother creating entries for mods already in coll;
             # 'skyrim' should always be 1st item, and should always not
             # be in the collection at this point; thus it will always
             # be inserted at index 0
             if m_name not in self._collection:
-                self._collection.insert(next(default_order),
-                                        ModEntry(*_row_tuple(
-                                            name=m_name,
-                                            managed=0,
-                                            directory=m_name
-                                        )))
+                self._collection.insert(
+                    next(default_order),
+                    _make_mod_entry(name=m_name,
+                                    managed=0,
+                                    # this is not exactly accurate...
+                                    # I really need to change 'directory' to something else
+                                    directory=m_name
+                                    ))
+                # set success True if we add at least 1 item to collection
+                success=True
 
-        #     m_tuple = _row_tuple(
-        #         # keep 'Skyrim' entry first
-        #         ordinal=-1 if m_name == 'Skyrim' else next(_mcount),
-        #         name=m_name,
-        #         managed=0,
-        #
-        #         # this is not exactly accurate...
-        #         # I really need to change 'directory' to something else
-        #         directory=m_name,
-        #     )
-        #     um_mods.append(m_tuple)
-        #
-        # if um_mods:
-        #     self._collection.add(
-        #         ModEntry(*m) for m in um_mods)
-
-            # self.add_to_mods_table(um_mods)
+        return success
 
     def load_all_mod_files(self, mods_dir=None):
         """
@@ -715,6 +693,7 @@ class DBManager(BaseDBManager, Submanager):
         if not self._vanilla_mod_info:
             self._vanilla_mod_info = vanilla_mods(skyrim_dir)
 
+        # noinspection PyTypeChecker
         present_mods = [t for t in self._vanilla_mod_info if
                         (t[0] == 'Skyrim' or t[1]['present'])]
 
@@ -749,17 +728,14 @@ class DBManager(BaseDBManager, Submanager):
         """
         self.LOGGER << "<==Method call"
 
-        # build the modcollection here, too
-        for m in mod_list:
-            self._collection.append(ModEntry(*m))
 
         # ignore the error field for now
         with self.conn:
             # insert the list of row-tuples into the in-memory db
             self.conn.executemany(
                 "INSERT INTO mods({}) VALUES ({})".format(
-                    ", ".join(db_fields_noerror),
-                    ", ".join("?" * len(db_fields_noerror))
+                    ", ".join(_db_fields_noerr),
+                    ", ".join("?" * len(_db_fields_noerr))
                 ),
                 mod_list)
 
@@ -780,6 +756,7 @@ class DBManager(BaseDBManager, Submanager):
                 self.conn.executemany(
                     "INSERT INTO modfiles VALUES (?, ?)",
                     zip(repeat(mod_key), file_list))
+                self._empty['modfiles'] = False
 
     def add_to_missing_files_table(self, mod_key, file_list):
         """
@@ -794,6 +771,8 @@ class DBManager(BaseDBManager, Submanager):
                 self.conn.executemany(
                     "INSERT INTO missingfiles VALUES (?, ?)",
                     zip(repeat(mod_key), file_list))
+                self._empty['missingfiles'] = False
+
 
     def add_files_from_dir(self, mod_name, mod_root):
         """
@@ -817,9 +796,22 @@ class DBManager(BaseDBManager, Submanager):
         # field (e.g. 'CoolMod42'), and the filepath as the second (e.g.
         # 'meshes/whatever.nif')
         if mfiles:
-            self._con.executemany(
-                "INSERT INTO modfiles VALUES (?, ?)",
-                zip(repeat(mod_name), mfiles))
+            with self.conn:
+                self.conn.executemany(
+                    "INSERT INTO modfiles VALUES (?, ?)",
+                    zip(repeat(mod_name), mfiles))
+                self._empty['modfiles'] = False
+
+
+    def populate_mods_table(self, mod_list):
+        """Similar to add_to_mods_table, but this first checks to see if
+        the mods table is empty before attempting to add any data to it.
+        The method will fail if table already contains data."""
+
+        if self._empty['mods']:
+            self.add_to_mods_table(mod_list)
+        else:
+            self.LOGGER.error("Attempted to populate non-empty table 'mods'.")
 
     ##=============================================
     ## Saving Data
@@ -840,8 +832,10 @@ class DBManager(BaseDBManager, Submanager):
         # we don't save the ordinal rank, so we need to get a list (set)
         # of the fields without "ordinal" Using sets here is OK because
         # field order doesn't matter when saving
-        noord_fields = set(db_fields) - {db_fields.FLD_ORD,
-                                         db_fields.FLD_ERR}
+        # noord_fields = set(_db_fields) - {db_fields.FLD_ORD,
+        #                                  db_fields.FLD_ERR}
+
+        dbfields_noerr_noord=ModEntry._fields[:-1]
 
         modinfo = []
 
@@ -850,11 +844,11 @@ class DBManager(BaseDBManager, Submanager):
         # ignore 'skyrim' mod
         for row in self.conn.execute(
                 "SELECT {} FROM (SELECT * FROM mods WHERE directory != 'Skyrim' ORDER BY ordinal)"
-                        .format(", ".join(noord_fields))):
+                        .format(", ".join(dbfields_noerr_noord))):
             # then, for each row (mod entry),
             # zip fields names and values up and convert to dict
             # to create json-able object
-            modinfo.append(dict(zip(noord_fields, row)))
+            modinfo.append(dict(zip(dbfields_noerr_noord, row)))
 
         with json_target.open('w') as f:
             json.dump(modinfo, f, indent=1)
@@ -1038,38 +1032,57 @@ class DBManager(BaseDBManager, Submanager):
 ## Module-level methods (should maybe be static?)
 ##=============================================
 
-def _to_row_tuple(pairs):
-    """
-    Used as object_pair_hook for json.load(). Takes the mod
-    information loaded from the json file and converts it
-    to a tuple of just the field values in the
-    correct order for feeding to the sqlite database.
-
-    :param typing.Sequence[tuple[str, Any]] pairs:
-    :return: Tuple containing just the values of the fields
-    # """
-    # print(dict(pairs))
-    # value for ordinal is taken from global incrementer as it is not
-    # stored in the modinfo file and is instead dependent on the
-    # order in which items are read from said file
-    return _row_tuple(ordinal=next(_mcount), **dict(pairs))
+# def _to_row_tuple(pairs):
+#     """
+#     Used as object_pair_hook for json.load(). Takes the mod
+#     information loaded from the json file and converts it
+#     to a tuple of just the field values in the
+#     correct order for feeding to the sqlite database.
+#
+#     :param typing.Sequence[tuple[str, Any]] pairs:
+#     :return: Tuple containing just the values of the fields
+#     # """
+#     # print(dict(pairs))
+#     # value for ordinal is taken from global incrementer as it is not
+#     # stored in the modinfo file and is instead dependent on the
+#     # order in which items are read from said file
+#     return _row_tuple(ordinal=next(_mcount), **dict(pairs))
 
 
         # return (next(_mcount),) + tuple(
         #     s[1] for s in sorted(pairs,
         #                          key=lambda p: db_field_order[p[0]]))
 
-def _row_tuple(**kwargs):
-    """Pulls value from supplied keyword arguments (generated from the
-    on-disk json file), supplementing any missing fields with default
-    values."""
-    return tuple(kwargs.get(field, _defaults.get(
-                             field, lambda v: "")(kwargs))
-                             for field in db_fields_noerror)
+# def _row_tuple(**kwargs):
+#     """Pulls value from supplied keyword arguments (generated from the
+#     on-disk json file), supplementing any missing fields with default
+#     values."""
+#     return tuple(kwargs.get(field, _defaults.get(
+#                              field, lambda v: "")(kwargs))
+#                              for field in db_fields_noerror)
 
 def _make_mod_entry(**kwargs):
-    return ModEntry._make(_row_tuple(**kwargs))
+    return _to_mod_entry(kwargs)
 
+def _to_mod_entry(json_object):
+    """
+    Take the decoded object literal (a dict) from a json.load
+    operation and convert it into a ModEntry object.
+
+    Can be used as an ``object_hook`` for json.load().
+
+    :param dict json_object:
+    :return:
+    """
+
+    return ModEntry._make(
+        json_object.get(field,
+                        _defaults.get(field, lambda f: "")(json_object)
+        ) for field in _db_fields)
+
+
+
+## NTS: these shouldn't even be in this module...
 
 def vanilla_mods(skyrim_dir):
     """
