@@ -1,4 +1,4 @@
-from collections.abc import MutableSequence, MutableSet
+from collections.abc import MutableSequence
 from weakref import proxy
 
 # Node object for linked list of items in ModCollection
@@ -61,8 +61,8 @@ class ModCollection(MutableSequence):
 
     def __getitem__(self, index):
         """
-        If `index` is an integer, get the item at currently set as that
-        number in the ordering.
+        If `index` is an integer, get the item currently located at that
+        position in the ordering.
 
         If `index` is a string, return the item having that unique
         key."""
@@ -79,8 +79,10 @@ class ModCollection(MutableSequence):
             key = self._order[index]
 
         # return the actual data stored in the node at that index
-        # XXX: should this return the Node object? Allowing use see which mods are previous/next? Maybe.
-        # XXX: or possibly return an object that includes the item's current ordinal...
+        # NTS: should this return the Node object? Allowing us to see
+        # which mods are previous/next? Maybe.
+        # NTS: or possibly return an object that includes the item's
+        # current ordinal...
 
         return self._map[key].data
 
@@ -120,12 +122,13 @@ class ModCollection(MutableSequence):
                 _prev.next = _next.prev = proxy(newnode)
 
                 # clear all refs to replaced data
-                self._order[index] = key
-
                 del self._index[old_key]
-                self._index[key] = index
-
                 del self._map[old_key]
+                # and insert new
+                self._order[index] = key
+                self._index[key] = index
+                self._map[key] = value
+
 
     def __len__(self):
         return len(self._map)
@@ -146,7 +149,7 @@ class ModCollection(MutableSequence):
 
         # adjust order; this intrinsically takes care of removing the
         # item (key) from the _order and _index mappings
-        self._shift_up(idx, 1)
+        self._shift_indices_up(idx, 1)
 
         # adjust pointers
         doomed = self._map[key]
@@ -160,33 +163,51 @@ class ModCollection(MutableSequence):
         del self._map[key]
 
     def insert(self, index, value):
-        """Add a new item at the ordinal `index`"""
+        """Add a new item at the ordinal `index`. Value must have
+        a ``key`` attribute that is unique amongst all other values
+        in the collection."""
 
-        # if the provided index is higher than the length of our map, just do an 'add'
-        if index >= len(self._map):
-            self.append(value)
-        elif value.key not in self._map:
+        # NTS: consider allowing 'value' to just be hashable, rather
+        # than requiring the key attribute; or maybe allow a key()
+        # function; or maybe don't, since this is really just specific
+        # to this application and doesn't need to be so generic...
 
-            key = value.key
+        # data needs to have a 'key' attribute
+        key = value.key
 
-            # get current node at that index
-            current = self._map[self._order[index]]
-            # and it's predecessor
-            prev = current.prev
+        # built-in set type does not throw an error for elements
+        # that already exist; dict does, however...which to imitate?
+        if key not in self._map:
 
-            # shift everything below this index down one
-            # FIXME: my brain not work so good right now...but I have feeling that math not work out right in shift_down() funkshun; mite stop going before get to 'index'. Check later when brane on.
-            #-- don't allow negative indices here
-            self._shift_down(max(index, 0), 1)
+            _max = len(self._map)
+
+            if abs(index) > _max:
+                raise IndexError
+
+            if index == _max:
+                # an 'append' operation:
+                # the 'next' node will be the sentinel
+                _next = self._root
+            else:
+                if index < 0: # negative indexing
+                    index += _max
+
+                # get current node at that index
+                _next = self._map[self._order[index]]
+
+                # shift all indices below this down one.
+                self._shift_indices_down(index, 1)
+
+            _prev = _next.prev
 
             # new node
             node = _Node()
 
             # assign data and pointers to new node
-            node.prev, node.next, node.key, node.data = prev, current, key, value
+            node.prev, node.next, node.key, node.data = _prev, _next, key, value
 
             # store pointers to new node as weak references
-            prev.next = current.prev = proxy(node)
+            _prev.next = _next.prev = proxy(node)
 
             # track new item's order
             self._order[index] = key
@@ -194,6 +215,7 @@ class ModCollection(MutableSequence):
 
             # and finally add to map
             self._map[key] = node
+
 
     ##=============================================
     ## overrides
@@ -221,38 +243,11 @@ class ModCollection(MutableSequence):
             yield curr.data
             curr = curr.next
 
-    def append(self, data):
-        """Add `data` to the end of the collection. Key must be a unique
-        value that can be used to identify this data"""
-
-        # data needs to have a 'key' attribute
-        key = data.key # type: str
-
-        if key not in self._map:
-            node = _Node()
-
-            root = self._root
-            last = root.prev
-
-            # assign data and pointers to new node
-            node.prev, node.next, node.key, node.data = last, root, key, data
-
-            # store pointers to new node as weak references
-            last.next = root.prev = proxy(node)
-
-            # track new item's order (easy to calculate since it is the
-            # last item in the list)
-            idx = len(self._map)
-            self._order[idx] = key
-            self._index[key] = idx
-
-            # and finally add to map
-            self._map[key] = node
-
-            # built-in ``set`` type does not throw an error for elements
-            # that already exist; dict does, however...
-
     def clear(self):
+        # override for speed; no need to pop everything off 1by1;
+        # having weakrefs to all nodes will allow gc to collect them
+        # after they've been cleared from our mapping, so there
+        # shouldn't be any problems w/ memory leaks here.
         self._map.clear()
         self._index.clear()
         self._order.clear()
@@ -262,7 +257,7 @@ class ModCollection(MutableSequence):
     ## Additional mechanics
     ##=============================================
 
-    def _shift_down(self, start_idx=0, count=1):
+    def _shift_indices_down(self, start_idx=0, count=1):
         """Starting at 'start_idx', increment each item's recorded order
         by `count`. This will effectively make an 'empty' section in the
         list `count` items in length.
@@ -298,7 +293,7 @@ class ModCollection(MutableSequence):
                 self._index[key] = i
 
 
-    def _shift_up(self, start_idx, count=1):
+    def _shift_indices_up(self, start_idx, count=1):
         """
         Decrease the ordinal by `count` for each item from `start_idx`
         to the end of the list. (Used when deleting items). This effectively
