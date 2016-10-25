@@ -272,6 +272,31 @@ class ModCollection(MutableSequence):
                 i[k] = c
                 c+=1
 
+    def index(self, value, start=0, stop=None) -> int:
+        """Override to greatly increase speed when checking for the
+        order of a mod (by ModEntry object or key). This ignores
+        start and stop as the operation is about O(1).
+
+        Raises ValueError if the value is not present"""
+
+        if isinstance(value, str):
+            # check for key; ignore start and stop
+            if value in self._map:
+                return self._index[value]
+
+        else:
+            #assume is ModEntry
+            try:
+                key = value.key
+            except AttributeError:
+                # not modentry...call super method as last resort
+                return super().index(value, start, stop)
+            else:
+                if key in self._map:
+                    return self._index[key]
+
+        raise ValueError
+
     ##=============================================
     ## Additional mechanics
     ##=============================================
