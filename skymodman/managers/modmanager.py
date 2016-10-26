@@ -4,7 +4,7 @@ from functools import lru_cache
 from skymodman.utils import tree as _tree
 
 # from skymodman import exceptions
-from skymodman.types import ModEntry, Alert, AppFolder
+from skymodman.types import ModEntry, ModCollection, Alert, AppFolder
 from skymodman.managers import (config as _config,
                                 database as _database,
                                 profiles as _profiles
@@ -74,6 +74,11 @@ class ModManager:
         # cached list of mods in mod directory
         self._managed_mods = []
 
+        # mod collection instance
+        self._modcollection = ModCollection()
+        # set as collection for all ModEntry objects
+        ModEntry.collection = self._modcollection
+
         # track when we're switching profiles
         self.in_profile_switch=False
 
@@ -102,7 +107,7 @@ class ModManager:
         self._profileman = _profiles.ProfileManager(mcp=self)
 
         # set up db, but do not load info until requested
-        self._dbman = _database.DBManager(mcp=self)
+        self._dbman = _database.DBManager(self._modcollection, mcp=self)
 
         # make sure we have a valid profiles directory
         # self.check_dir(ks_dir.PROFILES)

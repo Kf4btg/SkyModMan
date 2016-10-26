@@ -59,6 +59,9 @@ class ModCollection(MutableSequence):
     ## Abstract methods
     ##=============================================
 
+    def __len__(self):
+        return len(self._map)
+
     def __getitem__(self, index):
         """
         If `index` is an integer, get the item currently located at that
@@ -87,7 +90,6 @@ class ModCollection(MutableSequence):
         # current ordinal...
 
         return self._map[key].data
-
 
     def __setitem__(self, index, value):
         # TODO: support slices
@@ -131,10 +133,6 @@ class ModCollection(MutableSequence):
             self._order[index] = key
             self._index[key] = index
             self._map[key] = newnode
-
-
-    def __len__(self):
-        return len(self._map)
 
     def __delitem__(self, index):
 
@@ -280,10 +278,7 @@ class ModCollection(MutableSequence):
         Raises ValueError if the value is not present"""
 
         if isinstance(value, str):
-            # check for key; ignore start and stop
-            if value in self._map:
-                return self._index[value]
-
+            key = value
         else:
             #assume is ModEntry
             try:
@@ -291,11 +286,11 @@ class ModCollection(MutableSequence):
             except AttributeError:
                 # not modentry...call super method as last resort
                 return super().index(value, start, stop)
-            else:
-                if key in self._map:
-                    return self._index[key]
-
-        raise ValueError
+        try:
+            # check for key; ignore start and stop
+            return self._index[key]
+        except KeyError:
+            raise ValueError from None
 
     ##=============================================
     ## Additional mechanics

@@ -9,7 +9,6 @@ from collections import defaultdict, namedtuple
 # from skymodman import exceptions
 from skymodman.managers.base import Submanager, BaseDBManager
 
-from skymodman.types.modcollection import ModCollection
 from skymodman.types import ModEntry
 # from skymodman.constants import db_fields, db_fields_noerror, ModError #, db_field_order, keystrings
 from skymodman.constants import  ModError #, db_field_order, keystrings, db_fields, db_fields_noerror,
@@ -78,7 +77,12 @@ _defaults = {
 @withlogger
 class DBManager(BaseDBManager, Submanager):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, collection, *args, **kwargs):
+        """
+
+        :param collection: ModCollection instance in which to store
+            loaded mods
+        """
         super().__init__(db_path=":memory:", # create db in memory
                          schema=_SCHEMA,
                          # names of all tables
@@ -109,9 +113,7 @@ class DBManager(BaseDBManager, Submanager):
         self._vanilla_mod_info = []
 
         ## Try populating the modcollection on load
-        self._collection = ModCollection()
-        # associate all modentries with this collection
-        ModEntry.collection = self._collection
+        self._collection = collection
 
         # These are created from the database, so it seems like it may
         # be best just to store them in this class:
@@ -535,7 +537,7 @@ class DBManager(BaseDBManager, Submanager):
         :param include_skyrim:
         """
         # :param save_modinfo:
-        # TODO: Perhaps this should be run on every startup? At least to make sure it matches the stored data.
+        # NTS: Perhaps this should be run on every startup? At least to make sure it matches the stored data.
 
         if include_skyrim:
             self.load_unmanaged_mods()
@@ -956,7 +958,7 @@ class DBManager(BaseDBManager, Submanager):
             for current profile
         """
 
-        # Note: I notice ModOrganizer adds a '.mohidden' extension to every file it hides (or to the parent directory); hmm...I'd like to avoid changing the files on disk if possible
+        # NTS: I notice ModOrganizer adds a '.mohidden' extension to every file it hides (or to the parent directory); hmm...I'd like to avoid changing the files on disk if possible
 
         if not isinstance(json_target, Path):
             json_target = Path(json_target)
@@ -1094,7 +1096,7 @@ def vanilla_mods(skyrim_dir):
 
     from skymodman.constants import SkyrimGameInfo as skyinfo
 
-    # XXX: only DLC should appear in mod list (skyrim/update do not,
+    # NTS: only DLC should appear in mod list (skyrim/update do not,
     # though their files will appear in archives/files lists)
 
     # get 'skyrim/data'
