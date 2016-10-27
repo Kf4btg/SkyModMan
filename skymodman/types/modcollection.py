@@ -1,4 +1,5 @@
-from collections.abc import MutableSequence
+from itertools import count as counter
+from collections import abc, OrderedDict
 from weakref import proxy
 
 # Node object for linked list of items in ModCollection
@@ -15,7 +16,7 @@ class _Node:
         """
         self.prev, self.next, self.key, self.data = prev, next_, key, data
 
-class ModCollection(MutableSequence):
+class ModCollection(abc.MutableSequence):
     """A sequence that acts in some ways like a set (cannot add multiple
     items with the same key to the collection), some ways like a list
     (can access elements via their integer-index (an easily-adjustable
@@ -41,7 +42,7 @@ class ModCollection(MutableSequence):
         self._map = {} # type: dict [str, _Node]
 
         # mod-ordinal (int): mod_key (str)
-        self._order = {} # type: dict [int, str]
+        self._order = OrderedDict() # type: dict [int, str]
 
         # mod_key (str): mod-ordinal (int)
         # (reverse of _order)
@@ -117,6 +118,7 @@ class ModCollection(MutableSequence):
             # get current key at this index
             old_key = self._order[index]
 
+            # its nanoseconds are numbered
             doomed = self._map[old_key]
             _prev, _next = doomed.prev, doomed.next
 
@@ -292,6 +294,109 @@ class ModCollection(MutableSequence):
         except KeyError:
             raise ValueError from None
 
+    def __str__(self):
+        s = self.__class__.__name__ + "("
+        s+=", ".join("[{}: {}]".format(o,n) for o,n in self._order.items())
+        return s + ")"
+
+    ##=============================================
+    ## Rearrangement
+    ##=============================================
+
+    def change_order(self, old_position, new_position, num_to_move=1):
+        """
+        Move the item currently located at `old_position` to
+        `new_position`, adjusting the indices of any affected items
+        as needed.
+
+        :param int old_position:
+        :param int new_position:
+        :param int num_to_move: Number of contiguous items to move
+            (i.e. length of the slice starting at index `old_position`)
+        """
+
+        # Note -- The conventional way to visualize this is that
+        # the item is being slotted in _before_ the destination index;
+        # so, to move an item from position 7 to position 2, we pull
+        # it out of slot 7 and slide it back in directly above the
+        # item currently in slot 2, pushing that item down to slot 3,
+        # the one below it to slot 4, etc, until the item that was
+        # previously in slot 6 moves into the empty slot at slot 7.
+
+        # So, moving an item UP means shifting all the items BEFORE it,
+        # up to and including the item currently in the destination,
+        # down by 1. Moving a contiguous section of items up just means
+        # shifting the preceding items down by the number of items in
+        # the section.
+
+        # I don't know why this always makes my brain cry.
+
+        # TODO: get rid of linked list, it's unnecessary.
+
+        # can't go past this!
+        _imax = len(self._map)
+
+        ## don't do dumb things
+        assert new_position != old_position
+        assert num_to_move > 0
+        assert new_position in range(_imax)
+        assert old_position + num_to_move <= _imax
+
+        new, old, count = new_position, old_position, num_to_move
+
+        # save the keys we're moving around
+        chunk = [self._order[i] for i in range(old, old+count)]
+
+        if new < old:
+            # moving up
+
+            # shift the preceding items (new->old-1) down;
+            # but we have to start at the bottom (the bottom falls first!)
+            for i in range(old-1, new-1, -1):
+                key = self._order[i] # what's here right now?
+                drop_to = i+count
+
+                # shift down (give higher index)
+                self._index[key] = drop_to
+
+                # record new order
+                self._order[drop_to] = key
+
+            # slide chunk into place
+            for key, new_home in zip(chunk, counter(new)):
+                # give them an address
+                self._order[new_home] = key
+                # put them in the phone book
+                self._index[key] = new_home
+
+
+        elif old < new:
+            # moving down
+
+            # shift following items up
+            # range: <index imm. after chunk> to <dest. index + count lower>
+            # shift amount: -count
+            for i in range(old+count, new+count):
+                key = self._order[i]
+                raise_to = i-count
+
+                self._index[key] = raise_to
+                self._order[raise_to] = key
+
+            # put chunk in place
+            for key, new_home in zip(chunk, counter(new)):
+                self._order[new_home] = key
+                self._index[key] = new_home
+
+
+
+    def change_item_order(self, key, new_position):
+        """Given the key of a an item in the list, move it to the new
+        position, adjusting the index as needed for the new ordering"""
+
+        # current index
+        self.change_order(self._index[key], new_position)
+
     ##=============================================
     ## Additional mechanics
     ##=============================================
@@ -324,6 +429,8 @@ class ModCollection(MutableSequence):
                 key = self._order[i-count]
 
                 # add placeholder to order map
+                # (since _order is an OrderedDict, we only want to delete
+                # items from the end, otherwise it will get dis-ordered!)
                 self._order[i-count] = None
 
                 # effectively add `count` to each ordinal;
@@ -352,25 +459,31 @@ class ModCollection(MutableSequence):
         :param int count:
         """
 
+
         # sanity check on the parameters
         if count > 0 <= start_idx:
 
-            end_idx = len(self._map)-count
+            order = self._order
+            key_index = self._index
+
+            # remove key(s) about to be overwritten
+            for key_to_remove in [order[i] for i in range(start_idx, start_idx+count)]:
+                del key_index[key_to_remove]
+
+            # current length of collection
+            coll_len = len(order)
+            end_idx = coll_len - count
 
             for i in range(start_idx, end_idx):
-                # grab the 'new' key for this index (use pop to make
-                # sure we clear the 'tail' at the end of the 'list')
-                key = self._order.pop(i+count)
-                old_key = self._order[i]
-                # set popped key in its new location (overwrites the
-                # old key that was there)
-                self._order[i] = key
+                key = order[i+count]
+                # shift up
+                order[i] = key
+                # update index
+                key_index[key] = i
 
-                # remove overwritten entry from index...
-                self._index.pop(old_key)
-
-                # ...and record new position of moved key
-                self._index[key] = i
+            # remove 'tail' from order list
+            for i in range(end_idx, coll_len):
+                del order[i]
 
 
     def _get_real_index(self, index):
@@ -391,3 +504,57 @@ class ModCollection(MutableSequence):
 
         # index is fine as is
         return index
+
+
+
+if __name__ == '__main__':
+    class Fakeentry:
+        def __init__(self, key):
+            self.key = key
+        def __str__(self):
+            return "FakeEntry({})".format(self.key)
+
+
+    tcoll = ModCollection([Fakeentry(w) for w in "ABCDEF"])
+
+    print("START:", tcoll)
+
+    tcoll.extend([Fakeentry(w) for w in "GHIJKL"])
+
+    print("EXTEND:", tcoll)
+
+    tcoll.append(Fakeentry("Z"))
+
+    print("APPEND:", tcoll)
+
+    tcoll.insert(5, Fakeentry("Y"))
+
+    print("INSERT_5", tcoll)
+
+    tcoll.insert(0, Fakeentry("1"))
+
+    print("INSERT_0", tcoll)
+
+    print("GETINT_8", tcoll[8])
+
+    print("GETKEY_G", tcoll["G"])
+
+    del tcoll[8]
+
+    print("DELINT_8", tcoll)
+
+    del tcoll["H"]
+
+    print("DELKEY_H", tcoll)
+
+    del tcoll["Z"]
+
+    print("DELKEY_Z", tcoll)
+
+    del tcoll[0]
+
+    print("DELINT_0", tcoll)
+
+
+
+
