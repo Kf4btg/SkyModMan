@@ -373,11 +373,18 @@ class ModCollection(abc.MutableSequence):
         elif old < new:
             # moving down
 
+            # need to make sure we don't go past the end
+            # new += min(0, _imax - (new+count))
+            # actually, this means we have bad arguments...
+
             # shift following items up
             # range: <index imm. after chunk> to <dest. index + count lower>
             # shift amount: -count
             for i in range(old+count, new+count):
-                key = self._order[i]
+                try:
+                    key = self._order[i]
+                except KeyError:
+                    raise IndexError(i, "Tried to move chunk beyond end of collection") from None
                 raise_to = i-count
 
                 self._index[key] = raise_to
@@ -390,12 +397,12 @@ class ModCollection(abc.MutableSequence):
 
 
 
-    def change_item_order(self, key, new_position):
+    def change_item_order(self, key, new_position, count=1):
         """Given the key of a an item in the list, move it to the new
         position, adjusting the index as needed for the new ordering"""
 
         # current index
-        self.change_order(self._index[key], new_position)
+        self.change_order(self._index[key], new_position, count)
 
     ##=============================================
     ## Additional mechanics
@@ -493,7 +500,7 @@ class ModCollection(abc.MutableSequence):
         try:
             if abs(index) >= len(self._map):
                 # out of range
-                raise IndexError
+                raise IndexError(index)
         except TypeError:
             # abs() check failed
             raise TypeError("not a number") from None
@@ -517,43 +524,63 @@ if __name__ == '__main__':
 
     tcoll = ModCollection([Fakeentry(w) for w in "ABCDEF"])
 
-    print("START:", tcoll)
+    print("START:", tcoll, len(tcoll))
 
     tcoll.extend([Fakeentry(w) for w in "GHIJKL"])
 
-    print("EXTEND:", tcoll)
+    print("EXTEND:", tcoll, len(tcoll))
 
     tcoll.append(Fakeentry("Z"))
 
-    print("APPEND:", tcoll)
+    print("APPEND:", tcoll, len(tcoll))
 
     tcoll.insert(5, Fakeentry("Y"))
 
-    print("INSERT_5", tcoll)
+    print("INSERT_5", tcoll, len(tcoll))
 
     tcoll.insert(0, Fakeentry("1"))
 
-    print("INSERT_0", tcoll)
+    print("INSERT_0", tcoll, len(tcoll))
 
-    print("GETINT_8", tcoll[8])
+    print("GETINT_8", tcoll[8], len(tcoll))
 
-    print("GETKEY_G", tcoll["G"])
+    print("GETKEY_G", tcoll["G"], len(tcoll))
 
     del tcoll[8]
 
-    print("DELINT_8", tcoll)
+    print("DELINT_8", tcoll, len(tcoll))
 
     del tcoll["H"]
 
-    print("DELKEY_H", tcoll)
+    print("DELKEY_H", tcoll, len(tcoll))
 
     del tcoll["Z"]
 
-    print("DELKEY_Z", tcoll)
+    print("DELKEY_Z", tcoll, len(tcoll))
 
     del tcoll[0]
 
-    print("DELINT_0", tcoll)
+    print("DELINT_0", tcoll, len(tcoll))
+
+    tcoll[8]=Fakeentry('X')
+
+    print('SETIDX_8', tcoll, len(tcoll))
+
+    tcoll.change_order(6, 9)
+
+    print('MVIDX_6_9', tcoll, len(tcoll))
+
+    tcoll.change_order(6,3)
+
+    print('MVIDX_6_3', tcoll, len(tcoll))
+
+    tcoll.change_item_order('Y', 0)
+
+    print('MVKEY_Y_0', tcoll, len(tcoll))
+
+    tcoll.change_order(3, 8, 3)
+
+    print('MVCHUNK_3-5_8', tcoll, len(tcoll))
 
 
 
