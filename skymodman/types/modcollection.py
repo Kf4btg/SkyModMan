@@ -1,20 +1,20 @@
 from itertools import count as counter
 from collections import abc, OrderedDict
-from weakref import proxy
+# from weakref import proxy
 
 # Node object for linked list of items in ModCollection
-class _Node:
-    __slots__ = 'prev', 'next', 'key', 'data', '__weakref__'
-
-    def __init__(self, prev=None, next_=None, key=None, data=None):
-        """
-
-        :param _Node prev:
-        :param _Node next_:
-        :param str key:
-        :param data:
-        """
-        self.prev, self.next, self.key, self.data = prev, next_, key, data
+# class _Node:
+#     __slots__ = 'prev', 'next', 'key', 'data', '__weakref__'
+#
+#     def __init__(self, prev=None, next_=None, key=None, data=None):
+#         """
+#
+#         :param _Node prev:
+#         :param _Node next_:
+#         :param str key:
+#         :param data:
+#         """
+#         self.prev, self.next, self.key, self.data = prev, next_, key, data
 
 class ModCollection(abc.MutableSequence):
     """A sequence that acts in some ways like a set (cannot add multiple
@@ -39,7 +39,7 @@ class ModCollection(abc.MutableSequence):
 
     def __init__(self, iterable=None):
         # {mod_key:_Node}
-        self._map = {} # type: dict [str, _Node]
+        self._map = {} # type: dict [str, Any]
 
         # mod-ordinal (int): mod_key (str)
         self._order = OrderedDict() # type: dict [int, str]
@@ -48,10 +48,13 @@ class ModCollection(abc.MutableSequence):
         # (reverse of _order)
         self._index = {} # type: dict [str, int]
 
+        # we refer to len(self) a lot, so let's just track it
+        self._length = 0
+
         # initialize root/sentinel node
-        self._root = _Node()
+        # self._root = _Node()
         # these pointers are hard-refs so we don't lose our sentinel
-        self._root.prev = self._root.next = self._root
+        # self._root.prev = self._root.next = self._root
 
         if iterable is not None:
             self.extend(iterable)
@@ -61,7 +64,8 @@ class ModCollection(abc.MutableSequence):
     ##=============================================
 
     def __len__(self):
-        return len(self._map)
+        # return len(self._map)
+        return self._length
 
     def __getitem__(self, index):
         """
@@ -78,19 +82,13 @@ class ModCollection(abc.MutableSequence):
             # will raise keyerror if 'index' is not a valid key
             key = index
         else:
-            # will raise indexerror if index out of range, type error
-            # if it is not a number
-            index = self._get_real_index(index)
+            # raises index error if index is out of range
+            key = self._keyfromindex(index)
 
-            key = self._order[index]
-
-        # return the actual data stored in the node at that index
-        # NTS: should this return the Node object? Allowing us to see
-        # which mods are previous/next? Maybe.
-        # NTS: or possibly return an object that includes the item's
+        # NTS: possibly return an object that includes the item's
         # current ordinal...
 
-        return self._map[key].data
+        return self._map[key]
 
     def __setitem__(self, index, value):
         # TODO: support slices
@@ -99,13 +97,27 @@ class ModCollection(abc.MutableSequence):
 
         # check for unique key
         if key not in self._map:
-            index = self._get_real_index(index)
+            # get (adjusted) index and old_key
+            index, old_key = self._get_index_and_key(index)
+
+            # clear all refs to replaced data
+            del self._index[old_key]
+            del self._map[old_key]
+            # and insert new
+            self._order[index] = key
+            self._index[key] = index
+            # self._map[key] = newnode
+            self._map[key] = value
+
+
+
+            # index = self._get_real_index(index)
 
             # create new node for this item
-            newnode = _Node()
+            # newnode = _Node()
 
             # set key and data
-            newnode.key, newnode.data = key, value
+            # newnode.key, newnode.data = key, value
 
             # check if we're replacing an item
             # if index in range(len(self._map)):
@@ -116,25 +128,19 @@ class ModCollection(abc.MutableSequence):
             # a single item
 
             # get current key at this index
-            old_key = self._order[index]
+            # old_key = self._order[index]
 
             # its nanoseconds are numbered
-            doomed = self._map[old_key]
-            _prev, _next = doomed.prev, doomed.next
+            # doomed = self._map[old_key]
+            # _prev, _next = doomed.prev, doomed.next
 
             # add pointers to new node
-            newnode.prev, newnode.next = _prev, _next
+            # newnode.prev, newnode.next = _prev, _next
 
             # adjust pointers on adjacent nodes
-            _prev.next = _next.prev = proxy(newnode)
+            # _prev.next = _next.prev = proxy(newnode)
 
-            # clear all refs to replaced data
-            del self._index[old_key]
-            del self._map[old_key]
-            # and insert new
-            self._order[index] = key
-            self._index[key] = index
-            self._map[key] = newnode
+
 
     def __delitem__(self, index):
 
@@ -142,12 +148,13 @@ class ModCollection(abc.MutableSequence):
 
         if isinstance(index, str):
             # passed a key
-            idx = self._index[index]
             key = index
+            idx = self._index[key]
         else:
             # assume index is int
-            idx = self._get_real_index(index)
-            key = self._order[index]
+            idx, key = self._get_index_and_key(index)
+            # idx = self._get_real_index(index)
+            # key = self._order[index]
 
 
         # adjust order; this intrinsically takes care of removing the
@@ -155,14 +162,17 @@ class ModCollection(abc.MutableSequence):
         self._shift_indices_up(idx, 1)
 
         # adjust pointers
-        doomed = self._map[key]
-        _prev, _next = doomed.prev, doomed.next
+        # doomed = self._map[key]
+        # _prev, _next = doomed.prev, doomed.next
 
-        _prev.next, _next.prev = _next, _prev
+        # _prev.next, _next.prev = _next, _prev
 
         # now delete node from main _map; weakref should allow it to be
         # garbage collected shortly
         del self._map[key]
+
+        # update length
+        self._length = len(self._map)
 
     def insert(self, index, value):
         """Add a new item at the ordinal `index`. Value must have
@@ -177,44 +187,62 @@ class ModCollection(abc.MutableSequence):
         # data needs to have a 'key' attribute
         key = value.key
 
+
         # built-in set type does not throw an error for elements
         # that already exist; dict does, however...which to imitate?
         if key not in self._map:
 
+            idx = self._getposindex(index)
 
-            if index == len(self._map):
+            # if index < 0:
+                # negative indexing; translate to real index by
+                # subtracting from number of current items
+                # index += len(self._map)
+
+
+            # if index == len(self._map):
                 # an 'append' operation:
                 # the 'next' node will be the sentinel
-                _next = self._root
-            else:
+                # _next = self._root
+            if 0 <= idx < self._length:
                 # do this here since we want to allow the 'append'
                 # operation above, and this would throw IndexError
                 # on index==len(self); don't bother trying to allow
                 # '-len(self)' as a valid index because that's silly.
-                index = self._get_real_index(index)
+                # index = self._get_real_index(index)
 
                 # get current node at that index
-                _next = self._map[self._order[index]]
+                # _next = self._map[self._order[index]]
 
                 # shift all indices below this down one.
-                self._shift_indices_down(index, 1)
+                self._shift_indices_down(idx, 1)
+            elif idx != self._length:
+                # (index == length) is the only other valid scenario
+                # (in that case, this is an append op, and no shifting
+                # is necessary); anything else is out of range
+                raise IndexError(index) # raise with original index
 
-            _prev = _next.prev
+
+            # _prev = _next.prev
 
             # assign data and pointers to new node
-            node = _Node(_prev, _next, key, value)
+            # node = _Node(_prev, _next, key, value)
 
             # store pointers to new node as weak references
-            _prev.next = _next.prev = proxy(node)
+            # _prev.next = _next.prev = proxy(node)
 
             # track new item's order
-            self._order[index] = key
-            self._index[key] = index
+            self._order[idx] = key
+            self._index[key] = idx
 
             # and finally add node to map (as strong reference, so we
             # don't lose the node altogether on next gc collect; to
             # release node we only have to remove from map)
-            self._map[key] = node
+            # self._map[key] = node
+            self._map[key] = value
+
+            # update length attr
+            self._length = len(self._map)
 
 
     ##=============================================
@@ -233,15 +261,15 @@ class ModCollection(abc.MutableSequence):
     def __iter__(self):
         """Traverse the collection in the currently-defined order"""
 
+        yield from (self._map[key] for key in self._order.values())
 
-        # XXX: I don't think this really fits with our 'keep order external' thing...we may just need to ditch the linked list; we can implement this using the _order and _index mappings
-
-        root = self._root
-        curr = root.next
-
-        while curr is not root:
-            yield curr.data
-            curr = curr.next
+        # : I don't think this really fits with our 'keep order external' thing...we may just need to ditch the linked list; we can implement this using the _order and _index mappings
+        # root = self._root
+        # curr = root.next
+        #
+        # while curr is not root:
+        #     yield curr.data
+        #     curr = curr.next
 
     def clear(self):
         # override for speed; no need to pop everything off 1by1;
@@ -251,6 +279,7 @@ class ModCollection(abc.MutableSequence):
         self._map.clear()
         self._index.clear()
         self._order.clear()
+        self._length = 0
 
     def extend(self, values):
         # override extend to improve performance
@@ -258,19 +287,21 @@ class ModCollection(abc.MutableSequence):
         m = self._map
         o = self._order
         i = self._index
-        r = self._root
+        # r = self._root
         c = len(self._map)
 
         for v in values:
             k = v.key
             if k not in m:
-                p = r.prev
-                n = _Node(p, r, k, v)
-                r.prev = p.next = proxy(n)
-                m[k] = n
+                # p = r.prev
+                # n = _Node(p, r, k, v)
+                # r.prev = p.next = proxy(n)
+                m[k] = v
                 o[c] = k
                 i[k] = c
                 c+=1
+
+        self._length = len(self._map)
 
     def index(self, value, start=0, stop=None) -> int:
         """Override to greatly increase speed when checking for the
@@ -292,9 +323,10 @@ class ModCollection(abc.MutableSequence):
             # check for key; ignore start and stop
             return self._index[key]
         except KeyError:
-            raise ValueError from None
+            raise ValueError(value) from None
 
     def __str__(self):
+        # show order-number and key for each item
         s = self.__class__.__name__ + "("
         s+=", ".join("[{}: {}]".format(o,n) for o,n in self._order.items())
         return s + ")"
@@ -334,13 +366,13 @@ class ModCollection(abc.MutableSequence):
         # TODO: get rid of linked list, it's unnecessary.
 
         # can't go past this!
-        _imax = len(self._map)
+        # _imax = len(self._map)
 
         ## don't do dumb things
         assert new_position != old_position
         assert num_to_move > 0
-        assert new_position in range(_imax)
-        assert old_position + num_to_move <= _imax
+        assert new_position in range(self._length)
+        assert old_position + num_to_move <= self._length
 
         new, old, count = new_position, old_position, num_to_move
 
@@ -375,7 +407,7 @@ class ModCollection(abc.MutableSequence):
 
             # need to make sure we don't go past the end
             # new += min(0, _imax - (new+count))
-            # actually, this means we have bad arguments...
+            ## -- actually, this means we have bad arguments...(see below)
 
             # shift following items up
             # range: <index imm. after chunk> to <dest. index + count lower>
@@ -432,7 +464,7 @@ class ModCollection(abc.MutableSequence):
 
             # start at the end so we don't overwrite data!
             # (_order[len(self._map)] is beyond the end of the list when we start)
-            for i in range(len(self._map)+offset, start_idx+offset, -1):
+            for i in range(self._length+offset, start_idx+offset, -1):
                 key = self._order[i-count]
 
                 # add placeholder to order map
@@ -478,8 +510,8 @@ class ModCollection(abc.MutableSequence):
                 del key_index[key_to_remove]
 
             # current length of collection
-            coll_len = len(order)
-            end_idx = coll_len - count
+            # coll_len = len(order)
+            end_idx = self._length - count
 
             for i in range(start_idx, end_idx):
                 key = order[i+count]
@@ -489,28 +521,76 @@ class ModCollection(abc.MutableSequence):
                 key_index[key] = i
 
             # remove 'tail' from order list
-            for i in range(end_idx, coll_len):
+            for i in range(end_idx, self._length):
                 del order[i]
 
+    def _get_index_and_key(self, index):
+        """Given a user-supplied index (which could be negative), return
+        the (possibly-adjusted) index and key to which it points"""
 
-    def _get_real_index(self, index):
-        """Translate an index (which could be out of range or negative)
-        into a usable index, or throw IndexError as needed"""
+        # handle negative indices
+        index = self._getposindex(index)
 
         try:
-            if abs(index) >= len(self._map):
-                # out of range
-                raise IndexError(index)
-        except TypeError:
-            # abs() check failed
-            raise TypeError("not a number") from None
+            key = self._order[index]
+        except KeyError:
+            # make it look like we're a list
+            raise IndexError(index, "Index out of range") from None
 
-        if index < 0:
-            # indexing from end
-            return index + len(self._map)
+        return index, key
 
-        # index is fine as is
-        return index
+    def _getposindex(self, index):
+        """
+
+        :param index: If supplied w/ a negative index, will assume user
+            is attempting to use reverse-indexing, and returns the
+            index translated to its positive counterpart (Assuming the
+            index was in range). If `index` is positive, it is returned
+            as-is.
+
+            This does not check for range constraints, so the returned
+            value may still be negative/OOR-positive if the
+            given value was OOR to begin with.
+        """
+
+        return index + self._length if index < 0 else index
+
+    def _keyfromindex(self, index):
+        """
+
+        Throws IndexError if index out of range.
+
+        :param index: A 'raw' (user-provided) index.
+        :return: The key of the item located at that index, after
+            accounting for possible negative-indexing.
+        """
+
+        try:
+            return self._order[self._getposindex(index)]
+        except KeyError:
+            # since the 'key' was an int (as we sometimes pretend to
+            # be a list), raise indexerror instead of keyerror
+            raise IndexError(index, "Index out of range") from None
+
+    #
+    # def _get_real_index(self, index):
+    #     """Translate an index (which could be out of range or negative)
+    #     into a usable index, or throw IndexError as needed"""
+    #
+    #     try:
+    #         if abs(index) >= len(self._map):
+    #             # out of range
+    #             raise IndexError(index)
+    #     except TypeError:
+    #         # abs() check failed
+    #         raise TypeError("not a number") from None
+    #
+    #     if index < 0:
+    #         # indexing from end
+    #         return index + len(self._map)
+    #
+    #     # index is fine as is
+    #     return index
 
 
 
@@ -523,35 +603,44 @@ if __name__ == '__main__':
 
 
     tcoll = ModCollection([Fakeentry(w) for w in "ABCDEF"])
-
+    for ix, ky in enumerate("ABCDEF"):
+        assert tcoll[ix].key == ky
     print("START:", tcoll, len(tcoll))
 
     tcoll.extend([Fakeentry(w) for w in "GHIJKL"])
-
+    for i, k in enumerate("GHIJKL", start=6):
+        assert tcoll[i].key == k
     print("EXTEND:", tcoll, len(tcoll))
 
     tcoll.append(Fakeentry("Z"))
-
+    assert tcoll[-1].key == "Z"
     print("APPEND:", tcoll, len(tcoll))
 
     tcoll.insert(5, Fakeentry("Y"))
-
+    assert tcoll[5].key == "Y"
     print("INSERT_5", tcoll, len(tcoll))
 
     tcoll.insert(0, Fakeentry("1"))
-
+    assert tcoll[0].key == "1"
     print("INSERT_0", tcoll, len(tcoll))
 
     print("GETINT_8", tcoll[8], len(tcoll))
 
+    print("GETINT_-1", tcoll[-1])
+
     print("GETKEY_G", tcoll["G"], len(tcoll))
 
-    del tcoll[8]
+    x=tcoll[8]
+    assert x in tcoll
+    assert x.key in tcoll
 
+    del tcoll[8]
+    assert x not in tcoll
+    assert x.key not in tcoll
     print("DELINT_8", tcoll, len(tcoll))
 
     del tcoll["H"]
-
+    assert "H" not in tcoll
     print("DELKEY_H", tcoll, len(tcoll))
 
     del tcoll["Z"]
