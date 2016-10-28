@@ -1,5 +1,5 @@
-# from functools import (singledispatch as _singledispatch,
-#                        wraps as _wraps)
+from functools import (singledispatch as _singledispatch,
+                       wraps as _wraps)
                        # reduce as _reduce)
 # from itertools import (chain as _chain,
 #                        combinations as _combos)
@@ -9,14 +9,17 @@
 
 # FROM:
 # http://stackoverflow.com/questions/24601722/how-can-i-use-functools-singledispatch-with-instance-methods
-# def singledispatch_m(func):
-#     dispatcher = _singledispatch(func)
-#
-#     @_wraps(dispatcher)
-#     def wrapper(*args, **kw):
-#         return dispatcher.dispatch(
-#             args[1].__class__)(*args, **kw)
-#     return wrapper
+def singledispatch_m(func):
+    """singledispatch() variant that dispatches based on the second
+    argument (for use with instance methods where the first param
+    is always self)"""
+    dispatcher = _singledispatch(func)
+
+    @_wraps(dispatcher)
+    def wrapper(*args, **kw):
+        return dispatcher.dispatch(
+            args[1].__class__)(*args, **kw)
+    return wrapper
 
 # class classprop:
 #     """
