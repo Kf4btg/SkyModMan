@@ -5,7 +5,7 @@ import re
 from PyQt5 import QtGui
 from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData
 
-from skymodman.interface.typedefs import QModEntry
+# from skymodman.interface.typedefs import QModEntry
 from skymodman.constants import (Column as COL, ModError)
 from skymodman.log import withlogger
 
@@ -42,7 +42,7 @@ Qt_ForegroundRole = Qt.ForegroundRole
 Qt_FontRole       = Qt.FontRole
 
 Qt_Checked   = Qt.Checked
-# Qt_Unchecked = Qt.Unchecked
+Qt_Unchecked = Qt.Unchecked
 
 Qt_ItemIsSelectable    = Qt.ItemIsSelectable
 Qt_ItemIsEnabled       = Qt.ItemIsEnabled
@@ -58,6 +58,15 @@ col2field = {
     COL.DIRECTORY: "directory",
     COL_MODID:     "modid",
     COL_VERSION:   "version",
+}
+
+col_to_attr = {
+    COL_ORDER:     lambda m: m.ordinal,
+    COL_ENABLED:   lambda m: m.enabled,
+    COL_NAME:      lambda m: m.name,
+    COL.DIRECTORY: lambda m: m.directory,
+    COL_MODID:     lambda m: m.modid,
+    COL_VERSION:   lambda m: m.version,
 }
 
 col2Header={
@@ -93,7 +102,11 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         self.Manager = manager
 
-        self.mod_entries = [] #type: list [QModEntry]
+        self.mods = None
+        """:type: skymodman.types.modcollection.ModCollection"""
+        self.errors = {} # type: dict [str, int]
+
+        # self.mod_entries = [] #type: list [QModEntry]
 
         self.vheader_field = COL_ORDER
 
@@ -145,7 +158,8 @@ class ModTable_TreeModel(QAbstractItemModel):
         :return: QModEntry instance representing the mod in that row. If `row` is out of bounds or cannot be implicitly converted to an int, return None.
         """
         try:
-            return self.mod_entries[row]
+            return self.mods[row]
+            # return self.mod_entries[row]
         except (TypeError, IndexError):
             return None
 
@@ -156,7 +170,8 @@ class ModTable_TreeModel(QAbstractItemModel):
         :param QModelIndex index:
         :return:
         """
-        if index.isValid(): return self.mod_entries[index.row()]
+        if index.isValid(): return self.mods[index.row()]
+        # if index.isValid(): return self.mod_entries[index.row()]
 
     def mod_missing(self, mod_entry):
         """
@@ -165,7 +180,13 @@ class ModTable_TreeModel(QAbstractItemModel):
         :param QModEntry mod_entry:
         :return:
         """
-        return mod_entry.error == ModError.DIR_NOT_FOUND
+        try:
+            return self.errors[mod_entry.directory] == ModError.DIR_NOT_FOUND
+        except KeyError:
+            # mod has no errors
+            return False
+
+        # return mod_entry.error == ModError.DIR_NOT_FOUND
 
     def mark_modified(self, iterable):
         """
@@ -201,7 +222,8 @@ class ModTable_TreeModel(QAbstractItemModel):
     ##===============================================
 
     def rowCount(self, *args, **kwargs) -> int:
-        return len(self.mod_entries)
+        # return len(self.mod_entries)
+        return len(self.mods)
 
     def columnCount(self, *args, **kwargs) -> int:
         return len(col2Header)
@@ -226,8 +248,9 @@ class ModTable_TreeModel(QAbstractItemModel):
         #     return QModelIndex()
 
         try:
-            child = self.mod_entries[row]
-            return self.createIndex(row, col, child)
+            return self.createIndex(row, col, self.mods[row])
+            # child = self.mod_entries[row]
+            # return self.createIndex(row, col, child)
         except IndexError:
             return QModelIndex()
 
@@ -243,7 +266,8 @@ class ModTable_TreeModel(QAbstractItemModel):
         if col == COL_ORDER:
             return index.row() + 1 if role == Qt_DisplayRole else None
 
-        mod = self.mod_entries[index.row()]
+        mod = self.mods[index.row()]
+        # mod = self.mod_entries[index.row()]
 
         # I've heard it a thousand times from a thousand people:
         # "Don't mix your data provider with styling information!"
@@ -270,9 +294,14 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         # handle errors first
         if col == COL_ERRORS:
-            if not mod.error: return
+            try:
+                err_type = self.errors[mod.directory]
+            except KeyError:
+                return
+            # if mod.directory not in self.errors: return
+            # if not mod.error: return
 
-            if mod.error & ModError.DIR_NOT_FOUND:
+            if err_type & ModError.DIR_NOT_FOUND:
                 # noinspection PyArgumentList,PyTypeChecker
                 return (QtGui.QIcon.fromTheme('dialog-error')
                             if role == Qt_DecorationRole
@@ -293,12 +322,16 @@ class ModTable_TreeModel(QAbstractItemModel):
                         else None)
 
         elif col == COL_ENABLED:
-            return mod.checkState if role == Qt_CheckStateRole else None
+            if role == Qt_CheckStateRole:
+                return Qt_Checked if mod.enabled else Qt_Unchecked
+
+            # return mod.checkState if role == Qt_CheckStateRole else None
 
         # for every other column, return the stored value as the
         # display role
         elif role == Qt_DisplayRole:
-            return getattr(mod, col2field[col])
+            return col_to_attr[col](mod)
+            # return getattr(mod, col2field[col])
         elif col == COL_NAME:
             if role == Qt_EditRole:
                 return mod.name
@@ -313,13 +346,13 @@ class ModTable_TreeModel(QAbstractItemModel):
         :param role:
         :return: column header for the specified section (column) number.
         """
-        if role == Qt_DisplayRole:
-
-            if orientation == Qt.Horizontal:
+        if role == Qt_DisplayRole and orientation == Qt.Horizontal:
                 return col2Header[section]
 
-            else:  # vertical header
-                return self.mod_entries[section].ordinal
+            # the vertical header doesn't work...
+            # else:  # vertical header
+            #     return self.mods.index()
+            #     return self.mod_entries[section].ordinal
 
         return super().headerData(section, orientation, role)
 
@@ -448,7 +481,8 @@ class ModTable_TreeModel(QAbstractItemModel):
                 cb2 = partial(self._post_change_mod_attr, index)
 
                 self._push_command(change_mod_attribute.cmd(
-                    self.mod_entries[row],
+                    self.mods[row],
+                    # self.mod_entries[row],
                     "enabled",
                     int(value == Qt_Checked),
                     post_redo_callback = cb1,
@@ -459,7 +493,8 @@ class ModTable_TreeModel(QAbstractItemModel):
         elif role == Qt_EditRole:
             if index.column() == COL_NAME:
                 row = index.row()
-                mod = self.mod_entries[row]
+                mod = self.mods[row]
+                # mod = self.mod_entries[row]
                 # remove trailing/leading space
                 new_name = value.strip()
                 # if unchanged or blank, don't update
@@ -554,15 +589,17 @@ class ModTable_TreeModel(QAbstractItemModel):
         self.beginResetModel()
         self._modifications.clear()
 
-        self.mod_entries = [QModEntry(**d) for d
-                            in self.Manager.allmodinfo()]
+        self.mods = self.Manager.modcollection
+
+        # self.mod_entries = [QModEntry(**d) for d
+        #                     in self.Manager.allmodinfo()]
 
         self.check_mod_errors()
 
         self.endResetModel()
         self.tablehaschanges.emit(False)
 
-    def check_mod_errors(self, query_db = False):
+    def check_mod_errors(self, refresh = False):
         """
         Check which mods, if any, encountered errors during load and
         show or hide the Errors column appropriately.
@@ -579,21 +616,30 @@ class ModTable_TreeModel(QAbstractItemModel):
         # reset
         err_types = ModError.NONE
 
-        if query_db:
+        if refresh:
+            self.errors = self.Manager.get_mod_errors()
+
+        # TODO: use itertools.groupby (or something similar) to avoid this loop
+        for err_type in self.errors.values():
+            err_types |= err_type
+
+
             # if we need to query the database to refresh the errors,
             # do that here:
-            errors = self.Manager.get_mod_errors()
+            # errors = self.Manager.get_mod_errors()
 
             # update the "error" field of each modentry
-            for m in self.mod_entries:
-                m.error = errors[m.directory]
-                if m.error:
-                    err_types |= m.error
-        else:
+            # for m in self.mod_entries:
+            #     m.error = errors[m.directory]
+            #     if m.error:
+            #         err_types |= m.error
+        # else:
             # otherwise, we're just checking for any errors in any mod
-            for m in self.mod_entries:
-                if m.error:
-                    err_types |= m.error
+        # for err_type in self.errors.values():
+        #     err_types |= err_type
+            # for m in self.mod_entries:
+            #     if m.error:
+            #         err_types |= m.error
 
         self.errorsAnalyzed.emit(err_types)
 
@@ -617,6 +663,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         # first, update ordinals of modified entries to reflect their
         # (possibly) new position
         for row in modified:
+            # self.mods.move()
             self.mod_entries[row].ordinal = row
             to_save.append(self.mod_entries[row])
 

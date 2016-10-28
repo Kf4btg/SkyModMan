@@ -153,14 +153,15 @@ class ModManager:
         # self._folders['vfs'].register_change_listener(
         #     self.on_dir_change)
 
-    ##=============================================
-    ## Sub-manager access properties
-    ##=============================================
 
     @property
     def Folders(self):
         """return the mapping of keys to AppFolder instances."""
         return self._folders
+
+    ##=============================================
+    ## Sub-manager access properties
+    ##=============================================
 
     @property
     def Config(self):
@@ -177,7 +178,23 @@ class ModManager:
         """Access the Database Manager for the current session"""
         return self._dbman
 
+    @property
+    def Collector(self):
+        """Access the Mod Collection Manager for the current session"""
+        return self._collman
+
+    @property
+    def IO(self):
+        """Access the IOManager (disk read/write) for the current session """
+        return self._ioman
+
     ## Various things what need easy access ##
+
+    @property
+    def modcollection(self):
+        """Return the ModCollection sequence containing the currently
+        loaded ModEntries"""
+        return self._collman.collection
 
     @property
     def profile(self):
@@ -638,17 +655,21 @@ class ModManager:
         self.LOGGER << "<==Method called"
 
         if self._ioman.load_raw_mod_info(self._collection):
+            # populate db from collection
+            self._dbman.populate_mods_table(self._collection)
+            # save info (to generate file since it likely doesn't exist)
             self.save_mod_info()
+            return True
 
 
-        if self._folders['mods']:
+        # if self._folders['mods']:
             # populate the mods table from the main mods directory
             # self._dbman.get_mod_data_from_directory(self._folders['mods'].path)
-            self._dbman.load_mod_info_from_disk(self._folders['mods'].path)
+            # self._dbman.load_mod_info_from_disk(self._folders['mods'].path)
             # and (re)generate the modinfo file using default values
-            self.save_mod_info()
+            # self.save_mod_info()
             # return success
-            return True
+            # return True
         else:
             self.LOGGER.error("Mods Folder is unset or could not be found")
             return False
