@@ -1,6 +1,8 @@
 from itertools import count as counter
 from collections import abc, OrderedDict
 
+from skymodman.utils import singledispatch_m
+
 class ModCollection(abc.MutableSequence):
     """A sequence that acts in some ways like a set (cannot add multiple
     items with the same key to the collection), some ways like a list
@@ -225,7 +227,38 @@ class ModCollection(abc.MutableSequence):
     ## Rearrangement
     ##=============================================
 
-    def change_order(self, old_position, new_position, num_to_move=1):
+    @singledispatch_m
+    def move(self, from_index, to_index, count=1):
+        """
+        Change the order of an item or block of items.
+
+        :param int|str from_index:
+        :param int to_index:
+        :param int count:
+        """
+
+        # adjust given indices, if needed
+        self._change_order(self._getposindex(from_index),
+                           self._getposindex(to_index),
+                           count)
+
+    @move.register(str)
+    def _(self, key:str, dest:int, count:int=1):
+        """Given the key of a an item in the list, move it to the new
+        position, adjusting the index as needed for the new ordering
+
+        :param key:
+        :param dest:
+        :param count:
+        :return:
+        """
+        # get the index of the item to move based on its key
+        self._change_order(self._index[key],
+                           self._getposindex(dest),
+                           count)
+
+
+    def _change_order(self, old_position, new_position, num_to_move=1):
         """
         Move the item currently located at `old_position` to
         `new_position`, adjusting the indices of any affected items
@@ -301,7 +334,7 @@ class ModCollection(abc.MutableSequence):
                 try:
                     key = self._order[i]
                 except KeyError:
-                    raise IndexError(i, "Tried to move chunk beyond end of collection") from None
+                    raise IndexError(i, "Tried to move item(s) beyond end of collection") from None
                 raise_to = i-count
 
                 self._index[key] = raise_to
@@ -311,15 +344,6 @@ class ModCollection(abc.MutableSequence):
             for key, new_home in zip(chunk, counter(new)):
                 self._order[new_home] = key
                 self._index[key] = new_home
-
-
-
-    def change_item_order(self, key, new_position, count=1):
-        """Given the key of a an item in the list, move it to the new
-        position, adjusting the index as needed for the new ordering"""
-
-        # current index
-        self.change_order(self._index[key], new_position, count)
 
     ##=============================================
     ## Additional mechanics
@@ -520,18 +544,18 @@ if __name__ == '__main__':
 
     print('SETIDX_8', tcoll, len(tcoll))
 
-    tcoll.change_order(6, 9)
+    tcoll.move(6, 9)
 
     print('MVIDX_6_9', tcoll, len(tcoll))
 
-    tcoll.change_order(6,3)
+    tcoll.move(6,3)
 
     print('MVIDX_6_3', tcoll, len(tcoll))
 
-    tcoll.change_item_order('Y', 0)
+    tcoll.move('Y', 0)
 
     print('MVKEY_Y_0', tcoll, len(tcoll))
 
-    tcoll.change_order(3, 8, 3)
+    tcoll.move(3, 8, 3)
 
     print('MVCHUNK_3-5_8', tcoll, len(tcoll))
