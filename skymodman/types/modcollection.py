@@ -1,20 +1,5 @@
 from itertools import count as counter
 from collections import abc, OrderedDict
-# from weakref import proxy
-
-# Node object for linked list of items in ModCollection
-# class _Node:
-#     __slots__ = 'prev', 'next', 'key', 'data', '__weakref__'
-#
-#     def __init__(self, prev=None, next_=None, key=None, data=None):
-#         """
-#
-#         :param _Node prev:
-#         :param _Node next_:
-#         :param str key:
-#         :param data:
-#         """
-#         self.prev, self.next, self.key, self.data = prev, next_, key, data
 
 class ModCollection(abc.MutableSequence):
     """A sequence that acts in some ways like a set (cannot add multiple
@@ -38,7 +23,7 @@ class ModCollection(abc.MutableSequence):
     for a reasonably-sized collection."""
 
     def __init__(self, iterable=None):
-        # {mod_key:_Node}
+        # {mod_key:mod_entry}
         self._map = {} # type: dict [str, Any]
 
         # mod-ordinal (int): mod_key (str)
@@ -51,11 +36,6 @@ class ModCollection(abc.MutableSequence):
         # we refer to len(self) a lot, so let's just track it
         self._length = 0
 
-        # initialize root/sentinel node
-        # self._root = _Node()
-        # these pointers are hard-refs so we don't lose our sentinel
-        # self._root.prev = self._root.next = self._root
-
         if iterable is not None:
             self.extend(iterable)
 
@@ -64,7 +44,6 @@ class ModCollection(abc.MutableSequence):
     ##=============================================
 
     def __len__(self):
-        # return len(self._map)
         return self._length
 
     def __getitem__(self, index):
@@ -77,7 +56,6 @@ class ModCollection(abc.MutableSequence):
 
         # TODO: support slices
 
-        # (bytes, str) -- nah, don't worry about bytes...
         if isinstance(index, str):
             # will raise keyerror if 'index' is not a valid key
             key = index
@@ -106,41 +84,7 @@ class ModCollection(abc.MutableSequence):
             # and insert new
             self._order[index] = key
             self._index[key] = index
-            # self._map[key] = newnode
             self._map[key] = value
-
-
-
-            # index = self._get_real_index(index)
-
-            # create new node for this item
-            # newnode = _Node()
-
-            # set key and data
-            # newnode.key, newnode.data = key, value
-
-            # check if we're replacing an item
-            # if index in range(len(self._map)):
-
-            ## delete old item ##
-
-            # don't have to shift anything if we're just replacing
-            # a single item
-
-            # get current key at this index
-            # old_key = self._order[index]
-
-            # its nanoseconds are numbered
-            # doomed = self._map[old_key]
-            # _prev, _next = doomed.prev, doomed.next
-
-            # add pointers to new node
-            # newnode.prev, newnode.next = _prev, _next
-
-            # adjust pointers on adjacent nodes
-            # _prev.next = _next.prev = proxy(newnode)
-
-
 
     def __delitem__(self, index):
 
@@ -153,22 +97,12 @@ class ModCollection(abc.MutableSequence):
         else:
             # assume index is int
             idx, key = self._get_index_and_key(index)
-            # idx = self._get_real_index(index)
-            # key = self._order[index]
-
 
         # adjust order; this intrinsically takes care of removing the
         # item (key) from the _order and _index mappings
         self._shift_indices_up(idx, 1)
 
-        # adjust pointers
-        # doomed = self._map[key]
-        # _prev, _next = doomed.prev, doomed.next
-
-        # _prev.next, _next.prev = _next, _prev
-
-        # now delete node from main _map; weakref should allow it to be
-        # garbage collected shortly
+        # now delete from main _map
         del self._map[key]
 
         # update length
@@ -187,33 +121,13 @@ class ModCollection(abc.MutableSequence):
         # data needs to have a 'key' attribute
         key = value.key
 
-
         # built-in set type does not throw an error for elements
         # that already exist; dict does, however...which to imitate?
         if key not in self._map:
 
             idx = self._getposindex(index)
 
-            # if index < 0:
-                # negative indexing; translate to real index by
-                # subtracting from number of current items
-                # index += len(self._map)
-
-
-            # if index == len(self._map):
-                # an 'append' operation:
-                # the 'next' node will be the sentinel
-                # _next = self._root
             if 0 <= idx < self._length:
-                # do this here since we want to allow the 'append'
-                # operation above, and this would throw IndexError
-                # on index==len(self); don't bother trying to allow
-                # '-len(self)' as a valid index because that's silly.
-                # index = self._get_real_index(index)
-
-                # get current node at that index
-                # _next = self._map[self._order[index]]
-
                 # shift all indices below this down one.
                 self._shift_indices_down(idx, 1)
             elif idx != self._length:
@@ -222,23 +136,11 @@ class ModCollection(abc.MutableSequence):
                 # is necessary); anything else is out of range
                 raise IndexError(index) # raise with original index
 
-
-            # _prev = _next.prev
-
-            # assign data and pointers to new node
-            # node = _Node(_prev, _next, key, value)
-
-            # store pointers to new node as weak references
-            # _prev.next = _next.prev = proxy(node)
-
             # track new item's order
             self._order[idx] = key
             self._index[key] = idx
 
-            # and finally add node to map (as strong reference, so we
-            # don't lose the node altogether on next gc collect; to
-            # release node we only have to remove from map)
-            # self._map[key] = node
+            # and finally add val to map
             self._map[key] = value
 
             # update length attr
@@ -263,14 +165,6 @@ class ModCollection(abc.MutableSequence):
 
         yield from (self._map[key] for key in self._order.values())
 
-        # : I don't think this really fits with our 'keep order external' thing...we may just need to ditch the linked list; we can implement this using the _order and _index mappings
-        # root = self._root
-        # curr = root.next
-        #
-        # while curr is not root:
-        #     yield curr.data
-        #     curr = curr.next
-
     def clear(self):
         # override for speed; no need to pop everything off 1by1;
         # having weakrefs to all nodes will allow gc to collect them
@@ -287,15 +181,11 @@ class ModCollection(abc.MutableSequence):
         m = self._map
         o = self._order
         i = self._index
-        # r = self._root
         c = len(self._map)
 
         for v in values:
             k = v.key
             if k not in m:
-                # p = r.prev
-                # n = _Node(p, r, k, v)
-                # r.prev = p.next = proxy(n)
                 m[k] = v
                 o[c] = k
                 i[k] = c
@@ -362,11 +252,6 @@ class ModCollection(abc.MutableSequence):
         # the section.
 
         # I don't know why this always makes my brain cry.
-
-        # TODO: get rid of linked list, it's unnecessary.
-
-        # can't go past this!
-        # _imax = len(self._map)
 
         ## don't do dumb things
         assert new_position != old_position
@@ -498,7 +383,6 @@ class ModCollection(abc.MutableSequence):
         :param int count:
         """
 
-
         # sanity check on the parameters
         if count > 0 <= start_idx:
 
@@ -572,25 +456,6 @@ class ModCollection(abc.MutableSequence):
             # be a list), raise indexerror instead of keyerror
             raise IndexError(index, "Index out of range") from None
 
-    #
-    # def _get_real_index(self, index):
-    #     """Translate an index (which could be out of range or negative)
-    #     into a usable index, or throw IndexError as needed"""
-    #
-    #     try:
-    #         if abs(index) >= len(self._map):
-    #             # out of range
-    #             raise IndexError(index)
-    #     except TypeError:
-    #         # abs() check failed
-    #         raise TypeError("not a number") from None
-    #
-    #     if index < 0:
-    #         # indexing from end
-    #         return index + len(self._map)
-    #
-    #     # index is fine as is
-    #     return index
 
 
 
@@ -608,8 +473,8 @@ if __name__ == '__main__':
     print("START:", tcoll, len(tcoll))
 
     tcoll.extend([Fakeentry(w) for w in "GHIJKL"])
-    for i, k in enumerate("GHIJKL", start=6):
-        assert tcoll[i].key == k
+    for ix, ky in enumerate("GHIJKL", start=6):
+        assert tcoll[ix].key == ky
     print("EXTEND:", tcoll, len(tcoll))
 
     tcoll.append(Fakeentry("Z"))
@@ -670,7 +535,3 @@ if __name__ == '__main__':
     tcoll.change_order(3, 8, 3)
 
     print('MVCHUNK_3-5_8', tcoll, len(tcoll))
-
-
-
-
