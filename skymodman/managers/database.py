@@ -18,7 +18,8 @@ from skymodman.utils import tree
 _relpath = os.path.relpath
 _join = os.path.join
 
-_db_fields = ('ordinal',) + ModEntry._fields
+# _db_fields = ('ordinal',) + ModEntry._fields
+_db_fields = ModEntry._fields
 _db_fields_noerr = _db_fields[:-1]
 
 # _mcount = count()
@@ -30,9 +31,9 @@ _SQLMAX=900
 # note -- if 'managed' is 0/False, the mod should be in <skyrim-install>/Data/
 # rather than <mods-folder>/<directory>
 # XXX: 'directory' should probably be renamed, then, since it's not accurate for unmanaged mods
+#             ordinal   INTEGER unique, --mod's rank in the install order
 _SCHEMA = """
         CREATE TABLE mods (
-            ordinal   INTEGER unique, --mod's rank in the install order
             directory TEXT    unique, --folder on disk holding mod's files
             name      TEXT,           --user-editable label for mod
             modid     INTEGER,        --nexus id, or 0 if none
@@ -386,7 +387,7 @@ class DBManager(BaseDBManager, Submanager):
         #         if m!='Bethesda Hi-Res DLC Optimized':
         #             print('\t', m)
 
-    def validate_mods_list(self, installed_mods):
+    def validate_mods_list(self, managed_mods):
         """
         Compare the database's list of mods against a list of the
         folders in the installed-mods directory. Handle discrepancies by
@@ -397,7 +398,7 @@ class DBManager(BaseDBManager, Submanager):
             * Mods Not Found: for mods listed in the list of installed
               mods whose installation folders were not found on disk.
 
-        :param list[str] installed_mods: list of all installed mods
+        :param list[str] managed_mods: list of all installed mods
         :return: True if no errors and table unchanged. False if errors
             encountered and/or removed from table
         """
@@ -422,7 +423,7 @@ class DBManager(BaseDBManager, Submanager):
 
         # make a copy of the mods list since we may be
         # modifying its contents
-        im_list = installed_mods[:]
+        im_list = managed_mods[:]
 
         not_found = []
         not_listed = []

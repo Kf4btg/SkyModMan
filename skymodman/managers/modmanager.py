@@ -7,7 +7,9 @@ from skymodman.utils import tree as _tree
 from skymodman.types import ModEntry, ModCollection, Alert, AppFolder
 from skymodman.managers import (config as _config,
                                 database as _database,
-                                profiles as _profiles
+                                profiles as _profiles,
+                                disk as _disk,
+                                collection as _collection
                                 # , paths as _paths
                                 )
 from skymodman.constants import db_fields as _db_fields, db_field_order as _field_order, APPNAME, MAIN_CONFIG #overrideable_dirs,
@@ -62,6 +64,10 @@ class ModManager:
         """:type: skymodman.managers.profiles.ProfileManager"""
         self._dbman = None
         """:type: skymodman.managers.database.DBManager"""
+        self._ioman = None
+        """:type: skymodman.managers.disk.IOManager"""
+        self._collman = None
+        """:type: skymodman.managers.collection.ModCollectionManager"""
 
         ## these (probably) don't really
         ## need a separate manager; they
@@ -108,6 +114,10 @@ class ModManager:
 
         # set up db, but do not load info until requested
         self._dbman = _database.DBManager(self._modcollection, mcp=self)
+
+        self._ioman = _disk.IOManager(mcp=self)
+
+        self._collman = _collection.ModCollectionManager(mcp=self)
 
         # make sure we have a valid profiles directory
         # self.check_dir(ks_dir.PROFILES)
@@ -318,7 +328,9 @@ class ModManager:
     def refresh_modlist(self, modfolder: AppFolder):
         """Regenerate the cached list of installed mods"""
         self.LOGGER << "Refreshing mods list"
-        self._managed_mods = [n for n in modfolder]
+        # this actually reads the disk
+        self._managed_mods = list(iter(modfolder))
+        # self._managed_mods = [n for n in modfolder]
 
     # def on_dir_change(self, folder, previous, current):
     def on_dir_change(self, folder):
@@ -592,8 +604,16 @@ class ModManager:
         # first, reinitialize the db tables
         self._dbman.reinit(files=moddir_changed, sky=skydir_changed)
 
-        # try to read modinfo file (populates "mods" table)
-        if self._dbman.load_mod_info(self.profile.modinfo):
+        # and the mod collection
+        self._collman.reset()
+
+        # try to read modinfo file (creates the mod collection)
+        if self._ioman.load_saved_modlist(self.profile.modinfo,
+                                          self._collman.collection):
+            # populate the db
+            self._dbman.populate_mods_table(self._collman.collection)
+
+        # if self._dbman.load_mod_info(self.profile.modinfo):
             # if successful, validate modinfo (i.e. synchronize the list
             # of mods from the modinfo file with mod folders actually
             # present in Mods directory)

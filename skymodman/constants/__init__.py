@@ -66,6 +66,11 @@ class SkyrimGameInfo:
     exe_name = "TESV.exe"
     game_name = "Skyrim"
 
+    all_dlc = ("Dawnguard", "HearthFires", "Dragonborn",
+                "HighResTexturePack01",
+                "HighResTexturePack02",
+                "HighResTexturePack03")
+
     # possible locations of "local appdata" folder within windows
     # user folder
     local_appdata = ("AppData/Local", "Local Settings")
@@ -75,6 +80,7 @@ class SkyrimGameInfo:
     ini_files = ("skyrim.ini", "skyrimprefs.ini")
 
     masters = ("skyrim.esm", "update.esm")
+
     dlc_masters = ("Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm")
 
     HR_texpacks = ("HighResTexturePack01.esp",
