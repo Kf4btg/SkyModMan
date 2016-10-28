@@ -1,16 +1,15 @@
 # from collections import namedtuple
 # TModEntry = namedtuple("TModEntry", ['enabled', 'name', 'modid', 'version', 'directory', 'ordinal'])
-# from functools import total_ordering
+from collections import OrderedDict
 
 from skymodman import Manager
 # from skymodman.constants import db_fields
 
 # db_fields = "ordinal", "directory", "name", "modid", "version", "enabled", "managed", "error"
 
-# @total_ordering
 class ModEntry:
     __slots__ = ('directory', 'name', 'modid', 'version',
-                 'enabled', 'managed', 'error')
+                 'enabled', 'managed')
     # __slots__ = ('enabled', 'name', 'modid', 'version',
     #              'directory', 'ordinal', 'managed', 'error')
     _fields= __slots__ # to match the namedtuple interface
@@ -30,7 +29,7 @@ class ModEntry:
     #              managed=None, error=None):
     def __init__(self, directory=None, name=None,
                  modid=None, version=None, enabled=None,
-                 managed=None, error=None):
+                 managed=None):
         """
 
         :param int enabled: 0/1; togglable by user
@@ -57,7 +56,7 @@ class ModEntry:
         self.enabled   = enabled
         self.managed   = managed
         # Error is a bitwise-combination of constants.enums.ModError values
-        self.error     = error
+        # self.error     = error
 
     @property
     def key(self):
@@ -120,11 +119,10 @@ class ModEntry:
         else:
             return cls(*iterrible)
 
-    # def _asdict(self):
-    #     """Convert the ModEntry to an OrderedDict instance"""
-    #     from collections import OrderedDict
-    #
-    #     return OrderedDict((f, getattr(self, f)) for f in db_fields)
+    def _asdict(self):
+        """Convert the ModEntry to an OrderedDict instance"""
+
+        return OrderedDict((f, getattr(self, f)) for f in self._fields)
 
     def __iter__(self):
         """allows this object to be converted to tuple (or list, or other
@@ -138,7 +136,30 @@ class ModEntry:
         yield from (getattr(self, f) for f in self._fields)
 
     def __repr__(self):
-        return self.__class__.__name__ + "(enabled={0.enabled}, name='{0.name}', modid={0.modid}, version='{0.version}', directory='{0.directory}', ordinal={0.ordinal}, managed={0.managed}, error={0.error})".format(self)
+        sparts = [self.__class__.__name__, "("]
+
+        fparts = []
+        for f in self._fields:
+            v=getattr(self, f)
+            if isinstance(v, int):
+                # numbers need no quotes
+                fparts.append("{}={}".format(f, v))
+            else:
+                # quotes around strings
+                fparts.append("{}='{}'".format(f, v))
+
+        sparts.append(", ".join(fparts))
+        sparts.append(")")
+
+        return "".join(sparts)
+
+        # return self.__class__.__name__ + \
+        #        "(" + \
+        #        ", ".join(
+        #            (f + "=" + getattr(self,f) for f in self._fields)
+        #        ) + ")"
+        # return self.__class__.__name__ + "(enabled={0.enabled}, name='{0.name}', modid={0.modid}, version='{0.version}', directory='{0.directory}', managed={0.managed})".format(self)
+        # return self.__class__.__name__ + "(enabled={0.enabled}, name='{0.name}', modid={0.modid}, version='{0.version}', directory='{0.directory}', ordinal={0.ordinal}, managed={0.managed}, error={0.error})".format(self)
 
     ##=============================================
     ## comparison
@@ -155,3 +176,11 @@ class ModEntry:
     #     return self.ordinal < other.ordinal #ordinal is unique, but not constant
     # def __gt__(self, other):
     #     return self.ordinal > other.ordinal
+
+
+if __name__ == '__main__':
+    testmod = ModEntry("testdir", "Test Mod", 143, "ver1", 1, 0)
+
+    print(testmod)
+
+    print(testmod._asdict())

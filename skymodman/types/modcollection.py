@@ -234,7 +234,7 @@ class ModCollection(abc.MutableSequence):
 
         :param int|str from_index:
         :param int to_index:
-        :param int count:
+        :param int count: number of items (including the first) to move
         """
 
         # adjust given indices, if needed
@@ -559,3 +559,6 @@ if __name__ == '__main__':
     tcoll.move(3, 8, 3)
 
     print('MVCHUNK_3-5_8', tcoll, len(tcoll))
+
+    # import json
+    # print(json.dumps(tcoll, indent=1, default=lambda o: list(i.__dict__ for i in o)))

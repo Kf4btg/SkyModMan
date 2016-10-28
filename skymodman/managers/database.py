@@ -820,51 +820,51 @@ class DBManager(BaseDBManager, Submanager):
     ## Saving Data
     ##=============================================
 
-    def save_mod_info(self, json_target):
-        """
-        Write the data from the in-memory database to a
-        json file on disk. The file will be overwritten, or
-        created if it does not exist
-
-        :param str|Path json_target: path to modinfo.json file
-        """
-
-        if not isinstance(json_target, Path):
-            json_target = Path(json_target)
-
-        # we don't save the ordinal rank, so we need to get a list (set)
-        # of the fields without "ordinal" Using sets here is OK because
-        # field order doesn't matter when saving
-        # noord_fields = set(_db_fields) - {db_fields.FLD_ORD,
-        #                                  db_fields.FLD_ERR}
-
-        dbfields_noerr_noord=ModEntry._fields[:-1]
-
-        modinfo = []
-
-        # select (all fields other than ordinal & error)
-        # from a subquery of (all fields ordered by ordinal).
-        # ignore 'skyrim' mod
-        for row in self.conn.execute(
-                "SELECT {} FROM (SELECT * FROM mods WHERE directory != 'Skyrim' ORDER BY ordinal)"
-                        .format(", ".join(dbfields_noerr_noord))):
-            # then, for each row (mod entry),
-            # zip fields names and values up and convert to dict
-            # to create json-able object
-            modinfo.append(dict(zip(dbfields_noerr_noord, row)))
-
-        with json_target.open('w') as f:
-            json.dump(modinfo, f, indent=1)
-
-    @staticmethod
-    def json_write(json_target, pyobject):
-        """Dump the given object to a json file specified by the given Path object.
-
-        :param Path json_target:
-        :param pyobject:
-        """
-        with json_target.open('w') as f:
-            json.dump(pyobject, f, indent=1)
+    # def save_mod_info(self, json_target):
+    #     """
+    #     Write the data from the in-memory database to a
+    #     json file on disk. The file will be overwritten, or
+    #     created if it does not exist
+    #
+    #     :param str|Path json_target: path to modinfo.json file
+    #     """
+    #
+    #     if not isinstance(json_target, Path):
+    #         json_target = Path(json_target)
+    #
+    #     # we don't save the ordinal rank, so we need to get a list (set)
+    #     # of the fields without "ordinal" Using sets here is OK because
+    #     # field order doesn't matter when saving
+    #     # noord_fields = set(_db_fields) - {db_fields.FLD_ORD,
+    #     #                                  db_fields.FLD_ERR}
+    #
+    #     dbfields_noerr_noord=ModEntry._fields[:-1]
+    #
+    #     modinfo = []
+    #
+    #     # select (all fields other than ordinal & error)
+    #     # from a subquery of (all fields ordered by ordinal).
+    #     # ignore 'skyrim' mod
+    #     for row in self.conn.execute(
+    #             "SELECT {} FROM (SELECT * FROM mods WHERE directory != 'Skyrim' ORDER BY ordinal)"
+    #                     .format(", ".join(dbfields_noerr_noord))):
+    #         # then, for each row (mod entry),
+    #         # zip fields names and values up and convert to dict
+    #         # to create json-able object
+    #         modinfo.append(dict(zip(dbfields_noerr_noord, row)))
+    #
+    #     with json_target.open('w') as f:
+    #         json.dump(modinfo, f, indent=1)
+    #
+    # @staticmethod
+    # def json_write(json_target, pyobject):
+    #     """Dump the given object to a json file specified by the given Path object.
+    #
+    #     :param Path json_target:
+    #     :param pyobject:
+    #     """
+    #     with json_target.open('w') as f:
+    #         json.dump(pyobject, f, indent=1)
 
     ##=============================================
     ## Dealing with hidden files

@@ -3,12 +3,11 @@ import json.decoder
 import os
 import itertools
 
-
 from pathlib import Path
 from collections import namedtuple
 
 from skymodman import exceptions
-from skymodman.constants import ModError
+# from skymodman.constants import ModError
 from skymodman.managers.base import Submanager
 from skymodman.log import withlogger
 from skymodman.types import ModEntry
@@ -21,7 +20,7 @@ _defaults = {
     "version": lambda v: "",
     "enabled": lambda v: 1,
     "managed": lambda v: 1,
-    "error": lambda v: ModError.NONE
+    # "error": lambda v: ModError.NONE
 }
 
 @withlogger
@@ -114,10 +113,6 @@ class IOManager(Submanager):
         # items that may not be present
         default_order = itertools.count()
 
-        # noinspection PyTypeChecker
-        # present_mods = [t for t in self._vanilla_mod_info if
-        #                 (t[0] == 'Skyrim' or t[1]['present'])]
-
         # get only the mods marked as "present" (i.e. at least some
         # of their files were found in the data dir)
         present_mods = filter(lambda vmi: vmi.is_present,
@@ -143,6 +138,119 @@ class IOManager(Submanager):
                 success = True
 
         return success
+
+    def load_raw_mod_info(self, container, include_skyrim=True):
+                                # save_modinfo=False):
+        """
+        scan the actual mods-directory and populate the database from
+        there instead of a cached json file.
+
+        Will need to do this on first run and periodically to make sure
+        cache is in sync.
+
+        :param include_skyrim:
+        :param container:
+        """
+        # :param save_modinfo:
+        # NTS: Perhaps this should be run on every startup? At least to make sure it matches the stored data.
+
+        if include_skyrim:
+            self.load_unmanaged_mods()
+
+        # list of installed mod folders
+        installed_mods = self.mainmanager.managed_mod_folders
+
+        if not installed_mods:
+            self.LOGGER << "Mods directory empty"
+            return False
+
+        mods_dir = self.mainmanager.Folders['mods']
+
+        if not mods_dir:
+            self.LOGGER.error("Mod directory unset or invalid")
+            return False
+
+        mods_dir = mods_dir.path
+
+        # use config parser to read modinfo 'meta.ini' files, if present
+        import configparser as _config
+        configP = _config.ConfigParser()
+
+        # for managed mods, mod_key is the directory name
+        for mod_key in installed_mods:
+            mod_dir = mods_dir / mod_key
+
+            # support loading information read from meta.ini
+            # (ModOrganizer) file
+            # TODO: check case-insensitively
+            meta_ini_path = mod_dir / "meta.ini"
+
+            if meta_ini_path.exists():
+                configP.read(str(meta_ini_path))
+                try:
+                    modid = configP['General']['modid']
+                    version = configP['General']['version']
+                except KeyError:
+                    # if the meta.ini file was malformed or something,
+                    # ignore it
+                    add_me = _make_mod_entry(directory=mod_key,
+                                                managed=1)
+                else:
+                    add_me = _make_mod_entry(directory=mod_key,
+                                                managed=1,
+                                                modid=modid,
+                                                version=version)
+            else:
+                # no meta file
+                add_me = _make_mod_entry(directory=mod_key,
+                                                managed=1)
+
+            container.append(add_me)
+
+        # get rid of import
+        del _config
+
+        return True
+
+        # finally, populate the table with the discovered mods
+        # self.populate_mods_table(self._collection)
+
+    ##=============================================
+    ## Writing Data
+    ##=============================================
+
+    def save_mod_info(self, json_target, mod_container):
+        """
+
+        :param str|Path json_target:
+        :param mod_container: an in-order sequence of ModEntry objects
+        """
+
+        if not isinstance(json_target, Path):
+            json_target = Path(json_target)
+
+        # create list of mods as dicts (actually Ordered dicts)
+        ## note -- ignore 'Skyrim' fakemod (always first in list)
+        modinfo=[me._asdict() for me in mod_container if me.directory != 'Skyrim']
+
+        with json_target.open('w') as f:
+            # NTS: maybe remove the indent when shipping (for space)
+            json.dump(modinfo, f, indent=1)
+
+    @staticmethod
+    def json_write(json_target, pyobject):
+        """Dump the given object to a json file specified by the given
+        Path object.
+
+        :param Path json_target:
+        :param pyobject:
+        """
+        with json_target.open('w') as f:
+            json.dump(pyobject, f, indent=1)
+
+
+
+
 
 
 

@@ -637,6 +637,10 @@ class ModManager:
         """
         self.LOGGER << "<==Method called"
 
+        if self._ioman.load_raw_mod_info(self._collection):
+            self.save_mod_info()
+
+
         if self._folders['mods']:
             # populate the mods table from the main mods directory
             # self._dbman.get_mod_data_from_directory(self._folders['mods'].path)
@@ -660,9 +664,11 @@ class ModManager:
         :return: a dictionary of mod-directory:error-type for every
             mod in the database
         """
+        return self._collman.errors
 
-        return {r['directory']: r['error'] for r in
-                self._dbman.select("mods", "directory", "error")}
+
+        # return {r['directory']: r['error'] for r in
+        #         self._dbman.select("mods", "directory", "error")}
 
     def allmodinfo(self):
         """
@@ -682,7 +688,8 @@ class ModManager:
         """
         yields the names of enabled mods for the currently active profile
         """
-        yield from self._dbman.enabled_mods(True)
+        # yield from self._dbman.enabled_mods(True)
+        yield from (m.name for m in self._collman.enabled_mods())
 
     def disabled_mods(self):
         yield from self._dbman.disabled_mods(True)
@@ -696,9 +703,10 @@ class ModManager:
         :return: True if no errors encountered, False otherwise
         """
         self.LOGGER << "Validating installed mods"
+        return self._collman.validate_mods(self.managed_mod_folders)
 
         # try:
-        return self._dbman.validate_mods_list(self.managed_mod_folders)
+        # return self._dbman.validate_mods_list(self.managed_mod_folders)
         # except exceptions.InvalidAppDirectoryError as e:
         #     self.LOGGER.error(e)
         #     return False
@@ -775,7 +783,10 @@ class ModManager:
         """Have database manager save modinfo to disk"""
         self.LOGGER << "<==Method called"
 
-        self._dbman.save_mod_info(self.profile.modinfo)
+        self._ioman.save_mod_info(self.profile.modinfo,
+                                  self._collman.collection)
+
+        # self._dbman.save_mod_info(self.profile.modinfo)
         # reset so that next install will reflect the new state
         self._enabledmods = None
 
