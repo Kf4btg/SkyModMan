@@ -419,7 +419,7 @@ class ChangeHiddenFilesCommand(UndoCmd):
         self.tounhide = []
 
         # get currently hidden files from db
-        currhidden = list(self.DB.files_hidden(self.mod_dir))
+        currhidden = list(self.DB.hidden_files(self.mod_dir))
 
         # if nothing was already hidden, we shouldn't waste time
         # trying to figure out what to un-hide

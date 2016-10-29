@@ -550,7 +550,8 @@ class ModManager:
             self.find_all_mod_files(True, True)
             self._dbman.detect_file_conflicts()
 
-        self._dbman.load_hidden_files(self.profile.hidden_files)
+        self.load_hidden_files()
+        # self._dbman.load_hidden_files(self.profile.hidden_files)
 
         self._enabledmods = None
 
@@ -590,7 +591,8 @@ class ModManager:
 
         # always need to re-check hidden files
         # todo: clear out saved hidden files for mods that have been uninstalled.
-        self._dbman.load_hidden_files(self.profile.hidden_files)
+        self.load_hidden_files()
+        # self._dbman.load_hidden_files(self.profile.hidden_files)
 
         # finally, clear the "list of enabled mods" cache (used by installer)
         self._enabledmods = None
@@ -619,7 +621,8 @@ class ModManager:
         self.LOGGER << "<==Method called"
 
         # first, reinitialize the db tables
-        self._dbman.reinit(files=moddir_changed, sky=skydir_changed)
+        # self._dbman.reinit(files=moddir_changed, sky=skydir_changed)
+        self._dbman.reinit(files=moddir_changed)
 
         # and the mod collection
         self._collman.reset()
@@ -691,19 +694,19 @@ class ModManager:
         # return {r['directory']: r['error'] for r in
         #         self._dbman.select("mods", "directory", "error")}
 
-    def allmodinfo(self):
-        """
-        Obtain an iterator over all the rows in the database which yields
-        _all_ the info for a mod as a dict, intended for feeding to
-        ModEntry(**d) or using directly.
-
-        This ignores the fake 'Skyrim' mod, though it is still
-        accessible in the database table
-
-        :rtype: __generator[dict[str, sqlite3.Row], Any, None]
-        """
-        for row in self._dbman.get_mod_info():
-            yield dict(zip(row.keys(), row))
+    # def allmodinfo(self):
+    #     """
+    #     Obtain an iterator over all the rows in the database which yields
+    #     _all_ the info for a mod as a dict, intended for feeding to
+    #     ModEntry(**d) or using directly.
+    #
+    #     This ignores the fake 'Skyrim' mod, though it is still
+    #     accessible in the database table
+    #
+    #     :rtype: __generator[dict[str, sqlite3.Row], Any, None]
+    #     """
+    #     for row in self._dbman.get_mod_info():
+    #         yield dict(zip(row.keys(), row))
 
     def enabled_mods(self):
         """
@@ -713,7 +716,9 @@ class ModManager:
         yield from (m.name for m in self._collman.enabled_mods())
 
     def disabled_mods(self):
-        yield from self._dbman.disabled_mods(True)
+        yield from (m.name for m in self._collman.disabled_mods())
+
+        # yield from self._dbman.disabled_mods(True)
 
     def validate_mod_installs(self):
         """
@@ -748,7 +753,16 @@ class ModManager:
         # Skyrim Data folder to the db
         if skyfiles:
             if self._folders['skyrim']:
-                self._dbman.load_unmanaged_mod_files(self._folders['skyrim'].path)
+
+                for mod, file_list, missing_files in self._ioman.load_unmanaged_files():
+                    if file_list:
+                        self._dbman.add_files('mod', mod, file_list)
+                        # self._dbman.add_to_modfiles_table(mod, file_list)
+                    if missing_files:
+                        self._dbman.add_files('missing', mod, missing_files)
+                        # self._dbman.add_to_missing_files_table(mod, missing_files)
+
+                # self._dbman.load_unmanaged_mod_files(self._folders['skyrim'].path)
                 # self._dbman.load_skyfiles(self._folders['skyrim'].path)
                     # self.get_directory(ks_dir.SKYRIM,
                     #                    aspath=True))
@@ -758,11 +772,34 @@ class ModManager:
         # if required, examine the disk for files.
         if modfiles:
             if self._folders['mods']:
+                # iterate over returned pairs (name, list) from iomanager
+                for mod, file_list in self._ioman.load_all_mod_files():
+                    # insert into db
+                    self._dbman.add_files('mod', mod, file_list)
+                    # self._dbman.add_to_modfiles_table(mod, file_list)
+
+
             # try:
-                self._dbman.load_all_mod_files(self._folders['mods'].path)
+            #     self._dbman.load_all_mod_files(self._folders['mods'].path)
             else:
             # except exceptions.InvalidAppDirectoryError as e:
                 self.LOGGER.error("Mods directory is unset or could not be found")
+
+
+    def load_hidden_files(self):
+        """
+        Read profile's list of files hidden by user (if any) and record
+        in database
+        """
+        # get info on hidden files from io-manager
+        for mod_key, hidden_list in self._ioman.load_hidden_files(
+                self.profile.hidden_files):
+            # add to database
+            self._dbman.add_files('hidden', mod_key, hidden_list)
+            # self._dbman.add_to_hidden_files_table(mod_key, hidden_list)
+
+
+
 
     ##=============================================
     ## Data Persistence
@@ -818,7 +855,17 @@ class ModManager:
         """
         self.LOGGER << "<==Method called"
 
-        self._dbman.save_hidden_files_to(self.profile.hidden_files)
+        # utils.tree.Tree uses json internally to stringify itself, so
+        # we just need to write the string to disk
+
+        with self.profile.hidden_files.open('w') as f:
+            f.write(str(self._dbman.get_hidden_file_tree()))
+
+        # use static json-serializing method
+        # _disk.IOManager.json_write(self.profile.hidden_files,
+        #                            self._dbman.get_hidden_file_tree())
+
+        # self._dbman.save_hidden_files_to(self.profile.hidden_files)
 
     ##=============================================
     ## Configuration Management Interface

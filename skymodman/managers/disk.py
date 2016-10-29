@@ -12,6 +12,9 @@ from skymodman.managers.base import Submanager
 from skymodman.log import withlogger
 from skymodman.types import ModEntry
 
+_relpath = os.path.relpath
+_join = os.path.join
+
 _mod_fields = ModEntry._fields
 
 _defaults = {
@@ -216,6 +219,130 @@ class IOManager(Submanager):
         # self.populate_mods_table(self._collection)
 
     ##=============================================
+    ## Loading file lists
+    ##=============================================
+
+    def load_all_mod_files(self):
+        """
+        This generates tuples of the form
+        (mod_key, [list of files in mod]). One can iterate over this
+        generator to get all files on disk.
+        """
+
+        mods_dir = self.mainmanager.Folders['mods'].path
+
+        # use the list of on-disk mods from manager (rather than
+        # the 'theoretical' list of mods in the mod collection)
+        installed = self.mainmanager.managed_mod_folders
+
+
+        for mdir in installed:
+
+            # abs-path to each directory
+            mroot = str(mods_dir / mdir)
+
+            mfiles = []
+            # this gets the lowercase path to each file, starting at the
+            # root of this mod folder. So:
+            #   '/path/to/modstorage/CoolMod42/Meshes/WhatEver.NIF'
+            # becomes:
+            #   'meshes/whatever.nif'
+            for root, dirs, files in os.walk(mroot):
+                mfiles.extend(_relpath(
+                    _join(root, f), mroot).lower() for f in files)
+
+            yield (mdir, mfiles)
+
+    def load_unmanaged_files(self):
+        """Yield the files for the unamanged 'Vanilla' mods and any other
+        files found in the Skyrim Data directory
+
+
+        Yielded tuples have 3 fields:
+            0) Mod name
+            1) list of files found
+            2) list of files that were expected but not found (missing files)
+
+
+        The second and third fields may be empty lists depending on what
+        was found on disk.
+        """
+
+        if not self._vanilla_mod_info:
+            self._vanilla_mod_info = vanilla_mods(
+                self.mainmanager.Folders['skyrim'].path)
+
+        for m in filter(lambda vmi: vmi.is_present,
+                              self._vanilla_mod_info):
+            if m.files or m.missing_files:
+                yield (m.name, m.files, m.missing_files)
+
+    ##=============================================
+    ## loading list of hidden files
+    ##=============================================
+
+    def load_hidden_files(self, json_source):
+        """
+
+        :param json_source:
+        """
+        if not isinstance(json_source, Path):
+            json_source = Path(json_source)
+        # success = False
+
+        with json_source.open('r') as f:
+            try:
+                # due to the way we saved the hidden files, this
+                # loads a nested dict structure. The top-level keys
+                # are the names of mods (directories); the values for
+                # these are nested (tree-like) dicts where each value
+                # is either a dict
+                # or a list; if the value is a dict, then the key for
+                # that value is a directory name and the contents of
+                # the value-dict are the contents of the directory. If value
+                # is a list, then the items of that list are the regular
+                # files (i.e. non-directories) within the current
+                # directory
+                hidden_files = json.load(f)
+            except json.decoder.JSONDecodeError:
+                self.LOGGER.warning("No hidden files listed in {}, "
+                                   "or file is malformed."
+                                   .format(json_source))
+            else:
+                if hidden_files:
+
+                    # initialize variable
+                    hfilelist = [] # type: list [str]
+
+                    # recursive method to flatten the nested dictionary
+                    # into a list of filepaths (strings)
+                    def extract_paths(from_dict, parent_path):
+                        for key, value in from_dict.items():
+
+                            # if this is the list of files
+                            if isinstance(value, list):
+                                # extend hidden_file list w/ 'flattened'
+                                # paths to these files
+                                hfilelist.extend(
+                                    _join(parent_path, file_name)
+                                    for file_name in value)
+                            else:
+                                # it must be a dictionary representing
+                                # a sub-directory; recurse!
+                                extract_paths(value, _join(parent_path, key))
+
+                    # iter over top-level items
+                    for mod, contents in hidden_files.items(): # type: str, dict
+                        # reset list
+                        hfilelist = [] # type: list [str]
+                        # start extraction with no parent path
+                        extract_paths(contents, "")
+
+                        # yield name of mod, hidden file list
+                        yield mod, hfilelist
+
+
+    ##=============================================
     ## Writing Data
     ##=============================================
 
@@ -238,7 +365,7 @@ class IOManager(Submanager):
             json.dump(modinfo, f, indent=1)
 
     @staticmethod
-    def json_write(json_target, pyobject):
+    def json_write(json_target, pyobject, indent=0):
         """Dump the given object to a json file specified by the given
         Path object.
 
@@ -246,7 +373,10 @@ class IOManager(Submanager):
         :param pyobject:
         """
         with json_target.open('w') as f:
-            json.dump(pyobject, f, indent=1)
+            if indent:
+                json.dump(pyobject, f, indent=indent)
+            else:
+                json.dump(pyobject, f)
 
 
 
@@ -297,8 +427,7 @@ def vanilla_mods(skyrim_dir):
     """
 
     from skymodman.constants import SkyrimGameInfo as skyinfo
-    _relpath = os.path.relpath
-    _join = os.path.join
+
 
     # NTS: only DLC should appear in mod list (skyrim/update do not,
     # though their files will appear in archives/files lists)
