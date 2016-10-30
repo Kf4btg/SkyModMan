@@ -343,7 +343,7 @@ class ModFileTreeModel(QAbstractItemModel):
         """
         if self.DB.in_transaction:
             self.DB.commit()
-            self.DB.save_hidden_files()
+            self.manager.save_hidden_files()
             self.hasUnsavedChanges.emit(False)
 
     def revert(self):
@@ -425,7 +425,7 @@ class ChangeHiddenFilesCommand(UndoCmd):
         # trying to figure out what to un-hide
         self.check_unhide = len(currhidden) > 0
 
-        # analyze checkstates
+        # analyze checkstates, fill self.checked, self.unchecked lists
         self._get_checkstates(self.root_item)
 
         # now filter the lists of qfsitems down to subsets:
@@ -499,9 +499,7 @@ class ChangeHiddenFilesCommand(UndoCmd):
         # ... and reset the checkstates
         self._modify_checkstates(True)
 
-    def _modify_checkstates(self, undo=False,
-                            _checked=Qt.Checked,
-                            _unchecked=Qt.Unchecked):
+    def _modify_checkstates(self, undo=False):
         """
         After the first "do", we'll need to check/uncheck items
         programatically. The post-[re|un]do-callback takes care of
@@ -509,9 +507,11 @@ class ChangeHiddenFilesCommand(UndoCmd):
         """
 
         for c in self.checked: #type: QFSItem
-            c.checkState = _unchecked if undo else _checked
+            c.setChecked(not undo)
+            # c.checkState = _unchecked if undo else _checked
         for u in self.unchecked:
-            u.checkState = _checked if undo else _unchecked
+            u.setChecked(undo)
+            # u.checkState = _checked if undo else _unchecked
 
 
     def _get_checkstates(self, base,

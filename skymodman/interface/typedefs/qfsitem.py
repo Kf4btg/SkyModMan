@@ -26,7 +26,7 @@ class QFSItem(FSItem):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self._checkstate=Qt_Checked# tracks explicit checks
+        self._checkstate=Qt_Checked # tracks explicit checks
         self.flags = Qt.ItemIsUserCheckable | Qt.ItemIsEnabled | Qt.ItemIsSelectable
         if self.isdir:
             self.flags |= Qt_ItemIsTristate
@@ -62,10 +62,19 @@ class QFSItem(FSItem):
     # set the checkstates of all that directory's children to match.
     # here's the python translation of the c++ code from qtreewidget.cpp:
 
-    # Superfancy typechecker doesn't know what its talking about...
-    # noinspection PyUnresolvedReferences
     @checkState.setter
     def checkState(self, state):
+        self.setCheckState(state)
+
+
+    def setChecked(self, checked):
+        """
+        :param bool checked:
+        """
+        self.setCheckState(Qt_Checked if checked else Qt_Unchecked)
+
+
+    def setCheckState(self, state):
         # using a class variable, track which items were changed
         QFSItem.last_child_seen = self
 
@@ -75,20 +84,20 @@ class QFSItem(FSItem):
             # propagate a check-or-uncheck down the line:
             for c in self.iterchildren():
 
-                # using a class variable, track which items were changed
-                QFSItem.last_row_touched = c.row
-
                 # this will trigger any child dirs to do the same
                 c.checkState = state
                 # c.setEnabled(state == Qt_Checked)
 
         self._checkstate = state
 
-        # the "hidden" attribute on the baseclass is what will allow us to save
-        # the lists of hidden files to disk, so be sure to set it here;
-        # note: only explicitly unchecked items will be marked as hidden here;
-        # checked and partially-checked directories will not be hidden
-        self._hidden = state == Qt_Unchecked
+        # the "hidden" attribute on the baseclass is what will allow us
+        # to save the lists of hidden files to disk, so be sure to set
+        # it here;
+
+        # note:: only explicitly unchecked items will be marked as
+        # hidden here; checked and partially-checked directories will
+        # not be hidden
+        self.hidden = state == Qt_Unchecked
 
         # add final check for if this was the last unhidden file in a directory:
 
@@ -113,8 +122,10 @@ class QFSItem(FSItem):
         for c in self.iterchildren():
             s = c.checkState
             # if any child is partially checked, so will this be
-            if s == Qt_PartiallyChecked: return Qt_PartiallyChecked
-            elif s == Qt_Unchecked:
+            if s == Qt_PartiallyChecked:
+                return Qt_PartiallyChecked
+
+            if s == Qt_Unchecked:
                 uncheckedkids = True
             else:
                 checkedkids = True
