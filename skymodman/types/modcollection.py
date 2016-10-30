@@ -224,6 +224,33 @@ class ModCollection(abc.MutableSequence):
         return s + ")"
 
     ##=============================================
+    ## Other
+    ##=============================================
+
+    def iter_count(self):
+        """
+        Iterate over the items of the collection, yielding ordered
+        pairs of (int, object), where the first item is the current
+        ordinal of the item in the collection, and the second item is
+        the item itself.
+        """
+        yield from ((idx, self._map[key]) for idx, key in self._order.items())
+
+    def verbose_str(self):
+        """
+        Unlike the regular str() functionality (which only prints the
+        key of each item) this calls str(obj) on each item in the
+        collection.
+        """
+        s = self.__class__.__name__ + "("
+        s += ", ".join(
+            "[{}: {}]".format(o, str(self._map[k])) for o, k in self._order.items())
+        return s + ")"
+
+
+
+
+    ##=============================================
     ## Rearrangement
     ##=============================================
 

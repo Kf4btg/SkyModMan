@@ -85,24 +85,28 @@ col2Header={
 @withlogger
 class ModTable_TreeModel(QAbstractItemModel):
 
+    # noinspection PyArgumentList
     tablehaschanges = pyqtSignal(bool)
 
     # let view know selection may have moved
+    # noinspection PyArgumentList
     notifyViewRowsMoved = pyqtSignal()
-
+    # noinspection PyArgumentList
     hideErrorColumn = pyqtSignal(bool)
-
+    # noinspection PyArgumentList
     errorsAnalyzed = pyqtSignal(int)
 
     def __init__(self, parent, manager, **kwargs):
         """
         """
+        # noinspection PyArgumentList
         super().__init__(parent, **kwargs)
         self._parent = parent
 
         self.Manager = manager
 
-        self.mods = None
+        # initialize as empty list so our rowCount() method doesn't crash
+        self.mods = []
         """:type: skymodman.types.modcollection.ModCollection"""
         self.errors = {} # type: dict [str, int]
 

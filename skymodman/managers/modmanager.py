@@ -113,7 +113,7 @@ class ModManager:
         self._profileman = _profiles.ProfileManager(mcp=self)
 
         # set up db, but do not load info until requested
-        self._dbman = _database.DBManager(self._modcollection, mcp=self)
+        self._dbman = _database.DBManager(mcp=self)
 
         self._ioman = _disk.IOManager(mcp=self)
 
@@ -143,16 +143,6 @@ class ModManager:
 
         self._folders['mods'].register_change_listener(
             self.refresh_modlist)
-
-        # self._folders['mods'].register_change_listener(
-        #     self.on_dir_change)
-        # self._folders['skyrim'].register_change_listener(
-        #     self.on_dir_change)
-        # self._folders['profiles'].register_change_listener(
-        #     self.on_dir_change)
-        # self._folders['vfs'].register_change_listener(
-        #     self.on_dir_change)
-
 
     @property
     def Folders(self):
@@ -363,9 +353,16 @@ class ModManager:
         else:
             self.remove_alert(self._diralerts[folder.name])
 
-        if self._configman and not self.in_profile_switch and not folder.is_overriden:
-            self._configman.update_folderpath(folder)
-            # self.set_config_value(folder.name, folder.path, ks_sec.DIRECTORIES)
+        if not self.in_profile_switch and not folder.is_overriden:
+            try:
+                self._configman.update_folderpath(folder)
+            except AttributeError:
+                # config manager not initialized yet
+                pass
+
+        # if self._configman and not self.in_profile_switch and not folder.is_overriden:
+        #     self._configman.update_folderpath(folder)
+        #     self.set_config_value(folder.name, folder.path, ks_sec.DIRECTORIES)
 
     ##=============================================
     ## Profile Management Interface
@@ -630,8 +627,14 @@ class ModManager:
         # try to read modinfo file (creates the mod collection)
         if self._ioman.load_saved_modlist(self.profile.modinfo,
                                           self._collman.collection):
+            # print(self._collman.collection.verbose_str())
+
             # populate the db
-            self._dbman.populate_mods_table(self._collman.collection)
+            # self._dbman.populate_mods_table(self._collman.collection)
+            self._dbman.populate_mods_table(
+                tuple(entry) for entry in
+                self._collman.collection
+            )
 
         # if self._dbman.load_mod_info(self.profile.modinfo):
             # if successful, validate modinfo (i.e. synchronize the list
@@ -657,9 +660,9 @@ class ModManager:
         """
         self.LOGGER << "<==Method called"
 
-        if self._ioman.load_raw_mod_info(self._collection):
+        if self._ioman.load_raw_mod_info(self._collman.collection):
             # populate db from collection
-            self._dbman.populate_mods_table(self._collection)
+            self._dbman.populate_mods_table(self._collman.collection)
             # save info (to generate file since it likely doesn't exist)
             self.save_mod_info()
             return True
@@ -754,18 +757,13 @@ class ModManager:
         if skyfiles:
             if self._folders['skyrim']:
 
-                for mod, file_list, missing_files in self._ioman.load_unmanaged_files():
+                for mod, file_list, missing_files in \
+                        self._ioman.load_unmanaged_files():
                     if file_list:
                         self._dbman.add_files('mod', mod, file_list)
-                        # self._dbman.add_to_modfiles_table(mod, file_list)
                     if missing_files:
                         self._dbman.add_files('missing', mod, missing_files)
-                        # self._dbman.add_to_missing_files_table(mod, missing_files)
 
-                # self._dbman.load_unmanaged_mod_files(self._folders['skyrim'].path)
-                # self._dbman.load_skyfiles(self._folders['skyrim'].path)
-                    # self.get_directory(ks_dir.SKYRIM,
-                    #                    aspath=True))
             else:
                 self.LOGGER.warning("Skyrim directory is unset")
 

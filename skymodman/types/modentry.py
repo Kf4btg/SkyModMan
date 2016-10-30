@@ -131,7 +131,7 @@ class ModEntry:
         # yield ordinal first; this is to allow the ordinal to still
         # be stored in the database, though the individual mods don't
         # really care about it.
-        yield self.ordinal
+        # yield self.ordinal
         # use _fields to ensure proper order
         yield from (getattr(self, f) for f in self._fields)
 

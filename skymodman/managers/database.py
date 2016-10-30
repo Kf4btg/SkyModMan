@@ -1,8 +1,4 @@
-import json
-import json.decoder
-import os
-
-from pathlib import Path, PurePath
+from pathlib import PurePath
 from itertools import repeat
 from collections import defaultdict, namedtuple
 
@@ -10,19 +6,10 @@ from collections import defaultdict, namedtuple
 from skymodman.managers.base import Submanager, BaseDBManager
 
 from skymodman.types import ModEntry
-# from skymodman.constants import db_fields, db_fields_noerror, ModError #, db_field_order, keystrings
-# from skymodman.constants import  ModError #, db_field_order, keystrings, db_fields, db_fields_noerror,
 from skymodman.log import withlogger
 from skymodman.utils import tree
 
-# _relpath = os.path.relpath
-# _join = os.path.join
 
-# _db_fields = ('ordinal',) + ModEntry._fields
-# _db_fields = ModEntry._fields
-# _db_fields_noerr = _db_fields[:-1]
-
-# _mcount = count()
 
 # max number of vars for sqlite query is 999
 _SQLMAX=900
@@ -40,7 +27,7 @@ _SCHEMA = """
             modid     INTEGER,        --nexus id, or 0 if none
             version   TEXT,           --arbitrary, set by mod author
             enabled   INTEGER default 1,  --effectively a boolean value (0,1)
-            managed   INTEGER default 1,  --boolean; is this in our mods folder?
+            managed   INTEGER default 1  --boolean; is this in our mods folder?
         );
         CREATE TABLE hiddenfiles (
             directory TEXT REFERENCES mods(directory) DEFERRABLE INITIALLY DEFERRED,
@@ -63,27 +50,12 @@ _SCHEMA = """
 
 File_Conflict_Map = namedtuple("File_Conflict_Map", "by_file by_mod")
 
-# _defaults = {
-#     "name": lambda v: v["directory"],
-#     "modid": lambda v: 0,
-#     "version": lambda v: "",
-#     "enabled": lambda v: 1,
-#     "managed": lambda v: 1,
-#     "error": lambda v: ModError.NONE
-# }
-
-
 # from skymodman.utils import humanizer
 # @humanizer.humanize
 @withlogger
 class DBManager(BaseDBManager, Submanager):
 
-    def __init__(self, collection, *args, **kwargs):
-        """
-
-        :param collection: ModCollection instance in which to store
-            loaded mods
-        """
+    def __init__(self, *args, **kwargs):
         super().__init__(db_path=":memory:", # create db in memory
                          schema=_SCHEMA,
                          # names of all tables
@@ -91,30 +63,10 @@ class DBManager(BaseDBManager, Submanager):
                          logger=self.LOGGER,
                          *args, **kwargs)
 
-        # indicates if fill_mods_table() has ever been called
-        self._initialized = False
-
         # track which tables are currently empty
         self._empty = {tn:True for tn in self._tablenames}
 
         # self._con.set_trace_callback(print)
-
-        # track which dlc are present
-        # TODO: actually use this
-        self.dlc_present = {
-            'dawnguard': False,
-            'hearthfires': False,
-            'dragonborn': False,
-            'highrestexturepack01': False,
-            'highrestexturepack02': False,
-            'highrestexturepack03': False,
-        }
-
-        # temporary storage for info about unmanaged mods
-        self._vanilla_mod_info = []
-
-        ## Try populating the modcollection on load
-        self._collection = collection
 
         # These are created from the database, so it seems like it may
         # be best just to store them in this class:
@@ -133,10 +85,6 @@ class DBManager(BaseDBManager, Submanager):
     #     :rtype: list[sqlite3.Row]
     #     """
     #     return self.get_mod_info(True).fetchall()
-    #
-    # @property
-    # def is_initialized(self):
-    #     return self._initialized
 
     @property
     def file_conflicts(self):
@@ -196,21 +144,72 @@ class DBManager(BaseDBManager, Submanager):
                 self.conn.execute("DELETE FROM hiddenfiles")
                 self._empty['hiddenfiles'] = True
 
-        # if sky:
-        #     # clear vanilla info if skyrim dir has changed
-        #     self._vanilla_mod_info = []
 
-    # def reset_errors(self):
-    #     """
-    #     Reset the "error" column for each mod to ModError.None
-    #     and commit the changes
-    #
-    #     :return: the number of rows affected
-    #     """
-    #
-    #     with self.conn:
-    #         return self.conn.execute(
-    #             "UPDATE mods SET error = 0 WHERE error != 0").rowcount
+            # if sky:
+            #     # clear vanilla info if skyrim dir has changed
+            #     self._vanilla_mod_info = []
+
+    ##=============================================
+    ## Table population
+    ##=============================================
+
+    def add_to_mods_table(self, mod_list):
+        """
+        Dynamically build the INSERT statement from the list of fields,
+        then insert the values from mod_list (a sequence of tuples) into
+        the database. The changes are committed after all values have
+        been inserted.
+
+        Does not check for an empty mods table.
+
+        :param mod_list:
+        """
+        self.LOGGER << "<==Method call"
+
+        # ignore the error field for now
+        with self.conn:
+            # insert the list of row-tuples into the in-memory db
+            self.conn.executemany(
+                "INSERT INTO mods({}) VALUES ({})".format(
+                    ", ".join(ModEntry._fields),
+                    ", ".join("?" * len(ModEntry._fields))
+                ),
+                mod_list)
+
+            # mark db as initialized (if it wasn't already)
+            self._empty['mods'] = False
+
+    def populate_mods_table(self, mod_list):
+        """Similar to add_to_mods_table, but this first checks to see if
+        the mods table is empty before attempting to add any data to it.
+        The method will fail if table already contains data."""
+
+        if self._empty['mods']:
+            self.add_to_mods_table(mod_list)
+        else:
+            self.LOGGER.error(
+                "Attempted to populate non-empty table 'mods'.")
+
+    # noinspection PyShadowingBuiltins
+    def add_files(self, type, for_mod, files):
+        """
+        Record the list of filepaths in the database keyed by the mod
+        with which they are associated. `type` indicates the context
+        for the file list.
+
+        :param type: a string that is either 'mod', 'missing', or 'hidden'
+        :param for_mod:
+        :param files: list of filepaths (as strings)
+        """
+        if files:
+            table = type + "files"
+            if table in self._tablenames:
+                with self.conn:
+                    self.conn.executemany(
+                        "INSERT INTO " + table + " VALUES (?, ?)",
+                        zip(repeat(for_mod), files))
+
+                    self._empty[table] = False
 
     def remove_files(self, for_mod):
         """
@@ -246,6 +245,178 @@ class DBManager(BaseDBManager, Submanager):
     ## ---------------------
     ## Mostly convenenience methods
     ##=============================================
+
+    def detect_file_conflicts(self):
+        """
+        Using the data in the 'modfiles' table, detect any file
+        conflicts among the installed mods
+
+        Note: this method causes an implicit COMMIT in the database.
+        This is unlikely to be an issue, though, since we only call
+        this before the user has actually had a chance to make any
+        changes (or immediately after they've saved them)
+        """
+
+        # setup variables
+        file = ''
+        conflicts = defaultdict(list)
+        mods_with_conflicts = defaultdict(list)
+
+        # only run if there are actually any files to check
+        if not self._empty['modfiles']:
+            self.LOGGER.info("Detecting file conflicts")
+
+            # if we're reloading the status of conflicted mods,
+            # delete the view if it exists
+
+            # create the view
+            # with self.conn:
+            # self.conn.execute("DROP VIEW IF EXISTS filesbymodorder")
+            #
+            # # self._con.execute(q)
+            # self.conn.execute("""
+            #     CREATE VIEW filesbymodorder AS
+            #         SELECT ordinal, f.directory, filepath
+            #         FROM modfiles f, mods m
+            #         WHERE f.directory=m.directory
+            #         ORDER BY ordinal
+            #     """)
+
+            # [print(*r) for r in self._con.execute(detect_dupes_query)]
+            # for r in self._con.execute(detect_dupes_query):
+
+            # query view to detect duplicates
+            # for r in self.conn.execute("""
+            #     SELECT f.filepath, f.directory
+            #         FROM filesbymodorder f
+            #         INNER JOIN (
+            #             SELECT filepath, COUNT(*) AS C
+            #             FROM filesbymodorder
+            #             GROUP BY filepath
+            #             HAVING C > 1
+            #         ) dups ON f.filepath=dups.filepath
+            #         ORDER BY f.filepath, f.directory
+            #         """):
+
+            ## Ordinal is no longer stored in database;
+            # the 'winning' mod will be determined elsewhere based
+            # on dynamic ordering of mod collection
+
+            # query for duplicates that doesn't use a custom view:
+            for r in self.conn.execute("""
+                SELECT f.filepath, f.directory
+                    FROM modfiles f
+                    INNER JOIN (
+                        SELECT filepath, COUNT(*) AS C
+                        FROM modfiles
+                        GROUP BY filepath
+                        HAVING C > 1
+                    ) dups on f.filepath=dups.filepath
+                    ORDER BY f.filepath, f.directory
+                """):
+
+                # detects when we 'switch' files
+                if r['filepath'] != file:
+                    file = r['filepath']
+
+                # identity of mod containing this occurrence of 'file'
+                mod = r['directory']
+
+                # a dictionary of file conflicts to an ordered
+                #  list of mods which contain them
+                conflicts[file].append(mod)
+                # also, a dictionary of mods to a list of conflicting files
+                mods_with_conflicts[mod].append(file)
+        else:
+            self.LOGGER << "No entries present in modfiles table"
+
+        # convert to normal dicts when adding to conflict map
+        self._conflict_map = File_Conflict_Map(
+            by_file=dict(conflicts),
+            by_mod=dict(mods_with_conflicts))
+
+        # for c in mods_with_conflicts['Bethesda Hi-Res DLC Optimized']:
+        #     print("other mods containing file '%s'" % c)
+        #     for m in conflicts[c]:
+        #         if m!='Bethesda Hi-Res DLC Optimized':
+        #             print('\t', m)
+
+    ##=============================================
+    ## Dealing with hidden files
+    ## -----------------------------------
+    ## conglomerate methods that deal w/ hidden files here
+    ##=============================================
+
+    def remove_hidden_files(self, mod_dir, file_list):
+        """
+        Remove the items (filepaths) in file list from the hiddenfiles
+        db table. If `file_list` contains more than 900 items, they
+        will be deleted in batches of 900 (999 is parameter
+        limit in sqlite)
+
+        :param mod_dir: directory name of the mod from which to delete
+        :param file_list: list of files
+        """
+
+        self.checktx()
+
+        _q = "DELETE FROM hiddenfiles" \
+             " WHERE directory = '{mdir}'" \
+             " AND filepath IN ({paths})"
+
+        c = self.conn.cursor()
+
+        if len(file_list) <= _SQLMAX:
+            # nothing special
+            _q = _q.format(mdir=mod_dir,
+                           paths=", ".join("?" * len(file_list)))
+            c.execute(_q, file_list)
+        else:
+            # something special
+            sections, remainder = divmod(len(file_list), _SQLMAX)
+            for i in range(sections):
+                s = _SQLMAX * i
+                query = _q.format(mdir=mod_dir,
+                                  paths=", ".join('?' * _SQLMAX))
+                c.execute(query, file_list[s:s + _SQLMAX])
+            if remainder:
+                query = _q.format(mdir=mod_dir,
+                                  paths=", ".join('?' * remainder))
+                c.execute(query, file_list[sections * _SQLMAX:])
+
+        return c
+
+    def hidden_files(self, for_mod):
+        """
+        Yield paths of currently hidden files for the given mod
+
+        :param for_mod: directory name of the mod
+        """
+
+        yield from (r["filepath"]
+                    for r in self.conn.execute(
+            "SELECT * FROM hiddenfiles WHERE directory = ?",
+            (for_mod,)
+        ))
+
+    def get_hidden_file_tree(self):
+        """
+        Return all hidden files for all mods as a tree structure
+        (from utils.tree). The tree is non-flattened and convenient
+        for serializing to disk w/ json.
+        """
+
+        # build a tree from the database
+        htree = tree.Tree()
+
+        for row in self.conn.execute(
+                "SELECT * FROM hiddenfiles ORDER BY directory, filepath"):
+            p = PurePath(row['directory'], row['filepath'])
+            pathparts = p.parts[:-1]
+
+            htree.insert(pathparts, p.name)
+
+        return htree
 
     # def enabled_mods(self, name_only = False):
     #     """
@@ -309,101 +480,6 @@ class DBManager(BaseDBManager, Submanager):
         # with open('res/test2.dump.sql', 'w') as f:
         #     for l in self._con.iterdump():
         #         f.write(l+'\n')
-
-    def detect_file_conflicts(self):
-        """
-        Using the data in the 'modfiles' table, detect any file
-        conflicts among the installed mods
-
-        Note: this method causes an implicit COMMIT in the database.
-        This is unlikely to be an issue, though, since we only call
-        this before the user has actually had a chance to make any
-        changes (or immediately after they've saved them)
-        """
-
-        # setup variables
-        file=''
-        conflicts = defaultdict(list)
-        mods_with_conflicts = defaultdict(list)
-
-        # only run if there are actually any files to check
-        if not self._empty['modfiles']:
-            self.LOGGER.info("Detecting file conflicts")
-
-            # if we're reloading the status of conflicted mods,
-            # delete the view if it exists
-
-            # create the view
-            # with self.conn:
-                # self.conn.execute("DROP VIEW IF EXISTS filesbymodorder")
-                #
-                # # self._con.execute(q)
-                # self.conn.execute("""
-                #     CREATE VIEW filesbymodorder AS
-                #         SELECT ordinal, f.directory, filepath
-                #         FROM modfiles f, mods m
-                #         WHERE f.directory=m.directory
-                #         ORDER BY ordinal
-                #     """)
-
-            # [print(*r) for r in self._con.execute(detect_dupes_query)]
-            # for r in self._con.execute(detect_dupes_query):
-
-            # query view to detect duplicates
-            # for r in self.conn.execute("""
-            #     SELECT f.filepath, f.directory
-            #         FROM filesbymodorder f
-            #         INNER JOIN (
-            #             SELECT filepath, COUNT(*) AS C
-            #             FROM filesbymodorder
-            #             GROUP BY filepath
-            #             HAVING C > 1
-            #         ) dups ON f.filepath=dups.filepath
-            #         ORDER BY f.filepath, f.directory
-            #         """):
-
-            ## Ordinal is no longer stored in database;
-            # the 'winning' mod will be determined elsewhere based
-            # on dynamic ordering of mod collection
-
-            # query for duplicates that doesn't use a custom view:
-            for r in self.conn.execute("""
-                SELECT f.filepath, f.directory
-                    FROM modfiles f
-                    INNER JOIN (
-                        SELECT filepath, COUNT(*) AS C
-                        FROM modfiles
-                        GROUP BY filepath
-                        HAVING C > 1
-                    ) dups on f.filepath=dups.filepath
-                    ORDER BY f.filepath, f.directory
-                """):
-
-
-                # detects when we 'switch' files
-                if r['filepath'] != file:
-                    file=r['filepath']
-
-                # identity of mod containing this occurrence of 'file'
-                mod=r['directory']
-
-                # a dictionary of file conflicts to an ordered
-                #  list of mods which contain them
-                conflicts[file].append(mod)
-                # also, a dictionary of mods to a list of conflicting files
-                mods_with_conflicts[mod].append(file)
-        else:
-            self.LOGGER << "No entries present in modfiles table"
-
-        # convert to normal dicts when adding to conflict map
-        self._conflict_map = File_Conflict_Map(
-            by_file=dict(conflicts), by_mod=dict(mods_with_conflicts))
-
-        # for c in mods_with_conflicts['Bethesda Hi-Res DLC Optimized']:
-        #     print("other mods containing file '%s'" % c)
-        #     for m in conflicts[c]:
-        #         if m!='Bethesda Hi-Res DLC Optimized':
-        #             print('\t', m)
 
     # def validate_mods_list(self, managed_mods):
     #     """
@@ -732,59 +808,6 @@ class DBManager(BaseDBManager, Submanager):
     #     self._empty['missingfiles'] = self.count("missingfiles") < 1
 
 
-    ##=============================================
-    ## Table population
-    ##=============================================
-
-    def add_to_mods_table(self, mod_list):
-        """
-        Dynamically build the INSERT statement from the list of fields,
-        then insert the values from mod_list (a sequence of tuples) into
-        the database. The changes are committed after all values have
-        been inserted.
-
-        Does not check for an empty mods table.
-
-        :param mod_list:
-        """
-        self.LOGGER << "<==Method call"
-
-
-        # ignore the error field for now
-        with self.conn:
-            # insert the list of row-tuples into the in-memory db
-            self.conn.executemany(
-                "INSERT INTO mods({}) VALUES ({})".format(
-                    ", ".join(ModEntry._fields),
-                    ", ".join("?" * len(ModEntry._fields))
-                ),
-                mod_list)
-
-            # mark db as initialized (if it wasn't already)
-            self._empty['mods'] = False
-
-    # noinspection PyShadowingBuiltins
-    def add_files(self, type, for_mod, files):
-        """
-        Record the list of filepaths in the database keyed by the mod
-        with which they are associated. `type` indicates the context
-        for the file list.
-
-        :param type: a string that is either 'mod', 'missing', or 'hidden'
-        :param for_mod:
-        :param files: list of filepaths (as strings)
-        """
-        if files:
-            table = type + "files"
-            if table in self._tablenames:
-                with self.conn:
-                    self.conn.executemany(
-                        "INSERT INTO " + table + " VALUES (?, ?)",
-                        zip(repeat(for_mod), files))
-
-                    self._empty[table] = False
-
-
     # def add_to_modfiles_table(self, mod_key, file_list):
     #     """
     #
@@ -864,17 +887,6 @@ class DBManager(BaseDBManager, Submanager):
     #                 zip(repeat(mod_name), mfiles))
     #             self._empty['modfiles'] = False
 
-
-    def populate_mods_table(self, mod_list):
-        """Similar to add_to_mods_table, but this first checks to see if
-        the mods table is empty before attempting to add any data to it.
-        The method will fail if table already contains data."""
-
-        if self._empty['mods']:
-            self.add_to_mods_table(mod_list)
-        else:
-            self.LOGGER.error("Attempted to populate non-empty table 'mods'.")
-
     ##=============================================
     ## Saving Data
     ##=============================================
@@ -925,11 +937,6 @@ class DBManager(BaseDBManager, Submanager):
     #     with json_target.open('w') as f:
     #         json.dump(pyobject, f, indent=1)
 
-    ##=============================================
-    ## Dealing with hidden files
-    ## -----------------------------------
-    ## conglomerate methods that deal w/ hidden files here
-    ##=============================================
 
     # def load_hidden_files(self, json_source):
     #     """
@@ -998,118 +1005,45 @@ class DBManager(BaseDBManager, Submanager):
     #
     #     return flist
 
-    def save_hidden_files(self):
-        """
-        Save the contents of the hiddenfiles table to the
-        `hiddenfiles.json` file of the current profile
-
-        :return:
-        """
-        if self.mainmanager.profile:
-            self.save_hidden_files_to(
-                self.mainmanager.profile.hidden_files)
-
-    def save_hidden_files_to(self, json_target):
-        """
-        Serialize the contents of the hiddenfiles table to a file in
-        json format
-
-        :param str|Path json_target: path to hiddenfiles.json file
-            for current profile
-        """
-
-        # NTS: I notice ModOrganizer adds a '.mohidden' extension to every file it hides (or to the parent directory); hmm...I'd like to avoid changing the files on disk if possible
-
-        if not isinstance(json_target, Path):
-            json_target = Path(json_target)
-
-        # build a tree from the database and jsonify it to disk
-        htree = tree.Tree()
-
-        for row in self.conn.execute(
-                "SELECT * FROM hiddenfiles ORDER BY directory, filepath"):
-            p = PurePath(row['directory'], row['filepath'])
-            pathparts = p.parts[:-1]
-
-            htree.insert(pathparts, p.name)
-
-        with json_target.open('w') as f:
-            f.write(str(htree))
-
-            # print(tree.to_string(2))
-
-    def remove_hidden_files(self, mod_dir, file_list):
-        """
-        Remove the items (filepaths) in file list from the hiddenfiles
-        db table. If `file_list` contains more than 900 items, they
-        will be deleted in batches of 900 (999 is parameter
-        limit in sqlite)
-
-        :param mod_dir: directory name of the mod from which to delete
-        :param file_list: list of files
-        """
-
-        self.checktx()
-
-        _q = "DELETE FROM hiddenfiles" \
-             " WHERE directory = '{mdir}'" \
-             " AND filepath IN ({paths})"
-
-        c = self.conn.cursor()
-
-        if len(file_list) <= _SQLMAX:
-            # nothing special
-            _q = _q.format(mdir=mod_dir,
-                           paths=", ".join("?" * len(file_list)))
-            c.execute(_q, file_list)
-        else:
-            # something special
-            sections, remainder = divmod(len(file_list), _SQLMAX)
-            for i in range(sections):
-                s = _SQLMAX * i
-                query = _q.format(mdir=mod_dir,
-                                  paths=", ".join('?' * _SQLMAX))
-                c.execute(query, file_list[s:s + _SQLMAX])
-            if remainder:
-                query = _q.format(mdir=mod_dir,
-                                  paths=", ".join('?' * remainder))
-                c.execute(query, file_list[sections * _SQLMAX:])
-
-        return c
-
-    def hidden_files(self, for_mod):
-        """
-        Yield paths of currently hidden files for the given mod
-
-        :param for_mod: directory name of the mod
-        """
-
-        yield from (r["filepath"]
-                    for r in self.conn.execute(
-            "SELECT * FROM hiddenfiles WHERE directory = ?",
-            (for_mod,)
-        ))
-
-    def get_hidden_file_tree(self):
-        """
-        Return all hidden files for all mods as a tree structure
-        (from utils.tree). The tree is non-flattened and convenient
-        for serializing to disk w/ json.
-        """
-
-        # build a tree from the database
-        htree = tree.Tree()
-
-        for row in self.conn.execute(
-                "SELECT * FROM hiddenfiles ORDER BY directory, filepath"):
-            p = PurePath(row['directory'], row['filepath'])
-            pathparts = p.parts[:-1]
-
-            htree.insert(pathparts, p.name)
-
-        return htree
-
-
+    # def save_hidden_files(self):
+    #     """
+    #     Save the contents of the hiddenfiles table to the
+    #     `hiddenfiles.json` file of the current profile
+    #
+    #     :return:
+    #     """
+    #     if self.mainmanager.profile:
+    #         self.save_hidden_files_to(
+    #             self.mainmanager.profile.hidden_files)
+    #
+    # def save_hidden_files_to(self, json_target):
+    #     """
+    #     Serialize the contents of the hiddenfiles table to a file in
+    #     json format
+    #
+    #     :param str|Path json_target: path to hiddenfiles.json file
+    #         for current profile
+    #     """
+    #
+    #     # NTS: I notice ModOrganizer adds a '.mohidden' extension to every file it hides (or to the parent directory); hmm...I'd like to avoid changing the files on disk if possible
+    #
+    #     if not isinstance(json_target, Path):
+    #         json_target = Path(json_target)
+    #
+    #     # build a tree from the database and jsonify it to disk
+    #     htree = tree.Tree()
+    #
+    #     for row in self.conn.execute(
+    #             "SELECT * FROM hiddenfiles ORDER BY directory, filepath"):
+    #         p = PurePath(row['directory'], row['filepath'])
+    #         pathparts = p.parts[:-1]
+    #
+    #         htree.insert(pathparts, p.name)
+    #
+    #     with json_target.open('w') as f:
+    #         f.write(str(htree))
+    #
+    #         # print(tree.to_string(2))
 
 ##=============================================
 ## Module-level methods (should maybe be static?)
