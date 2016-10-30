@@ -48,19 +48,65 @@ class ModCollection(abc.MutableSequence):
     def __len__(self):
         return self._length
 
+    def __unslice(self, slice_):
+        """Make sense of a provided slice object (for __getitem__,
+        __setitem__, and __delitem__).
+
+        Returns 3-tuple of ints (start, stop, step), properly
+        adjusted to take negative indexing into account."""
+
+        # try to make sense of slice objects;
+        # any or all of .start, .stop, and .step may be None
+
+        a,b,n = slice_.start, slice_.stop, slice_.step
+
+        if n is None: n = 1
+        # step NEVER defaults to negative, even if start and stop
+            # would indicate that was the intention
+
+        elif n < 0:
+            # negative step -> a defaults to len(), b to <before start>
+
+            # stop==None is the only way to indicate that
+            # item#0 should be included in the result when using a
+            # negative step (using -1 in slice notation is, of course,
+            # intepreted as (end of sequence));
+            # if b==0, the result will terminate
+            # just BEFORE the first item; so we return -1 NOT to
+            # indicate negative indexing, but rather to show that
+            # we want to go ALL THE WAY to 0
+            return (self._length-1 if a is None else self._getposindex(a),
+                    -1 if b is None else self._getposindex(b),
+                    n)
+
+        # else: positive step
+        return (self._getposindex(a) if a else 0, # 0 if None or 0
+                self._length if b is None else self._getposindex(b),
+                n)
+
+
     def __getitem__(self, index):
         """
         If `index` is an integer, get the item currently located at that
         position in the ordering.
 
         If `index` is a string, return the item having that unique
-        key."""
+        key.
 
-        # TODO: support slices
+        If index is a slice (i.e. notation was like ``collection[3:5]``,
+        ``collection[3:13:2]``, or ``collection[5:3:-1]``) return a
+        regular list containing the selected items
+        """
 
         if isinstance(index, str):
             # will raise keyerror if 'index' is not a valid key
             key = index
+        elif isinstance(index, slice):
+            # start, stop, step = self.__unslice(index)
+
+            # build and return a list
+            return [self._map[k] for i in range(*self.__unslice(index))
+                    for k in self._keyfromindex(i)]
         else:
             # raises index error if index is out of range
             key = self._keyfromindex(index)
@@ -70,15 +116,42 @@ class ModCollection(abc.MutableSequence):
 
         return self._map[key]
 
-    def __setitem__(self, index, value):
-        # TODO: support slices
+    #=================================
+    # setitem + helper
+    #---------------------------------
 
-        key = value.key
+    def __setitem__(self, index, value):
+        """
+        Accepts integers or slices as valid values for `index`.
+        """
+        if isinstance(index, slice):
+            # if the 'index' is a slice, then "value" must be an
+            # iterable of values (or an iterator or a generator or ...)
+            idxs = iter(range(*self.__unslice(index)))
+            vals = iter(value)
+
+            while True:
+                try:
+                    self.__setitem(self._getposindex(next(idxs)), next(vals))
+                except StopIteration:
+                    # this stops at end of the shortest sequence;
+                    # it may be useful to throw an exception if there's
+                    # a mismatch in length.
+                    # ...let's put that one on the 'long-term' to-do list
+                    break
+        else:
+            self.__setitem(self._getposindex(index), value)
+
+    def __setitem(self, index, value):
+        """Internal helper for __setitem__"""
+        # call w/ pre-adjusted index
 
         # check for unique key
+        key = value.key
         if key not in self._map:
+            old_key = self._keyfromindex(index)
             # get (adjusted) index and old_key
-            index, old_key = self._get_index_and_key(index)
+            # index, old_key = self._get_index_and_key(index)
 
             # clear all refs to replaced data
             del self._index[old_key]
@@ -88,27 +161,76 @@ class ModCollection(abc.MutableSequence):
             self._index[key] = index
             self._map[key] = value
 
-    def __delitem__(self, index):
+    #=================================
+    # delitem + helpers
+    #---------------------------------
 
-        # TODO: support slices
+    def __delitem__(self, index):
 
         if isinstance(index, str):
             # passed a key
-            key = index
-            idx = self._index[key]
+            self.__delitem(self._index[index])
+        elif isinstance(index, slice):
+            # translate the slice endpoints & call helper
+            self.__delslice(*self.__unslice(index))
         else:
-            # assume index is int
-            idx, key = self._get_index_and_key(index)
+            # assume index is int; adjust as necessary
+            self.__delitem(self._getposindex(index))
+
+
+    def __delitem(self, index:int):
+        """__delitem__ helper; this ONLY accepts ints--that is, keys
+        for the self._order mapping. They are assumed to have already
+        been adjusted for negative indexing, if needed."""
 
         # adjust order; this intrinsically takes care of removing the
-        # item (key) from the _order and _index mappings
-        self._shift_indices_up(idx, 1)
+        # item (key) from the _order and _index mappings;
+        # the method returns a list of removed keys; in this instance,
+        # there should just be one
+        old_key = self._shift_indices_up(index, 1)[0]
 
         # now delete from main _map
-        del self._map[key]
+        del self._map[old_key]
 
         # update length
         self._length = len(self._map)
+
+
+    def __delslice(self, start, stop, step):
+        """Internal helper for deleting slices"""
+        if step == 1:
+            # no surprises here, just delete the range of entries
+
+            # shift indices up; hold onto the keys being removed
+            k2r = self._shift_indices_up(start, stop - start)
+
+            # delete all removed entries from map
+            for k in k2r:
+                del self._map[k]
+
+            # update length attribute
+            self._length = len(self._map)
+
+        else:
+            # if "step" is something other than 1 (or None), it's
+            # a bit more involved; since _shift_indices_up changes
+            # the order and index maps, doing a 1-by-1 loop w/ the
+            # values from the slice won't work (the values would
+            # be invalid after the first iteration)
+
+            # thus, we get the keys currently at those values
+            k2r = [self._order[i]
+                   for i in range(start, stop, step)]
+
+            # then, to keep things simple, delete each from self
+            for k in k2r:
+                self.__delitem(self._index[k])
+
+            # the length attr will be set in the del self[k] call
+
+    #=================================
+    # Item insertion
+    #---------------------------------
 
     def insert(self, index, value):
         """Add a new item at the ordinal `index`. Value must have
@@ -227,7 +349,7 @@ class ModCollection(abc.MutableSequence):
     ## Other
     ##=============================================
 
-    def iter_count(self):
+    def iter_order(self):
         """
         Iterate over the items of the collection, yielding ordered
         pairs of (int, object), where the first item is the current
@@ -246,9 +368,6 @@ class ModCollection(abc.MutableSequence):
         s += ", ".join(
             "[{}: {}]".format(o, str(self._map[k])) for o, k in self._order.items())
         return s + ")"
-
-
-
 
     ##=============================================
     ## Rearrangement
@@ -412,6 +531,8 @@ class ModCollection(abc.MutableSequence):
                 self._order[i] = key
                 # record new position in index
                 self._index[key] = i
+        else:
+            raise IndexError
 
 
     def _shift_indices_up(self, start_idx, count=1):
@@ -432,6 +553,8 @@ class ModCollection(abc.MutableSequence):
 
         :param int start_idx:
         :param int count:
+        :return: list of keys that were removed from the ``order`` and
+        ``index`` mappings by this operation.
         """
 
         # sanity check on the parameters
@@ -440,9 +563,12 @@ class ModCollection(abc.MutableSequence):
             order = self._order
             key_index = self._index
 
+            keys_to_remove = [order[i] for i in range(start_idx,
+                                                      start_idx+count)]
+
             # remove key(s) about to be overwritten
-            for key_to_remove in [order[i] for i in range(start_idx, start_idx+count)]:
-                del key_index[key_to_remove]
+            for k2r in keys_to_remove:
+                del key_index[k2r]
 
             # current length of collection
             # coll_len = len(order)
@@ -458,6 +584,10 @@ class ModCollection(abc.MutableSequence):
             # remove 'tail' from order list
             for i in range(end_idx, self._length):
                 del order[i]
+
+            return keys_to_remove
+        else:
+            raise IndexError
 
     def _get_index_and_key(self, index):
         """Given a user-supplied index (which could be negative), return
@@ -536,8 +666,8 @@ if __name__ == '__main__':
     assert tcoll[5].key == "Y"
     print("INSERT_5", tcoll, len(tcoll))
 
-    tcoll.insert(0, Fakeentry("1"))
-    assert tcoll[0].key == "1"
+    tcoll.insert(0, Fakeentry("a"))
+    assert tcoll[0].key == "a"
     print("INSERT_0", tcoll, len(tcoll))
 
     print("GETINT_8", tcoll[8], len(tcoll))
@@ -586,6 +716,40 @@ if __name__ == '__main__':
     tcoll.move(3, 8, 3)
 
     print('MVCHUNK_3-5_8', tcoll, len(tcoll))
+
+    print('SLICE_4:8', [e.key for e in tcoll[4:8]])
+
+    tcoll[2:5] = [Fakeentry('0'), Fakeentry('1'), Fakeentry('2')]
+    print('SETSLC_2:5', tcoll, len(tcoll))
+
+    tcoll[2:5] = (Fakeentry(k) for k in "543")
+    print('SETSGEN', tcoll, )
+    tcoll[2:5] = map(Fakeentry, "678")
+    print('SETSMAP', tcoll, )
+
+    del tcoll[2:5]
+    print('DELSLC_2:5', tcoll, len(tcoll))
+
+    print("tcoll[1:]")
+    print([e.key for e in tcoll[1:]])
+    print("tcoll[:-1]")
+    print([e.key for e in tcoll[:-1]])
+    print("tcoll[:2]")
+    print([e.key for e in tcoll[:2]])
+    print("tcoll[:4:2]")
+    print([e.key for e in tcoll[:4:2]])
+    print("tcoll[1::2]")
+    print([e.key for e in tcoll[1::2]])
+    print("tcoll[::2]")
+    print([e.key for e in tcoll[::2]])
+    print("tcoll[::]")
+    print([e.key for e in tcoll[::]])
+    print("tcoll[::-1]")
+    print([e.key for e in tcoll[::-1]])
+
+
+    del tcoll[:8:2]
+    print('DELSLC_0:8:2', tcoll, len(tcoll))
 
     # import json
     # print(json.dumps(tcoll, indent=1, default=lambda o: list(i.__dict__ for i in o)))
