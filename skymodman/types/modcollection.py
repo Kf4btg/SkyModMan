@@ -1,11 +1,11 @@
-from itertools import count as counter
+from itertools import count as counter, chain
 from functools import partial
 from collections import abc, OrderedDict, namedtuple
 
 from skymodman.utils import singledispatch_m
 
 # used to prepare executable "move" actions
-_mover = namedtuple("_mover", "first last exec")
+_mover = namedtuple("_mover", "first last split exec")
 
 class ModCollection(abc.MutableSequence):
     """A sequence that acts in some ways like a set (cannot add multiple
@@ -511,9 +511,9 @@ class ModCollection(abc.MutableSequence):
         the creation of the mover-object, the results of calling
         ``exec()`` are undefined and data may be lost!
 
-        :param start: current index of 1st item in block
-        :param end: target index for 1st item in block
-        :param count: number of items, including `start`, to include in
+        :param int start: current index of 1st item in block
+        :param int end: target index for 1st item in block
+        :param int count: number of items, including `start`, to include in
             the block that gets moved
         """
 
@@ -523,40 +523,62 @@ class ModCollection(abc.MutableSequence):
 
         if old == new:
             # throw error?
-            return None
+            return None, None, None
 
-        # precalculate the new order
-        try:
+        # return first, last, split
+        return (min(old, new),
+                max(old, new) + count,
+                count if old<new else (old-new))
 
-            selected_keys = [self._order[i] for i in
-                             range(old, old + count)]
+        ## Legend:
+        # old > new => Up   (to lesser index)
+        # old < new => Down (to greater index)
 
-            if old < new:  # increasing index
-                c_start = old
-                # selected block goes on end
-                reordered = [self._order[i] for i in
-                             range(old + count,
-                                   new + count)] + selected_keys
 
-                # calculate the "split" point so the move can easily be
-                # undone (swap the section [0:split] with [split:-1] to
-                # get the original ordering back)
-                split = len(reordered) - len(selected_keys)
-            else:  # decreasing index (cannot be equal)
-                c_start = new
-                # selected block goes at beginning
-                reordered = selected_keys + [self._order[i] for
-                                             i in
-                                             range(new, old)]
+        #  first is start of affected chunk
+        # last is index immediately AFTER the end of the chunk
+        # first, last = min(old, new), max(old, new) + count
 
-                # split after 'selected_keys' section
-                split = len(selected_keys)
-        except KeyError as e:
-            # if a key (an int in this case) was not found, that effectively
-            # means the given index was "out of bounds"
+        # if going DOWN, split=length of chunk to be lowered;
+        # elif going UP, split=length of section between the destination
+        #                      and the start of the section to be raised
+        # split_on = count if old<new else (old-new)
 
-            raise IndexError(e.args[0],
-                             "Tried to move item(s) beyond end of collection") from None
+
+        # # precalculate the new order
+        # try:
+        #
+        #     selected_keys = [self._order[i] for i in
+        #                      range(old, old + count)]
+        #
+        #     if old < new:  # increasing index
+        #         c_start = old
+        #         # selected block goes on end
+        #         reordered = [self._order[i] for i in
+        #                      range(old + count,
+        #                            new + count)] + selected_keys
+        #
+        #         # calculate the "split" point so the move can easily be
+        #         # undone (swap the section [0:split] with [split:-1] to
+        #         # get the original ordering back)
+        #         split = len(reordered) - len(selected_keys)
+        #     else:  # decreasing index (cannot be equal)
+        #         c_start = new
+        #         # selected block goes at beginning
+        #         reordered = selected_keys + [self._order[i] for
+        #                                      i in
+        #                                      range(new, old)]
+        #
+        #         # split after 'selected_keys' section
+        #         split = len(selected_keys)
+        # except KeyError as e:
+        #     # if a key (an int in this case) was not found, that effectively
+        #     # means the given index was "out of bounds"
+        #
+        #     raise IndexError(e.args[0],
+        #                      "Tried to move item(s) beyond end of collection") from None
+
+        # return min(old, new), max(old, new) + count, split, tuple(reordered)
 
         # each 'Mover' object will contain the list of keys in the
         # new order that they should appear after the move is executed,
@@ -567,15 +589,20 @@ class ModCollection(abc.MutableSequence):
         # lost.
         # The move can easily be undone by passing undo=True to the
         # exec() method
-        return _mover(first=min(old, new),
-                      last=max(old, new) + count - 1,
-                      exec=partial(self._do_move, c_start,
-                                   # convert the list to a tuple since
-                                   # we won't be modifying it further
-                                   tuple(reordered), split))
+        # return _mover(first=min(old, new),
+        #               # last is the item immediately AFTER the shifted block
+        #               last=max(old, new) + count,
+        #               # defines the start of the block for the undo op
+        #               split=split,
+        #               exec=partial(self._do_move, c_start,
+        #                            # convert the list to a tuple since
+        #                            # we won't be modifying it further
+        #                            tuple(reordered), split))
 
-    def _do_move(self, start_count, reordered_keys, split,
-                 undo=False):
+
+
+    # def _do_move(self, start_count, reordered_keys, split, undo=False):
+    def exec_move(self, start_count, split, reordered_keys, undo=False):
         """Used as the exec() method on the _mover objects"""
         # if start_count and reordered_keys are set up correctly
         # (and the collection is unmodified since they were set up),
@@ -595,6 +622,41 @@ class ModCollection(abc.MutableSequence):
                             ):
                 self._index[k] = i
                 self._order[i] = k
+
+    def _doshift(self, first, last, split):
+        """Can it really be this simple? A move is just swapping the
+        position of 2 sub-lists
+
+        Doing it this way requires a bit more work on each operation
+        (the sub-list is pulled from the collection on each run: O(k)),
+        but greatly reduces the amount of information we have to store.
+
+        :return: value of 'split' parameter for reversed op
+        """
+        # """
+        # [8 9 | 10 11 12] => f=8, l=13, s=2
+        #   |
+        #   V
+        # [10 11 12 | 8 9] => new s=3 (13-8-2)
+        #
+        #
+        # [10 11 12 13 14 15 | 16 17 18] f=10 l=19 s=6
+        #
+        # [16 17 18 | 10 11 12 13 14 15] new s = (19-10)-6 = 9-6 = 3
+        # """
+
+        try:
+            keys = [self._order[i] for i in range(first, last)]
+        except KeyError as e:
+            raise IndexError(e.args[0],
+             "Tried to move item(s) beyond end of collection") from None
+
+        # use itertools.chain to avoid list concatenation
+        for j,k in zip(counter(first), chain(keys[split:],keys[:split])):
+            self._index[k] = j
+            self._order[j] = k
+
+        return last - first - split
 
     ##=============================================
     ## Additional mechanics

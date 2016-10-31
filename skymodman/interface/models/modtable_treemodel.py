@@ -623,6 +623,34 @@ class ModTable_TreeModel(QAbstractItemModel):
         # push to the undo stack
         self._push_command(scmd)
 
+    def prepare_shift(self, parent, src_row, dest_row, count):
+        """
+        Prepare and return a 'change-order' operation.
+
+        :param int src_row:
+        :param int dest_row:
+        :param int count:
+        :return:
+        """
+        first, last, split = self.mods.prepare_move(src_row, dest_row, count)
+        rsplit = last - first - split # split param for reverse-shift
+
+
+        ## get args for beginMoveRows
+
+        # destinationChild depends on direction of movement
+        if dest_row < src_row: #UP
+            destinationChild, rdestinationChild = first, last
+            srcLast, rsrcLast=last-1,first+rsplit-1
+            rsrcFirst=first
+        else: #Down
+            destinationChild, rdestinationChild = last, first
+            srcLast, rsrcLast = first + rsplit - 1, last - 1
+            rsrcFirst = dest_row
+
+        beginMoveRows_args = (parent, src_row, srcLast, parent, destinationChild)
+        rbeginMoveRows_args = (parent, rsrcFirst, rsrcLast, parent, rdestinationChild)
+
     ##===============================================
     ## Getting data from disk into model
     ##===============================================
