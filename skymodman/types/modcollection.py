@@ -1,7 +1,11 @@
 from itertools import count as counter
-from collections import abc, OrderedDict
+from functools import partial
+from collections import abc, OrderedDict, namedtuple
 
 from skymodman.utils import singledispatch_m
+
+# used to prepare executable "move" actions
+_mover = namedtuple("_mover", "first last exec")
 
 class ModCollection(abc.MutableSequence):
     """A sequence that acts in some ways like a set (cannot add multiple
@@ -440,56 +444,201 @@ class ModCollection(abc.MutableSequence):
 
         new, old, count = new_position, old_position, num_to_move
 
+        ## NTS: there are some musings on why we move things around this
+        ## way down at the bottom of the file
+
         # save the keys we're moving around
         chunk = [self._order[i] for i in range(old, old+count)]
 
         if new < old:
-            # moving up
+            # moving up (to LOWER indices)
 
-            # shift the preceding items (new->old-1) down;
-            # but we have to start at the bottom (the bottom falls first!)
-            for i in range(old-1, new-1, -1):
-                key = self._order[i] # what's here right now?
-                drop_to = i+count
+            # append the stuff from <the target index> to <right before
+            # our original index> to the chunk (since, after "shifting"
+            # these values out of the way, they will come after our
+            # "moved" values in the New Order)
 
-                # shift down (give higher index)
-                self._index[key] = drop_to
-
-                # record new order
-                self._order[drop_to] = key
-
-            # slide chunk into place
-            for key, new_home in zip(chunk, counter(new)):
-                # give them an address
-                self._order[new_home] = key
-                # put them in the phone book
-                self._index[key] = new_home
-
+            first=new
+            chunk += [self._order[i] for i in range(new,old)]
 
         elif old < new:
-            # moving down
+            #     moving down (to HIGHER indices)
 
-            # need to make sure we don't go past the end
-            # new += min(0, _imax - (new+count))
-            ## -- actually, this means we have bad arguments...(see below)
+            # have to shift items <immediately after the main block> to
+            # <index where the END of our block will end up>.
+            # This can stuck on the front of the original chunk to get
+            # the New Order
+            first = old
+            chunk = [self._order[i] for i in range(old+count, new+count)] + chunk
 
-            # shift following items up
-            # range: <index imm. after chunk> to <dest. index + count lower>
-            # shift amount: -count
-            for i in range(old+count, new+count):
-                try:
-                    key = self._order[i]
-                except KeyError:
-                    raise IndexError(i, "Tried to move item(s) beyond end of collection") from None
-                raise_to = i-count
+        else:
+            # old==new WHAT ARE YOU DOING GET OUT OF HERE
+            return
 
-                self._index[key] = raise_to
-                self._order[raise_to] = key
+        # now plug the whole chunk back in;
+        # we don't need to worry about the 'last' index because the
+        # length of the chunk implicitly handles that; so we just
+        # start counting at first.
+        for i,k in zip(counter(first), chunk):
+            self._index[k] = i
+            self._order[i] = k
 
-            # put chunk in place
-            for key, new_home in zip(chunk, counter(new)):
-                self._order[new_home] = key
-                self._index[key] = new_home
+
+
+
+
+        # if new < old:
+        #
+        #     # first=new, last = old+count-1
+        #
+        #     # shift the preceding items (new->old-1) down;
+        #     # but we have to start at the bottom (the bottom falls first!)
+        #     for i in range(old-1, new-1, -1):
+        #         # can think of this as:
+        #         #   >>> for item in reversed(self[new:old]): ...
+        #
+        #         key = self._order[i] # what's here right now?
+        #         drop_to = i+count
+        #
+        #         # shift down (give higher index)
+        #         self._index[key] = drop_to
+        #
+        #         # record new order
+        #         self._order[drop_to] = key
+        #
+        #     # slide chunk into place
+        #     for key, new_home in zip(chunk, counter(new)):
+        #         # give them an address
+        #         self._order[new_home] = key
+        #         # put them in the phone book
+        #         self._index[key] = new_home
+        #
+        #
+        # elif old < new:
+        #     # moving down (to HIGHER indices)
+        #
+        #     # need to make sure we don't go past the end
+        #     # new += min(0, _imax - (new+count))
+        #     ## -- actually, this means we have bad arguments...(see below)
+        #
+        #     # shift following items up
+        #     # range: <index imm. after chunk> to <dest. index + count lower>
+        #     # shift amount: -count
+        #
+        #     for i in range(old+count, new+count):
+        #         try:
+        #             key = self._order[i]
+        #         except KeyError:
+        #             raise IndexError(i, "Tried to move item(s) beyond end of collection") from None
+        #         raise_to = i-count
+        #
+        #         self._index[key] = raise_to
+        #         self._order[raise_to] = key
+        #
+        #     # put chunk in place
+        #     for key, new_home in zip(chunk, counter(new)):
+        #         self._order[new_home] = key
+        #         self._index[key] = new_home
+
+    def prepare_move(self, start, end, count):
+        """This prepares a move operation, then returns an object
+        that can be used to actually execute the move.
+
+        The returned object will have ``first`` and ``last``
+        attributes, corresponding to the start and end points of the
+        full range of indices affected by the move operation.
+
+        To execute the move, call the ``exec()`` method of the returned
+        object. As a convenience, to 'undo' the move and put the
+        affected items back in their previous positions, simply call
+        ``exec(undo=True)``
+
+        IMPORTANT!: if the collection has been modified since
+        the creation of the mover-object, the results of calling
+        ``exec()`` are undefined and data may be lost!
+
+        :param start: current index of 1st item in block
+        :param end: target index for 1st item in block
+        :param count: number of items, including `start`, to include in
+            the block that gets moved
+        """
+
+        # adjust given indices, if needed
+        old = self._getposindex(start)
+        new = self._getposindex(end)
+
+        if old == new:
+            # throw error?
+            return None
+
+        # precalculate the new order
+
+        try:
+
+            selected_keys = [self._order[i] for i in
+                             range(old, old + count)]
+
+            if old < new:  # increasing index
+                c_start = old
+                # selected block goes on end
+                reordered = [self._order[i] for i in
+                             range(old + count,
+                                   new + count)] + selected_keys
+
+                # calculate the "split" point so the move can easily be
+                # undone (swap the section [0:split] with [split:-1] to
+                # get the original ordering back)
+                split = len(reordered) - len(selected_keys)
+            else:  # decreasing index (cannot be equal)
+                c_start = new
+                # selected block goes at beginning
+                reordered = selected_keys + [self._order[i] for
+                                             i in
+                                             range(new, old)]
+
+                # split after 'selected_keys' section
+                split = len(selected_keys)
+        except KeyError as e:
+            # if a key (an int in this case) was not found, that effectively
+            # means the given index was "out of bounds"
+
+            raise IndexError(e.args[0],
+                             "Tried to move item(s) beyond end of collection") from None
+
+        # each 'Mover' object will contain the list of keys in the
+        # new order that they should appear after the move is executed,
+        # along with the index where insertion of the keys should begin.
+        # Obviously, if the collection is changed between the creation
+        # of this object and its execution, the collection will be
+        # left in an undefined state afterwards, and data may have been
+        # lost.
+        # The move can easily be undone by passing undo=True to the
+        # exec() method
+        return _mover(first=min(old, new),
+                      last=max(old, new) + count - 1,
+                      exec=partial(self._do_move, c_start,
+                                   reordered, split))
+
+    def _do_move(self, start_count, reordered_keys, split,
+                 undo=False):
+        # if start_count and reordered_keys are set up correctly
+        # (and the collection is unmodified since they were set up),
+        # it shouldn't be possible to lose data w/ this operation.
+        # everything will still be there, just in a different order
+
+        if not undo:
+            for i, k in zip(counter(start_count),
+                            reordered_keys):
+                self._index[k] = i
+                self._order[i] = k
+        else:
+            # if we're undoing, rearrange the list using the split point
+            for i, k in zip(counter(start_count),
+                            reordered_keys[
+                            split:] + reordered_keys[:split]
+                            ):
+                self._index[k] = i
+                self._order[i] = k
 
     ##=============================================
     ## Additional mechanics
@@ -699,33 +848,33 @@ if __name__ == '__main__':
 
     tcoll[8]=Fakeentry('X')
 
-    print('SETIDX_8', tcoll, len(tcoll))
+    print('SETIDX_8', tcoll, len(tcoll), '\n')
 
     tcoll.move(6, 9)
 
-    print('MVIDX_6_9', tcoll, len(tcoll))
+    print('MVIDX_6_9', tcoll, len(tcoll), '\n')
 
     tcoll.move(6,3)
 
-    print('MVIDX_6_3', tcoll, len(tcoll))
+    print('MVIDX_6_3', tcoll, len(tcoll), '\n')
 
     tcoll.move('Y', 0)
 
-    print('MVKEY_Y_0', tcoll, len(tcoll))
+    print('MVKEY_Y_0', tcoll, len(tcoll), '\n')
 
     tcoll.move(3, 8, 3)
 
-    print('MVCHUNK_3-5_8', tcoll, len(tcoll))
+    print('MVCHUNK_3-5_8', tcoll, len(tcoll), '\n')
 
-    print('SLICE_4:8', [e.key for e in tcoll[4:8]])
+    print('SLICE_4:8', [e.key for e in tcoll[4:8]], '\n')
 
     tcoll[2:5] = [Fakeentry('0'), Fakeentry('1'), Fakeentry('2')]
-    print('SETSLC_2:5', tcoll, len(tcoll))
+    print('SETSLC_2:5', tcoll, len(tcoll), '\n')
 
     tcoll[2:5] = (Fakeentry(k) for k in "543")
-    print('SETSGEN', tcoll, )
+    print('SETSGEN', tcoll, '\n')
     tcoll[2:5] = map(Fakeentry, "678")
-    print('SETSMAP', tcoll, )
+    print('SETSMAP', tcoll, '\n')
 
     del tcoll[2:5]
     print('DELSLC_2:5', tcoll, len(tcoll))
@@ -753,3 +902,92 @@ if __name__ == '__main__':
 
     # import json
     # print(json.dumps(tcoll, indent=1, default=lambda o: list(i.__dict__ for i in o)))
+
+
+## notes on movement ##
+# """
+#
+# If we have a list such as:
+#
+# >>> [0 ... 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 ... ?]
+#
+# maybe we want to move items 15-17 up in rank; we want 15 to
+# end up at rank 10.
+#
+# so let's pull those 3 items out:
+#
+# >>> saved=[15,16,17]
+# >>> [0 ... 9, 10, 11, 12, 13, 14, __, __, __, 18, 19 ... ?]
+#
+# we can imagine we pulled them aside and left those slots
+# empty. Now we need to move the item that is currently in slot
+# 10 out of the way so that we can put item 15 there, along
+# with the items following 10 to make space for 16 and 17.
+#
+# If space (memory usage) is a concern, we likely would want
+# to do this "in place", shifting them one by one. But, in our
+# case, "in place" doesn't make a lot of sense because we
+# don't actually _have_ a real, indexed list to worry about,
+# with the performance implications of reallocations, resizing,
+# etc. We have a "fake" list, simulated by various key-value
+# mappings--hash tables, where the only thing we're really
+# doing is reassigning pointers, not changing locations in
+# an indexable array.
+#
+# That, and we can assume that there's not going to be
+# thousands or millions of items of items in this container;
+# hundreds, at the most, probably a lot less in the normal
+# case. So making a few extra containers for a few microseconds
+# --even if those containers have nearly the same amount of
+# entries as the entire collection--isn't going to be an issue.
+#
+# So, the point is...let's just yank stuff out and shove them
+# back in in chunks:
+#
+# >>> saved=[15,16,17]
+# >>> shifted=[10,11,12,13,14]
+# >>> [0 ... 9, __, __, __, __, __, __, __, __, 18, 19 ... ?]
+#
+# in fact, we could just add this on to the 'saved' list:
+#
+# >>> saved = [15,16,17,10,11,12,13,14]
+#
+# and reassign
+#
+# >>> [0 ... 9, 15, 16, 17, 10, 11, 12, 13, 14, 18, 19 ... ?]
+#
+# """
+#
+# """
+#
+# Moving down:
+# >>> [0 ... 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 ... ?]
+#
+# So we want to move 10,11,12 to position 15.
+#
+# >>> saved=[10,11,12]
+# >>> [0 ... 9, __, __, __, 13, 14, 15, 16, 17, 18, 19 ... ?]
+#
+# We need to move 15 and the 2 following it out of the way.
+# To do that, the items between where our 'saved' chunk ended
+# and the 'to-move-out-the-way' chunk begins (in this case,
+# 13 & 14) need to move, too. We can add those together:
+#
+# >>> saved=[10,11,12]
+# >>> shift=[13,14] + [15,16,17] = [13,14,15,16,17]
+#
+# >>> [0 ... 9, __, __, __, ==, ==, ++, ++, ++, 18, 19 ... ?]
+#
+# And we can of course append the 'saved' chunk on the end
+# to get the full "New Order" of the affected items.
+#
+# >>> chunk=[13, 14, 15, 16, 17, 10, 11, 12]
+#
+# which we slide back into the empty spaces we left:
+#
+# >>> [0 ... 9, 13, 14, 15, 16, 17, 10, 11, 12, 18, 19 ... ?]
+#
+# and ta-la. voi-da. whatever. yay.
+#
+#
+# """
