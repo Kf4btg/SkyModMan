@@ -78,6 +78,10 @@ col2Header={
     COL.VERSION:   "Version",
     COL.ERRORS:    "Errors",
 }
+
+# base set of flags for table cells
+_base_flags = Qt_ItemIsEnabled | Qt_ItemIsSelectable | \
+                 Qt_ItemIsDragEnabled | Qt_ItemIsDropEnabled
 # </editor-fold>
 
 
@@ -112,7 +116,7 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         # self.mod_entries = [] #type: list [QModEntry]
 
-        self.vheader_field = COL_ORDER
+        # self.vheader_field = COL_ORDER
 
         ## to speed up drag-n-drop operations, track the start and
         ## end of the dragged range as ints (so we don't need to split()
@@ -187,20 +191,20 @@ class ModTable_TreeModel(QAbstractItemModel):
         try:
             return self.errors[mod_entry.directory] == ModError.DIR_NOT_FOUND
         except KeyError:
-            # mod has no errors
+            # mod is not missing
             return False
 
         # return mod_entry.error == ModError.DIR_NOT_FOUND
 
-    def mark_modified(self, iterable):
+    def mark_modified(self, row_nums):
         """
-        Add the items from `iterable` to the collection of modified rows.
+        Add the values from `row_nums` to the collection of modified rows./
 
-        :param iterable: an iterable collection of ints. The values must
-            all be valid indices in the model's list of mods
+        :param row_nums: an iterable of ints. The values must
+            all be valid indices in the mod collection
         """
         # self.LOGGER << iterable
-        self._modifications.extend(iterable)
+        self._modifications.extend(row_nums)
 
     def unmark_modified(self, count):
         """
@@ -292,7 +296,7 @@ class ModTable_TreeModel(QAbstractItemModel):
             return self.disabled_foreground
 
         # show unmanaged mods in italic font
-        # XXX: maybe this...should be in a custom delegate...?
+        # XXX: but maybe this...should be in a custom delegate...?
         if role == Qt_FontRole and not mod.managed:
             return self.unmanaged_font
 
@@ -301,9 +305,8 @@ class ModTable_TreeModel(QAbstractItemModel):
             try:
                 err_type = self.errors[mod.directory]
             except KeyError:
+                # no error for this mod
                 return
-            # if mod.directory not in self.errors: return
-            # if not mod.error: return
 
             if err_type & ModError.DIR_NOT_FOUND:
                 # noinspection PyArgumentList,PyTypeChecker
@@ -353,7 +356,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         if role == Qt_DisplayRole and orientation == Qt.Horizontal:
                 return col2Header[section]
 
-            # the vertical header doesn't work...
+            # the vertical header doesn't work, anyway...
             # else:  # vertical header
             #     return self.mods.index()
             #     return self.mod_entries[section].ordinal
@@ -377,18 +380,16 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
         if not index.isValid():
             return Qt_ItemIsEnabled
+
         col = index.column()
 
-        _flags = Qt_ItemIsEnabled | Qt_ItemIsSelectable | \
-                 Qt_ItemIsDragEnabled | Qt_ItemIsDropEnabled
-
         if col == COL_ENABLED:
-            return _flags | Qt_ItemIsUserCheckable
+            return _base_flags | Qt_ItemIsUserCheckable
 
         if col == COL_NAME:
-            return _flags | Qt_ItemIsEditable
+            return _base_flags | Qt_ItemIsEditable
 
-        return _flags
+        return _base_flags
 
     def search(self, text, start_index, direction=1) -> QModelIndex:
         """
@@ -455,11 +456,11 @@ class ModTable_TreeModel(QAbstractItemModel):
     def _search_slice(self, match_func, start=None, end=None, step=1):
         if start is None:
             if end is None:
-                return next(filter(match_func, self.mod_entries[::step]))
-            return next(filter(match_func, self.mod_entries[:end:step]))
+                return next(filter(match_func, self.mods[::step]))
+            return next(filter(match_func, self.mods[:end:step]))
         elif end is None:
-            return next(filter(match_func, self.mod_entries[start::step]))
-        return next(filter(match_func, self.mod_entries[start:end:step]))
+            return next(filter(match_func, self.mods[start::step]))
+        return next(filter(match_func, self.mods[start:end:step]))
 
     ##===============================================
     ## Setting Data
@@ -480,9 +481,11 @@ class ModTable_TreeModel(QAbstractItemModel):
             if index.column() == COL_ENABLED:
                 row = index.row()
 
-                # callbacks for updating (1) or reverting (2)
-                cb1 = partial(self._post_change_mod_attr, index, row)
-                cb2 = partial(self._post_change_mod_attr, index)
+                # callbacks for updating (1) or reverting (2);
+                # set full_row_update to True since changing enabled
+                # status changes the appearance of the entire row
+                cb1 = partial(self._post_change_mod_attr, index, row, True)
+                cb2 = partial(self._post_change_mod_attr, index, -1, True)
 
                 self._push_command(change_mod_attribute.cmd(
                     self.mods[row],
@@ -521,7 +524,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         # enabled/name, just ret false
         return False
 
-    def _post_change_mod_attr(self, index, row=-1):
+    def _post_change_mod_attr(self, index, row=-1, full_row_update=False):
         """
         For use as a callback after updating (+ redo/undo) a
         mod attribute. Args will need to be filled in w/ partial()
@@ -534,13 +537,20 @@ class ModTable_TreeModel(QAbstractItemModel):
             self._modifications.pop()
         else:
             self._modifications.append(row)
-        self.dataChanged.emit(index, index)
+
+        if full_row_update:
+            # emit the data changed signal for each cell in row
+            self.dataChanged.emit(self.index(index.row(), 0),
+                                  self.index(index.row(), self.columnCount()))
+        else:
+            self.dataChanged.emit(index, index)
 
     ##===============================================
     ## Modifying Row Position
     ##===============================================
 
-    def shift_rows(self, start_row, end_row, move_to_row, parent=QModelIndex(), undotext="Reorder Mods"):
+    def shift_rows(self, start_row, end_row, move_to_row,
+                   parent=QModelIndex(), undotext="Reorder Mods"):
         """
         :param int start_row: start of shifted block
         :param int end_row: end of shifted block
@@ -550,8 +560,21 @@ class ModTable_TreeModel(QAbstractItemModel):
         :param str undotext: optional text that will appear in
             the Undo/Redo menu items
         """
-        # create a new shift-command
+        # hmmm....how about we let the VIEW take care of pushing the
+        # commands? We'll just call all the required stuff here.
 
+        # count = 1+(end_row - start_row)
+
+        # move_cmd = partial(self.mods.move, start_row,
+        #                                 move_to_row,
+        #                                 count)
+
+        # to reverse, just move it back
+        # unmove_cmd = partial(self.mods.move, move_to_row,
+        #                                 start_row,
+        #                                 count)
+
+        # create a new shift-command
         scmd = shift_rows.cmd(
             self, start_row, end_row, move_to_row,
             text=undotext,
@@ -562,6 +585,25 @@ class ModTable_TreeModel(QAbstractItemModel):
         # get the shifter object from the command
         shifter = scmd.shifter
         # and use it to build the beginMoveRows args
+
+        # bool QAbstractItemModel::beginMoveRows(
+        #   const QModelIndex &sourceParent,
+        #   int sourceFirst,
+        #   int sourceLast,
+        #   const QModelIndex &destinationParent,
+        #   int destinationChild)
+
+        # note:: moving down means "move to row BEFORE destinationChild",
+        # so e.g. moving row 2 down by 1 to row 3 would mean
+        # ``destinationChild=4``. Moreover, destinationChild is the row
+        # that will come after the ENTIRE block of moved rows...so,
+        # moving rows 2 and 3 down by 2 (to become rows 4 and 5)
+        # requires ``destinationChild=6``
+        #
+        #
+        # Moving up is more sensible, where
+        # moving row 3 up by 1 to row 2 means ``destinationChild=2``
+
         scmd.pre_redo_callback = partial(
             self.beginMoveRows, parent,
             start_row,
@@ -593,11 +635,12 @@ class ModTable_TreeModel(QAbstractItemModel):
         self.beginResetModel()
         self._modifications.clear()
 
+        # we use the same collection as the rest of the application,
+        # so we shouldn't modify it (unless specifically told to do so
+        # by user interaction, of course)
         self.mods = self.Manager.modcollection
 
-        # self.mod_entries = [QModEntry(**d) for d
-        #                     in self.Manager.allmodinfo()]
-
+        # see if we currently have any errors
         self.check_mod_errors()
 
         self.endResetModel()
@@ -608,43 +651,30 @@ class ModTable_TreeModel(QAbstractItemModel):
         Check which mods, if any, encountered errors during load and
         show or hide the Errors column appropriately.
 
-        If query_db is True, ask the manager to query the database and
-        return a mapping of all mods (by directory name) to the value of
-        their error-type (ModError.* -- hopefully NONE). Then go through
-        the model's list of modentries and update the error value of
-        each to the value found in the mapping. After this is done,
-        hide or show the Errors column based on whether any of the mods
+        If refresh is True, ask the manager to return a mapping of all
+        mods (by directory name) to the value of their error-type
+        (ModError.* -- hopefully NONE).
+
+        Hide or show the Errors column based on whether any of the mods
         have a non-zero error type
         """
 
         # reset
         err_types = ModError.NONE
 
+        # if we need to query manager to refresh errors, do it here
         if refresh:
             self.errors = self.Manager.get_mod_errors()
 
         # TODO: use itertools.groupby (or something similar) to avoid this loop
         for err_type in self.errors.values():
+            # we're just checking for any errors in any mod;
+            # err_types is a bit-combo indicating the types of errors
+            # we encountered
             err_types |= err_type
 
-
-            # if we need to query the database to refresh the errors,
-            # do that here:
-            # errors = self.Manager.get_mod_errors()
-
-            # update the "error" field of each modentry
-            # for m in self.mod_entries:
-            #     m.error = errors[m.directory]
-            #     if m.error:
-            #         err_types |= m.error
-        # else:
-            # otherwise, we're just checking for any errors in any mod
-        # for err_type in self.errors.values():
-        #     err_types |= err_type
-            # for m in self.mod_entries:
-            #     if m.error:
-            #         err_types |= m.error
-
+        # let rest of app know what we found; this should show/hide
+        # the Errors column as needed
         self.errorsAnalyzed.emit(err_types)
 
     def reload_errors_only(self):

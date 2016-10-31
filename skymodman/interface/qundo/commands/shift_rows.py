@@ -58,4 +58,32 @@ class ShiftRowsCommand(UndoCmd):
         self._model.unmark_modified(len(self._shift.affected_range))
 
 
+class MoveRowsCommand(UndoCmd):
+    """Calls move() operations an a ModCollection instance"""
+
+    def __init__(self, move_cmd, unmove_cmd,
+                 end_move_rows,
+                 text="Reorder",
+                 *args, **kwargs):
+        super().__init__(text=text, *args, **kwargs)
+
+        self._move = move_cmd # called during redo()
+        self._unmove = unmove_cmd # called during undo()
+
+        # this is QAbstractItemModel.endMoveRows()
+        # (provided by the model which created this instance)
+        self._endmove = end_move_rows
+
+    def _redo_(self):
+        self._move()
+
+        self._endmove()
+
+    def _undo_(self):
+        self._unmove()
+        self._endmove()
+
+
+
+
 cmd = ShiftRowsCommand
