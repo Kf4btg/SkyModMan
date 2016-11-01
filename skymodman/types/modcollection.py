@@ -1,5 +1,4 @@
 from itertools import count as counter, chain
-from functools import partial
 from collections import abc, OrderedDict, namedtuple
 
 from skymodman.utils import singledispatch_m
@@ -602,36 +601,37 @@ class ModCollection(abc.MutableSequence):
 
 
     # def _do_move(self, start_count, reordered_keys, split, undo=False):
-    def exec_move(self, start_count, split, reordered_keys, undo=False):
-        """Used as the exec() method on the _mover objects"""
-        # if start_count and reordered_keys are set up correctly
-        # (and the collection is unmodified since they were set up),
-        # it shouldn't be possible to lose data w/ this operation.
-        # everything will still be there, just in a different order
+    # def exec_move(self, start_count, split, reordered_keys, undo=False):
+    #     """Used as the exec() method on the _mover objects"""
+    #     # if start_count and reordered_keys are set up correctly
+    #     # (and the collection is unmodified since they were set up),
+    #     # it shouldn't be possible to lose data w/ this operation.
+    #     # everything will still be there, just in a different order
+    #
+    #     if not undo:
+    #         for i, k in zip(counter(start_count),
+    #                         reordered_keys):
+    #             self._index[k] = i
+    #             self._order[i] = k
+    #     else:
+    #         # if we're undoing, rearrange the list using the split point
+    #         for i, k in zip(counter(start_count),
+    #                         reordered_keys[
+    #                         split:] + reordered_keys[:split]
+    #                         ):
+    #             self._index[k] = i
+    #             self._order[i] = k
 
-        if not undo:
-            for i, k in zip(counter(start_count),
-                            reordered_keys):
-                self._index[k] = i
-                self._order[i] = k
-        else:
-            # if we're undoing, rearrange the list using the split point
-            for i, k in zip(counter(start_count),
-                            reordered_keys[
-                            split:] + reordered_keys[:split]
-                            ):
-                self._index[k] = i
-                self._order[i] = k
-
-    def _doshift(self, first, last, split):
+    def exec_move(self, first, last, split):
         """Can it really be this simple? A move is just swapping the
-        position of 2 sub-lists
+        position of 2 sub-lists. Call with the values returned by
+        ``prepare_move()``
 
         Doing it this way requires a bit more work on each operation
         (the sub-list is pulled from the collection on each run: O(k)),
         but greatly reduces the amount of information we have to store.
 
-        :return: value of 'split' parameter for reversed op
+        :return: value of 'split' parameter for reversing the  move
         """
         # """
         # [8 9 | 10 11 12] => f=8, l=13, s=2
@@ -655,6 +655,7 @@ class ModCollection(abc.MutableSequence):
         for j,k in zip(counter(first), chain(keys[split:],keys[:split])):
             self._index[k] = j
             self._order[j] = k
+
 
         return last - first - split
 
@@ -807,116 +808,116 @@ class ModCollection(abc.MutableSequence):
 
 
 
-if __name__ == '__main__':
-    class Fakeentry:
-        def __init__(self, key):
-            self.key = key
-        def __str__(self):
-            return "FakeEntry({})".format(self.key)
-
-
-    tcoll = ModCollection([Fakeentry(w) for w in "ABCDEF"])
-    for ix, ky in enumerate("ABCDEF"):
-        assert tcoll[ix].key == ky
-    print("START:", tcoll, len(tcoll))
-
-    tcoll.extend([Fakeentry(w) for w in "GHIJKL"])
-    for ix, ky in enumerate("GHIJKL", start=6):
-        assert tcoll[ix].key == ky
-    print("EXTEND:", tcoll, len(tcoll))
-
-    tcoll.append(Fakeentry("Z"))
-    assert tcoll[-1].key == "Z"
-    print("APPEND:", tcoll, len(tcoll))
-
-    tcoll.insert(5, Fakeentry("Y"))
-    assert tcoll[5].key == "Y"
-    print("INSERT_5", tcoll, len(tcoll))
-
-    tcoll.insert(0, Fakeentry("a"))
-    assert tcoll[0].key == "a"
-    print("INSERT_0", tcoll, len(tcoll))
-
-    print("GETINT_8", tcoll[8], len(tcoll))
-
-    print("GETINT_-1", tcoll[-1])
-
-    print("GETKEY_G", tcoll["G"], len(tcoll))
-
-    x=tcoll[8]
-    assert x in tcoll
-    assert x.key in tcoll
-
-    del tcoll[8]
-    assert x not in tcoll
-    assert x.key not in tcoll
-    print("DELINT_8", tcoll, len(tcoll))
-
-    del tcoll["H"]
-    assert "H" not in tcoll
-    print("DELKEY_H", tcoll, len(tcoll))
-
-    del tcoll["Z"]
-
-    print("DELKEY_Z", tcoll, len(tcoll))
-
-    del tcoll[0]
-
-    print("DELINT_0", tcoll, len(tcoll))
-
-    tcoll[8]=Fakeentry('X')
-
-    print('SETIDX_8', tcoll, len(tcoll), '\n')
-
-    tcoll.move(6, 9)
-
-    print('MVIDX_6_9', tcoll, len(tcoll), '\n')
-
-    tcoll.move(6,3)
-
-    print('MVIDX_6_3', tcoll, len(tcoll), '\n')
-
-    tcoll.move('Y', 0)
-
-    print('MVKEY_Y_0', tcoll, len(tcoll), '\n')
-
-    tcoll.move(3, 8, 3)
-
-    print('MVCHUNK_3-5_8', tcoll, len(tcoll), '\n')
-
-    print('SLICE_4:8', [e.key for e in tcoll[4:8]], '\n')
-
-    tcoll[2:5] = [Fakeentry('0'), Fakeentry('1'), Fakeentry('2')]
-    print('SETSLC_2:5', tcoll, len(tcoll), '\n')
-
-    tcoll[2:5] = (Fakeentry(k) for k in "543")
-    print('SETSGEN', tcoll, '\n')
-    tcoll[2:5] = map(Fakeentry, "678")
-    print('SETSMAP', tcoll, '\n')
-
-    del tcoll[2:5]
-    print('DELSLC_2:5', tcoll, len(tcoll))
-
-    print("tcoll[1:]")
-    print([e.key for e in tcoll[1:]])
-    print("tcoll[:-1]")
-    print([e.key for e in tcoll[:-1]])
-    print("tcoll[:2]")
-    print([e.key for e in tcoll[:2]])
-    print("tcoll[:4:2]")
-    print([e.key for e in tcoll[:4:2]])
-    print("tcoll[1::2]")
-    print([e.key for e in tcoll[1::2]])
-    print("tcoll[::2]")
-    print([e.key for e in tcoll[::2]])
-    print("tcoll[::]")
-    print([e.key for e in tcoll[::]])
-    print("tcoll[::-1]")
-    print([e.key for e in tcoll[::-1]])
-
-
-    del tcoll[:8:2]
-    print('DELSLC_0:8:2', tcoll, len(tcoll))
+# if __name__ == '__main__':
+#     class Fakeentry:
+#         def __init__(self, key):
+#             self.key = key
+#         def __str__(self):
+#             return "FakeEntry({})".format(self.key)
+#
+#
+#     tcoll = ModCollection([Fakeentry(w) for w in "ABCDEF"])
+#     for ix, ky in enumerate("ABCDEF"):
+#         assert tcoll[ix].key == ky
+#     print("START:", tcoll, len(tcoll))
+#
+#     tcoll.extend([Fakeentry(w) for w in "GHIJKL"])
+#     for ix, ky in enumerate("GHIJKL", start=6):
+#         assert tcoll[ix].key == ky
+#     print("EXTEND:", tcoll, len(tcoll))
+#
+#     tcoll.append(Fakeentry("Z"))
+#     assert tcoll[-1].key == "Z"
+#     print("APPEND:", tcoll, len(tcoll))
+#
+#     tcoll.insert(5, Fakeentry("Y"))
+#     assert tcoll[5].key == "Y"
+#     print("INSERT_5", tcoll, len(tcoll))
+#
+#     tcoll.insert(0, Fakeentry("a"))
+#     assert tcoll[0].key == "a"
+#     print("INSERT_0", tcoll, len(tcoll))
+#
+#     print("GETINT_8", tcoll[8], len(tcoll))
+#
+#     print("GETINT_-1", tcoll[-1])
+#
+#     print("GETKEY_G", tcoll["G"], len(tcoll))
+#
+#     x=tcoll[8]
+#     assert x in tcoll
+#     assert x.key in tcoll
+#
+#     del tcoll[8]
+#     assert x not in tcoll
+#     assert x.key not in tcoll
+#     print("DELINT_8", tcoll, len(tcoll))
+#
+#     del tcoll["H"]
+#     assert "H" not in tcoll
+#     print("DELKEY_H", tcoll, len(tcoll))
+#
+#     del tcoll["Z"]
+#
+#     print("DELKEY_Z", tcoll, len(tcoll))
+#
+#     del tcoll[0]
+#
+#     print("DELINT_0", tcoll, len(tcoll))
+#
+#     tcoll[8]=Fakeentry('X')
+#
+#     print('SETIDX_8', tcoll, len(tcoll), '\n')
+#
+#     tcoll.move(6, 9)
+#
+#     print('MVIDX_6_9', tcoll, len(tcoll), '\n')
+#
+#     tcoll.move(6,3)
+#
+#     print('MVIDX_6_3', tcoll, len(tcoll), '\n')
+#
+#     tcoll.move('Y', 0)
+#
+#     print('MVKEY_Y_0', tcoll, len(tcoll), '\n')
+#
+#     tcoll.move(3, 8, 3)
+#
+#     print('MVCHUNK_3-5_8', tcoll, len(tcoll), '\n')
+#
+#     print('SLICE_4:8', [e.key for e in tcoll[4:8]], '\n')
+#
+#     tcoll[2:5] = [Fakeentry('0'), Fakeentry('1'), Fakeentry('2')]
+#     print('SETSLC_2:5', tcoll, len(tcoll), '\n')
+#
+#     tcoll[2:5] = (Fakeentry(k) for k in "543")
+#     print('SETSGEN', tcoll, '\n')
+#     tcoll[2:5] = map(Fakeentry, "678")
+#     print('SETSMAP', tcoll, '\n')
+#
+#     del tcoll[2:5]
+#     print('DELSLC_2:5', tcoll, len(tcoll))
+#
+#     print("tcoll[1:]")
+#     print([e.key for e in tcoll[1:]])
+#     print("tcoll[:-1]")
+#     print([e.key for e in tcoll[:-1]])
+#     print("tcoll[:2]")
+#     print([e.key for e in tcoll[:2]])
+#     print("tcoll[:4:2]")
+#     print([e.key for e in tcoll[:4:2]])
+#     print("tcoll[1::2]")
+#     print([e.key for e in tcoll[1::2]])
+#     print("tcoll[::2]")
+#     print([e.key for e in tcoll[::2]])
+#     print("tcoll[::]")
+#     print([e.key for e in tcoll[::]])
+#     print("tcoll[::-1]")
+#     print([e.key for e in tcoll[::-1]])
+#
+#
+#     del tcoll[:8:2]
+#     print('DELSLC_0:8:2', tcoll, len(tcoll))
 
     # import json
     # print(json.dumps(tcoll, indent=1, default=lambda o: list(i.__dict__ for i in o)))

@@ -100,6 +100,13 @@ class ModTable_TreeModel(QAbstractItemModel):
     # noinspection PyArgumentList
     errorsAnalyzed = pyqtSignal(int)
 
+    # noinspection PyArgumentList
+    rowsDropped = pyqtSignal(int, int, int)
+    """emitted when a user drags a row or section of rows from
+    one part of the list to another. The parameters are the first
+    row of the dragged section, the last row of the dragged section,
+    and the row of the item that they dropped the section on."""
+
     def __init__(self, parent, manager, **kwargs):
         """
         """
@@ -560,19 +567,6 @@ class ModTable_TreeModel(QAbstractItemModel):
         :param str undotext: optional text that will appear in
             the Undo/Redo menu items
         """
-        # hmmm....how about we let the VIEW take care of pushing the
-        # commands? We'll just call all the required stuff here.
-
-        # count = 1+(end_row - start_row)
-
-        # move_cmd = partial(self.mods.move, start_row,
-        #                                 move_to_row,
-        #                                 count)
-
-        # to reverse, just move it back
-        # unmove_cmd = partial(self.mods.move, move_to_row,
-        #                                 start_row,
-        #                                 count)
 
         # create a new shift-command
         scmd = shift_rows.cmd(
@@ -623,20 +617,70 @@ class ModTable_TreeModel(QAbstractItemModel):
         # push to the undo stack
         self._push_command(scmd)
 
-    def prepare_shift(self, parent, src_row, dest_row, count):
+    def prepare_move(self, src_row, dest_row, count):
         """
-        Prepare and return a 'change-order' operation.
+        Prepare and return all the required parameters to fully execute
+        a 'change-order' operation--both forward and in reverse--in
+        order to support the Undo system. A LOT of information is
+        returned, but that's just to make sure that every piece of
+        information is explicitly specified. Zero additional calculations
+        should be required after this step.
+
+        Pass the returned values to do_move() of this model to actually
+        perform the move.
 
         :param int src_row:
         :param int dest_row:
         :param int count:
-        :return:
+
+        :return: A 10-tuple. The first two values are the "first" and
+            "last" rows that define the full range of indices in the
+             collection that will affected by this move. The next 4
+             values are used in the forward operation, and the final
+             4 for the reverse operation.
+
+            "first", "last", and "split" (or its counterpart "rev_split")
+            will become the arguments for collection.do_move(). Everything
+            else will be a parameter for beginMoveRows()
+
+            In full and in order:
+                0) first
+                1) last
+
+                2) split
+                3) srcFirst
+                4) srcLast
+                5) destinationChild
+
+                6) rev_split
+                7) rev_srcFirst
+                8) rev_srcLast
+                9) rev_destinationChild
+
         """
         first, last, split = self.mods.prepare_move(src_row, dest_row, count)
         rsplit = last - first - split # split param for reverse-shift
 
+        ## get args for beginMoveRows:
+        ## C++ signature:
+        # bool QAbstractItemModel::beginMoveRows(
+        #   const QModelIndex &sourceParent,
+        #   int sourceFirst,
+        #   int sourceLast,
+        #   const QModelIndex &destinationParent,
+        #   int destinationChild)
 
-        ## get args for beginMoveRows
+        # note:: moving down means "move to row BEFORE destinationChild",
+        # so e.g. moving row 2 down by 1 to row 3 would mean
+        # ``destinationChild=4``. Moreover, destinationChild is the row
+        # that will come after the ENTIRE block of moved rows...so,
+        # moving rows 2 and 3 down by 2 (to become rows 4 and 5)
+        # requires ``destinationChild=6``
+        #
+        # Moving up is more sensible, where
+        # moving row 3 up by 1 to row 2 means ``destinationChild=2``
+
+        # fixme: crashes when using 'move to bottom' action
 
         # destinationChild depends on direction of movement
         if dest_row < src_row: #UP
@@ -645,11 +689,59 @@ class ModTable_TreeModel(QAbstractItemModel):
             rsrcFirst=first
         else: #Down
             destinationChild, rdestinationChild = last, first
-            srcLast, rsrcLast = first + rsplit - 1, last - 1
+            srcLast, rsrcLast = first + split - 1, last - 1
             rsrcFirst = dest_row
 
-        beginMoveRows_args = (parent, src_row, srcLast, parent, destinationChild)
-        rbeginMoveRows_args = (parent, rsrcFirst, rsrcLast, parent, rdestinationChild)
+        # bmr_args = (parent, src_row, srcLast, parent, destinationChild)
+        # rbmr_args = (parent, rsrcFirst, rsrcLast, parent, rdestinationChild)
+
+        return (first, last, # always the same
+                # args for forward (redo)
+                split, src_row, srcLast, destinationChild,
+                # args for reverse (undo)
+                rsplit, rsrcFirst, rsrcLast, rdestinationChild)
+
+
+    def do_move(self, first, last, split, srcFirst, srcLast, destinationChild, parent=QModelIndex()):
+        """
+        Performs execution of a move operation where all the
+        variables have been pre-calculated.
+
+        The first three parameters (`first`, `last`, and `split`) are
+        used by the move() operation in the modcollection. The
+        remaining arguments are required by the
+        QAbstractItemModel.beginMoveRows() method. There's likely a lot
+        of overlap, but because just _precisely_ what that overlap is
+        depends on a LOT of factors, so it's best to precalculate
+        everything beforehand and pass them all individually.
+
+        :param int first: first row of entire affected block
+        :param int last: last row of entire affected block (actually,
+            the row just beyond it)
+        :param int split: the offset from `first` that defines the
+            divider between the 'shifted' and the 'shiftee' blocks...
+            i.e. the point where the selection ends and the rows
+            that have to be moved to accomodate the movement of the
+            selection begin
+
+        :param int srcFirst: the srcFirst parameter for beginMoveRows
+        :param int srcLast: the srcLast param for beginMoveRows
+        :param int destinationChild: the destinationChild param for
+            beginMoveRows
+        :param QModelIndex parent: the QModelIndex in the TreeModel
+            that contains all these rows; we only worry about flat
+            movements here (within the same parent), and this is
+            very likely to be the invisible root Item of the view.
+        """
+
+        print(srcFirst, srcLast, destinationChild)
+        self.beginMoveRows(parent, srcFirst, srcLast, parent, destinationChild)
+
+        self.mods.exec_move(first, last, split)
+
+        self.endMoveRows()
+
+        self.notifyViewRowsMoved.emit()
 
     ##===============================================
     ## Getting data from disk into model
@@ -819,13 +911,15 @@ class ModTable_TreeModel(QAbstractItemModel):
             return False
         # p = parent.internalPointer() #type: QModEntry
 
-        dest = parent.row()
+        # dest = parent.row()
 
         start, end = [int(r) for r in data.text().split()]
 
         # print("dropMimeData: dest =", dest, ", start =", start, ", end =", end)
 
-        self.shift_rows(start, end, dest)
+        self.rowsDropped.emit(start, end, parent.row())
+
+        # self.shift_rows(start, end, dest)
         return True
 
     ##===============================================

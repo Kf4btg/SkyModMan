@@ -1,3 +1,5 @@
+from functools import partial
+
 from PyQt5 import QtWidgets, QtCore
 
 from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot, QItemSelectionModel as qISM
@@ -7,6 +9,7 @@ from skymodman.log import withlogger
 
 # from skymodman.interface.models import ModTable_TreeModel
 from skymodman.interface.ui_utils import undomacro, blocked_signals
+from skymodman.interface.qundo.commands.generic import UndoCommand
 
 qmenu = QtWidgets.QMenu
 
@@ -21,13 +24,17 @@ COL_ENABLED = Column.ENABLED.value
 @withlogger
 class ModTable_TreeView(QtWidgets.QTreeView):
 
+    # noinspection PyArgumentList
     enableModActions = pyqtSignal(bool)
 
+    # noinspection PyArgumentList
     enableSearchActions = pyqtSignal(bool)
     """emitted to enable/disable the find-next/previous buttons"""
 
+    # noinspection PyArgumentList
     canMoveItems = pyqtSignal(bool, bool)
 
+    # noinspection PyArgumentList
     setStatusMessage = pyqtSignal(str)
     """emitted when the table would like to update the main window status bar"""
 
@@ -35,6 +42,7 @@ class ModTable_TreeView(QtWidgets.QTreeView):
     # """emitted with the number of items in the table after loading is finished"""
 
     # TODO: this could likely be more generic; it's meant to inform the main window to reanalyze which actions are active (in particular, the clear_missing_mods action)
+    # noinspection PyArgumentList
     errorsChanged = pyqtSignal(int)
 
     def __init__(self, parent, *args, **kwargs):
@@ -142,6 +150,10 @@ class ModTable_TreeView(QtWidgets.QTreeView):
 
         # called from model's shiftrows() method
         self._model.notifyViewRowsMoved.connect(self.selectionChanged)
+
+        # perform a reorder operation when the user drags and drops
+        # rows around:
+        self._model.rowsDropped.connect(self.on_rows_dropped)
 
         # only show error col if there are errors
         self._model.errorsAnalyzed.connect(self._analyze_errors)
@@ -362,8 +374,9 @@ class ModTable_TreeView(QtWidgets.QTreeView):
 
             # bind them all into one undo-action
             with undomacro(self.undo_stack, ": {} Mods".format(_text)):
-                for idx in filter(lambda i: i.column() == COL_ENABLED,
-                                  sel):
+                for idx in (i for i in sel if i.column() == COL_ENABLED):
+                # for idx in filter(lambda i: i.column() == COL_ENABLED,
+                #                   sel):
                     # if i.column() == COL_ENABLED:
                     self._model.setData(idx, _checked,
                                         Qt_CheckStateRole)
@@ -416,11 +429,12 @@ class ModTable_TreeView(QtWidgets.QTreeView):
     ## Action handlers
 
     def move_selection_to_top(self):
-        self._tell_model_shift_rows(0, text="Move to Top")
+        # self._tell_model_shift_rows(0, text="Move to Top")
+        self._reorder_selection(0, text="Move to Top")
 
     def move_selection_to_bottom(self):
-        self._tell_model_shift_rows(self._model.rowCount() - 1,
-                                    text="Move to Bottom")
+        # self._tell_model_shift_rows(self._model.rowCount() - 1, text="Move to Bottom")
+        self._reorder_selection(self._model.rowCount() - 1, text="Move to Bottom")
 
     def move_selection(self, distance):
         """
@@ -428,7 +442,8 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         """
         if distance != 0:
             rows = self._selected_row_numbers()
-            self._tell_model_shift_rows(rows[0] + distance, rows=rows)
+            # self._tell_model_shift_rows(rows[0] + distance, rows=rows)
+            self._reorder_selection(rows[0] + distance, rows=rows)
 
     ##=============================================
     ## Internal slots
@@ -481,22 +496,80 @@ class ModTable_TreeView(QtWidgets.QTreeView):
                  for idx in
                  self.selectedIndexes()]))
 
-    def _tell_model_shift_rows(self, dest, *, rows=None, text="Reorder Mods"):
+    # def _tell_model_shift_rows(self, dest, *, rows=None, text="Reorder Mods"):
+    #     """
+    #     :param int dest: either the destination row number or a callable
+    #         that takes the sorted list of selected rows as an argument
+    #         and returns the destination row number.
+    #     :param rows: the rows to shift. If None or not specified, will
+    #         be derived from the current selection.
+    #     :param text: optional text that will appear after 'Undo' or
+    #         'Redo' in the Edit menu
+    #     """
+    #     if rows is None:
+    #         rows = self._selected_row_numbers()
+    #     if rows:
+    #         self._model.shift_rows(rows[0],
+    #                                rows[-1],
+    #                                dest,
+    #                                parent=self.rootIndex(),
+    #                                undotext=text)
+
+    def on_rows_dropped(self, start, end, dest):
         """
-        :param int dest: either the destination row number or a callable
-            that takes the sorted list of selected rows as an argument
-            and returns the destination row number.
-        :param rows: the rows to shift. If None or not specified, will
-            be derived from the current selection.
-        :param text: optional text that will appear after 'Undo' or
-            'Redo' in the Edit menu
+
+        :param start:
+        :param end:
+        :param dest:
+        :return:
         """
+
+        self.move_rows(start, dest, end-start+1, text="Drag Rows")
+
+    def _reorder_selection(self, dest, rows=None, text="Reorder"):
+        """
+
+        :param int dest: the destination row number
+        :param list[int] rows: the (contigous section of) rows to shift.
+            If None or not specified, will be derived from the current
+            selection.
+        :param text:
+        """
+
         if rows is None:
             rows = self._selected_row_numbers()
         if rows:
-            self._model.shift_rows(rows[0],
-                                   rows[-1],
-                                   dest,
-                                   parent=self.rootIndex(),
-                                   undotext=text)
+            # src, count = rows[0], len(rows)
+            self.move_rows(rows[0], dest, len(rows), text)
+
+    def move_rows(self, src, dest, count, text="Change order"):
+
+            if dest != src:
+
+                # yeesh that's a lotta junk. See the model for notes on
+                # it...or don't, you'll be better off.
+                first, last, \
+                split, srcFirst, srcLast, dChild, \
+                rsplit, rsrcFirst, rsrcLast, rdChild = \
+                    self._model.prepare_move(src, dest, count)
+
+                # build partial funcs using this info
+                forward_cmd = partial(self._model.do_move,
+                                      first, last, split,
+                                      srcFirst, srcLast, dChild,
+                                      self.rootIndex())
+
+                reverse_cmd = partial(self._model.do_move,
+                                      first, last, rsplit,
+                                      rsrcFirst, rsrcLast, rdChild,
+                                      self.rootIndex())
+
+                # now feed those funcs to a generic UndoCommand,
+                # and push it to the undo stack
+                self._undo_stack.push(UndoCommand(
+                    text=text,
+                    redo=forward_cmd,
+                    undo=reverse_cmd))
+
+
 
