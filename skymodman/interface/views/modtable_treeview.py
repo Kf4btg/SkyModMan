@@ -70,6 +70,7 @@ class ModTable_TreeView(QtWidgets.QTreeView):
 
         # create an undo stack for the mods tab
         self._undo_stack = QtWidgets.QUndoStack()
+        # TODO: so, it looks like, if we're going to move the undoCommand-pushing out of the model to the view, we're going to have to implement custom delegates for the editable columns that intercept setData and wrap it in an undocommand...yay...
 
     @property
     def undo_stack(self):
@@ -107,8 +108,6 @@ class ModTable_TreeView(QtWidgets.QTreeView):
 
     def setupui(self, search_box):
         """Setup searchbox functionality"""
-        ## setup search box ##
-
         self._searchbox = search_box
 
         # setup the animation to show/hide the search bar
@@ -149,7 +148,6 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         self._model = model
 
         # called from model's shiftrows() method
-        # self._model.notifyViewRowsMoved.connect(self.selectionChanged)
         self._model.rowsMoved.connect(self.on_rows_moved)
 
         # perform a reorder operation when the user drags and drops
@@ -170,25 +168,15 @@ class ModTable_TreeView(QtWidgets.QTreeView):
 
     def selectionChanged(self, selected=None, deselected=None):
 
-        # None means the selection was _moved_, rather than changed
-        # if selected is None:
-            # self.handle_move_signals will be false if there
-            # is no selection and we're in an undo/redo cmd
-            # if self.handle_move_signals:
-            # if self._selection_model.hasSelection():
-            #     self._selection_moved()
-        # else:
-            # self.LOGGER << "selection changed"
+        # enable/disable the button box
+        if self.selectionModel().hasSelection():
 
-            # enable/disable the button box
-            if self.selectionModel().hasSelection():
+            self.enableModActions.emit(True)
+            self._selection_moved()  # check for disable up/down buttons
+        else:
+            self.enableModActions.emit(False)
 
-                self.enableModActions.emit(True)
-                self._selection_moved()  # check for disable up/down buttons
-            else:
-                self.enableModActions.emit(False)
-
-            super().selectionChanged(selected, deselected)
+        super().selectionChanged(selected, deselected)
 
     def dragEnterEvent(self, event):
         """ Qt-override.
@@ -288,8 +276,6 @@ class ModTable_TreeView(QtWidgets.QTreeView):
     def _on_searchbox_return(self):
         """called when the user hits return in the search box"""
         self.enableSearchActions.emit(bool(self.search_text))
-        # self.action_find_next.setEnabled(e)
-        # self.action_find_previous.setEnabled(e)
         self.on_table_search()
 
     def on_table_search(self, direction=1):
@@ -379,9 +365,6 @@ class ModTable_TreeView(QtWidgets.QTreeView):
             # bind them all into one undo-action
             with undomacro(self.undo_stack, ": {} Mods".format(_text)):
                 for idx in (i for i in sel if i.column() == COL_ENABLED):
-                # for idx in filter(lambda i: i.column() == COL_ENABLED,
-                #                   sel):
-                    # if i.column() == COL_ENABLED:
                     self._model.setData(idx, _checked,
                                         Qt_CheckStateRole)
         else:
@@ -433,18 +416,15 @@ class ModTable_TreeView(QtWidgets.QTreeView):
     ## Action handlers
 
     def move_selection_to_top(self):
-        # self._tell_model_shift_rows(0, text="Move to Top")
         self._reorder_selection(0, text="Move to Top")
 
     def move_selection_to_bottom(self):
-        # self._tell_model_shift_rows(self._model.rowCount() - 1, text="Move to Bottom")
         sel_rows = self._selected_row_numbers()
 
         # subtract the number of rows from the total row count to make
         # sure we don't try to move anything beyond the end of the list
         self._reorder_selection(self._model.rowCount() - len(sel_rows),
-                                sel_rows,
-                                "Move to Bottom")
+                                sel_rows, "Move to Bottom")
 
     def move_selection(self, distance):
         """
@@ -452,14 +432,15 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         """
         if distance != 0:
             rows = self._selected_row_numbers()
-            # self._tell_model_shift_rows(rows[0] + distance, rows=rows)
             self._reorder_selection(rows[0] + distance, rows)
 
     ##=============================================
     ## Internal slots
     ##=============================================
 
+
     # def on_rows_moved(self, parent, start, end, destination, row):
+    # noinspection PyUnusedLocal
     def on_rows_moved(self, *args):
         """gets notified when endMoveRows() is called by the model"""
         # the arguments aren't important to us
@@ -483,9 +464,6 @@ class ModTable_TreeView(QtWidgets.QTreeView):
 
         :param err_types:
         """
-        # self.setColumnHidden(Column.ERRORS, hide)
-        # if not hide:
-        #     self.resizeColumnToContents(Column.ERRORS)
 
         old_err_types = self._err_types
 
@@ -519,39 +497,17 @@ class ModTable_TreeView(QtWidgets.QTreeView):
     def _selected_row_numbers(self):
         # we use set() first because Qt sends the row number once for
         # each column in the row.
-        return sorted(set(
-                [idx.row()
-                 for idx in
-                 self.selectedIndexes()]))
-
-    # def _tell_model_shift_rows(self, dest, *, rows=None, text="Reorder Mods"):
-    #     """
-    #     :param int dest: either the destination row number or a callable
-    #         that takes the sorted list of selected rows as an argument
-    #         and returns the destination row number.
-    #     :param rows: the rows to shift. If None or not specified, will
-    #         be derived from the current selection.
-    #     :param text: optional text that will appear after 'Undo' or
-    #         'Redo' in the Edit menu
-    #     """
-    #     if rows is None:
-    #         rows = self._selected_row_numbers()
-    #     if rows:
-    #         self._model.shift_rows(rows[0],
-    #                                rows[-1],
-    #                                dest,
-    #                                parent=self.rootIndex(),
-    #                                undotext=text)
+        return sorted(set(idx.row() for idx in self.selectedIndexes()))
 
     def on_rows_dropped(self, start, end, dest):
         """
+        Reacts to rowsDropped signal from model
 
         :param start:
         :param end:
         :param dest:
         :return:
         """
-
         self.move_rows(start, dest, end-start+1, text="Drag Rows")
 
     def _reorder_selection(self, dest, rows=None, text="Reorder"):
@@ -567,37 +523,46 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         if rows is None:
             rows = self._selected_row_numbers()
         if rows:
-            # src, count = rows[0], len(rows)
             self.move_rows(rows[0], dest, len(rows), text)
 
     def move_rows(self, src, dest, count, text="Change order"):
+        """
+        Build a QUndoCommand that encapsulates moving a section of the
+        mod table around, then push it to the undo stack to execute
+        the operation.
 
-            if dest != src:
+        :param src:
+        :param dest:
+        :param count:
+        :param text:
+        """
 
-                # yeesh that's a lotta junk. See the model for notes on
-                # it...or don't, you'll be better off.
-                first, last, \
-                split, srcFirst, srcLast, dChild, \
-                rsplit, rsrcFirst, rsrcLast, rdChild = \
-                    self._model.prepare_move(src, dest, count)
+        if dest != src:
 
-                # build partial funcs using this info
-                forward_cmd = partial(self._model.do_move,
-                                      first, last, split,
-                                      srcFirst, srcLast, dChild,
-                                      self.rootIndex())
+            # yeesh that's a lotta junk. See the model for notes on
+            # it...or don't, you'll be better off.
+            first, last, \
+            split, srcFirst, srcLast, dChild, \
+            rsplit, rsrcFirst, rsrcLast, rdChild = \
+                self._model.prepare_move(src, dest, count)
 
-                reverse_cmd = partial(self._model.do_move,
-                                      first, last, rsplit,
-                                      rsrcFirst, rsrcLast, rdChild,
-                                      self.rootIndex())
+            # build partial funcs using this info
+            forward_cmd = partial(self._model.do_move,
+                                  first, last, split,
+                                  srcFirst, srcLast, dChild,
+                                  self.rootIndex())
 
-                # now feed those funcs to a generic UndoCommand,
-                # and push it to the undo stack
-                self._undo_stack.push(UndoCommand(
-                    text=text,
-                    redo=forward_cmd,
-                    undo=reverse_cmd))
+            reverse_cmd = partial(self._model.do_move,
+                                  first, last, rsplit,
+                                  rsrcFirst, rsrcLast, rdChild,
+                                  self.rootIndex())
+
+            # now feed those funcs to a generic UndoCommand,
+            # and push it to the undo stack
+            self._undo_stack.push(UndoCommand(
+                text=text,
+                redo=forward_cmd,
+                undo=reverse_cmd))
 
 
 
