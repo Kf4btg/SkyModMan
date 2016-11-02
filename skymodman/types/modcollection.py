@@ -385,6 +385,8 @@ class ModCollection(abc.MutableSequence):
         :param int count: number of items (including the first) to move
         """
 
+        # TODO: get rid of _change_order() method/reimplement it using the same mechanism as exec_move()
+
         # adjust given indices, if needed
         self._change_order(self._getposindex(from_index),
                            self._getposindex(to_index),
@@ -543,85 +545,6 @@ class ModCollection(abc.MutableSequence):
         #                      and the start of the section to be raised
         # split_on = count if old<new else (old-new)
 
-
-        # # precalculate the new order
-        # try:
-        #
-        #     selected_keys = [self._order[i] for i in
-        #                      range(old, old + count)]
-        #
-        #     if old < new:  # increasing index
-        #         c_start = old
-        #         # selected block goes on end
-        #         reordered = [self._order[i] for i in
-        #                      range(old + count,
-        #                            new + count)] + selected_keys
-        #
-        #         # calculate the "split" point so the move can easily be
-        #         # undone (swap the section [0:split] with [split:-1] to
-        #         # get the original ordering back)
-        #         split = len(reordered) - len(selected_keys)
-        #     else:  # decreasing index (cannot be equal)
-        #         c_start = new
-        #         # selected block goes at beginning
-        #         reordered = selected_keys + [self._order[i] for
-        #                                      i in
-        #                                      range(new, old)]
-        #
-        #         # split after 'selected_keys' section
-        #         split = len(selected_keys)
-        # except KeyError as e:
-        #     # if a key (an int in this case) was not found, that effectively
-        #     # means the given index was "out of bounds"
-        #
-        #     raise IndexError(e.args[0],
-        #                      "Tried to move item(s) beyond end of collection") from None
-
-        # return min(old, new), max(old, new) + count, split, tuple(reordered)
-
-        # each 'Mover' object will contain the list of keys in the
-        # new order that they should appear after the move is executed,
-        # along with the index where insertion of the keys should begin.
-        # Obviously, if the collection is changed between the creation
-        # of this object and its execution, the collection will be
-        # left in an undefined state afterwards, and data may have been
-        # lost.
-        # The move can easily be undone by passing undo=True to the
-        # exec() method
-        # return _mover(first=min(old, new),
-        #               # last is the item immediately AFTER the shifted block
-        #               last=max(old, new) + count,
-        #               # defines the start of the block for the undo op
-        #               split=split,
-        #               exec=partial(self._do_move, c_start,
-        #                            # convert the list to a tuple since
-        #                            # we won't be modifying it further
-        #                            tuple(reordered), split))
-
-
-
-    # def _do_move(self, start_count, reordered_keys, split, undo=False):
-    # def exec_move(self, start_count, split, reordered_keys, undo=False):
-    #     """Used as the exec() method on the _mover objects"""
-    #     # if start_count and reordered_keys are set up correctly
-    #     # (and the collection is unmodified since they were set up),
-    #     # it shouldn't be possible to lose data w/ this operation.
-    #     # everything will still be there, just in a different order
-    #
-    #     if not undo:
-    #         for i, k in zip(counter(start_count),
-    #                         reordered_keys):
-    #             self._index[k] = i
-    #             self._order[i] = k
-    #     else:
-    #         # if we're undoing, rearrange the list using the split point
-    #         for i, k in zip(counter(start_count),
-    #                         reordered_keys[
-    #                         split:] + reordered_keys[:split]
-    #                         ):
-    #             self._index[k] = i
-    #             self._order[i] = k
-
     def exec_move(self, first, last, split):
         """Can it really be this simple? A move is just swapping the
         position of 2 sub-lists. Call with the values returned by
@@ -633,7 +556,7 @@ class ModCollection(abc.MutableSequence):
 
         :return: value of 'split' parameter for reversing the  move
         """
-        # """
+
         # [8 9 | 10 11 12] => f=8, l=13, s=2
         #   |
         #   V
@@ -643,7 +566,6 @@ class ModCollection(abc.MutableSequence):
         # [10 11 12 13 14 15 | 16 17 18] f=10 l=19 s=6
         #
         # [16 17 18 | 10 11 12 13 14 15] new s = (19-10)-6 = 9-6 = 3
-        # """
 
         try:
             keys = [self._order[i] for i in range(first, last)]

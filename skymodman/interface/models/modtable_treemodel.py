@@ -556,67 +556,6 @@ class ModTable_TreeModel(QAbstractItemModel):
     ## Modifying Row Position
     ##===============================================
 
-    def shift_rows(self, start_row, end_row, move_to_row,
-                   parent=QModelIndex(), undotext="Reorder Mods"):
-        """
-        :param int start_row: start of shifted block
-        :param int end_row: end of shifted block
-        :param int move_to_row: destination row; where the
-            `start_row` should end up
-        :param QModelIndex parent:
-        :param str undotext: optional text that will appear in
-            the Undo/Redo menu items
-        """
-
-        # create a new shift-command
-        scmd = shift_rows.cmd(
-            self, start_row, end_row, move_to_row,
-            text=undotext,
-            post_redo_callback=self.notifyViewRowsMoved.emit,
-            post_undo_callback=self.notifyViewRowsMoved.emit
-        )
-
-        # get the shifter object from the command
-        shifter = scmd.shifter
-        # and use it to build the beginMoveRows args
-
-        # bool QAbstractItemModel::beginMoveRows(
-        #   const QModelIndex &sourceParent,
-        #   int sourceFirst,
-        #   int sourceLast,
-        #   const QModelIndex &destinationParent,
-        #   int destinationChild)
-
-        # note:: moving down means "move to row BEFORE destinationChild",
-        # so e.g. moving row 2 down by 1 to row 3 would mean
-        # ``destinationChild=4``. Moreover, destinationChild is the row
-        # that will come after the ENTIRE block of moved rows...so,
-        # moving rows 2 and 3 down by 2 (to become rows 4 and 5)
-        # requires ``destinationChild=6``
-        #
-        #
-        # Moving up is more sensible, where
-        # moving row 3 up by 1 to row 2 means ``destinationChild=2``
-
-        scmd.pre_redo_callback = partial(
-            self.beginMoveRows, parent,
-            start_row,
-            end_row,
-            parent,
-            shifter.block_dest())
-
-        # get the values for the reverse operation
-        scmd.pre_undo_callback = partial(
-            self.beginMoveRows, parent,
-            shifter.block_start(True),
-            shifter.block_end(True),
-            parent,
-            shifter.block_dest(True)
-        )
-
-        # push to the undo stack
-        self._push_command(scmd)
-
     def prepare_move(self, src_row, dest_row, count):
         """
         Prepare and return all the required parameters to fully execute
@@ -680,8 +619,6 @@ class ModTable_TreeModel(QAbstractItemModel):
         # Moving up is more sensible, where
         # moving row 3 up by 1 to row 2 means ``destinationChild=2``
 
-        # fixme: crashes when using 'move to bottom' action
-
         # destinationChild depends on direction of movement
         if dest_row < src_row: #UP
             destinationChild, rdestinationChild = first, last
@@ -702,7 +639,9 @@ class ModTable_TreeModel(QAbstractItemModel):
                 rsplit, rsrcFirst, rsrcLast, rdestinationChild)
 
 
-    def do_move(self, first, last, split, srcFirst, srcLast, destinationChild, parent=QModelIndex()):
+    def do_move(self, first, last, split,
+                srcFirst, srcLast, destinationChild,
+                parent=QModelIndex()):
         """
         Performs execution of a move operation where all the
         variables have been pre-calculated.
@@ -734,8 +673,8 @@ class ModTable_TreeModel(QAbstractItemModel):
             very likely to be the invisible root Item of the view.
         """
 
-        print(srcFirst, srcLast, destinationChild)
-        self.beginMoveRows(parent, srcFirst, srcLast, parent, destinationChild)
+        self.beginMoveRows(parent, srcFirst, srcLast,
+                           parent, destinationChild)
 
         self.mods.exec_move(first, last, split)
 

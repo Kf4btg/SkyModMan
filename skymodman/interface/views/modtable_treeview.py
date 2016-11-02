@@ -434,7 +434,13 @@ class ModTable_TreeView(QtWidgets.QTreeView):
 
     def move_selection_to_bottom(self):
         # self._tell_model_shift_rows(self._model.rowCount() - 1, text="Move to Bottom")
-        self._reorder_selection(self._model.rowCount() - 1, text="Move to Bottom")
+        sel_rows = self._selected_row_numbers()
+
+        # subtract the number of rows from the total row count to make
+        # sure we don't try to move anything beyond the end of the list
+        self._reorder_selection(self._model.rowCount() - len(sel_rows),
+                                sel_rows,
+                                "Move to Bottom")
 
     def move_selection(self, distance):
         """
@@ -443,7 +449,7 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         if distance != 0:
             rows = self._selected_row_numbers()
             # self._tell_model_shift_rows(rows[0] + distance, rows=rows)
-            self._reorder_selection(rows[0] + distance, rows=rows)
+            self._reorder_selection(rows[0] + distance, rows)
 
     ##=============================================
     ## Internal slots
