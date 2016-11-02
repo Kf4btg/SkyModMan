@@ -94,7 +94,7 @@ class ModTable_TreeModel(QAbstractItemModel):
 
     # let view know selection may have moved
     # noinspection PyArgumentList
-    notifyViewRowsMoved = pyqtSignal()
+    # notifyViewRowsMoved = pyqtSignal()
     # noinspection PyArgumentList
     hideErrorColumn = pyqtSignal(bool)
     # noinspection PyArgumentList
@@ -548,7 +548,11 @@ class ModTable_TreeModel(QAbstractItemModel):
         if full_row_update:
             # emit the data changed signal for each cell in row
             self.dataChanged.emit(self.index(index.row(), 0),
-                                  self.index(index.row(), self.columnCount()))
+                                  self.index(
+                                      index.row(),
+                                      self.columnCount()-1
+                                    )
+                                  )
         else:
             self.dataChanged.emit(index, index)
 
@@ -680,7 +684,7 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         self.endMoveRows()
 
-        self.notifyViewRowsMoved.emit()
+        # self.notifyViewRowsMoved.emit()
 
     ##===============================================
     ## Getting data from disk into model

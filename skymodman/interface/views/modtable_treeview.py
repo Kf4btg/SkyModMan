@@ -149,7 +149,8 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         self._model = model
 
         # called from model's shiftrows() method
-        self._model.notifyViewRowsMoved.connect(self.selectionChanged)
+        # self._model.notifyViewRowsMoved.connect(self.selectionChanged)
+        self._model.rowsMoved.connect(self.on_rows_moved)
 
         # perform a reorder operation when the user drags and drops
         # rows around:
@@ -170,13 +171,13 @@ class ModTable_TreeView(QtWidgets.QTreeView):
     def selectionChanged(self, selected=None, deselected=None):
 
         # None means the selection was _moved_, rather than changed
-        if selected is None:
+        # if selected is None:
             # self.handle_move_signals will be false if there
             # is no selection and we're in an undo/redo cmd
             # if self.handle_move_signals:
-            if self._selection_model.hasSelection():
-                self._selection_moved()
-        else:
+            # if self._selection_model.hasSelection():
+            #     self._selection_moved()
+        # else:
             # self.LOGGER << "selection changed"
 
             # enable/disable the button box
@@ -224,6 +225,7 @@ class ModTable_TreeView(QtWidgets.QTreeView):
 
     ##=============================================
     ## Searching
+    ## <editor-fold desc="...">
     ##=============================================
 
     @pyqtSlot()
@@ -326,6 +328,8 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         if self._searchbox.styleSheet():
             self._searchbox.setStyleSheet('')
             self.setStatusMessage.emit('')
+
+    #</editor-fold>
 
     ##=============================================
     ## "Public Slots"
@@ -455,6 +459,21 @@ class ModTable_TreeView(QtWidgets.QTreeView):
     ## Internal slots
     ##=============================================
 
+    # def on_rows_moved(self, parent, start, end, destination, row):
+    def on_rows_moved(self, *args):
+        """gets notified when endMoveRows() is called by the model"""
+        # the arguments aren't important to us
+
+        # NTS: although, maybe they should be? I guess that we could
+        # check to see if the first/last items of the list are within
+        # the destination area after moving (assuming we have a selection;
+        # if we don't it wouldn't matter).
+        # I don't really feel that would offer any benefit over the
+        # current way we do it, though
+
+        if self._selection_model.hasSelection():
+            self._selection_moved()
+
     @pyqtSlot(int)
     def _analyze_errors(self, err_types):
         """
@@ -488,10 +507,13 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         # self.LOGGER << "selection moved"
 
         is_selected = self._selection_model.isSelected
-        model = self._model
+        m = self._model
+
+        # emit signal with info about whether the first/last
+        # items of the list are in the current selection
         self.canMoveItems.emit(
-            not is_selected(model.index(0,0)),
-            not is_selected(model.index(model.rowCount()-1, 0))
+            not is_selected(m.index(0,0)),
+            not is_selected(m.index(m.rowCount()-1, 0))
         )
 
     def _selected_row_numbers(self):
