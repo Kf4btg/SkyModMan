@@ -101,18 +101,26 @@ class ModCollection(abc.MutableSequence):
         regular list containing the selected items
         """
 
-        if isinstance(index, str):
-            # will raise keyerror if 'index' is not a valid key
-            key = index
-        elif isinstance(index, slice):
-            # start, stop, step = self.__unslice(index)
-
-            # build and return a list
-            return [self._map[k] for i in range(*self.__unslice(index))
-                    for k in self._keyfromindex(i)]
-        else:
+        # let's assume it's an int to start with
+        try:
             # raises index error if index is out of range
             key = self._keyfromindex(index)
+        except TypeError:
+            # but if it wasn't an int, try something else
+            if isinstance(index, str):
+                # will raise keyerror if 'index' is not a valid key
+                key = index
+            elif isinstance(index, slice):
+                # start, stop, step = self.__unslice(index)
+
+                # build and return a list
+                return [self._map[k] for i in range(*self.__unslice(index))
+                        for k in self._keyfromindex(i)]
+            else:
+                raise TypeError("Collection indices must be integers, slices, or a valid str key, not {}".format(type(index))) from None
+        # else:
+            # raises index error if index is out of range
+            # key = self._keyfromindex(index)
 
         # NTS: possibly return an object that includes the item's
         # current ordinal...

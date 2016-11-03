@@ -1,17 +1,10 @@
-# from collections import namedtuple
-# TModEntry = namedtuple("TModEntry", ['enabled', 'name', 'modid', 'version', 'directory', 'ordinal'])
 from collections import OrderedDict
 
 from skymodman import Manager
-# from skymodman.constants import db_fields
-
-# db_fields = "ordinal", "directory", "name", "modid", "version", "enabled", "managed", "error"
 
 class ModEntry:
     __slots__ = ('directory', 'name', 'modid', 'version',
                  'enabled', 'managed')
-    # __slots__ = ('enabled', 'name', 'modid', 'version',
-    #              'directory', 'ordinal', 'managed', 'error')
     _fields= __slots__ # to match the namedtuple interface
 
     # set this to associate all ModEntry objects with a ModCollection
@@ -21,12 +14,6 @@ class ModEntry:
     """:type: skymodman.types.modcollection.ModCollection"""
 
 
-    # def __init__(self, enabled=None, name=None, modid=None,
-    #              version=None, directory=None, ordinal=None,
-    #              managed=None, error=None):
-    # def __init__(self, ordinal=None, directory=None, name=None,
-    #              modid=None, version=None, enabled=None,
-    #              managed=None, error=None):
     def __init__(self, directory=None, name=None,
                  modid=None, version=None, enabled=None,
                  managed=None):
@@ -38,17 +25,11 @@ class ModEntry:
         :param str version: arbitrary, set by mod author
         :param str directory: arbitrary, must be unique among all other
             mod entries
-        :param int ordinal: should generally be any integer >=0; not
-            tied to this mod, but must still be unique amongst all other
-            entries (i.e. if this changes, other entries must be changed
-            accordingly)
         :param int managed: 0/1, determined by installation location
-        :param int error: bitwise-combination of constants.enums.ModError values
         """
 
         # TODO: it really sounds like the 'ordinal' should be external to the mod entry and looked up on query
 
-        # self.ordinal   = ordinal
         self.directory = directory
         self.name      = name
         self.modid     = modid
@@ -170,17 +151,9 @@ class ModEntry:
             return other.key == self.key
         return NotImplemented
 
-    # this should be all we need to do; let 'total_ordering' decorator
-    # handle the rest
-    # def __lt__(self, other):
-    #     return self.ordinal < other.ordinal #ordinal is unique, but not constant
-    # def __gt__(self, other):
-    #     return self.ordinal > other.ordinal
-
-
-if __name__ == '__main__':
-    testmod = ModEntry("testdir", "Test Mod", 143, "ver1", 1, 0)
-
-    print(testmod)
-
-    print(testmod._asdict())
+# if __name__ == '__main__':
+#     testmod = ModEntry("testdir", "Test Mod", 143, "ver1", 1, 0)
+#
+#     print(testmod)
+#
+#     print(testmod._asdict())

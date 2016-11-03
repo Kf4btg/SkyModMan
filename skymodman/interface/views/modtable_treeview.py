@@ -39,10 +39,10 @@ class ModTable_TreeView(QtWidgets.QTreeView):
     setStatusMessage = pyqtSignal(str)
     """emitted when the table would like to update the main window status bar"""
 
-    # itemsLoaded = pyqtSignal(int)
-    # """emitted with the number of items in the table after loading is finished"""
+    # NTS: this could likely be more generic; it's meant to inform the
+    # main window to reanalyze which actions are active (in particular,
+    # the clear_missing_mods action)
 
-    # TODO: this could likely be more generic; it's meant to inform the main window to reanalyze which actions are active (in particular, the clear_missing_mods action)
     # noinspection PyArgumentList
     errorsChanged = pyqtSignal(int)
 
@@ -52,8 +52,8 @@ class ModTable_TreeView(QtWidgets.QTreeView):
 
         self._model  = None
         """:type: skymodman.interface.models.ModTable_TreeModel"""
+
         self._selection_model = None # type: qISM
-        self.handle_move_signals = True
         # self.LOGGER << "Init ModTable_TreeView"
 
         # debugging: print modentry on click
@@ -71,32 +71,6 @@ class ModTable_TreeView(QtWidgets.QTreeView):
 
         # create an undo stack for the mods tab
         self._undo_stack = QtWidgets.QUndoStack()
-        # TODO: so, it looks like, if we're going to move the undoCommand-pushing out of the model to the view, we're going to have to implement custom delegates for the editable columns that intercept setData and wrap it in an undocommand...yay...
-
-        ## setup editor for enabled box ##
-
-        ## --update: yeah, this didn't really work...it required
-        # three clicks just to change the enabled status.
-        # looks like using a simple custom delegate (see
-        # CheckBoxDelegate, below) and catching the mouseRelease editor
-        # event is a better way to go
-
-        # get a copy of the default factory
-        # factory = QtWidgets.QItemEditorFactory()
-        #
-        # # and an instance of the editor creator base
-        # # (returns new instances of the CheckBoxEditor for each
-        # # delegate that requests one from the facotry)
-        # boolboxcreator = CheckBoxEditorBase()
-        #
-        # # register our editor creator for the bool type
-        # factory.registerEditor(QtCore.QVariant.Bool, boolboxcreator)
-        #
-        # # change the default factory to our slightly modified one
-        # # QtWidgets.QItemEditorFactory.setDefaultFactory(factory)
-        # # ...we'll use the static method by accessing it via the instance...
-        # # that way the type checker doesn't wig out
-        # factory.setDefaultFactory(factory)
 
     @property
     def undo_stack(self):
@@ -173,7 +147,7 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         self._selection_model = self.selectionModel()
         self._model = model
 
-        # called from model's shiftrows() method
+        # called from model's do_move() method
         self._model.rowsMoved.connect(self.on_rows_moved)
 
         # perform a reorder operation when the user drags and drops
@@ -193,9 +167,13 @@ class ModTable_TreeView(QtWidgets.QTreeView):
                                            QtWidgets.QHeaderView.Stretch)
 
 
-        # set a custom
-        # delegate on the enabled row
+        ## set custom delegates to wrap setData calls in undo-cmds
+
+        # set a custom delegate on the enabled row
         self.setItemDelegateForColumn(COL_ENABLED, CheckBoxDelegate(self))
+
+        # ...and on the name row
+        self.setItemDelegateForColumn(Column.NAME, LineEditDelegate(self))
 
     def selectionChanged(self, selected=None, deselected=None):
 
@@ -242,14 +220,6 @@ class ModTable_TreeView(QtWidgets.QTreeView):
 
         menu.exec_(event.globalPos())
 
-    def commitData(self, editor):
-        print("commitData")
-        super().commitData(editor)
-
-    def closeEditor(self, editor, hint):
-        print("closeEditor")
-        super().closeEditor(editor, hint)
-
     ##=============================================
     ## Searching
     ## <editor-fold desc="...">
@@ -293,6 +263,8 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         :param int direction: positive for up, negative for down
         :return:
         """
+
+        # fixme: this crashes now...
 
         cindex = self.currentIndex()
 
@@ -377,8 +349,6 @@ class ModTable_TreeView(QtWidgets.QTreeView):
             self._model.index(0),
             qISM.NoUpdate)
 
-        # self.itemsLoaded.emit(self._model.rowCount())
-
     def toggle_selection_checkstate(self):
         """
         Toggle the enabled-state of the currently selected mod(s)
@@ -390,11 +360,12 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         # need to hit 'Space' **twice** to achieve their goal.  Might
         # lose a lot of people over this.
 
-        currstate = self.currentIndex().internalPointer().enabled
+        is_enabled = bool(self.currentIndex().internalPointer().enabled)
         sel = self.selectedIndexes()
 
-        _text = ("Enable", "Disable")[currstate]
-        _checked = (Qt_Checked, Qt_Unchecked)[currstate]
+        # _text = ("Enable", "Disable")[currstate]
+        _text = "Disable" if is_enabled else "Enable"
+        # _checked = (Qt_Checked, Qt_Unchecked)[currstate]
 
         # splitting these up may help with some undo weirdness...
 
@@ -402,14 +373,30 @@ class ModTable_TreeView(QtWidgets.QTreeView):
             # multiple rows selected
 
             # bind them all into one undo-action
-            with undomacro(self.undo_stack, ": {} Mods".format(_text)):
-                for idx in (i for i in sel if i.column() == COL_ENABLED):
-                    self._model.setData(idx, _checked,
-                                        Qt_CheckStateRole)
+            with undomacro(self.undo_stack, "{} Mods".format(_text)):
+
+                # only use the indexes for the "enabled" column
+                for index in (idx for idx in sel if idx.column() == COL_ENABLED):
+
+                    # push each command to the stack (within the macro)
+                    self._undo_stack.push(UndoCommand(
+                        redo=partial(self._model.setData, index,
+                                     not is_enabled, Qt.EditRole),
+                        undo=partial(self._model.setData, index,
+                                     is_enabled, Qt.EditRole)))
         else:
-            # only one row
-            self._model.setData(sel[COL_ENABLED], _checked,
-                                Qt_CheckStateRole)
+            # only one row selected
+
+            # pull the right index out of it
+            index = sel[COL_ENABLED]
+
+            # push the command to the stack
+            self._undo_stack.push(UndoCommand(
+                text="{} Mod".format(_text),
+                redo=partial(self._model.setData, index,
+                             not is_enabled, Qt.EditRole),
+                undo=partial(self._model.setData, index,
+                             is_enabled, Qt.EditRole)))
 
     def revert_changes(self):
         """
@@ -614,7 +601,6 @@ class CheckBoxDelegate(QtWidgets.QStyledItemDelegate):
 
         # get the undo stack instance from the parent (the treeview)
         self._stack = parent.undo_stack # type: QtWidgets.QUndoStack
-        self._model = parent.model()
 
 
 
@@ -642,6 +628,38 @@ class CheckBoxDelegate(QtWidgets.QStyledItemDelegate):
         # even if we didn't handle it (because we don't want any other
         # editor event stuff to happen)
         return True
+
+# create similar delegate for the name-edit field
+class LineEditDelegate(QtWidgets.QStyledItemDelegate):
+
+    def __init__(self, parent, *args, **kwargs):
+        super().__init__(parent, *args, **kwargs)
+
+        # get the undo stack instance from the parent (the treeview)
+        self._stack = parent.undo_stack  # type: QtWidgets.QUndoStack
+
+
+    def setModelData(self, editor, model, index):
+        # editor is a qlineedit
+
+        new_name=editor.text().strip()
+
+        curr_name = index.internalPointer().name.strip()
+
+        # make sure the name field isn't empty and that a change
+        # did actually happen
+        if new_name and new_name != curr_name:
+            self._stack.push(
+                UndoCommand(
+                    text="Edit Mod Name",
+                    redo=partial(model.setData, index, new_name, Qt.EditRole),
+                    undo=partial(model.setData, index, curr_name, Qt.EditRole)
+                )
+            )
+
+
+
+
 
 
 

@@ -275,16 +275,24 @@ class ModTable_TreeModel(QAbstractItemModel):
     def data(self, index, role=Qt_DisplayRole):
         col = index.column()
 
-        # just display the row number in the "order" column.
-        # this allows us to manipulate the ordinal number a bit more
-        # freely behind the scenes
-        if col == COL_ORDER:
-            return index.row() + 1 if role == Qt_DisplayRole else None
-
         mod = self.mods[index.row()]
-        # mod = self.mod_entries[index.row()]
 
-        # I've heard it a thousand times from a thousand people:
+        # now that the ordinal is more loosely coupled to the
+        # mod, we can actually return the value specifically for that
+        # mod, potentially allowing filtering/categories/other fun
+        # stuff without messing up the 'order' column
+        if col == COL_ORDER:
+            # ???: which of the following two is better? mod.ordinal
+            # is a property which basically does the exact same
+            # thing as the other statement...but it feels more
+            # intuitive, as if the mod just knows where it is in line.
+            # It might be slightly less performant, though...i guess
+            # we'll reconsider if it becomes an issue
+
+            # return self.mods.index(mod.directory)
+            return mod.ordinal if role == Qt_DisplayRole else None
+
+            # I've heard it a thousand times from a thousand people:
         # "Don't mix your data provider with styling information!"
         # Apparently that's amateur and The Wrong Way to do it.
         # But here's the thing. I tried it The Right Way, and, besides
@@ -337,20 +345,13 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         elif col == COL_ENABLED:
 
-            ## although our catches the editor event to know when
-            # the user clicked on the checkbox, we never actually
+            ## although our delegate catches the editor event to know
+            # when the user clicked on the checkbox, we never actually
             # open the editor (we just hijack the event to wrap
             # a setData() call), so we don't need to handle edit_role
 
-            # if role == Qt_EditRole:
-            #     return bool(mod.enabled)
-            # elif role == Qt_DisplayRole:
-            #     return bool(mod.enabled)
-
             if role == Qt_CheckStateRole:
                 return Qt_Checked if mod.enabled else Qt_Unchecked
-
-            # return mod.checkState if role == Qt_CheckStateRole else None
 
         # for every other column, return the stored value as the
         # display role
@@ -496,30 +497,8 @@ class ModTable_TreeModel(QAbstractItemModel):
         :return:
         """
 
-        # if role == Qt_CheckStateRole:
-        #     if index.column() == COL_ENABLED:
-        #
-        #         row = index.row()
-        #
-        #         # callbacks for updating (1) or reverting (2);
-        #         # set full_row_update to True since changing enabled
-        #         # status changes the appearance of the entire row
-        #         cb1 = partial(self._post_change_mod_attr, index, row, True)
-        #         cb2 = partial(self._post_change_mod_attr, index, -1, True)
-        #
-        #         self._push_command(change_mod_attribute.cmd(
-        #             self.mods[row],
-        #             # self.mod_entries[row],
-        #             "enabled",
-        #             int(value == Qt_Checked),
-        #             post_redo_callback = cb1,
-        #             post_undo_callback = cb2)
-        #         )
-        #
-        #         return True
-
-        # now we user a cutom "editor" to catch when the user
-        # clicks on the checkbox, so we use EditRole instead
+        # now we have a custom delegate's editorEvent to catch when the
+        # user clicks on the checkbox, so we use EditRole instead
         if role == Qt_EditRole:
             if index.column() == COL_ENABLED:
                 row = index.row()
@@ -535,75 +514,22 @@ class ModTable_TreeModel(QAbstractItemModel):
                                       self.index(row,
                                                  self.columnCount() - 1)
                                       )
-
-                # callbacks for updating (1) or reverting (2);
-                # set full_row_update to True since changing enabled
-                # status changes the appearance of the entire row
-                # cb1 = partial(self._post_change_mod_attr, index, row,
-                #               True)
-                # cb2 = partial(self._post_change_mod_attr, index, -1,
-                #               True)
-                #
-                # self._push_command(change_mod_attribute.cmd(
-                #     self.mods[row],
-                #     # self.mod_entries[row],
-                #     "enabled",
-                #     int(value),
-                #     post_redo_callback=cb1,
-                #     post_undo_callback=cb2)
-                # )
                 return True
 
             elif index.column() == COL_NAME:
-                row = index.row()
-                mod = self.mods[row]
-                # mod = self.mod_entries[row]
-                # remove trailing/leading space
-                new_name = value.strip()
-                # if unchanged or blank, don't update
-                if new_name in [mod.name, ""]: return False
+                # assume name is valid (view does check)
 
-                # callbacks for changing (1) or reverting (2)
-                cb1 = partial(self._post_change_mod_attr, index, row)
-                cb2 = partial(self._post_change_mod_attr, index)
-                self._push_command(change_mod_attribute.cmd(
-                    mod, "name", new_name,
-                    post_redo_callback = cb1,
-                    post_undo_callback = cb2)
-                )
+                self.mods[index.row()].name = value
+
+                self.dataChanged.emit(index, index)
 
                 return True
         else:
             return super().setData(index, value, role)
 
-        # if role was checkstate or edit, but column was not
+        # if role was edit, but column was not
         # enabled/name, just ret false
         return False
-
-    def _post_change_mod_attr(self, index, row=-1, full_row_update=False):
-        """
-        For use as a callback after updating (+ redo/undo) a
-        mod attribute. Args will need to be filled in w/ partial()
-        """
-
-        # having row == -1 signifies that this is an UNDO operation,
-        # so we should just pop the end off the modification deque
-        if row < 0:
-            # remove this row number from the modified rows stack
-            self._modifications.pop()
-        else:
-            self._modifications.append(row)
-
-        if full_row_update:
-            # emit the data changed signal for each cell in row
-            self.dataChanged.emit(self.index(index.row(), 0),
-                                  self.index(
-                                      index.row(),
-                                      self.columnCount()-1
-                                    )
-                                  )
-        else:
-            self.dataChanged.emit(index, index)
 
     ##===============================================
     ## Modifying Row Position
@@ -733,8 +659,6 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         self.endMoveRows()
 
-        # self.notifyViewRowsMoved.emit()
-
     ##===============================================
     ## Getting data from disk into model
     ##===============================================
@@ -826,7 +750,6 @@ class ModTable_TreeModel(QAbstractItemModel):
         # self.Manager.save_user_edits(to_save)
 
 
-
     def clear_missing(self):
         """
         Remove all mods that are marked with the NOT FOUND error
@@ -849,6 +772,8 @@ class ModTable_TreeModel(QAbstractItemModel):
         def post_op():
             self.check_mod_errors()
             self.endResetModel()
+
+        # FIXME: move this undocommand out of the model
 
         self._push_command(
             clear_missing_mods.cmd(
@@ -939,6 +864,8 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
 
         end = row+count-1
+
+        # FIXME: move this undocommand out of the model
 
         self._push_command(
             remove_rows.cmd(
