@@ -518,6 +518,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         self.LOGGER.debug("_setup_signals_and_slots")
 
+        tbl=self.mod_table
+        prof=self.profile_helper
+
         connections = [
 
             ## local signals -> local slots ##
@@ -525,28 +528,27 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
             ## local signals -> non-local (on other components) slots ##
             ## -----
-            # connect the move up/down signal to the appropriate slot on view
-            (self.moveMods, self.mod_table.move_selection),
-            # same for the move to top/bottom signals
-            (self.moveModsToBottom, self.mod_table.move_selection_to_bottom),
-            (self.moveModsToTop, self.mod_table.move_selection_to_top),
+            # connect the move up/down signal to the appropriate slot on
+            # view; same for the move-to-top/-bottom signals
+            (self.moveMods,         tbl.move_selection),
+            (self.moveModsToBottom, tbl.move_selection_to_bottom),
+            (self.moveModsToTop,    tbl.move_selection_to_top),
 
             ## non-local signals -> local slots ##
             ## -----
 
             # listen to profile helper for new profile
-            (self.profile_helper.newProfileLoaded, self.on_profile_load),
-
+            (prof.newProfileLoaded,     self.on_profile_load),
             # enable/disable rename/remove-profile actions as needed
-            (self.profile_helper.enableProfileActions, self.update_profile_actions),
+            (prof.enableProfileActions, self.update_profile_actions),
 
             # ensure the UI is properly updated when the tab changes
             (self.manager_tabs.currentChanged, self.on_tab_changed),
-            # depending on selection in table, the movement actions will be
-            # enabled or disabled
-            (self.mod_table.enableModActions, self.on_make_or_clear_mod_selection),
-            (self.mod_table.canMoveItems, self._enable_mod_move_actions),
 
+            # depending on selection in table, the movement actions will
+            # be enabled or disabled
+            (tbl.enableModActions, self.on_make_or_clear_mod_selection),
+            (tbl.canMoveItems,     self._enable_mod_move_actions),
         ]
 
         for signal, slot in connections:
@@ -660,12 +662,15 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         :param int newindex:
         """
         self.current_tab = TAB(newindex)
-        self._update_visible_components()
-        self._update_enabled_actions()
+
+        # ensure proper UI state for current tab
+        self.update_UI()
+
+        # self._update_visible_components()
+        # self._update_enabled_actions()
 
         # also change the current undo stack
-        self.undoManager.setActiveStack(
-            self.undo_stacks[self.current_tab])
+        # self._update_active_undostack()
 
     @pyqtSlot('QString')
     def on_profile_load(self, profile_name):
@@ -681,8 +686,11 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.filetree_modlist.reset_view()
         self.filetree_fileviewer.reset_view()
 
-        self._update_visible_components()
-        self._update_enabled_actions()
+        # update the UI components for the current tab/profile/data
+        self.update_UI()
+
+        # self._update_visible_components()
+        # self._update_enabled_actions()
 
         # also recheck alerts when loading new profile
         # self.update_alerts()
@@ -854,8 +862,14 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     # def update_UI(self, *args):
     def update_UI(self):
+        """Ensure the UI has the appropriate parts active/visible for
+        the current tab and data state."""
         self._update_visible_components()
-        self.undoManager.setActiveStack(self.undo_stacks[self.current_tab])
+        self._update_enabled_actions()
+
+        # also change the current undo stack
+        self._update_active_undostack()
+
 
     def _update_visible_components(self):
         """
@@ -901,6 +915,12 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         for comp, select in s.items():
             all_components[comp].setEnabled(select)
+
+    def _update_active_undostack(self):
+        """Set the active undo stack to the stack associated with
+        the current tab"""
+        self.undoManager.setActiveStack(
+            self.undo_stacks[self.current_tab])
 
     def _enable_mod_move_actions(self, enable_moveup, enable_movedown):
         """

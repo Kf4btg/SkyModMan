@@ -450,7 +450,7 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         self._undo_stack.setClean()
 
     ##=============================================
-    ## Action handlers
+    ## "Move selection" action handlers
 
     def move_selection_to_top(self):
         self._reorder_selection(0, text="Move to Top")
