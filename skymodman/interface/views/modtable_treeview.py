@@ -2,7 +2,8 @@ from functools import partial
 
 from PyQt5 import QtWidgets, QtCore
 
-from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot, QItemSelectionModel as qISM
+from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot, QEvent, QItemSelectionModel as qISM
+# , pyqtProperty
 
 from skymodman.constants import Column, ModError
 from skymodman.log import withlogger
@@ -71,6 +72,31 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         # create an undo stack for the mods tab
         self._undo_stack = QtWidgets.QUndoStack()
         # TODO: so, it looks like, if we're going to move the undoCommand-pushing out of the model to the view, we're going to have to implement custom delegates for the editable columns that intercept setData and wrap it in an undocommand...yay...
+
+        ## setup editor for enabled box ##
+
+        ## --update: yeah, this didn't really work...it required
+        # three clicks just to change the enabled status.
+        # looks like using a simple custom delegate (see
+        # CheckBoxDelegate, below) and catching the mouseRelease editor
+        # event is a better way to go
+
+        # get a copy of the default factory
+        # factory = QtWidgets.QItemEditorFactory()
+        #
+        # # and an instance of the editor creator base
+        # # (returns new instances of the CheckBoxEditor for each
+        # # delegate that requests one from the facotry)
+        # boolboxcreator = CheckBoxEditorBase()
+        #
+        # # register our editor creator for the bool type
+        # factory.registerEditor(QtCore.QVariant.Bool, boolboxcreator)
+        #
+        # # change the default factory to our slightly modified one
+        # # QtWidgets.QItemEditorFactory.setDefaultFactory(factory)
+        # # ...we'll use the static method by accessing it via the instance...
+        # # that way the type checker doesn't wig out
+        # factory.setDefaultFactory(factory)
 
     @property
     def undo_stack(self):
@@ -166,6 +192,11 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         self.header().setSectionResizeMode(Column.NAME,
                                            QtWidgets.QHeaderView.Stretch)
 
+
+        # and, to complement our new editor factory, set a custom
+        # delegate on the enabled row
+        self.setItemDelegateForColumn(COL_ENABLED, CheckBoxDelegate())
+
     def selectionChanged(self, selected=None, deselected=None):
 
         # enable/disable the button box
@@ -210,6 +241,14 @@ class ModTable_TreeView(QtWidgets.QTreeView):
             menu.addAction(mw.action_clear_missing)
 
         menu.exec_(event.globalPos())
+
+    def commitData(self, editor):
+        print("commitData")
+        super().commitData(editor)
+
+    def closeEditor(self, editor, hint):
+        print("closeEditor")
+        super().closeEditor(editor, hint)
 
     ##=============================================
     ## Searching
@@ -565,4 +604,62 @@ class ModTable_TreeView(QtWidgets.QTreeView):
                 undo=reverse_cmd))
 
 
+class CheckBoxDelegate(QtWidgets.QStyledItemDelegate):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+
+    def editorEvent(self, event, model, style_option, index):
+
+        #TODO: see if we can get some sort of visual response when the mouse is pressed down on the checkbox (like a regular checkbox does, to show that it really does know that you're clicking on it)
+
+        if event.type() == QEvent.MouseButtonRelease:
+            model.setData(index,
+                          not index.internalPointer().enabled,
+                          role = Qt.EditRole)
+
+        # return True to indicate that the event has been handled,
+        # even if we didn't handle it (because we don't want any other
+        # editor event stuff to happen)
+        return True
+
+
+# class CheckBoxEditor(QtWidgets.QCheckBox):
+#     """Using this as an editor in the treeview will allow us to capture
+#     the "check" event and wrap the setData call to the model in a
+#     Qundocommand"""
+#
+#
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#
+#         # intialize ourselves as checked
+#         self.setChecked(True)
+#         self.setAutoFillBackground(True)
+#
+#
+#     # all we need to do is define a user property
+#
+#     @pyqtProperty(bool, user=True)
+#     def item_is_enabled(self):
+#         return self.isChecked()
+#
+#     @item_is_enabled.setter
+#     def item_is_enabled(self, value):
+#         self.setChecked(value)
+#
+#
+# class CheckBoxEditorBase(QtWidgets.QItemEditorCreatorBase):
+#
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#
+#     def createWidget(self, parent):
+#         return CheckBoxEditor(parent)
+
+
+    # this is only called when there is no user property, which is not
+        # the case for us
+    # def valuePropertyName():
 

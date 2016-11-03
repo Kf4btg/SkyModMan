@@ -336,6 +336,17 @@ class ModTable_TreeModel(QAbstractItemModel):
                         else None)
 
         elif col == COL_ENABLED:
+
+            ## although our catches the editor event to know when
+            # the user clicked on the checkbox, we never actually
+            # open the editor (we just hijack the event to wrap
+            # a setData() call), so we don't need to handle edit_role
+
+            # if role == Qt_EditRole:
+            #     return bool(mod.enabled)
+            # elif role == Qt_DisplayRole:
+            #     return bool(mod.enabled)
+
             if role == Qt_CheckStateRole:
                 return Qt_Checked if mod.enabled else Qt_Unchecked
 
@@ -391,7 +402,8 @@ class ModTable_TreeModel(QAbstractItemModel):
         col = index.column()
 
         if col == COL_ENABLED:
-            return _base_flags | Qt_ItemIsUserCheckable
+            return _base_flags | Qt_ItemIsEditable
+            # return _base_flags | Qt_ItemIsUserCheckable
 
         if col == COL_NAME:
             return _base_flags | Qt_ItemIsEditable
@@ -486,6 +498,7 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         if role == Qt_CheckStateRole:
             if index.column() == COL_ENABLED:
+
                 row = index.row()
 
                 # callbacks for updating (1) or reverting (2);
@@ -505,7 +518,28 @@ class ModTable_TreeModel(QAbstractItemModel):
 
                 return True
         elif role == Qt_EditRole:
-            if index.column() == COL_NAME:
+            if index.column() == COL_ENABLED:
+                row = index.row()
+
+                # callbacks for updating (1) or reverting (2);
+                # set full_row_update to True since changing enabled
+                # status changes the appearance of the entire row
+                cb1 = partial(self._post_change_mod_attr, index, row,
+                              True)
+                cb2 = partial(self._post_change_mod_attr, index, -1,
+                              True)
+
+                self._push_command(change_mod_attribute.cmd(
+                    self.mods[row],
+                    # self.mod_entries[row],
+                    "enabled",
+                    int(value),
+                    post_redo_callback=cb1,
+                    post_undo_callback=cb2)
+                )
+
+
+            elif index.column() == COL_NAME:
                 row = index.row()
                 mod = self.mods[row]
                 # mod = self.mod_entries[row]
