@@ -496,48 +496,63 @@ class ModTable_TreeModel(QAbstractItemModel):
         :return:
         """
 
-        if role == Qt_CheckStateRole:
-            if index.column() == COL_ENABLED:
+        # if role == Qt_CheckStateRole:
+        #     if index.column() == COL_ENABLED:
+        #
+        #         row = index.row()
+        #
+        #         # callbacks for updating (1) or reverting (2);
+        #         # set full_row_update to True since changing enabled
+        #         # status changes the appearance of the entire row
+        #         cb1 = partial(self._post_change_mod_attr, index, row, True)
+        #         cb2 = partial(self._post_change_mod_attr, index, -1, True)
+        #
+        #         self._push_command(change_mod_attribute.cmd(
+        #             self.mods[row],
+        #             # self.mod_entries[row],
+        #             "enabled",
+        #             int(value == Qt_Checked),
+        #             post_redo_callback = cb1,
+        #             post_undo_callback = cb2)
+        #         )
+        #
+        #         return True
 
+        # now we user a cutom "editor" to catch when the user
+        # clicks on the checkbox, so we use EditRole instead
+        if role == Qt_EditRole:
+            if index.column() == COL_ENABLED:
                 row = index.row()
+                # value is passed as bool, but we store as int
+                # TODO: actually, if we don't store the enabled status in the database any more, there's really no point in using ints instead of bools...
+
+                self.mods[row].enabled = int(value)
+
+                # since we change the appearance of the text across
+                # the entire row when 'enabled' is changed,
+                # emit the data changed signal for each cell in row
+                self.dataChanged.emit(self.index(row, 0),
+                                      self.index(row,
+                                                 self.columnCount() - 1)
+                                      )
 
                 # callbacks for updating (1) or reverting (2);
                 # set full_row_update to True since changing enabled
                 # status changes the appearance of the entire row
-                cb1 = partial(self._post_change_mod_attr, index, row, True)
-                cb2 = partial(self._post_change_mod_attr, index, -1, True)
-
-                self._push_command(change_mod_attribute.cmd(
-                    self.mods[row],
-                    # self.mod_entries[row],
-                    "enabled",
-                    int(value == Qt_Checked),
-                    post_redo_callback = cb1,
-                    post_undo_callback = cb2)
-                )
-
+                # cb1 = partial(self._post_change_mod_attr, index, row,
+                #               True)
+                # cb2 = partial(self._post_change_mod_attr, index, -1,
+                #               True)
+                #
+                # self._push_command(change_mod_attribute.cmd(
+                #     self.mods[row],
+                #     # self.mod_entries[row],
+                #     "enabled",
+                #     int(value),
+                #     post_redo_callback=cb1,
+                #     post_undo_callback=cb2)
+                # )
                 return True
-        elif role == Qt_EditRole:
-            if index.column() == COL_ENABLED:
-                row = index.row()
-
-                # callbacks for updating (1) or reverting (2);
-                # set full_row_update to True since changing enabled
-                # status changes the appearance of the entire row
-                cb1 = partial(self._post_change_mod_attr, index, row,
-                              True)
-                cb2 = partial(self._post_change_mod_attr, index, -1,
-                              True)
-
-                self._push_command(change_mod_attribute.cmd(
-                    self.mods[row],
-                    # self.mod_entries[row],
-                    "enabled",
-                    int(value),
-                    post_redo_callback=cb1,
-                    post_undo_callback=cb2)
-                )
-
 
             elif index.column() == COL_NAME:
                 row = index.row()
@@ -788,22 +803,29 @@ class ModTable_TreeModel(QAbstractItemModel):
         Save all changes made to the mod table to disk
         """
 
-        modified = set(self._modifications)
-        to_save = []
+        # no need to mess w/ the whole 'which rows were modifed' thing,
+        # since there's no need to update the database anymore;
+        # just write the current state of the collection to disk
+        self.Manager.save_mod_info()
+
+        # modified = set(self._modifications)
+        # to_save = []
 
         # first, update ordinals of modified entries to reflect their
         # (possibly) new position
-        for row in modified:
+        # for row in modified:
             # self.mods.move()
-            self.mod_entries[row].ordinal = row
-            to_save.append(self.mod_entries[row])
+            # self.mod_entries[row].ordinal = row
+            # to_save.append(self.mod_entries[row])
 
         # print(to_save)
 
         # to_save = [self.mod_entries[row]
         #            for row in set(self._modifications)]
 
-        self.Manager.save_user_edits(to_save)
+        # self.Manager.save_user_edits(to_save)
+
+
 
     def clear_missing(self):
         """

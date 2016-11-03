@@ -6,8 +6,10 @@ class UndoCommand(QUndoCommand):
     redo and undo methods as parameters to the constructor
     """
 
-    # __slots__ = ("_preredo", "_postredo", "_preundo", "_postundo")
-    __slots__ = ()
+    # __slots__ = ()
+    # __slots__ = ("_preredo", "_postredo", "_preundo", "_postundo", "_undo", "_redo")
+
+    __slots__ = ("_undo", "_redo")
 
     def __init__(self, text="", *args,
                  redo=None, undo=None,
@@ -51,11 +53,13 @@ class UndoCommand(QUndoCommand):
                     redo()
                     post_redo()
             else:
-                _ = redo
+                # _ = redo
+                def _(): redo()
         else:
             def _(): pass
 
         self.redo=_
+        # self._redo=_
 
         if undo is not None:
             if pre_undo is not None:
@@ -76,17 +80,47 @@ class UndoCommand(QUndoCommand):
                     undo()
                     post_undo()
             else:
-                _ = undo
+                def _(): undo()
+                # _ = undo
         else:
             def _(): pass
 
         self.undo=_
+        # self._undo=_
 
-    # def redo(self):
-    #     pass
-    #
-    # def undo(self):
-    #     pass
+    # so, unlike a pure python class, this qt/c++ derived subclass
+    # can't just reassign methods like variables (e.g. "self.redo=_"),
+    # at least not for overridden methods.
+    # If we want the definition of the method to vary at runtime, we
+    # have to make a placeholder method and call it within the
+    # override. (Although, I admit, it actually SEEMED to work
+    # the first way for one of the situations in which I make and
+    # push an UndoCommand, but crashed hard a different time...but
+    # this ensures that it'll work no matter what).
+
+    # ...but wait! there's ...something else.
+    # Seems it was just the part in init() where I used e.g.
+    # "_ = undo" (effectively just assigning the passed callable to the
+    # instance as the redo()/undo() methods. And that seems to be what
+    # the problem was; I guess, in some instances, the callable
+    # was getting deleted by Qt (but it hung around the other times?
+    # hmmm...hope there's no memory leak there...). Actually
+    # wrapping the callable in a proper "def _:" block fixed the
+    # problem.
+
+    # def redo(self): pass
+        # self._redo()
+
+    # def undo(self): pass
+        # self._undo()
+
+    # tried to prevent the spurious command grouping by explicitly
+    # returning -1 from id()...but it didn't work. still don't
+    # know why that happens, but it makes the whole system effectively
+    # useless!!!
+
+    # def id(self):
+    #     return -1
 
 
 # def test():

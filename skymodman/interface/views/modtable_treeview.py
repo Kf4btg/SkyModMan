@@ -193,9 +193,9 @@ class ModTable_TreeView(QtWidgets.QTreeView):
                                            QtWidgets.QHeaderView.Stretch)
 
 
-        # and, to complement our new editor factory, set a custom
+        # set a custom
         # delegate on the enabled row
-        self.setItemDelegateForColumn(COL_ENABLED, CheckBoxDelegate())
+        self.setItemDelegateForColumn(COL_ENABLED, CheckBoxDelegate(self))
 
     def selectionChanged(self, selected=None, deselected=None):
 
@@ -605,9 +605,17 @@ class ModTable_TreeView(QtWidgets.QTreeView):
 
 
 class CheckBoxDelegate(QtWidgets.QStyledItemDelegate):
+    """Custom delegate that intercepts when a user clicks on a the
+    checkbox in the delegate's cell and wraps the model's setData()
+    call in a QUndoCommand"""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, parent, *args, **kwargs):
+        super().__init__(parent, *args, **kwargs)
+
+        # get the undo stack instance from the parent (the treeview)
+        self._stack = parent.undo_stack # type: QtWidgets.QUndoStack
+        self._model = parent.model()
+
 
 
     def editorEvent(self, event, model, style_option, index):
@@ -615,14 +623,26 @@ class CheckBoxDelegate(QtWidgets.QStyledItemDelegate):
         #TODO: see if we can get some sort of visual response when the mouse is pressed down on the checkbox (like a regular checkbox does, to show that it really does know that you're clicking on it)
 
         if event.type() == QEvent.MouseButtonRelease:
-            model.setData(index,
-                          not index.internalPointer().enabled,
-                          role = Qt.EditRole)
+            # create a qundo command to wrap the setdata call
+
+            # current enabled status of the mod at the given index
+            is_enabled = bool(index.internalPointer().enabled)
+
+            # fixme: ARRRGH the undo stack keeps grouping commands! Even fairly unrelated ones! And I have no idea why!! It's frustrating to try to undo 1 thing and have half your work undone! WHYYYYYYY
+
+            self._stack.push(
+                UndoCommand(
+                    text="Disable Mod" if is_enabled else "Enable Mod",
+                    redo=partial(model.setData, index, not is_enabled, Qt.EditRole),
+                    undo=partial(model.setData, index, is_enabled, Qt.EditRole)
+                )
+            )
 
         # return True to indicate that the event has been handled,
         # even if we didn't handle it (because we don't want any other
         # editor event stuff to happen)
         return True
+
 
 
 # class CheckBoxEditor(QtWidgets.QCheckBox):
