@@ -56,10 +56,11 @@ class ModEntry:
     def ordinal(self):
         """Query the ModCollection (assuming one has been set) to
         find out the current ordering of this mod entry"""
-        if ModEntry.collection:
+        try:
             return ModEntry.collection.index(self.key)
-        # if no collection is yet associated, always return -1
-        return -1
+        except AttributeError:
+            # if no collection is yet associated, always return -1
+            return -1
 
     @property
     def filelist(self):

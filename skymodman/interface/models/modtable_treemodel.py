@@ -289,29 +289,16 @@ class ModTable_TreeModel(QAbstractItemModel):
             # It might be slightly less performant, though...i guess
             # we'll reconsider if it becomes an issue
 
-            # return self.mods.index(mod.directory)
+            # return self.mods.index(mod.directory) if role == Qt_DisplayRole else None
             return mod.ordinal if role == Qt_DisplayRole else None
 
-            # I've heard it a thousand times from a thousand people:
-        # "Don't mix your data provider with styling information!"
-        # Apparently that's amateur and The Wrong Way to do it.
-        # But here's the thing. I tried it The Right Way, and, besides
-        # being supremely over-complicated for my purposes (I just want
-        # to change the text color!), it never, ever worked correctly.
-        # So it involves a custom item delegate--no problem, done.
-        # Within that delegate I was able to change the font style, font
-        # weight, and some other things just fine. But the text color?
-        # No, to get it to look exactly like everything else but JUST
-        # IN A DIFFERENT COLOR would require re-implementing almost
-        # the entire low-level painting code. Which is stupid.
-
-        # But this is simple. And works. You can take your Right Way
-        # and shove it.
+        # In lieu of a rant about delegates, I'll just note here that
+        # I never could get the font color to change using a custom
+        # delegate, but returning this here works fine:
         if role == Qt_ForegroundRole and not mod.enabled:
             return self.disabled_foreground
 
         # show unmanaged mods in italic font
-        # XXX: but maybe this...should be in a custom delegate...?
         if role == Qt_FontRole and not mod.managed:
             return self.unmanaged_font
 
