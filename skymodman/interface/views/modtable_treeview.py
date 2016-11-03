@@ -398,6 +398,17 @@ class ModTable_TreeView(QtWidgets.QTreeView):
                 undo=partial(self._model.setData, index,
                              is_enabled, Qt.EditRole)))
 
+    def clear_missing_mods(self):
+        """
+         Remove all mods that are marked with the NOT FOUND error
+         from the current profile's modlist
+
+         :return:
+         """
+
+        self._undo_stack.push("")
+
+
     def revert_changes(self):
         """
         Revert the state of the table to that of the last save-point

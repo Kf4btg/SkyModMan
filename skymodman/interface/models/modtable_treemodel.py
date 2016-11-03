@@ -852,21 +852,57 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         end = row+count-1
 
+        self.beginRemoveRows(parent, row, end)
+
+        del self.mods[row:row+count]
+
+        self.endRemoveRows()
+
         # FIXME: move this undocommand out of the model
 
-        self._push_command(
-            remove_rows.cmd(
-                self, row, end,
-                pre_redo_callback  = partial(self.beginRemoveRows,
-                                             parent, row, end),
-                post_redo_callback = self.endRemoveRows,
-                pre_undo_callback  = partial(self.beginInsertRows,
-                                             parent, row, end),
-                post_undo_callback = self.endInsertRows
-            )
-        )
+        # self._push_command(
+        #     remove_rows.cmd(
+        #         self, row, end,
+        #         pre_redo_callback  = partial(self.beginRemoveRows,
+        #                                      parent, row, end),
+        #         post_redo_callback = self.endRemoveRows,
+        #         pre_undo_callback  = partial(self.beginInsertRows,
+        #                                      parent, row, end),
+        #         post_undo_callback = self.endInsertRows
+        #     )
+        # )
 
         return True
+
+    def insert_entries(self, row, entries, parent=QModelIndex()):
+        """
+        Add the given mod(s) to the mod collection at position `row`
+
+        :param row:
+        :param entries:
+        :param parent:
+        :return:
+        """
+        # don't allow out-of-bounds insertions
+        row = max(row, len(self.mods))
+
+        end = row + len(entries) - 1
+
+        self.beginInsertRows(parent, row, end)
+
+        # if appending, just extend
+        if row == len(self.mods):
+            self.mods.extend(entries)
+        else:
+            pos=row
+            for m in entries:
+                self.mods.insert(pos, m)
+                pos+=1
+
+        self.endInsertRows()
+
+
+
     #
     #
     # def insertRows(self, row, count, parent = QModelIndex()):

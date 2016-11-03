@@ -1,10 +1,7 @@
 from itertools import count as counter, chain
-from collections import abc, OrderedDict, namedtuple
+from collections import abc, OrderedDict
 
 from skymodman.utils import singledispatch_m
-
-# used to prepare executable "move" actions
-_mover = namedtuple("_mover", "first last split exec")
 
 class ModCollection(abc.MutableSequence):
     """A sequence that acts in some ways like a set (cannot add multiple
