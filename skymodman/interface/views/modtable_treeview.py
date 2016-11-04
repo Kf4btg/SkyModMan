@@ -11,6 +11,7 @@ from skymodman.log import withlogger
 # from skymodman.interface.models import ModTable_TreeModel
 from skymodman.interface.ui_utils import undomacro, blocked_signals
 from skymodman.interface.qundo.commands.generic import UndoCommand
+from skymodman.interface.qundo.commands import clear_missing_mods
 
 qmenu = QtWidgets.QMenu
 
@@ -406,7 +407,13 @@ class ModTable_TreeView(QtWidgets.QTreeView):
          :return:
          """
 
-        self._undo_stack.push("")
+        # but first make sure there actually ARE any:
+        if self._err_types & ModError.DIR_NOT_FOUND:
+
+            # now simply push the a new clear-missing-mods undocmd
+            # and let it take care of all the details
+            self._undo_stack.push(
+                clear_missing_mods.cmd(self._model))
 
 
     def revert_changes(self):
