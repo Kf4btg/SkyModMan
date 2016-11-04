@@ -1123,10 +1123,10 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         Remove all mod entries that were not found on disk from the
         current profile's mod list
         """
-        ## FIXME: make this undoable. Also, make sure the mod-count on the file tree mods-list is updated correctly to show the correct new value for the number of known mods
+        ## FIXME: make sure the mod-count on the file tree mods-list is updated correctly to show the correct new value for the number of known mods
         self.LOGGER << "Clear missing mods"
 
-        self.models[M.mod_table].clear_missing()
+        self.mod_table.clear_missing_mods()
 
     #</editor-fold>
 
