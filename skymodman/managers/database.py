@@ -63,6 +63,8 @@ class DBManager(BaseDBManager, Submanager):
                          logger=self.LOGGER,
                          *args, **kwargs)
 
+        # TODO: once we're testing this at scale (with real mods), we really should check the memory usage of the modfiles table...I wouldn't be suprised if it got enormous. Might want to consider using a disk-based db, in that case.
+
         # track which tables are currently empty
         self._empty = {tn:True for tn in self._tablenames}
 
@@ -340,6 +342,26 @@ class DBManager(BaseDBManager, Submanager):
         #     for m in conflicts[c]:
         #         if m!='Bethesda Hi-Res DLC Optimized':
         #             print('\t', m)
+
+    ##=============================================
+    ## Queeries
+    ##=============================================
+
+    def find_matching_files(self, mod_key, pattern):
+        """
+        Yield files contained by the mod w/ directory `mod_key` that
+        match the given SQL-wildcard `pattern` (for the "LIKE" operator)
+
+
+        :return: list of matching files
+        """
+
+        # yield the first (and only) item of the 1-tuple returned
+        # for each matching row in table--i.e. the path for each
+        # matching file
+        yield from (r[0] for r in self.conn.execute(
+            "SELECT filepath FROM modfiles WHERE directory=? "
+            "AND filepath LIKE ?", (mod_key, pattern)))
 
     ##=============================================
     ## Dealing with hidden files

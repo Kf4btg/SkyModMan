@@ -25,6 +25,9 @@ class FileTabTreeView(QtWidgets.QTreeView):
         self._filterbox = None
         """:type: skymodman.interface.designer.plugins.widgets.escapeablelineedit.EscapeableLineEdit"""
 
+        # create an undo stack for the viewer
+        self._undostack = QtWidgets.QUndoStack()
+
 
     @property
     def filter(self):
@@ -52,7 +55,8 @@ class FileTabTreeView(QtWidgets.QTreeView):
         :param selection_list: the QListView of mod names; when one is
             selected, update which mod is shown here
         """
-        from skymodman.interface.models import ModFileTreeModel, FileViewerTreeFilter
+        from skymodman.interface.models import ModFileTreeModel, \
+            FileViewerTreeFilter
 
         self._filterbox = filterbox
         # have escape key clear focus from filterbox
@@ -89,9 +93,17 @@ class FileTabTreeView(QtWidgets.QTreeView):
 
         self._filterbox.clear()
 
+
+        # self._undostack.clear()
+
         self._srcmodel.setMod(None)
 
     def revert(self):
+
+        # # model.revert() rolls back the DB, so we can just drop
+        # # the undo stack rather than "undo"-ing the whole thing
+        # self._undostack.clear()
+
         self._srcmodel.revert()
 
     def save(self):
@@ -132,16 +144,21 @@ class FileTabTreeView(QtWidgets.QTreeView):
             f.setFilterWildcard(text)
 
         else:
-            cur = Manager().getdbcursor()
+            # cur = Manager().getdbcursor()
 
             # turn wildcard filter into SQL-compatible pattern
             sqlexpr = r'%' + text.replace('?', '_').replace('*',
                                                             r'%') + r'%'
 
             # get list of matching files from db
-            matches = [r[0] for r in cur.execute(
-                "SELECT filepath FROM modfiles WHERE directory=? AND filepath LIKE ?",
-                (self._srcmodel.modname, sqlexpr))]
+
+            matches = list(Manager().DB.find_matching_files(
+                self._srcmodel.modname, sqlexpr))
+
+
+            # matches = [r[0] for r in cur.execute(
+            #     "SELECT filepath FROM modfiles WHERE directory=? AND filepath LIKE ?",
+            #     (self._srcmodel.modname, sqlexpr))]
 
             # set the matches on the filter
             f.setMatchingFiles(matches)

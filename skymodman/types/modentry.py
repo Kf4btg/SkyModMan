@@ -66,12 +66,19 @@ class ModEntry:
     def filelist(self):
         """Return the list of files contained by this mod."""
         # recently-queried mods are cached by modmanager
-        return Manager().get_mod_file_list(self.key)
+        try:
+            return Manager().get_mod_file_list(self.key)
+        except AttributeError:
+            # no manager, somehow
+            return []
 
     @property
     def filetree(self):
         """Return the files contained by this mod as a tree"""
-        return Manager().get_mod_file_tree(self.key)
+        try:
+            return Manager().get_mod_file_tree(self.key)
+        except AttributeError:
+            return None
 
 
     # @filelist.setter

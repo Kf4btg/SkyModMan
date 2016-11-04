@@ -12,7 +12,7 @@ from skymodman.managers import (config as _config,
                                 collection as _collection
                                 # , paths as _paths
                                 )
-from skymodman.constants import db_fields as _db_fields, db_field_order as _field_order, APPNAME, MAIN_CONFIG #overrideable_dirs,
+from skymodman.constants import APPNAME, MAIN_CONFIG #overrideable_dirs,
 from skymodman.constants.keystrings import (Dirs as ks_dir,
                                             Section as ks_sec,
                                             INI as ks_ini)
@@ -796,44 +796,41 @@ class ModManager:
             self._dbman.add_files('hidden', mod_key, hidden_list)
             # self._dbman.add_to_hidden_files_table(mod_key, hidden_list)
 
-
-
-
     ##=============================================
     ## Data Persistence
     ##=============================================
 
-    def save_user_edits(self, changes):
-        """
-        :param collections.abc.Iterable[ModEntry] changes: an iterable of ModEntry objects
-        """
-
-        rows_to_delete = [(m.ordinal,) for m in changes]
-
-        # a generator that creates tuples of values by sorting the
-        # values of the modentry according the order defined in
-        # constants._db_fields
-        dbrowgen = (
-            tuple([getattr(mod, field)
-                   for field in sorted(mod._fields,
-                                       key=_field_order.get)
-                   ])
-            for mod in changes)
-
-        # using the context manager may allow deferrable foreign
-        # to go unsatisfied for a moment
-
-        with self._dbman.conn:
-            # delete the row with the given ordinal
-            self._dbman.delete("mods", "ordinal=?", rows_to_delete, True)
-
-            # and reinsert
-
-            self._dbman.insert(len(_db_fields), "mods", *_db_fields,
-                               params=dbrowgen)
-
-        # And finally save changes to disk
-        self.save_mod_info()
+    # def save_user_edits(self, changes):
+    #     """
+    #     :param collections.abc.Iterable[ModEntry] changes: an iterable of ModEntry objects
+    #     """
+    #
+    #     rows_to_delete = [(m.ordinal,) for m in changes]
+    #
+    #     # a generator that creates tuples of values by sorting the
+    #     # values of the modentry according the order defined in
+    #     # constants._db_fields
+    #     dbrowgen = (
+    #         tuple([getattr(mod, field)
+    #                for field in sorted(mod._fields,
+    #                                    key=_field_order.get)
+    #                ])
+    #         for mod in changes)
+    #
+    #     # using the context manager may allow deferrable foreign
+    #     # to go unsatisfied for a moment
+    #
+    #     with self._dbman.conn:
+    #         # delete the row with the given ordinal
+    #         self._dbman.delete("mods", "ordinal=?", rows_to_delete, True)
+    #
+    #         # and reinsert
+    #
+    #         self._dbman.insert(len(_db_fields), "mods", *_db_fields,
+    #                            params=dbrowgen)
+    #
+    #     # And finally save changes to disk
+    #     self.save_mod_info()
 
     def save_mod_info(self):
         """Have database manager save modinfo to disk"""
