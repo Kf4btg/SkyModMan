@@ -114,14 +114,7 @@ class UndoCommand(QUndoCommand):
     # def undo(self): pass
         # self._undo()
 
-    # tried to prevent the spurious command grouping by explicitly
-    # returning -1 from id()...but it didn't work. still don't
-    # know why that happens, but it makes the whole system effectively
-    # useless!!!
-
-    # def id(self):
-    #     return -1
-
+cmd = UndoCommand
 
 # def test():
 #     from functools import partial

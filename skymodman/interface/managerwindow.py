@@ -35,11 +35,16 @@ from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow
 
 @withlogger
 class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
+    # noinspection PyArgumentList
     modListModified     = pyqtSignal()
+    # noinspection PyArgumentList
     modListSaved        = pyqtSignal()
 
+    # noinspection PyArgumentList
     moveMods            = pyqtSignal(int)
+    # noinspection PyArgumentList
     moveModsToTop       = pyqtSignal()
+    # noinspection PyArgumentList
     moveModsToBottom    = pyqtSignal()
 
     instance = None # type: ModManagerWindow
@@ -605,8 +610,13 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                                  #     "undo", scale_factor=0.85,
                                  #     offset=(0, 0.1)),
                                  icon=QtGui.QIcon().fromTheme("edit-undo")
-                                 , triggered=self.on_undo
+                                 # , triggered=self.on_undo
                                  )
+
+        # it seems it calls undoStack.undo() automatically...no need
+        # to connect to something that calls it manually...unless you
+        # want every undo/redo action to do that action twice...like
+        # it was.
 
         # create and configure redo action
         self.action_redo = self.undoManager.createRedoAction(self, "Redo")
@@ -615,7 +625,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                                  #     "redo", scale_factor=0.85,
                                  #     offset=(0, 0.1)),
                                  icon=QtGui.QIcon().fromTheme("edit-redo")
-                                 , triggered=self.on_redo
+                                 # , triggered=self.on_redo
                                  )
 
         # insert into the "Edit" menu before the save-changes entry
@@ -746,15 +756,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         elif self.current_tab == TAB.FILETREE:
             self.filetree_fileviewer.revert()
-
-    @pyqtSlot()
-    def on_undo(self):
-        """calls undo() on the current undoStack"""
-        self.undoManager.undo()
-
-    @pyqtSlot()
-    def on_redo(self):
-        self.undoManager.redo()
 
     @pyqtSlot()
     def on_select_all(self):
@@ -1024,7 +1025,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # self.Manager.check_dirs()
         # self.update_alerts()
 
-
     @pyqtSlot()
     def choose_mod_folder(self):
         """
@@ -1036,7 +1036,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         """
 
-        # noinspection PyTypeChecker
+        # noinspection PyTypeChecker, PyArgumentList
         moddir = QtWidgets.QFileDialog.getExistingDirectory(
             self,
             "Choose Directory Containing Installed Mods",

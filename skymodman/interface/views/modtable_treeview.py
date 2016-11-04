@@ -361,11 +361,11 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         # need to hit 'Space' **twice** to achieve their goal.  Might
         # lose a lot of people over this.
 
-        is_enabled = bool(self.currentIndex().internalPointer().enabled)
+        current_is_enabled = bool(self.currentIndex().internalPointer().enabled)
         sel = self.selectedIndexes()
 
         # _text = ("Enable", "Disable")[currstate]
-        _text = "Disable" if is_enabled else "Enable"
+        _text = "Disable" if current_is_enabled else "Enable"
         # _checked = (Qt_Checked, Qt_Unchecked)[currstate]
 
         # splitting these up may help with some undo weirdness...
@@ -378,12 +378,17 @@ class ModTable_TreeView(QtWidgets.QTreeView):
 
                 # only use the indexes for the "enabled" column
                 for index in (idx for idx in sel if idx.column() == COL_ENABLED):
+                    is_enabled = bool(index.internalPointer().enabled)
 
                     # push each command to the stack (within the macro)
                     self._undo_stack.push(UndoCommand(
                         redo=partial(self._model.setData, index,
-                                     not is_enabled, Qt.EditRole),
+                                     # change them to opposite of curr.
+                                     # index's enabled state
+                                     not current_is_enabled, Qt.EditRole),
                         undo=partial(self._model.setData, index,
+                                     # but return to original state of
+                                     # this specific index
                                      is_enabled, Qt.EditRole)))
         else:
             # only one row selected
@@ -395,9 +400,9 @@ class ModTable_TreeView(QtWidgets.QTreeView):
             self._undo_stack.push(UndoCommand(
                 text="{} Mod".format(_text),
                 redo=partial(self._model.setData, index,
-                             not is_enabled, Qt.EditRole),
+                             not current_is_enabled, Qt.EditRole),
                 undo=partial(self._model.setData, index,
-                             is_enabled, Qt.EditRole)))
+                             current_is_enabled, Qt.EditRole)))
 
     def clear_missing_mods(self):
         """
@@ -615,6 +620,7 @@ class CheckBoxDelegate(QtWidgets.QStyledItemDelegate):
     call in a QUndoCommand"""
 
     def __init__(self, parent, *args, **kwargs):
+        # noinspection PyArgumentList
         super().__init__(parent, *args, **kwargs)
 
         # get the undo stack instance from the parent (the treeview)
@@ -631,8 +637,6 @@ class CheckBoxDelegate(QtWidgets.QStyledItemDelegate):
 
             # current enabled status of the mod at the given index
             is_enabled = bool(index.internalPointer().enabled)
-
-            # fixme: ARRRGH the undo stack keeps grouping commands! Even fairly unrelated ones! And I have no idea why!! It's frustrating to try to undo 1 thing and have half your work undone! WHYYYYYYY
 
             self._stack.push(
                 UndoCommand(
@@ -651,6 +655,7 @@ class CheckBoxDelegate(QtWidgets.QStyledItemDelegate):
 class LineEditDelegate(QtWidgets.QStyledItemDelegate):
 
     def __init__(self, parent, *args, **kwargs):
+        # noinspection PyArgumentList
         super().__init__(parent, *args, **kwargs)
 
         # get the undo stack instance from the parent (the treeview)
@@ -676,46 +681,4 @@ class LineEditDelegate(QtWidgets.QStyledItemDelegate):
             )
 
 
-
-
-
-
-
-# class CheckBoxEditor(QtWidgets.QCheckBox):
-#     """Using this as an editor in the treeview will allow us to capture
-#     the "check" event and wrap the setData call to the model in a
-#     Qundocommand"""
-#
-#
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#
-#         # intialize ourselves as checked
-#         self.setChecked(True)
-#         self.setAutoFillBackground(True)
-#
-#
-#     # all we need to do is define a user property
-#
-#     @pyqtProperty(bool, user=True)
-#     def item_is_enabled(self):
-#         return self.isChecked()
-#
-#     @item_is_enabled.setter
-#     def item_is_enabled(self, value):
-#         self.setChecked(value)
-#
-#
-# class CheckBoxEditorBase(QtWidgets.QItemEditorCreatorBase):
-#
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#
-#     def createWidget(self, parent):
-#         return CheckBoxEditor(parent)
-
-
-    # this is only called when there is no user property, which is not
-        # the case for us
-    # def valuePropertyName():
 

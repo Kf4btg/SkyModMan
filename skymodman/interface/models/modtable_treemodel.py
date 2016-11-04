@@ -1,21 +1,12 @@
 from functools import partial
-from collections import deque
 import re
 
 from PyQt5 import QtGui
 from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeData
 
-# from skymodman.interface.typedefs import QModEntry
 from skymodman.constants import (Column as COL, ModError)
 from skymodman.log import withlogger
 
-# # sometimes...the import system makes me very angry
-# from skymodman.interface.qundo.commands import (
-#     change_mod_attribute,
-#     shift_rows,
-#     remove_rows,
-#     clear_missing_mods
-# )
 
 # <editor-fold desc="ModuleConstants">
 
@@ -121,8 +112,6 @@ class ModTable_TreeModel(QAbstractItemModel):
         """:type: skymodman.types.modcollection.ModCollection"""
         self.errors = {} # type: dict [str, int]
 
-        # self.mod_entries = [] #type: list [QModEntry]
-
         # self.vheader_field = COL_ORDER
 
         ## to speed up drag-n-drop operations, track the start and
@@ -130,21 +119,6 @@ class ModTable_TreeModel(QAbstractItemModel):
         ## and int() the mimedata multiple times per second)
         self._drag_start = -1
         self._drag_end = -1
-
-
-        # track the row numbers of every mod in the table that is
-        # changed in any way. Every time a change is made, the row
-        # number is appended to the end of the deque, even if it
-        # is already present. Allowing duplicates in this way lets
-        # an undo() remove the most recent changes without losing
-        # track of any previous changes made to that row.
-
-        # More importantly, this allows us to directly specify precisely
-        # which mods need to be updated in the DB when the user issues
-        # a save command, rather than updating every entry in the table
-        # each time. This can safe a lot of cycles when only 1 or 2
-        # entries have been modified
-        # self._modifications = deque()
 
         # the 'disabled' text color
         self.disabled_foreground = QtGui.QBrush(
@@ -160,10 +134,6 @@ class ModTable_TreeModel(QAbstractItemModel):
     ##===============================================
     ## PROPERTIES
     ##===============================================
-
-    # @property
-    # def is_dirty(self) -> bool:
-    #     return len(self._modifications) > 0
 
     def __getitem__(self, row):
         """
@@ -186,14 +156,13 @@ class ModTable_TreeModel(QAbstractItemModel):
         :return:
         """
         if index.isValid(): return self.mods[index.row()]
-        # if index.isValid(): return self.mod_entries[index.row()]
 
     def mod_missing(self, mod_entry):
         """
         Return whether the specified mod is currently in an error state.
 
         :param QModEntry mod_entry:
-        :return:
+        :return: True iff the mod has the ModError.DIR_NOT_FOUND error
         """
         try:
             return self.errors[mod_entry.directory] == ModError.DIR_NOT_FOUND
@@ -201,50 +170,19 @@ class ModTable_TreeModel(QAbstractItemModel):
             # mod has no errors
             return False
 
-        # return mod_entry.error == ModError.DIR_NOT_FOUND
-
-    # def mark_modified(self, row_nums):
-    #     """
-    #     Add the values from `row_nums` to the collection of modified rows./
-    #
-    #     :param row_nums: an iterable of ints. The values must
-    #         all be valid indices in the mod collection
-    #     """
-    #     # self.LOGGER << iterable
-    #     self._modifications.extend(row_nums)
-    #
-    # def unmark_modified(self, count):
-    #     """
-    #     Remove the `count` most recent additions to the modifications
-    #     collection
-    #
-    #     :param int count:
-    #     :return:
-    #     """
-    #     # self.LOGGER << count
-    #     for _ in range(count):
-    #         self._modifications.pop()
-    #
-    # def _push_command(self, command):
-    #     """
-    #     Push a QUndoCommand to the parent's undo_stack
-    #     :param command:
-    #     """
-    #     self._parent.undo_stack.push(command)
-
     ##===============================================
     ## Required Qt Abstract Method Overrides
     ##===============================================
 
     def rowCount(self, *args, **kwargs) -> int:
-        # return len(self.mod_entries)
         return len(self.mods)
 
     def columnCount(self, *args, **kwargs) -> int:
         return len(col2Header)
 
     def parent(self, child_index=None):
-        # There are no children (yet...) so I guess this should always return invalid??
+        # There are no children (yet...) so I guess this should
+        # always return invalid??
         return QModelIndex()
 
     def index(self, row, col=0, parent=QModelIndex(), *args,
@@ -300,7 +238,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         if role == Qt_FontRole and not mod.managed:
             return self.unmanaged_font
 
-        # handle errors first
+        # handle errors
         if col == COL_ERRORS:
             try:
                 err_type = self.errors[mod.directory]
@@ -656,7 +594,6 @@ class ModTable_TreeModel(QAbstractItemModel):
         and when something major changes, like the active profile.
         """
         self.beginResetModel()
-        # self._modifications.clear()
 
         # we use the same collection as the rest of the application,
         # so we shouldn't modify it (unless specifically told to do so
@@ -719,64 +656,11 @@ class ModTable_TreeModel(QAbstractItemModel):
         # just write the current state of the collection to disk
         self.Manager.save_mod_info()
 
-        # modified = set(self._modifications)
-        # to_save = []
-
-        # first, update ordinals of modified entries to reflect their
-        # (possibly) new position
-        # for row in modified:
-            # self.mods.move()
-            # self.mod_entries[row].ordinal = row
-            # to_save.append(self.mod_entries[row])
-
-        # print(to_save)
-
-        # to_save = [self.mod_entries[row]
-        #            for row in set(self._modifications)]
-
-        # self.Manager.save_user_edits(to_save)
-
     def missing_mods(self):
         """Yield all the mods in the model that are currently showing
         the MOD_NOT_FOUND error type."""
 
         yield from (m for m in self.mods if self.mod_missing(m))
-
-
-    # def clear_missing(self):
-    #     """
-    #     Remove all mods that are marked with the NOT FOUND error
-    #     from the current profile's modlist
-    #
-    #     :return:
-    #     """
-    #
-    #     ## options here:
-    #     # 1) find each row that contains an errored mod and call
-    #     # RemoveRows on it. could be sped up by finding ranges.
-    #     # Will need to emit dataChanged and possibly shift stuff
-    #     # around.
-    #     # 2) just remove them from the mod_entries list and reset the
-    #     # model.
-    #     # ...
-    #     # 2 is much simpler. And if they user is doing this, there's
-    #     # likely a lot of things to remove.
-    #
-    #     def post_op():
-    #         self.check_mod_errors()
-    #         self.endResetModel()
-    #
-    #     # FIXME: move this undocommand out of the model
-    #
-    #     self._push_command(
-    #         clear_missing_mods.cmd(
-    #             self,
-    #             pre_redo_callback=self.beginResetModel,
-    #             pre_undo_callback=self.beginResetModel,
-    #             post_redo_callback=post_op,
-    #             post_undo_callback=post_op,
-    #         )
-    #     )
 
     ##===============================================
     ## Drag & Drop
@@ -827,13 +711,8 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         if not parent.isValid():
             return False
-        # p = parent.internalPointer() #type: QModEntry
-
-        # dest = parent.row()
 
         start, end = [int(r) for r in data.text().split()]
-
-        # print("dropMimeData: dest =", dest, ", start =", start, ", end =", end)
 
         self.rowsDropped.emit(start, end, parent.row())
 
@@ -863,18 +742,6 @@ class ModTable_TreeModel(QAbstractItemModel):
         del self.mods[row:row+count]
 
         self.endRemoveRows()
-
-        # self._push_command(
-        #     remove_rows.cmd(
-        #         self, row, end,
-        #         pre_redo_callback  = partial(self.beginRemoveRows,
-        #                                      parent, row, end),
-        #         post_redo_callback = self.endRemoveRows,
-        #         pre_undo_callback  = partial(self.beginInsertRows,
-        #                                      parent, row, end),
-        #         post_undo_callback = self.endInsertRows
-        #     )
-        # )
 
         return True
 
