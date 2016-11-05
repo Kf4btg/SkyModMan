@@ -145,7 +145,7 @@ class BaseDBManager:
         """
         self._con.close()
 
-    def select(self, from_table, *fields, where="", params=()):
+    def select(self, *fields, FROM, WHERE="", params=()):
         """
         Execute a SELECT statement for the specified fields from
         the named table, optionally using a WHERE constraint and
@@ -154,11 +154,11 @@ class BaseDBManager:
         "yield from" statement or e.g. turned into a sequence
         with fetchall() )
 
-        :param from_table: name of the database table to select from
         :param fields: columns/fields to choose from each matching row.
             If none are provided, then "*" will be used to select all
             columns
-        :param where: a SQL 'WHERE' constraint, minus the "WHERE"
+        :param FROM: name of the database table to select from
+        :param WHERE: a SQL 'WHERE' constraint, minus the "WHERE"
         :param params: parameter sequence to match any "?" in the query
 
         :rtype: sqlite3.Cursor
@@ -166,27 +166,28 @@ class BaseDBManager:
         """
 
 
-        if from_table not in self._tablenames:
-            raise KeyError(from_table)
+        if FROM not in self._tablenames:
+            raise KeyError(FROM)
             # raise exceptions.DatabaseError(
             #     "'{}' is not a valid from_table name".format(
             #         from_table))
 
         _q = "SELECT {flds} FROM {tbl}{whr}".format(
             flds=", ".join(fields) if fields else "*",
-            tbl=from_table,
-            whr=" WHERE {}".format(where) if where else ""
+            tbl=FROM,
+            whr=" WHERE {}".format(WHERE) if WHERE else ""
         )
 
         return self._con.execute(_q, params)
 
-    def selectone(self, from_table, *fields, where="", params=()):
+    def selectone(self, *fields, FROM, WHERE="", params=()):
         """
         Like ``select()``, but just returns the first row from the result
         of the query
         """
-        return self.select(from_table, *fields,
-                           where=where,
+        return self.select(*fields,
+                           FROM=FROM,
+                           WHERE=WHERE,
                            params=params).fetchone()
 
     def update(self, sql, params=(), many=False):
@@ -208,12 +209,12 @@ class BaseDBManager:
         # return self._con.execute(sql, params)
         return cmd(sql, params)
 
-    def delete(self, from_table, where="", params=(), many=False):
+    def delete(self, FROM, WHERE="", params=(), many=False):
         """
         Delete entries from a database table.
 
-        :param from_table:
-        :param where: if omitted, ALL rows in the table will be reomved
+        :param FROM:
+        :param WHERE: if omitted, ALL rows in the table will be reomved
         :param params:
         :param many: is this an ``executemany`` situation?
         :return: cursor object
@@ -223,8 +224,8 @@ class BaseDBManager:
         cmd = self._con.executemany if many else self._con.execute
 
         return cmd("DELETE FROM {tbl}{whr}".format(
-            tbl=from_table,
-            whr=(" WHERE %s" % where) if where else ""
+            tbl=FROM,
+            whr=(" WHERE %s" % WHERE) if WHERE else ""
         ), params)
 
     def insert(self, values_count, table, *fields, params=(),

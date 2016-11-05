@@ -155,6 +155,14 @@ class FileTabTreeView(QtWidgets.QTreeView):
             matches = list(Manager().DB.find_matching_files(
                 self._srcmodel.modname, sqlexpr))
 
+            ## using the select() method feels like a lot of overhead...
+            # matches = [r[0] for r in Manager().DB.select(
+            #     'filepath',
+            #     FROM='modfiles',
+            #     WHERE="directory = ? AND filepath LIKE ?",
+            #     params=(self._srcmodel.modname, sqlexpr)
+            # )]
+
 
             # matches = [r[0] for r in cur.execute(
             #     "SELECT filepath FROM modfiles WHERE directory=? AND filepath LIKE ?",

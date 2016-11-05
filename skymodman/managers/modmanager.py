@@ -943,12 +943,12 @@ class ModManager:
             mod's directory name, for managed mods)
         """
 
-        yield from (r[0] for r in self._dbman.select('modfiles', 'filepath',
-                           where="directory = ?",
-                           params=(mod_ident, )))
-
-
-
+        yield from (r[0] for r in
+                    self._dbman.select(
+                        'filepath',
+                        FROM='modfiles',
+                        WHERE="directory = ?",
+                        params=(mod_ident,)))
 
     ##=============================================
     ## Installation
@@ -1028,10 +1028,11 @@ class ModManager:
         """
 
         matches = list(r['directory'] for r in
-                       self._dbman.select("modfiles",
-                                         "directory",
-                                          where="filepath = ?",
-                                          params=(file.lower(), )
+                       self._dbman.select(
+                           "directory",
+                           FROM="modfiles",
+                           WHERE="filepath = ?",
+                           params=(file.lower(), )
                                           ))
 
         if matches:

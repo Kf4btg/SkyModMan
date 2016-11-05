@@ -1,5 +1,6 @@
 from functools import partial
 from itertools import repeat
+from bisect import bisect_left
 
 from PyQt5.QtCore import Qt, QModelIndex, QAbstractItemModel, pyqtSignal, pyqtSlot
 from PyQt5.QtWidgets import QUndoStack
@@ -33,6 +34,7 @@ class ModFileTreeModel(QAbstractItemModel):
     #TODO: calculate and inform the user of any file-conflicts that will occur in their mod-setup to help them decide what needs to be hidden.
 
     # rootPathChanged = pyqtSignal(str)
+    # noinspection PyArgumentList
     hasUnsavedChanges = pyqtSignal(bool)
 
     def __init__(self, parent, **kwargs):
@@ -55,6 +57,9 @@ class ModFileTreeModel(QAbstractItemModel):
         # the mod table has this stored on the custom view,
         # but we have no custom view for the file tree, so...here it is
         self.undostack = QUndoStack()
+
+        # maintain a flattened list of the files for the current mod
+        self._files = []
 
     # @property
     # def root_path(self):
@@ -121,25 +126,86 @@ class ModFileTreeModel(QAbstractItemModel):
         # name for this item is never actually seen
         self.rootitem = QFSItem(path="", name="data", parent=None)
 
+        # build yonder tree
         self.rootitem.build_children(self.mod.filetree, name_filter=lambda
                     n: n.lower() == 'meta.ini')
 
+        # create flattened list of just the files
+        self._files = [f for f in
+                       self.rootitem.iterchildren(recursive=True)
+                       if not f.isdir]
+
+        # for f in self._files:
+        #     f.print()
+
+        # print([str(i) for i in self._files])
+
+    def _locate(self, file):
+        """Given an FSItem or a file path (str), return the index of
+        that item (or the item with that path) in the flattened file
+        list"""
+
+        # perform a binary search for the file/path
+        i = bisect_left(self._files, file)
+
+        # make sure the index returned is of the exact item searched for
+        try:
+            if self._files[i] == file:
+                return i
+        except IndexError:
+            # this will only happen if 'file' doesn't exist in list
+            # and would have come after the final item, so `i` will
+            # be equal to len(self._files). Point is, file wasn't there
+            pass
+
+        raise ValueError
+
+        # if i != len(self._files) and self._files[i] == file:
+        #     return i
+        # raise ValueError
+
+    def _hidden_file_indices(self):
+        """Get the list of currently hidden files from the database
+        and return a list of the indices corresponding to those files
+        in self._files"""
+
+        idxs=[]
+
+        for hf in self.DB.hidden_files(self.mod.directory):
+            try:
+                idxs.append(self._locate(hf))
+            except ValueError:
+                self.LOGGER.error("Hidden file {0!r} was not found".format(hf))
+
+        # it's probably in order already, but just to be sure...
+        return sorted(idxs)
+
     def _mark_hidden_files(self):
 
-        hfiles = list(r['filepath'] for r in self.DB.select(
-            "hiddenfiles",
-            "filepath",
-            where="directory = ?",
-            params=(self.mod.directory,)
-        ))
+        # hfiles = list(r['filepath'] for r in self.DB.select(
+        #     "filepath",
+        #     FROM="hiddenfiles",
+        #     WHERE="directory = ?",
+        #     params=(self.mod.directory,)
+        # ))
+
+        # hfiles = list(self.DB.hidden_files(self.mod.directory))
+
+        # locate the hidden files in the file list using binary search:
+        # for hf in hfiles:
+        for hf in self.DB.hidden_files(self.mod.directory):
+            try:
+                self._files[self._locate(hf)].checkState = Qt_Unchecked
+            except ValueError:
+                self.LOGGER.error("Hidden file {0!r} was not found".format(hf))
 
         # only files (with their full paths relative to the root of
         # the mod directory) are in the hidden files list; thus we
         # need only compare files and not dirs to the list. As usual,
         # a directory's checkstate will be derived from its children
-        for c in self.rootitem.iterchildren(True):
-            if c.lpath in hfiles:
-                c.checkState = Qt_Unchecked
+        # for c in self.rootitem.iterchildren(True):
+        #     if c.lpath in hfiles:
+        #         c.checkState = Qt_Unchecked
 
     def getitem(self, index) -> QFSItem:
         """Extracts actual item from given index
@@ -335,6 +401,26 @@ class ModFileTreeModel(QAbstractItemModel):
 
         proxy.dataChanged.emit(proxy.mapFromSource(index1),
                                proxy.mapFromSource(index2), *args)
+
+
+
+    def change_hidden_state(self, to_hide=None, to_unhide=None):
+        """
+        Hides or unhides the indicated files. Does no checks to see if
+        the operation would be redundant.
+
+        :param list[int] to_hide: indices (from self.locate()) of
+            files to mark as hidden
+        :param list[int] to_unhide: indices (from self.locate()) of
+            files to mark as not-hidden
+        """
+
+
+
+
+    ##=============================================
+    ## Saving/undoing
+    ##=============================================
 
     def save(self):
         """

@@ -1,8 +1,10 @@
 from pathlib import Path
 from os.path import join
 from itertools import count
+from functools import total_ordering
 
 # @humanizer.humanize
+@total_ordering
 class FSItem:
     """
     Used to hold information about a real file on the filesystem,
@@ -238,14 +240,57 @@ class FSItem:
 
         :param FSItem other:
         """
-        return self.lpath == other.lpath
+        try:
+            return self.lpath == other.lpath
+        except AttributeError:
+            # value was not a FSItem...maybe it's a string
+            try:
+                return self.lpath == other.lower()
+            except AttributeError:
+                # nope, not a string
+                return NotImplemented
+
+    def __lt__(self, value):
+        """Compare this item's path to the path of the other item,
+        case insensitively. Also works if `value` is a string."""
+        try:
+            return self.lpath < value.lpath
+        except AttributeError:
+            # value was not a FSItem...maybe it's a string
+            try:
+                return self.lpath < value.lower()
+            except AttributeError:
+                # nope, not a string
+                return NotImplemented
+
 
     def __str__(self):
-        return  "\n  {0.__class__.__name__}(name: '{0._name}', " \
-                "path: '{0._path}',\n" \
-                "    row: {0._row}, " \
-                "level: {0._level}, " \
-                "isdir: {0._isdir}, " \
+        return  "{0.__class__.__name__}(name: '{0.name}', " \
+                "path: '{0.path}'," \
+                "row: {0.row}, " \
+                "level: {0.level}, " \
+                "isdir: {0.isdir}, " \
                 "kids: {0.child_count}, " \
                 "hidden: {0._hidden}" \
                 ")".format(self)
+
+    def print(self, file=None):
+        """print a str repr of the fsitem
+
+        use `file` to print to somewhere/something besides sys.stdout
+        """
+
+        lines= ("Name: %s " % self.name,
+                  "  Path: %s" % self.path,
+                  "  row: %d" % self.row,
+                  "  level: %d" % self.level,
+                  "  kids: %d" % self.child_count,
+                  "  hidden: %s" % self._hidden)
+
+        if file is not None:
+            for l in lines:
+                print(l, file=file)
+        else:
+            for l in lines:
+                print(l)
+

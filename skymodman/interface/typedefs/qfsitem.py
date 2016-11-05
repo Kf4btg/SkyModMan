@@ -58,10 +58,6 @@ class QFSItem(FSItem):
 
         return self._checkstate
 
-    # So, I think the protocol here is, when a directory is un/checked,
-    # set the checkstates of all that directory's children to match.
-    # here's the python translation of the c++ code from qtreewidget.cpp:
-
     @checkState.setter
     def checkState(self, state):
         self.setCheckState(state)
@@ -73,6 +69,9 @@ class QFSItem(FSItem):
         """
         self.setCheckState(Qt_Checked if checked else Qt_Unchecked)
 
+    # So, I think the protocol here is, when a directory is un/checked,
+    # set the checkstates of all that directory's children to match.
+    # here's the python translation of the c++ code from qtreewidget.cpp:
 
     def setCheckState(self, state):
         # using a class variable, track which items were changed
