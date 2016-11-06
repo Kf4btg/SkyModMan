@@ -15,9 +15,9 @@ class FSItem:
     #Since we may be creating LOTS of these things (some mods have gajiblions of files), we'll define
     # __slots__ to keep the memory footprint as low as possible
     # __slots__=("_path", "_lpath", "_name", "_parent", "_isdir", "_children", "_childnames", "_row", "_hidden", "_level", "_hasconflict")
-    __slots__=("path", "lpath", "name", "parent", "isdir", "_children", "_childnames", "row", "_hidden", "level", "_hasconflict")
+    __slots__=("path", "lpath", "name", "parent", "isdir", "row", "index", "_children", "_childnames", "_hidden", "level", "_hasconflict")
 
-    def __init__(self, *, path, name, parent=None, isdir=True, **kwargs):
+    def __init__(self, path, name, parent=None, isdir=True, *, index=-1, **kwargs):
         """
 
         :param str path: a relative path from an arbitray root to this file
@@ -41,6 +41,11 @@ class FSItem:
             self._childnames = None
 
         self.row=0
+
+        # as opposed to row, this is relative to the *entire* hierarchy
+        # of files this fsitem belongs to; basically, this is the index
+        # of this item in a flattened list of all files in the mod
+        self.index = index
 
         self._hidden = False
 
@@ -146,14 +151,37 @@ class FSItem:
         else:
             yield from self._children
 
-    def build_children(self, file_tree, name_filter=None):
-        """Build the fs-item tree from a tree of path names
-
-        :param skymodman.utils.tree.AutoTree file_tree:
+    @staticmethod
+    def build_filetree(root, file_tree, name_filter=None):
         """
+
+        :param FSItem root: Root container item of the tree
+        :param skymodman.utils.tree.AutoTree file_tree:
+        :param (str)->bool name_filter:
+        :return:
+        """
+
+        # use class attribute on temporary class to statically track
+        # items as they are added; each file-item (not dirs) will
+        # have an 'index' attribute >=0.
+        class indexer:
+            i=0
 
         if name_filter is None:
             name_filter = lambda n: False
+
+        root._build_children(file_tree, indexer, name_filter)
+
+        return root
+
+    def _build_children(self, file_tree, index, name_filter):
+        """Build the fs-item tree from a tree of path names
+
+        :param skymodman.utils.tree.AutoTree file_tree:
+        :param index:
+        """
+
+
 
         row=count()
         # recurse=False; do it manually by passing child tree to child item
@@ -163,11 +191,14 @@ class FSItem:
                 if name_filter(d):
                     continue # skip names that match filter
 
-                child=type(self)(path=join(self.path, d),
-                                 name=d,
-                                 parent=self,
-                                 isdir=True)
-                child.build_children(file_tree[d], name_filter)
+                # child=type(self)(path=join(self.path, d),
+                #                  name=d,
+                #                  parent=self,
+                #                  isdir=True)
+
+                child=type(self)(join(self.path, d), d, self, True)
+
+                child.build_children(file_tree[d], index, name_filter)
                 child.row = next(row)
 
                 self._children.append(child)
@@ -177,11 +208,19 @@ class FSItem:
                 if name_filter(f):
                     continue
 
-                child = type(self)(path=join(self.path, f),
-                                   name=f,
-                                   parent=self,
-                                   isdir=False)
+                # child = type(self)(path=join(self.path, f),
+                #                    name=f,
+                #                    parent=self,
+                #                    isdir=False,
+                #                    index=index.i)
+                child = type(self)(join(self.path, f),
+                                   f,
+                                   self,
+                                   False,
+                                   index=index.i)
                 child.row=next(row)
+
+                index.i+=1
 
                 self._children.append(child)
                 self._childnames.append(child.name)
@@ -273,6 +312,11 @@ class FSItem:
                 "kids: {0.child_count}, " \
                 "hidden: {0._hidden}" \
                 ")".format(self)
+
+    def __hash__(self):
+        """Use the hash of this item's filepath as its hash value"""
+
+        return hash(self.lpath)
 
     def print(self, file=None):
         """print a str repr of the fsitem

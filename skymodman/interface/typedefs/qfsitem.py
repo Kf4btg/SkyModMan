@@ -23,8 +23,8 @@ class QFSItem(FSItem):
     __slots__=("_checkstate", "flags", "icon")
 
     # noinspection PyTypeChecker,PyArgumentList
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
         self._checkstate=Qt_Checked # tracks explicit checks
         self.flags = Qt.ItemIsUserCheckable | Qt.ItemIsEnabled | Qt.ItemIsSelectable
@@ -58,22 +58,43 @@ class QFSItem(FSItem):
 
         return self._checkstate
 
-    @checkState.setter
-    def checkState(self, state):
-        self.setCheckState(state)
+    # @checkState.setter
+    # def checkState(self, state):
+    #     self.set_checkstate(state)
 
 
-    def setChecked(self, checked):
+    def setChecked(self, checked, recurse = True):
         """
         :param bool checked:
         """
-        self.setCheckState(Qt_Checked if checked else Qt_Unchecked)
+        self.set_checkstate(Qt_Checked if checked else Qt_Unchecked,
+                            recurse)
+
 
     # So, I think the protocol here is, when a directory is un/checked,
     # set the checkstates of all that directory's children to match.
     # here's the python translation of the c++ code from qtreewidget.cpp:
 
-    def setCheckState(self, state):
+    def set_checkstate(self, state, recurse=True):
+        """A simple this=that; set the checkstate of this item to
+        `state`, no questions asked."""
+
+
+        if recurse:
+            self._set_checkstate_recursive(state)
+        else:
+            self._checkstate = state
+
+        # the "hidden" attribute on the baseclass is what will allow us
+        # to save the lists of hidden files to disk, so be sure to set
+        # it here;
+
+        # note:: only explicitly unchecked items will be marked as
+        # hidden here; checked and partially-checked directories will
+        # not be hidden
+        self.hidden = state == Qt_Unchecked
+
+    def _set_checkstate_recursive(self, state):
         # using a class variable, track which items were changed
         QFSItem.last_child_seen = self
 
@@ -84,10 +105,13 @@ class QFSItem(FSItem):
             for c in self.iterchildren():
 
                 # this will trigger any child dirs to do the same
-                c.checkState = state
+                c.set_checkstate_recursive(state)
+                # c.checkState = state
                 # c.setEnabled(state == Qt_Checked)
 
-        self._checkstate = state
+        self.set_checkstate(state, False)
+
+        # self._checkstate = state
 
         # the "hidden" attribute on the baseclass is what will allow us
         # to save the lists of hidden files to disk, so be sure to set
@@ -96,7 +120,7 @@ class QFSItem(FSItem):
         # note:: only explicitly unchecked items will be marked as
         # hidden here; checked and partially-checked directories will
         # not be hidden
-        self.hidden = state == Qt_Unchecked
+        # self.hidden = state == Qt_Unchecked
 
         # add final check for if this was the last unhidden file in a directory:
 
@@ -136,14 +160,14 @@ class QFSItem(FSItem):
         return Qt_Unchecked if uncheckedkids else Qt_Checked
 
 
-    def setEnabled(self, boolean):
+    def setEnabled(self, enabled):
         """
         Modify this item's flags to set it enabled or disabled based on
         value of boolean
 
-        :param boolean:
+        :param bool enabled:
         """
-        if boolean:
+        if enabled:
             self.flags |= Qt.ItemIsEnabled
         else:
             self.flags &= ~Qt.ItemIsEnabled

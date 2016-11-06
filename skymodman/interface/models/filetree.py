@@ -1,4 +1,4 @@
-from functools import partial
+from functools import partial, lru_cache
 from itertools import repeat
 from bisect import bisect_left
 
@@ -89,6 +89,9 @@ class ModFileTreeModel(QAbstractItemModel):
         # drop the undo stack
         self.undostack.clear()
 
+        # and the index-cache
+        self._locate.cache_clear()
+
         # tells the view to get ready to redisplay its contents
         self.beginResetModel()
         self.mod = mod_entry
@@ -126,9 +129,14 @@ class ModFileTreeModel(QAbstractItemModel):
         # name for this item is never actually seen
         self.rootitem = QFSItem(path="", name="data", parent=None)
 
+
+        QFSItem.build_filetree(self.rootitem,
+                               self.mod.filetree,
+                               name_filter=lambda n: n.lower() == "meta.ini")
+
         # build yonder tree
-        self.rootitem.build_children(self.mod.filetree, name_filter=lambda
-                    n: n.lower() == 'meta.ini')
+        # self.rootitem.build_children(self.mod.filetree, name_filter=lambda
+        #             n: n.lower() == 'meta.ini')
 
         # create flattened list of just the files
         self._files = [f for f in
@@ -140,6 +148,7 @@ class ModFileTreeModel(QAbstractItemModel):
 
         # print([str(i) for i in self._files])
 
+    @lru_cache()
     def _locate(self, file):
         """Given an FSItem or a file path (str), return the index of
         that item (or the item with that path) in the flattened file
@@ -171,7 +180,22 @@ class ModFileTreeModel(QAbstractItemModel):
 
         idxs=[]
 
+        # the alternative to this (searching for each file by path to
+        # get index) would be to do some sort of...math...or something
+        # with the start/end index of the mod's entries in the database,
+        # referencing position of each file returned...
+        # but ehhhhhhhh, math.
+
+
+        # XXX: or, uh...there might already be a better way than either of these...and I've already written it. I guess I did, anyway. Obviously I don't remember it. Anyway, down in ``item_from_path()``...
+
         for hf in self.DB.hidden_files(self.mod.directory):
+            # NTS: As the number of hidden files approaches the total
+            # number of files in the mod, this bin search algo becomes
+            # less and less efficient compared to just going through
+            # the loop linearly once. Might be a moot point, though,
+            # as hiding the vast majority of files in a mod seems a
+            # very unlikely thing to want to do.
             try:
                 idxs.append(self._locate(hf))
             except ValueError:
@@ -363,7 +387,9 @@ class ModFileTreeModel(QAbstractItemModel):
 
         if role == Qt_CheckStateRole:
 
-            item.checkState = value #triggers cascade if this a dir
+            # item.checkState = value #triggers cascade if this a dir
+            item.set_checkstate(value, item.isdir)
+
 
             # if this item is the last checked/unchecked item in a dir,
             # make sure the change is propagated up through the parent
@@ -414,6 +440,8 @@ class ModFileTreeModel(QAbstractItemModel):
         :param list[int] to_unhide: indices (from self.locate()) of
             files to mark as not-hidden
         """
+
+
 
 
 
