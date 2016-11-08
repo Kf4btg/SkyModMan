@@ -129,6 +129,20 @@ class FSItem:
                 return None
 
     @property
+    def row_path(self):
+        """This is the 'how to get here from the root' path, using
+        row-indices from the top-level on down:
+            e.g. root[0][3][3][1][12]
+
+            or, the 13th item in the 2nd directory of the 4th directory
+            of the 4th directory of the 1st directory of the root item.
+            """
+        if self.parent:
+            return self.parent.row_path.append(self.row)
+        else:
+            return [self.row]
+
+    @property
     def children(self):
         """Returns a list of this item's direct children"""
         return self._children
@@ -180,9 +194,6 @@ class FSItem:
         :param skymodman.utils.tree.AutoTree file_tree:
         :param index:
         """
-
-
-
         row=count()
         # recurse=False; do it manually by passing child tree to child item
         for dirs, files in file_tree.walk(recurse=False):
@@ -208,11 +219,6 @@ class FSItem:
                 if name_filter(f):
                     continue
 
-                # child = type(self)(path=join(self.path, f),
-                #                    name=f,
-                #                    parent=self,
-                #                    isdir=False,
-                #                    index=index.i)
                 child = type(self)(join(self.path, f),
                                    f,
                                    self,

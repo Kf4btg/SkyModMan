@@ -15,12 +15,12 @@ class QFSItem(FSItem):
     # now here's a hack...
     # this is changed by every child when recursively toggling check
     # state; thus its final value will be the final child accessed.
-    last_child_seen = None
+    last_child_changed = None
 
 
     # Since the base class has __slots__, we need to define them here,
     # too, or we'll lose all the benefits.
-    __slots__=("_checkstate", "flags", "icon")
+    __slots__=("_checkstate", "flags", "icon", "_child_state")
 
     # noinspection PyTypeChecker,PyArgumentList
     def __init__(self, *args, **kwargs):
@@ -34,6 +34,8 @@ class QFSItem(FSItem):
         else: #file
             self.flags |= Qt.ItemNeverHasChildren
             self.icon = QIcon.fromTheme("text-plain")
+
+        self._child_state=None
 
     @property
     def itemflags(self):
@@ -56,7 +58,8 @@ class QFSItem(FSItem):
         if self.isdir and self.child_count>0:
             return self.children_checkState()
 
-        return self._checkstate
+        # return self._checkstate
+        return Qt_Unchecked if self.hidden else Qt_Checked
 
     # @checkState.setter
     # def checkState(self, state):
@@ -67,23 +70,51 @@ class QFSItem(FSItem):
         """
         :param bool checked:
         """
-        self.set_checkstate(Qt_Checked if checked else Qt_Unchecked,
+        self.set_checkstate(Qt_Checked if checked
+                            else Qt_Unchecked,
                             recurse)
 
-
-    # So, I think the protocol here is, when a directory is un/checked,
-    # set the checkstates of all that directory's children to match.
-    # here's the python translation of the c++ code from qtreewidget.cpp:
-
     def set_checkstate(self, state, recurse=True):
-        """A simple this=that; set the checkstate of this item to
-        `state`, no questions asked."""
+        """Set the checkstate of the item to `state`. If `recurse` is
+        True and this item is a directory, that state will also be
+        applied to all children under this item
+
+
+        :return: the FSItem highest in the parent-hierarchy above this
+            instance (i.e., the directory directly below the root item
+            that (at some level) contains this item). If this FSItem
+            is itself a top-level file or directory, it will return
+            itself.
+            This is for tracking which items have had their check-states
+            changed or invalidated (as in the case of directories, where
+            checkstate is derived from that of its children)"""
+
+        self._set_checkstate(state, recurse)
+
+        # invalidate parent child_state attribute
+        if self.parent and self.parent.parent:
+            # to avoid returning the root item, we
+            # check for self.parent (which should always be valid,
+            # since the user can't change the "checked" state of the
+            # root item) and self.parent.parent (which may be invalid
+            # IFF the parent of this item IS the root item, in which
+            # case we have no need to invalidate its child_state and
+            # so we return THIS item as the top-most affected ancestor)
+            return self.parent._invalidate_child_state()
+        return self
+
+    def _set_checkstate(self, state, recurse):
+        """For internal use"""
+        # this is kept separate to avoid gillions of unnecessary
+        # "parent._invalidate_child_state()" calls when recursing
+
+        # using a class variable, track which items were changed
+        QFSItem.last_child_changed = self
 
 
         if recurse:
             self._set_checkstate_recursive(state)
-        else:
-            self._checkstate = state
+        # self._checkstate = state
 
         # the "hidden" attribute on the baseclass is what will allow us
         # to save the lists of hidden files to disk, so be sure to set
@@ -96,7 +127,8 @@ class QFSItem(FSItem):
 
     def _set_checkstate_recursive(self, state):
         # using a class variable, track which items were changed
-        QFSItem.last_child_seen = self
+        # QFSItem.last_child_changed = self
+
 
         # state propagation for dirs:
         # (only dirs can have the tristate flag turned on)
@@ -105,25 +137,20 @@ class QFSItem(FSItem):
             for c in self.iterchildren():
 
                 # this will trigger any child dirs to do the same
-                c.set_checkstate_recursive(state)
-                # c.checkState = state
+                c.set_checkstate(state, c.isdir)
+
                 # c.setEnabled(state == Qt_Checked)
 
-        self.set_checkstate(state, False)
+            # we know that, now, all the children of this item have
+            # `state` as their current checkState, so we can update this:
+            self._child_state = state
 
-        # self._checkstate = state
+        # self.set_checkstate(state, False)
 
-        # the "hidden" attribute on the baseclass is what will allow us
-        # to save the lists of hidden files to disk, so be sure to set
-        # it here;
 
-        # note:: only explicitly unchecked items will be marked as
-        # hidden here; checked and partially-checked directories will
-        # not be hidden
-        # self.hidden = state == Qt_Unchecked
-
-        # add final check for if this was the last unhidden file in a directory:
-
+    # So, I think the protocol here is, when a directory is un/checked,
+    # set the checkstates of all that directory's children to match.
+    # here's the python translation of the c++ code from qtreewidget.cpp:
     def children_checkState(self):
         """
         Calculates the checked state of the item based on the checked
@@ -135,30 +162,70 @@ class QFSItem(FSItem):
 
           Note: both the description above and the algorithm below were
           'borrowed' from the Qt code for QTreeWidgetItem"""
-        checkedkids = False
-        uncheckedkids = False
 
-        # check child checkstates;
-        # break when answer can be determined;
-        # shouldn't need to be recursive if check state is properly
-        # propagated and set for all descendants
-        for c in self.iterchildren():
-            s = c.checkState
-            # if any child is partially checked, so will this be
-            if s == Qt_PartiallyChecked:
-                return Qt_PartiallyChecked
 
-            if s == Qt_Unchecked:
-                uncheckedkids = True
+        # if we have a cached, valid child state, skip the calculation
+        # and just return that; otherwise derive the conglomerate
+        # state of this item from that of its children
+        if self._child_state is None:
+
+            checkedkids = False
+            uncheckedkids = False
+
+            # roughly equivalent to:
+            #
+            # if any(c.checkState == PartialCheck for c in children):
+            #   self.checkstate = PartialCheck
+            # elif all(c.checkstate == Unchecked for c in children):
+            #   self.checkstate = Unchecked
+            # elif all(c.checkstate == Checked for c in children):
+            #   self.checkstate = Checked
+            # else:
+            #   self.checkstate = PartialCheck
+
+            # check child checkstates;
+            # break when answer can be determined;
+            # shouldn't need to be recursive if check state is properly
+            # propagated and set for all descendants
+            for c in self.iterchildren():
+                s = c.checkState
+                # if any child is partially checked, so will this be
+                if s == Qt_PartiallyChecked:
+                    self._child_state = Qt_PartiallyChecked
+                    break
+                    # return Qt_PartiallyChecked
+
+                if s == Qt_Unchecked:
+                    uncheckedkids = True
+                else:
+                    checkedkids = True
+
+                # if we've found both kinds, return partial
+                if checkedkids and uncheckedkids:
+                    self._child_state = Qt_PartiallyChecked
+                    break
+                    # return Qt_PartiallyChecked
             else:
-                checkedkids = True
+                # we didn't break, so one of the values must still be False
+                self._child_state = Qt_Unchecked if uncheckedkids else Qt_Checked
 
-            # if we've found both kinds, return partial
-            if checkedkids and uncheckedkids:
-                return Qt_PartiallyChecked
+        return self._child_state
+            # return Qt_Unchecked if uncheckedkids else Qt_Checked
 
-        return Qt_Unchecked if uncheckedkids else Qt_Checked
+    def _invalidate_child_state(self):
+        """Indicate that the cached _child_state attribute should
+        be considered invalid and be recalculated on next call"""
+        self._child_state = None
 
+        # necessarily, this requires that the parent of this item
+        # have its child_state rendered invalid as well
+        p = self.parent
+        if p and p.parent:
+            # check for the parent's parent because the root item
+            # is inaccessible to the user and thus will never
+            # have its child_state queried
+            return p._invalidate_child_state()
+        return self
 
     def setEnabled(self, enabled):
         """

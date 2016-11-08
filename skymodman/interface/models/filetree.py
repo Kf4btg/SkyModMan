@@ -59,7 +59,10 @@ class ModFileTreeModel(QAbstractItemModel):
         self.undostack = QUndoStack()
 
         # maintain a flattened list of the files for the current mod
-        self._files = []
+        self._files = [] # type: list [QFSItem]
+
+        # and a list of indices of files which are hidden
+        self._hidden = [] # type: list [int]
 
     # @property
     # def root_path(self):
@@ -173,7 +176,7 @@ class ModFileTreeModel(QAbstractItemModel):
         #     return i
         # raise ValueError
 
-    def _hidden_file_indices(self):
+    def _hidden_file_indices_db(self):
         """Get the list of currently hidden files from the database
         and return a list of the indices corresponding to those files
         in self._files"""
@@ -204,6 +207,13 @@ class ModFileTreeModel(QAbstractItemModel):
         # it's probably in order already, but just to be sure...
         return sorted(idxs)
 
+    def _hidden_file_indices(self):
+        """Rather than querying the database, this examines the current
+        state of the FSItems in the internal _files list"""
+        return [i for i, item in enumerate(self._files) if item.hidden]
+
+
+
     def _mark_hidden_files(self):
 
         # hfiles = list(r['filepath'] for r in self.DB.select(
@@ -219,7 +229,13 @@ class ModFileTreeModel(QAbstractItemModel):
         # for hf in hfiles:
         for hf in self.DB.hidden_files(self.mod.directory):
             try:
-                self._files[self._locate(hf)].checkState = Qt_Unchecked
+                idx = self._locate(hf)
+                # don't recurse, these should all be files;
+                # also use the internal _set_checkstate to avoid the
+                # parent.child_state invalidation step
+                self._files[idx]._set_checkstate(Qt_Unchecked, False)
+                # track indices of hidden files
+                self._hidden.append(idx)
             except ValueError:
                 self.LOGGER.error("Hidden file {0!r} was not found".format(hf))
 
@@ -241,18 +257,18 @@ class ModFileTreeModel(QAbstractItemModel):
             if item: return item
         return self.rootitem
 
-    def item_from_path(self, path_parts):
-        """
-
-        :param path_parts: a tuple where each element is an element in
-            the filesystem path leading from the root item to the item
-        :return: the item
-        """
-        item = self.rootitem
-        for p in path_parts:
-            item = item[p]
-
-        return item
+    # def item_from_path(self, path_parts):
+    #     """
+    #
+    #     :param path_parts: a tuple where each element is an element in
+    #         the filesystem path leading from the root item to the item
+    #     :return: the item
+    #     """
+    #     item = self.rootitem
+    #     for p in path_parts:
+    #         item = item[p]
+    #
+    #     return item
 
     def columnCount(self, *args, **kwargs) -> int:
         """Dir/File Name(+checkbox), path to file, file conflicts """
@@ -388,38 +404,49 @@ class ModFileTreeModel(QAbstractItemModel):
         if role == Qt_CheckStateRole:
 
             # item.checkState = value #triggers cascade if this a dir
-            item.set_checkstate(value, item.isdir)
+            toplvl_ancestor = item.set_checkstate(value, item.isdir)
 
 
             # if this item is the last checked/unchecked item in a dir,
             # make sure the change is propagated up through the parent
             # hierarchy, to make sure that no folders remain checked
             # when none of their descendants are.
-            ancestor = self._get_highest_affected_ancestor(item, value)
+            # ancestor = self._get_highest_affected_ancestor(item, value)
 
-            if ancestor is not item:
-                index1 = self.getIndexFromItem(ancestor)
-            else:
+            # if ancestor is not item:
+            #     index1 = self.getIndexFromItem(ancestor)
+
+            # item.set_checkstate now does the work for us
+            if toplvl_ancestor is item:
                 index1 = index
+            else:
+                index1 = self.getIndexFromItem(toplvl_ancestor)
 
-            # using the "last_child_seen" value--which SHOULD be the most
+            if QFSItem.last_child_changed is item:
+                index2 = index
+            else:
+                index2=self.getIndexFromItem(QFSItem.last_child_changed)
+
+            # using the "last_child_changed" value--which SHOULD be the most
             # "bottom-right" child that was just changed--to feed to
             # datachanged saves a lot of individual calls. Hopefully there
             # won't be any concurrency issues to worry about later on.
 
+            # self._send_data_through_proxy(index1,index2)
+
             # update the db with which files are now hidden
-            self.update_db(index1,
-                           self.getIndexFromItem(QFSItem.last_child_seen))
+            self.update_db(index1, index2)
+                           # self.getIndexFromItem(QFSItem.last_child_changed))
 
             return True
         return super().setData(index, value, role)
 
-    def _get_highest_affected_ancestor(self, item, value):
-        """worst name for a function ever but i can't think of better"""
-        if item.parent and item.parent.children_checkState() == value:
-            return self._get_highest_affected_ancestor(item.parent, value)
-        else:
-            return item
+    # def _get_highest_affected_ancestor(self, item, value):
+    #     """worst name for a function ever but i can't think of better"""
+    #     if item.parent and item.parent.children_checkState() == value:
+    #         return self._get_highest_affected_ancestor(item.parent, value)
+    #     else:
+    #         return item
 
     # noinspection PyUnresolvedReferences
     def _send_data_through_proxy(self, index1, index2, *args):
@@ -430,7 +457,15 @@ class ModFileTreeModel(QAbstractItemModel):
 
 
 
-    def change_hidden_state(self, to_hide=None, to_unhide=None):
+    def set_as_hidden(self, file_index_list):
+        """
+
+        :param file_index_list: a list of ints indicating which files
+            in self._files should be set hidden.
+        :return:
+        """
+
+    def change_hidden_states(self, to_hide=None, to_unhide=None):
         """
         Hides or unhides the indicated files. Does no checks to see if
         the operation would be redundant.
@@ -441,8 +476,52 @@ class ModFileTreeModel(QAbstractItemModel):
             files to mark as not-hidden
         """
 
+        # these are all files, so there'll be no cascade as with
+        # directories. However, we need to make sure the parent
+        # checkstate gets properly modified
+        _all = to_hide + to_unhide
+
+        # the largest index in the two lists corresponds to the "bottom-
+        # right" item as needed by dataChanged
+
+        bot_right = self._files[max(_all)]
+
+        # top left is the top-most parent of the smallest index (first
+        # row-number in the item's row path
+        top_left = self._files[self._files[min(_all)].row_path[0]]
+
+        for i in to_hide:
+            self._files[i].setChecked(False, False)
+        for i in to_unhide:
+            self._files[i].setChecked(True, False)
 
 
+
+
+        self._send_data_through_proxy(
+            self.getIndexFromItem(top_left),
+            self.getIndexFromItem(bot_right)
+        )
+
+
+
+    def row_path_to_item(self, row_path):
+        """
+        Given the row path (a list of ints) of an item, retrieve that
+        item from the file hierarchy
+
+        :param row_path:
+        :return:
+        """
+
+        item=self.rootitem
+
+        for r in row_path:
+            # each item of row_path is a row number;
+            # just follow the trail down the tree
+            item = item[r]
+
+        return item
 
 
 
@@ -503,6 +582,59 @@ class ModFileTreeModel(QAbstractItemModel):
                                      ))
         self.hasUnsavedChanges.emit(True)
 
+
+from skymodman.interface.qundo.commands.hide_files import ModifyHiddenFilesCommand
+
+class ModFileTreeModel_QUndo(ModFileTreeModel):
+    """
+    An extension of the ModFileTreeModel that only handles undo events;
+    everything else is delegated back to the base class
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(**args, **kwargs)
+
+        self._stack = QUndoStack(self)
+
+        self._setdataresult=None
+
+        self._item1=None
+        self._item2=None
+
+    def setData(self, index, value, role=Qt_CheckStateRole):
+
+        if role == Qt_CheckStateRole:
+            # get list of which indices are currently hidden
+            was_hidden = self._hidden_file_indices()
+
+            # first step of undoing: simulate re-clicking on the
+            # same item the user clicked on;
+            # second step is to fix any differences
+            item_clicked = index.internalPointer()
+
+            # since there doesn't actually appear to be a way
+            # to remove a failed UndoCommand from the stack,
+            # we're going to just call super().setData() here, then
+            # if that returns True, create the command and have it skip
+            # its first redo
+            if super().setData(index, value, role):
+                # get list of hidden items AFTER the checkstate change
+                # (because it could have triggered a cascade)
+
+                # TODO: see if there's a way to avoid doing a full linear search again
+                now_hidden = self._hidden_file_indices()
+
+
+
+
+
+            # create the undo command
+            cmd = ModifyHiddenFilesCommand()
+
+            self._stack.push(cmd)
+
+        else:
+            return super().setData(index, value, role)
 
 
 class ChangeHiddenFilesCommand(UndoCmd):
