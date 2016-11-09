@@ -843,12 +843,27 @@ class ModManager:
         # reset so that next install will reflect the new state
         self._enabledmods = None
 
-    def save_hidden_files(self):
+    def save_hidden_files(self, for_mod, unhide, hide):
         """
         Write the collection of hidden files (stored on the profile
         object) to disk.
+
+        :param for_mod: key (directory) of mod to which these files
+            belong
+        :param unhide: list of filepaths to remove from the hidden files
+            list
+        :param hide: list of filepaths to add to the hidden files list
+
         """
         self.LOGGER << "<==Method called"
+
+
+        # delete 'unhide' files
+        self._dbman.remove_hidden_files(for_mod, unhide)
+
+        # add newly-hidden files
+        self._dbman.add_files("hidden", for_mod, hide)
+
 
         # utils.tree.Tree uses json internally to stringify itself, so
         # we just need to write the string to disk

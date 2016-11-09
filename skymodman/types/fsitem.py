@@ -15,9 +15,9 @@ class FSItem:
     #Since we may be creating LOTS of these things (some mods have gajiblions of files), we'll define
     # __slots__ to keep the memory footprint as low as possible
     # __slots__=("_path", "_lpath", "_name", "_parent", "_isdir", "_children", "_childnames", "_row", "_hidden", "_level", "_hasconflict")
-    __slots__=("path", "lpath", "name", "parent", "isdir", "row", "index", "_children", "_childnames", "_hidden", "level", "_hasconflict")
+    __slots__=("path", "lpath", "name", "parent", "isdir", "row", "_children", "_childnames", "_hidden", "level", "_hasconflict")
 
-    def __init__(self, path, name, parent=None, isdir=True, *, index=-1, **kwargs):
+    def __init__(self, path, name, parent=None, isdir=True, **kwargs):
         """
 
         :param str path: a relative path from an arbitray root to this file
@@ -45,7 +45,7 @@ class FSItem:
         # as opposed to row, this is relative to the *entire* hierarchy
         # of files this fsitem belongs to; basically, this is the index
         # of this item in a flattened list of all files in the mod
-        self.index = index
+        # self.index = index
 
         self._hidden = False
 
@@ -112,16 +112,26 @@ class FSItem:
 
     def __getitem__(self, item):
         """
-        Access children using list notation: thisitem[0] or
-        thisitem["childfile.nif"] Returns none if given an invalid item
-        number/name or childlist is None
+        Access children using list notation: ``thisitem[0]`` or
+        ``thisitem["childfile.nif"]``. Returns ``None`` if given an invalid item
+        number/name or childlist is ``None``.
 
-        :param int|str item:
+        As a special case, if indexed w/ ``None``, returns itself.
+
+        >>> this_item[None]
+        this_item
+
+        :param int|str|None item: if an ``int``, return the item at that
+            row in this directory. if ``str``, return the child with
+            that name in this directory. If ``None``, return self.
         """
         try:
             # assume `item` is an int
             return self._children[item]
         except TypeError:
+            # bit of a hack: return self if indexed w/ ``None``
+            if item is None:
+                return self
             try:
                 # assume `item` is the name of the file as a string
                 return self._children[self._childnames.index(item)]
@@ -137,8 +147,8 @@ class FSItem:
             or, the 13th item in the 2nd directory of the 4th directory
             of the 4th directory of the 1st directory of the root item.
             """
-        if self.parent:
-            return self.parent.row_path.append(self.row)
+        if self.parent.parent:
+            return self.parent.row_path + [self.row]
         else:
             return [self.row]
 
@@ -171,45 +181,88 @@ class FSItem:
 
         :param FSItem root: Root container item of the tree
         :param skymodman.utils.tree.AutoTree file_tree:
-        :param (str)->bool name_filter:
-        :return:
+        :param (str)->bool name_filter: if given and not ``None``, each
+            filename found will be passed to the `namefilter` callable.
+            If the namefiter returns True, that file will NOT be added
+            to the list of children
+        :return: `root`
         """
 
         # use class attribute on temporary class to statically track
         # items as they are added; each file-item (not dirs) will
         # have an 'index' attribute >=0.
-        class indexer:
-            i=0
+        # class indexer:
+        #     i=0
 
         if name_filter is None:
             name_filter = lambda n: False
 
-        root._build_children(file_tree, indexer, name_filter)
+        # root._build_children(file_tree, indexer, name_filter)
+
+        root._build_tree(file_tree, name_filter)
 
         return root
 
-    def _build_children(self, file_tree, index, name_filter):
-        """Build the fs-item tree from a tree of path names
+    # def _build_children(self, file_tree, index, name_filter):
+    #     """Build the fs-item tree from a tree of path names
+    #
+    #     :param skymodman.utils.tree.AutoTree file_tree:
+    #     :param index:
+    #     """
+    #     row=count()
+    #     # recurse=False; do it manually by passing child tree to child item
+    #     for dirs, files in file_tree.walk(recurse=False):
+    #
+    #         for d in dirs:
+    #             if name_filter(d):
+    #                 continue # skip names that match filter
+    #
+    #             # child=type(self)(path=join(self.path, d),
+    #             #                  name=d,
+    #             #                  parent=self,
+    #             #                  isdir=True)
+    #
+    #             child=type(self)(join(self.path, d), d, self, True)
+    #
+    #             child.build_children(file_tree[d], index, name_filter)
+    #             child.row = next(row)
+    #
+    #             self._children.append(child)
+    #             self._childnames.append(child.name)
+    #
+    #         for f in files:
+    #             if name_filter(f):
+    #                 continue
+    #
+    #             child = type(self)(join(self.path, f),
+    #                                f,
+    #                                self,
+    #                                False,
+    #                                index=index.i)
+    #             child.row=next(row)
+    #
+    #             index.i+=1
+    #
+    #             self._children.append(child)
+    #             self._childnames.append(child.name)
 
-        :param skymodman.utils.tree.AutoTree file_tree:
-        :param index:
-        """
-        row=count()
+    def _build_tree(self, file_tree, name_filter):
+        row = count()
         # recurse=False; do it manually by passing child tree to child item
         for dirs, files in file_tree.walk(recurse=False):
 
             for d in dirs:
                 if name_filter(d):
-                    continue # skip names that match filter
+                    continue  # skip names that match filter
 
                 # child=type(self)(path=join(self.path, d),
                 #                  name=d,
                 #                  parent=self,
                 #                  isdir=True)
 
-                child=type(self)(join(self.path, d), d, self, True)
+                child = type(self)(join(self.path, d), d, self, True)
 
-                child.build_children(file_tree[d], index, name_filter)
+                child._build_tree(file_tree[d], name_filter)
                 child.row = next(row)
 
                 self._children.append(child)
@@ -222,11 +275,8 @@ class FSItem:
                 child = type(self)(join(self.path, f),
                                    f,
                                    self,
-                                   False,
-                                   index=index.i)
-                child.row=next(row)
-
-                index.i+=1
+                                   False)
+                child.row = next(row)
 
                 self._children.append(child)
                 self._childnames.append(child.name)

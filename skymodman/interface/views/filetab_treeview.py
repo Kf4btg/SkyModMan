@@ -16,7 +16,7 @@ class FileTabTreeView(QtWidgets.QTreeView):
 
         # source model
         self._srcmodel = None
-        """:type: skymodman.interface.models.ModFileTreeModel"""
+        """:type: skymodman.interface.models.ModFileTreeModel_QUndo"""
 
         # search filter proxy model
         self._filter = None
@@ -55,7 +55,7 @@ class FileTabTreeView(QtWidgets.QTreeView):
         :param selection_list: the QListView of mod names; when one is
             selected, update which mod is shown here
         """
-        from skymodman.interface.models import ModFileTreeModel, \
+        from skymodman.interface.models import ModFileTreeModel_QUndo, \
             FileViewerTreeFilter
 
         self._filterbox = filterbox
@@ -64,7 +64,7 @@ class FileTabTreeView(QtWidgets.QTreeView):
             self._filterbox.clearFocus)
 
         # initialize model
-        self._srcmodel = ModFileTreeModel(self)
+        self._srcmodel = ModFileTreeModel_QUndo(self)
 
         # initialize proxy filter
         self._filter = FileViewerTreeFilter(self)
@@ -86,7 +86,7 @@ class FileTabTreeView(QtWidgets.QTreeView):
         selection_list.selectedModChanged.connect(self.on_mod_changed)
 
         # cleanup
-        del ModFileTreeModel, FileViewerTreeFilter
+        del ModFileTreeModel_QUndo, FileViewerTreeFilter
 
     def reset_view(self):
         """Reset view to a clean state"""
@@ -104,7 +104,7 @@ class FileTabTreeView(QtWidgets.QTreeView):
         # # the undo stack rather than "undo"-ing the whole thing
         # self._undostack.clear()
 
-        self._srcmodel.revert()
+        self._srcmodel.revert_changes()
 
     def save(self):
         self._srcmodel.save()

@@ -380,33 +380,35 @@ class DBManager(BaseDBManager, Submanager):
         :param file_list: list of files
         """
 
-        self.checktx()
+        # self.checktx()
 
         _q = "DELETE FROM hiddenfiles" \
              " WHERE directory = '{mdir}'" \
              " AND filepath IN ({paths})"
 
-        c = self.conn.cursor()
+        # c = self.conn.cursor()
 
-        if len(file_list) <= _SQLMAX:
-            # nothing special
-            _q = _q.format(mdir=mod_dir,
-                           paths=", ".join("?" * len(file_list)))
-            c.execute(_q, file_list)
-        else:
-            # something special
-            sections, remainder = divmod(len(file_list), _SQLMAX)
-            for i in range(sections):
-                s = _SQLMAX * i
-                query = _q.format(mdir=mod_dir,
-                                  paths=", ".join('?' * _SQLMAX))
-                c.execute(query, file_list[s:s + _SQLMAX])
-            if remainder:
-                query = _q.format(mdir=mod_dir,
-                                  paths=", ".join('?' * remainder))
-                c.execute(query, file_list[sections * _SQLMAX:])
+        with self.conn as c:
 
-        return c
+            if len(file_list) <= _SQLMAX:
+                # nothing special
+                _q = _q.format(mdir=mod_dir,
+                               paths=", ".join("?" * len(file_list)))
+                c.execute(_q, file_list)
+            else:
+                # something special
+                sections, remainder = divmod(len(file_list), _SQLMAX)
+                for i in range(sections):
+                    s = _SQLMAX * i
+                    query = _q.format(mdir=mod_dir,
+                                      paths=", ".join('?' * _SQLMAX))
+                    c.execute(query, file_list[s:s + _SQLMAX])
+                if remainder:
+                    query = _q.format(mdir=mod_dir,
+                                      paths=", ".join('?' * remainder))
+                    c.execute(query, file_list[sections * _SQLMAX:])
+
+        # return c
 
     def hidden_files(self, for_mod):
         """

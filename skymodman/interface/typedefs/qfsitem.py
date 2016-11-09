@@ -66,11 +66,34 @@ class QFSItem(FSItem):
     #     self.set_checkstate(state)
 
 
+    def force_set_checkstate(self, state):
+        """
+        Simply set the checkstate of this item to `state`, no
+        questions asked--although Qt.PartiallyChecked is invalid for
+        files and will be changed to Qt.Checked.
+
+        No recursion occurs within this method.
+        """
+
+        if self.isdir:
+            # for directories, we use a cached value for the checkstate,
+            # so directly set that instead of letting it be derived
+            self._child_state = state
+
+        # and for files, the checkstate is taken from the 'hidden'
+        # status; we need to set that for directories as well, so this
+        # part can be universal
+
+        # NOT hidden if state is Checked or PartiallyChecked
+        self.hidden = state == Qt_Unchecked
+
+
+
     def setChecked(self, checked, recurse = True):
         """
         :param bool checked:
         """
-        self.set_checkstate(Qt_Checked if checked
+        return self.set_checkstate(Qt_Checked if checked
                             else Qt_Unchecked,
                             recurse)
 
@@ -79,20 +102,26 @@ class QFSItem(FSItem):
         True and this item is a directory, that state will also be
         applied to all children under this item
 
+        :return: the last QFSItem that was affected by this operation
+            (which would be this item if this item is a file, otherwise
+            the final item in this directory or the deepest sub-dir)
 
-        :return: the FSItem highest in the parent-hierarchy above this
-            instance (i.e., the directory directly below the root item
-            that (at some level) contains this item). If this FSItem
-            is itself a top-level file or directory, it will return
-            itself.
-            This is for tracking which items have had their check-states
-            changed or invalidated (as in the case of directories, where
-            checkstate is derived from that of its children)"""
+        # """
+        # """
+        # :return: the FSItem highest in the parent-hierarchy above this
+        #     instance (i.e., the directory directly below the root item
+        #     that (at some level) contains this item). If this FSItem
+        #     is itself a top-level file or directory, it will return
+        #     itself.
+        #     This is for tracking which items have had their check-states
+        #     changed or invalidated (as in the case of directories, where
+        #     checkstate is derived from that of its children)"""
 
         self._set_checkstate(state, recurse)
+        return QFSItem.last_child_changed
 
         # invalidate parent child_state attribute
-        if self.parent and self.parent.parent:
+        # if self.parent and self.parent.parent:
             # to avoid returning the root item, we
             # check for self.parent (which should always be valid,
             # since the user can't change the "checked" state of the
@@ -100,8 +129,9 @@ class QFSItem(FSItem):
             # IFF the parent of this item IS the root item, in which
             # case we have no need to invalidate its child_state and
             # so we return THIS item as the top-most affected ancestor)
-            return self.parent._invalidate_child_state()
-        return self
+            # return self.parent._invalidate_child_state()
+            # self.parent._invalidate_child_state()
+        # return self
 
     def _set_checkstate(self, state, recurse):
         """For internal use"""
@@ -137,7 +167,7 @@ class QFSItem(FSItem):
             for c in self.iterchildren():
 
                 # this will trigger any child dirs to do the same
-                c.set_checkstate(state, c.isdir)
+                c._set_checkstate(state, c.isdir)
 
                 # c.setEnabled(state == Qt_Checked)
 
@@ -226,6 +256,13 @@ class QFSItem(FSItem):
             # have its child_state queried
             return p._invalidate_child_state()
         return self
+
+    def invalidate_child_state(self):
+        """Indicate that the cached _child_state attribute should
+        be considered invalid and be recalculated on next call. Does
+        not propagate up."""
+        self._child_state = None
+
 
     def setEnabled(self, enabled):
         """
