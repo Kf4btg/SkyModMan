@@ -871,10 +871,6 @@ class ModManager:
         with self.profile.hidden_files.open('w') as f:
             f.write(str(self._dbman.get_hidden_file_tree()))
 
-        # use static json-serializing method
-        # _disk.IOManager.json_write(self.profile.hidden_files,
-        #                            self._dbman.get_hidden_file_tree())
-
         # self._dbman.save_hidden_files_to(self.profile.hidden_files)
 
     ##=============================================

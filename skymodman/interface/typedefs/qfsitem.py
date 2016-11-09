@@ -61,11 +61,6 @@ class QFSItem(FSItem):
         # return self._checkstate
         return Qt_Unchecked if self.hidden else Qt_Checked
 
-    # @checkState.setter
-    # def checkState(self, state):
-    #     self.set_checkstate(state)
-
-
     def force_set_checkstate(self, state):
         """
         Simply set the checkstate of this item to `state`, no
@@ -87,8 +82,6 @@ class QFSItem(FSItem):
         # NOT hidden if state is Checked or PartiallyChecked
         self.hidden = state == Qt_Unchecked
 
-
-
     def setChecked(self, checked, recurse = True):
         """
         :param bool checked:
@@ -107,15 +100,6 @@ class QFSItem(FSItem):
             the final item in this directory or the deepest sub-dir)
 
         # """
-        # """
-        # :return: the FSItem highest in the parent-hierarchy above this
-        #     instance (i.e., the directory directly below the root item
-        #     that (at some level) contains this item). If this FSItem
-        #     is itself a top-level file or directory, it will return
-        #     itself.
-        #     This is for tracking which items have had their check-states
-        #     changed or invalidated (as in the case of directories, where
-        #     checkstate is derived from that of its children)"""
 
         self._set_checkstate(state, recurse)
         return QFSItem.last_child_changed
@@ -135,8 +119,6 @@ class QFSItem(FSItem):
 
     def _set_checkstate(self, state, recurse):
         """For internal use"""
-        # this is kept separate to avoid gillions of unnecessary
-        # "parent._invalidate_child_state()" calls when recursing
 
         # using a class variable, track which items were changed
         QFSItem.last_child_changed = self
@@ -144,7 +126,6 @@ class QFSItem(FSItem):
 
         if recurse:
             self._set_checkstate_recursive(state)
-        # self._checkstate = state
 
         # the "hidden" attribute on the baseclass is what will allow us
         # to save the lists of hidden files to disk, so be sure to set
@@ -156,10 +137,6 @@ class QFSItem(FSItem):
         self.hidden = state == Qt_Unchecked
 
     def _set_checkstate_recursive(self, state):
-        # using a class variable, track which items were changed
-        # QFSItem.last_child_changed = self
-
-
         # state propagation for dirs:
         # (only dirs can have the tristate flag turned on)
         if self.flags & Qt_ItemIsTristate:
@@ -169,13 +146,9 @@ class QFSItem(FSItem):
                 # this will trigger any child dirs to do the same
                 c._set_checkstate(state, c.isdir)
 
-                # c.setEnabled(state == Qt_Checked)
-
             # we know that, now, all the children of this item have
             # `state` as their current checkState, so we can update this:
             self._child_state = state
-
-        # self.set_checkstate(state, False)
 
 
     # So, I think the protocol here is, when a directory is un/checked,
@@ -223,7 +196,6 @@ class QFSItem(FSItem):
                 if s == Qt_PartiallyChecked:
                     self._child_state = Qt_PartiallyChecked
                     break
-                    # return Qt_PartiallyChecked
 
                 if s == Qt_Unchecked:
                     uncheckedkids = True
@@ -234,13 +206,11 @@ class QFSItem(FSItem):
                 if checkedkids and uncheckedkids:
                     self._child_state = Qt_PartiallyChecked
                     break
-                    # return Qt_PartiallyChecked
             else:
                 # we didn't break, so one of the values must still be False
                 self._child_state = Qt_Unchecked if uncheckedkids else Qt_Checked
 
         return self._child_state
-            # return Qt_Unchecked if uncheckedkids else Qt_Checked
 
     def _invalidate_child_state(self):
         """Indicate that the cached _child_state attribute should

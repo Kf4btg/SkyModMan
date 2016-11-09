@@ -51,10 +51,6 @@ class HideDirectoryCommand(QUndoCommand):
                     # recurse, extending the base rel-path with row
                     # of child directory
                     _(base_path+[c.row])
-                # else:
-                #     curr_state.append(
-                #         (tuple(base_path+[c.row]), c.checkState)
-                #     )
 
         # build snapshot, starting w/ empty list (path)
         _([])
@@ -137,7 +133,6 @@ class HideFileCommand(QUndoCommand):
 
         # get tree-descent path to item
         self.path = item.row_path
-
 
 
     def _do(self, reverse=False):

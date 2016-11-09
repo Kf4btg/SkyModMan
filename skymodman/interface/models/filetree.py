@@ -1,15 +1,12 @@
-# from functools import partial, lru_cache
 from functools import lru_cache
-# from itertools import repeat
 from bisect import bisect_left
 from collections import deque
 
-from PyQt5.QtCore import Qt, QModelIndex, QAbstractItemModel, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import Qt, QModelIndex, QAbstractItemModel, pyqtSlot
 from PyQt5.QtWidgets import QUndoStack
 
 from skymodman import Manager
 from skymodman.log import withlogger #, tree
-# from skymodman.interface.qundo import UndoCmd
 from skymodman.interface.typedefs import QFSItem
 
 from skymodman.interface.qundo.commands.hide_files import HideFileCommand, HideDirectoryCommand
@@ -39,8 +36,6 @@ class ModFileTreeModel(QAbstractItemModel):
     #TODO: calculate and inform the user of any file-conflicts that will occur in their mod-setup to help them decide what needs to be hidden.
 
     # rootPathChanged = pyqtSignal(str)
-    # noinspection PyArgumentList
-    hasUnsavedChanges = pyqtSignal(bool)
 
     def __init__(self, parent, **kwargs):
         """
@@ -52,16 +47,11 @@ class ModFileTreeModel(QAbstractItemModel):
         self._parent = parent
         self.manager = Manager() # should be initialized by now
         self.DB = self.manager.DB
-        # self.rootpath = None #type: str
         self.modname = None #type: str
         self.rootitem = None #type: QFSItem
 
         self.mod = None
         """:type: skymodman.types.ModEntry"""
-
-        # the mod table has this stored on the custom view,
-        # but we have no custom view for the file tree, so...here it is
-        # self.undostack = QUndoStack()
 
         # maintain a flattened list of the files for the current mod
         self._files = [] # type: list [QFSItem]
@@ -70,26 +60,11 @@ class ModFileTreeModel(QAbstractItemModel):
         # (should correspond to entries in "hiddenfiles" db table)
         self._saved_state = []
 
-        # and a list of indices of files which are hidden
-        # self._hidden = [] # type: list [int]
-
         self.command_queue = deque()
-
-    # @property
-    # def root_path(self):
-    #     return self.rootpath
 
     @property
     def root_item(self):
         return self.rootitem
-
-    # @property
-    # def current_mod(self):
-    #     return self.modname
-
-    # @property
-    # def has_unsaved_changes(self):
-    #     return self.DB.in_transaction
 
     def setMod(self, mod_entry):
         """Set the mod that this model is focusing on to `mod_entry`.
@@ -97,13 +72,7 @@ class ModFileTreeModel(QAbstractItemModel):
 
         # if mod_entry is self.mod: return
 
-        # commit any changes we've made so far
-        # self.save()
-
-        # drop the undo stack
-        # self.undostack.clear()
-
-        # and the index-cache
+        # clear the index-cache
         self._locate.cache_clear()
 
         # tells the view to get ready to redisplay its contents
@@ -144,23 +113,15 @@ class ModFileTreeModel(QAbstractItemModel):
         self.rootitem = QFSItem(path="", name="data", parent=None)
 
 
+        # build yonder tree
         QFSItem.build_filetree(self.rootitem,
                                self.mod.filetree,
                                name_filter=lambda n: n.lower() == "meta.ini")
-
-        # build yonder tree
-        # self.rootitem.build_children(self.mod.filetree, name_filter=lambda
-        #             n: n.lower() == 'meta.ini')
 
         # create flattened list of just the files
         self._files = [f for f in
                        self.rootitem.iterchildren(recursive=True)
                        if not f.isdir]
-
-        # for f in self._files:
-        #     f.print()
-
-        # print([str(i) for i in self._files])
 
     @lru_cache()
     def _locate(self, file):
@@ -183,10 +144,6 @@ class ModFileTreeModel(QAbstractItemModel):
 
         raise ValueError
 
-        # if i != len(self._files) and self._files[i] == file:
-        #     return i
-        # raise ValueError
-
     def _hidden_file_indices_db(self):
         """Get the list of currently hidden files from the database
         and return a list of the indices corresponding to those files
@@ -199,9 +156,6 @@ class ModFileTreeModel(QAbstractItemModel):
         # with the start/end index of the mod's entries in the database,
         # referencing position of each file returned...
         # but ehhhhhhhh, math.
-
-
-        # XXX: or, uh...there might already be a better way than either of these...and I've already written it. I guess I did, anyway. Obviously I don't remember it. Anyway, down in ``item_from_path()``...
 
         for hf in self.DB.hidden_files(self.mod.directory):
             # NTS: As the number of hidden files approaches the total
@@ -225,17 +179,7 @@ class ModFileTreeModel(QAbstractItemModel):
 
     def _mark_hidden_files(self):
 
-        # hfiles = list(r['filepath'] for r in self.DB.select(
-        #     "filepath",
-        #     FROM="hiddenfiles",
-        #     WHERE="directory = ?",
-        #     params=(self.mod.directory,)
-        # ))
-
-        # hfiles = list(self.DB.hidden_files(self.mod.directory))
-
         # locate the hidden files in the file list using binary search:
-        # for hf in hfiles:
         for hf in self.DB.hidden_files(self.mod.directory):
             try:
                 idx = self._locate(hf)
@@ -243,18 +187,8 @@ class ModFileTreeModel(QAbstractItemModel):
                 # also use the internal _set_checkstate to avoid the
                 # parent.child_state invalidation step
                 self._files[idx]._set_checkstate(Qt_Unchecked, False)
-                # track indices of hidden files
-                # self._hidden.append(idx)
             except ValueError:
                 self.LOGGER.error("Hidden file {0!r} was not found".format(hf))
-
-        # only files (with their full paths relative to the root of
-        # the mod directory) are in the hidden files list; thus we
-        # need only compare files and not dirs to the list. As usual,
-        # a directory's checkstate will be derived from its children
-        # for c in self.rootitem.iterchildren(True):
-        #     if c.lpath in hfiles:
-        #         c.checkState = Qt_Unchecked
 
     def getitem(self, index) -> QFSItem:
         """Extracts actual item from given index
@@ -265,19 +199,6 @@ class ModFileTreeModel(QAbstractItemModel):
             item = index.internalPointer()
             if item: return item
         return self.rootitem
-
-    # def item_from_path(self, path_parts):
-    #     """
-    #
-    #     :param path_parts: a tuple where each element is an element in
-    #         the filesystem path leading from the root item to the item
-    #     :return: the item
-    #     """
-    #     item = self.rootitem
-    #     for p in path_parts:
-    #         item = item[p]
-    #
-    #     return item
 
     def columnCount(self, *args, **kwargs) -> int:
         """Dir/File Name(+checkbox), path to file, file conflicts """
@@ -302,7 +223,6 @@ class ModFileTreeModel(QAbstractItemModel):
         """
         if orient == Qt.Horizontal and role == Qt_DisplayRole:
             return ColHeaders[section]
-            # return "Name"
         return super().headerData(section, orient, role)
 
     def index(self, row, col, parent=QModelIndex(), *args, **kwargs):
@@ -388,7 +308,6 @@ class ModFileTreeModel(QAbstractItemModel):
                 except KeyError:
                     return None
 
-
         # if it's not the display role, we only care about the name column
         elif col == COL_NAME:
             if role == Qt_CheckStateRole:
@@ -419,58 +338,12 @@ class ModFileTreeModel(QAbstractItemModel):
 
             self.queue_command(cmd)
 
-            # item.checkState = value #triggers cascade if this a dir
-            # last_item = item.set_checkstate(value, item.isdir)
-
-            # first item in file's path is top-level ancestor
-            # toplvl_ancestor = self.rootitem[item.row_path[0]]
-
-
-            # if this item is the last checked/unchecked item in a dir,
-            # make sure the change is propagated up through the parent
-            # hierarchy, to make sure that no folders remain checked
-            # when none of their descendants are.
-            # ancestor = self._get_highest_affected_ancestor(item, value)
-
-            # if ancestor is not item:
-            #     index1 = self.getIndexFromItem(ancestor)
-
-            # item.set_checkstate now does the work for us
-            # if toplvl_ancestor is item:
-            #     index1 = index
-            # else:
-            #     index1 = self.getIndexFromItem(toplvl_ancestor)
-            #
-            # if last_item is item:
-            #     index2 = index
-            # else:
-            #     index2=self.getIndexFromItem(last_item)
-
-            # using the "last_child_changed" value--which SHOULD be the most
-            # "bottom-right" child that was just changed--to feed to
-            # datachanged saves a lot of individual calls. Hopefully there
-            # won't be any concurrency issues to worry about later on.
-
-            # self._send_data_through_proxy(index1,index2)
-
-            # update the db with which files are now hidden
-            # self.update_db(index1, index2)
-                           # self.getIndexFromItem(QFSItem.last_child_changed))
-
             return True
         return super().setData(index, value, role)
-
-    # def _get_highest_affected_ancestor(self, item, value):
-    #     """worst name for a function ever but i can't think of better"""
-    #     if item.parent and item.parent.children_checkState() == value:
-    #         return self._get_highest_affected_ancestor(item.parent, value)
-    #     else:
-    #         return item
 
     # noinspection PyUnresolvedReferences
     def _send_data_through_proxy(self, index1, index2, *args):
         proxy = self._parent.model() #QSortFilterProxyModel
-
 
         # if the two QModelIndexes are the same
         if index1 is index2:
@@ -480,7 +353,6 @@ class ModFileTreeModel(QAbstractItemModel):
             proxy.dataChanged.emit(proxy.mapFromSource(index1),
                                proxy.mapFromSource(index2), *args)
 
-        # self.hasUnsavedChanges.emit(True)
 
     def emit_dataChanged(self, index1, index2):
         self._send_data_through_proxy(index1, index2)
@@ -509,55 +381,6 @@ class ModFileTreeModel(QAbstractItemModel):
         Remove and return the oldest command in the command queue
         """
         return self.command_queue.popleft()
-
-
-    # def set_as_hidden(self, file_index_list):
-    #     """
-    #
-    #     :param file_index_list: a list of ints indicating which files
-    #         in self._files should be set hidden.
-    #     :return:
-    #     """
-
-    # def change_hidden_states(self, to_hide=None, to_unhide=None):
-    #     """
-    #     Hides or unhides the indicated files. Does no checks to see if
-    #     the operation would be redundant.
-    #
-    #     :param list[int] to_hide: indices (from self.locate()) of
-    #         files to mark as hidden
-    #     :param list[int] to_unhide: indices (from self.locate()) of
-    #         files to mark as not-hidden
-    #     """
-    #
-    #     # these are all files, so there'll be no cascade as with
-    #     # directories. However, we need to make sure the parent
-    #     # checkstate gets properly modified
-    #     _all = to_hide + to_unhide
-    #
-    #     # the largest index in the two lists corresponds to the "bottom-
-    #     # right" item as needed by dataChanged
-    #
-    #     bot_right = self._files[max(_all)]
-    #
-    #     # top left is the top-most parent of the smallest index (first
-    #     # row-number in the item's row path
-    #     top_left = self._files[self._files[min(_all)].row_path[0]]
-    #
-    #     for i in to_hide:
-    #         self._files[i].setChecked(False, False)
-    #     for i in to_unhide:
-    #         self._files[i].setChecked(True, False)
-    #
-    #
-    #
-    #
-    #     self._send_data_through_proxy(
-    #         self.getIndexFromItem(top_left),
-    #         self.getIndexFromItem(bot_right)
-    #     )
-
-
 
     def item_from_row_path(self, row_path):
         """
@@ -622,55 +445,6 @@ class ModFileTreeModel(QAbstractItemModel):
         # make the current state the saved state
         self._saved_state = current_state
 
-        # if self.DB.in_transaction:
-        #     self.DB.commit()
-        #     self.manager.save_hidden_files()
-            # self.hasUnsavedChanges.emit(False)
-
-    # def revert_changes(self):
-    #     """
-    #     Undo all changes made to the tree since the last save.
-    #     """
-    #     self.beginResetModel()
-    #
-    #     #SOOOO...
-    #     # will a rollback/drop-the-undostack work here?
-    #     # or is individually undoing everything (a bunch of savepoint-
-    #     # rollbacks) better? I guess it depends on whether we want to
-    #     # be able to define a "clean" point in the middle of a
-    #     # transaction...
-    #
-    #     self.DB.rollback()
-    #     self.undostack.clear()
-    #
-    #     self._setup_or_reload_tree()
-    #
-    #     self.endResetModel()
-        # self.hasUnsavedChanges.emit(False)
-
-    # def update_db(self, start_index, final_index):
-    #     """Make  changes to database.
-    #     NOTE: this does not commit them! That must be done separately
-    #
-    #     :param start_index: index of the "top-left" affected item
-    #     :param final_index: index of the "bottom-right" affected item
-    #
-    #
-    #     """
-    #     cb = partial(self._send_data_through_proxy,
-    #                  start_index, final_index)
-    #
-    #     self.undostack.push(
-    #         ChangeHiddenFilesCommand(self.rootitem,
-    #                                  # os.path.basename(self.rootpath),
-    #                                  self.mod.directory,
-    #                                  self.DB,
-    #                                  post_redo_callback=cb,
-    #                                  post_undo_callback=cb
-    #                                  ))
-        # self.hasUnsavedChanges.emit(True)
-
-
 
 class ModFileTreeModel_QUndo(ModFileTreeModel):
     """
@@ -719,9 +493,7 @@ class ModFileTreeModel_QUndo(ModFileTreeModel):
                 # pass
 
             return True
-
         return False
-
 
     def save(self):
 
@@ -734,168 +506,6 @@ class ModFileTreeModel_QUndo(ModFileTreeModel):
 
         # revert to 'clean' state
         self._stack.setIndex(self._stack.cleanIndex())
-
-
-
-# class ChangeHiddenFilesCommand(UndoCmd):
-#
-#
-#     def __init__(self, mod_root_item, mod_dir_name, database_mgr, text="", *args,
-#                  **kwargs):
-#         """
-#
-#         :param QFSItem mod_root:
-#         :param text:
-#         :param args:
-#         :param kwargs:
-#         """
-#
-#         self.root_item = mod_root_item  # QFSItem
-#         self.mod_dir = mod_dir_name     # str
-#         self.DB = database_mgr
-#
-#         # these two track the actual QFSItems that were modified
-#         self.checked = []
-#         self.unchecked = []
-#
-#         # these hold just the paths (in all lowercase)
-#         # XXX: should these be saved? or referenced each time we update
-#         # the DB? It'll be a tradeoff between memory and performance...
-#         self.tohide = []
-#         self.tounhide = []
-#
-#         # get currently hidden files from db
-#         currhidden = list(self.DB.hidden_files(self.mod_dir))
-#
-#         # if nothing was already hidden, we shouldn't waste time
-#         # trying to figure out what to un-hide
-#         self.check_unhide = len(currhidden) > 0
-#
-#         # analyze checkstates, fill self.checked, self.unchecked lists
-#         self._get_checkstates(self.root_item)
-#
-#         # now filter the lists of qfsitems down to subsets:
-#         # if any items were previously hidden, determine which need
-#         # to be un-hidden and which can remain, as well as any newly-
-#         # hidden files
-#         if currhidden:
-#             # filter the list of currently hidden items by those are
-#             # now checked; this will need to be "un"-hidden
-#             self.checked = [c for c in self.checked
-#                             if c.lpath in currhidden]
-#
-#             # keep a record of just the paths to speed up the db-calls
-#             self.tounhide = [c.lpath for c in self.checked]
-#
-#             # and make sure we're not trying to "re"-hide any items that
-#             # are already hidden.
-#             self.unchecked = [u for u in self.unchecked
-#                               if u.lpath not in currhidden]
-#         else:
-#             # if we're here, then no items were previously hidden
-#             self.tounhide = []
-#             # everything unchecked should be hidden
-#
-#         # this is the same no matter if currhidden or not
-#         self.tohide = [u.lpath for u in self.unchecked]
-#
-#         if self.tohide:
-#             text = "Hide Files"
-#         elif self.tounhide:
-#             text = "Unhide Files"
-#         else:
-#             # this shouldn't really ever happen...but it still
-#             # pops up sometimes, even when everything seems to be
-#             # working ok...
-#             text = "Modify Hidden Files"
-#
-#         # FINALLY call the super() init
-#         super().__init__(text=text, *args, **kwargs)
-#
-#         #track the first run
-#         self._first_do = True
-#
-#     def _redo_(self):
-#         """hide the visible, reveal the hidden"""
-#
-#         # create a savepoint immediately before we change the db
-#         self.DB.savepoint("changehidden")
-#
-#         if self.tounhide:
-#             self.DB.remove_hidden_files(self.mod_dir, self.tounhide)
-#         if self.tohide:
-#             self.DB.insert(2, "hiddenfiles",
-#                               params=zip(repeat(self.mod_dir),
-#                                          self.tohide))
-#
-#         # user changed the checkstates by clicking the first time, so
-#         # we only need to do it programatically each time after the first.
-#         if self._first_do:
-#             self._first_do = False
-#         else:
-#             self._modify_checkstates(False)
-#
-#
-#     def _undo_(self):
-#         """hide the hidden, visibilate the shown"""
-#         # if all goes well, we should just have to rollback to the
-#         # savepoint we made earlier...
-#         self.DB.rollback("changehidden")
-#
-#         # ... and reset the checkstates
-#         self._modify_checkstates(True)
-#
-#     def _modify_checkstates(self, undo=False):
-#         """
-#         After the first "do", we'll need to check/uncheck items
-#         programatically. The post-[re|un]do-callback takes care of
-#         emitting the datachanged signal.
-#         """
-#
-#         for c in self.checked: #type: QFSItem
-#             c.setChecked(not undo)
-#             # c.checkState = _unchecked if undo else _checked
-#         for u in self.unchecked:
-#             u.setChecked(undo)
-#             # u.checkState = _checked if undo else _unchecked
-#
-#
-#     def _get_checkstates(self, base,
-#                           unchecked=Qt.Unchecked,
-#                           pchecked=Qt.PartiallyChecked):
-#         """
-#         examine state of tree as it appears to user and record each
-#         unchecked ("hidden") item and separately (depending on the
-#         value of self.check_unhide) each checked ("visible") item.
-#         These are recorded in self.unchecked and self.checked,
-#         respectively.
-#
-#         :param skymodman.interface.models.filetree.QFSItem base:
-#         """
-#
-#         for child in base.iterchildren():
-#             cs = child.checkState
-#             if cs == pchecked:
-#                 # this is a directory, we need to go deeper
-#                 self._get_checkstates(child)
-#
-#             elif cs == unchecked:
-#                 if child.isdir:
-#                     # if we found an unchecked folder, just add
-#                     # all its children
-#                     self.unchecked.extend(c
-#                                        for c in child.iterchildren(True)
-#                                        if not c.isdir)
-#                 else:
-#                     self.unchecked.append(child)
-#
-#             elif self.check_unhide:
-#                 if child.isdir:
-#                     self.checked.extend(c for c
-#                                          in child.iterchildren(True)
-#                                          if not c.isdir)
-#                 else:
-#                     self.checked.append(child)
 
 if __name__ == '__main__':
     # noinspection PyUnresolvedReferences

@@ -2,7 +2,6 @@ from PyQt5 import QtWidgets
 from PyQt5.QtCore import Qt, pyqtSlot as Slot
 
 from skymodman import Manager
-# from skymodman.constants.keystrings import INI, Section
 # from skymodman.log import withlogger
 
 
@@ -93,17 +92,9 @@ class FileTabTreeView(QtWidgets.QTreeView):
 
         self._filterbox.clear()
 
-
-        # self._undostack.clear()
-
         self._srcmodel.setMod(None)
 
     def revert(self):
-
-        # # model.revert() rolls back the DB, so we can just drop
-        # # the undo stack rather than "undo"-ing the whole thing
-        # self._undostack.clear()
-
         self._srcmodel.revert_changes()
 
     def save(self):
@@ -144,8 +135,6 @@ class FileTabTreeView(QtWidgets.QTreeView):
             f.setFilterWildcard(text)
 
         else:
-            # cur = Manager().getdbcursor()
-
             # turn wildcard filter into SQL-compatible pattern
             sqlexpr = r'%' + text.replace('?', '_').replace('*',
                                                             r'%') + r'%'
@@ -154,19 +143,6 @@ class FileTabTreeView(QtWidgets.QTreeView):
 
             matches = list(Manager().DB.find_matching_files(
                 self._srcmodel.modname, sqlexpr))
-
-            ## using the select() method feels like a lot of overhead...
-            # matches = [r[0] for r in Manager().DB.select(
-            #     'filepath',
-            #     FROM='modfiles',
-            #     WHERE="directory = ? AND filepath LIKE ?",
-            #     params=(self._srcmodel.modname, sqlexpr)
-            # )]
-
-
-            # matches = [r[0] for r in cur.execute(
-            #     "SELECT filepath FROM modfiles WHERE directory=? AND filepath LIKE ?",
-            #     (self._srcmodel.modname, sqlexpr))]
 
             # set the matches on the filter
             f.setMatchingFiles(matches)

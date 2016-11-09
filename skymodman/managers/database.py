@@ -380,13 +380,9 @@ class DBManager(BaseDBManager, Submanager):
         :param file_list: list of files
         """
 
-        # self.checktx()
-
         _q = "DELETE FROM hiddenfiles" \
              " WHERE directory = '{mdir}'" \
              " AND filepath IN ({paths})"
-
-        # c = self.conn.cursor()
 
         with self.conn as c:
 
