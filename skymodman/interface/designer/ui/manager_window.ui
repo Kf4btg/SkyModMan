@@ -18,7 +18,7 @@
     <item row="0" column="0" colspan="5">
      <widget class="QTabWidget" name="manager_tabs">
       <property name="currentIndex">
-       <number>0</number>
+       <number>1</number>
       </property>
       <widget class="QWidget" name="installed_mods_tab">
        <property name="sizePolicy">
@@ -234,12 +234,21 @@
             </property>
             <item>
              <widget class="FileTabTreeView" name="filetree_fileviewer">
+              <property name="minimumSize">
+               <size>
+                <width>300</width>
+                <height>0</height>
+               </size>
+              </property>
               <property name="horizontalScrollBarPolicy">
                <enum>Qt::ScrollBarAlwaysOff</enum>
               </property>
               <property name="uniformRowHeights">
                <bool>true</bool>
               </property>
+              <attribute name="headerMinimumSectionSize">
+               <number>100</number>
+              </attribute>
              </widget>
             </item>
             <item>
@@ -802,10 +811,11 @@
     <bool>false</bool>
    </property>
    <property name="icon">
-    <iconset theme="edit-select-all"/>
+    <iconset theme="edit-select-all">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
-    <string>Select All</string>
+    <string>S&amp;elect All</string>
    </property>
   </action>
   <action name="action_select_none">
@@ -813,10 +823,11 @@
     <bool>false</bool>
    </property>
    <property name="icon">
-    <iconset theme="edit-select-none"/>
+    <iconset theme="edit-select-none">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
-    <string>Clear Selection</string>
+    <string>C&amp;lear Selection</string>
    </property>
   </action>
   <action name="action_select_inverse">
@@ -824,7 +835,8 @@
     <bool>false</bool>
    </property>
    <property name="icon">
-    <iconset theme="edit-select-invert"/>
+    <iconset theme="edit-select-invert">
+     <normaloff>.</normaloff>.</iconset>
    </property>
    <property name="text">
     <string>Invert Selection</string>

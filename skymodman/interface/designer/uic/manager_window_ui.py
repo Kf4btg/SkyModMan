@@ -112,9 +112,11 @@ class Ui_MainWindow(object):
         self.fileviewer_box.setContentsMargins(6, 6, 6, 6)
         self.fileviewer_box.setObjectName("fileviewer_box")
         self.filetree_fileviewer = FileTabTreeView(self.filetree_filebox)
+        self.filetree_fileviewer.setMinimumSize(QtCore.QSize(300, 0))
         self.filetree_fileviewer.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.filetree_fileviewer.setUniformRowHeights(True)
         self.filetree_fileviewer.setObjectName("filetree_fileviewer")
+        self.filetree_fileviewer.header().setMinimumSectionSize(100)
         self.fileviewer_box.addWidget(self.filetree_fileviewer)
         self.filetree_filefilter = EscapeableLineEdit(self.filetree_filebox)
         self.filetree_filefilter.setClearButtonEnabled(True)
@@ -340,7 +342,7 @@ class Ui_MainWindow(object):
         self.profile_label.setBuddy(self.profile_selector)
 
         self.retranslateUi(MainWindow)
-        self.manager_tabs.setCurrentIndex(0)
+        self.manager_tabs.setCurrentIndex(1)
         self.action_show_search.triggered.connect(self.modtable_search_button.click)
         self.modtable_search_box.escapeLineEdit.connect(self.modtable_search_button.click)
         self.filetree_modfilter.escapeLineEdit.connect(self.filetree_modfilter.clear)
@@ -431,8 +433,8 @@ class Ui_MainWindow(object):
         self.action_manual_install.setToolTip(_translate("MainWindow", "Manually Install a Mod Archive"))
         self.action_manual_install.setStatusTip(_translate("MainWindow", "Manually define which of the contents from a mod archive to install."))
         self.action_manual_install.setShortcut(_translate("MainWindow", "Ctrl+Shift+I"))
-        self.action_select_all.setText(_translate("MainWindow", "Select All"))
-        self.action_select_none.setText(_translate("MainWindow", "Clear Selection"))
+        self.action_select_all.setText(_translate("MainWindow", "S&elect All"))
+        self.action_select_none.setText(_translate("MainWindow", "C&lear Selection"))
         self.action_select_inverse.setText(_translate("MainWindow", "Invert Selection"))
 
 from skymodman.interface.designer.plugins.widgets.escapeablelineedit import EscapeableLineEdit

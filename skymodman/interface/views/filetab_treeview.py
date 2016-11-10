@@ -24,9 +24,7 @@ class FileTabTreeView(QtWidgets.QTreeView):
         self._filterbox = None
         """:type: skymodman.interface.designer.plugins.widgets.escapeablelineedit.EscapeableLineEdit"""
 
-        # create an undo stack for the viewer
-        self._undostack = QtWidgets.QUndoStack()
-
+        self._resized = False
 
     @property
     def filter(self):
@@ -35,7 +33,6 @@ class FileTabTreeView(QtWidgets.QTreeView):
     @property
     def undo_stack(self):
         """Returns the source-model's undo stack"""
-
         # TODO: move the undostack from the model to this view
         try:
             return self._srcmodel.undostack
@@ -47,6 +44,9 @@ class FileTabTreeView(QtWidgets.QTreeView):
     def has_unsaved_changes(self):
         return self._srcmodel.has_unsaved_changes
 
+    ##=============================================
+    ## REAL initialization
+    ##=============================================
 
     def setup(self, selection_list, filterbox):
         """
@@ -84,6 +84,27 @@ class FileTabTreeView(QtWidgets.QTreeView):
         # connect a selection-change in the modslist to updating the tree
         selection_list.selectedModChanged.connect(self.on_mod_changed)
 
+        self.resizeColumnToContents(0)
+        self.resizeColumnToContents(1)
+        self.resizeColumnToContents(2)
+
+        # stop the header sections from being dragged around
+        # h = self.header()
+
+        # h.setSectionsMovable(False)
+
+        # h=self.header()
+
+        # one_third_width = h.length() // 3
+
+        # make name and path columns equal to 1/3 of the available
+        # space
+        # h.resizeSection(2, 50)
+        # h.resizeSection(0, h.length() // 2)
+        # h.resizeSection(1, h.length() // 3)
+        # h.setSectionResizeMode(type(h).Interactive)
+        # h.setSectionResizeMode(0, type(h).Stretch)
+
         # cleanup
         del ModFileTreeModel_QUndo, FileViewerTreeFilter
 
@@ -114,6 +135,41 @@ class FileTabTreeView(QtWidgets.QTreeView):
 
         # set new mod on model
         self._srcmodel.setMod(new_mod)
+
+        # self.viewport().width()
+
+        self.resizeColumnToContents(0)
+        self.resizeColumnToContents(1)
+        self.resizeColumnToContents(2)
+
+
+        # if not self._resized:
+        #     h=self.header()
+        #
+        #     w = self.viewport().width()
+        #     # make name and path columns equal to 1/3 of the available
+        #     # space
+        #     # h.resizeSection(2, 50)
+        #     h.resizeSection(0, w // 2)
+        #     h.resizeSection(1, w // 3)
+        #
+        #     # h.setSectionResizeMode(2, type(h).Fixed)
+        #
+        #     # self.resizeColumnToContents(0)
+        #
+        #     self._resized = True
+
+
+    def sizeHintForColumn(self, column):
+        # this is called during resizeColumnToContents()
+
+        if column == 2: # conflicts
+            return self.header().minimumSectionSize()
+
+        # for name/path, return either 1/3 of the viewport width
+        # or the default sizeHint, whichever is larger
+        return max(self.viewport().width() // 3,
+                   super().sizeHintForColumn(column))
 
     @Slot(str)
     def on_filter_changed(self, text):
