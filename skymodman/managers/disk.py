@@ -446,7 +446,7 @@ def vanilla_mods(skyrim_dir):
     skyrim_mod = VModInfo(
         name="Skyrim",
         is_present=True, # the data directory is there, at least...
-        files=[*skyinfo.masters, *skyinfo.skyrim_archives],
+        files=sorted([*skyinfo.masters, *skyinfo.skyrim_archives], key=lambda p:p.lower()),
         missing_files=[]
     )
 
@@ -478,7 +478,7 @@ def vanilla_mods(skyrim_dir):
     for n in skyinfo.all_dlc[:3]:
         dlc_mods[n] = VModInfo(
             name=n,
-            files=[n+".esm", n+".bsa"],
+            files=sorted([n+".esm", n+".bsa"], key=lambda p:p.lower()),
             is_present=False, # set to True if dlc is installed
             missing_files=[] # if the dlc is Partially present,
                              # record missing files
@@ -488,21 +488,21 @@ def vanilla_mods(skyrim_dir):
     for n in skyinfo.all_dlc[3:]:
         dlc_mods[n] = VModInfo(
             name=n,
-            files=[n + ".esp", n + ".bsa"],
+            files=sorted([n + ".esp", n + ".bsa"], key=lambda p:p.lower()),
             is_present=False,
             missing_files=[]
         )
 
     for dlc, info in dlc_mods.items():
-        p = False # present?
+        isp = False # present?
         for f in info.files:
             try:
                 um_files.remove(f.lower())
-                p=True
+                isp=True
             except KeyError:
                 info.missing_files.append(f)
 
-        dlc_mods[dlc] = info._replace(is_present=p)
+        dlc_mods[dlc] = info._replace(is_present=isp)
         # info.is_present = p
 
     # any remaining files can be aggregated into 'Data'
