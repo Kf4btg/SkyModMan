@@ -240,9 +240,6 @@
                 <height>0</height>
                </size>
               </property>
-              <property name="horizontalScrollBarPolicy">
-               <enum>Qt::ScrollBarAlwaysOff</enum>
-              </property>
               <property name="uniformRowHeights">
                <bool>true</bool>
               </property>

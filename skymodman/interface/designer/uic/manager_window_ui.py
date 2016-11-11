@@ -113,7 +113,7 @@ class Ui_MainWindow(object):
         self.fileviewer_box.setObjectName("fileviewer_box")
         self.filetree_fileviewer = FileTabTreeView(self.filetree_filebox)
         self.filetree_fileviewer.setMinimumSize(QtCore.QSize(300, 0))
-        self.filetree_fileviewer.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.filetree_fileviewer.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
         self.filetree_fileviewer.setUniformRowHeights(True)
         self.filetree_fileviewer.setObjectName("filetree_fileviewer")
         self.filetree_fileviewer.header().setMinimumSectionSize(100)

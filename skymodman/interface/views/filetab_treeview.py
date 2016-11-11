@@ -1,5 +1,5 @@
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import Qt, pyqtSlot as Slot
+from PyQt5.QtCore import Qt, pyqtSlot as Slot, QObject, QEvent
 
 from skymodman import Manager
 # from skymodman.log import withlogger
@@ -26,6 +26,10 @@ class FileTabTreeView(QtWidgets.QTreeView):
 
         self._resized = False
 
+        # by default, name col will be 1/2 of the total width,
+        # path will be 1/3, conflicts 1/6.  Because this is IMPORTANT
+        self._column_ratios=[2, 3, 6]
+
     @property
     def filter(self):
         return self._filter
@@ -33,7 +37,6 @@ class FileTabTreeView(QtWidgets.QTreeView):
     @property
     def undo_stack(self):
         """Returns the source-model's undo stack"""
-        # TODO: move the undostack from the model to this view
         try:
             return self._srcmodel.undostack
         except AttributeError:
@@ -84,9 +87,18 @@ class FileTabTreeView(QtWidgets.QTreeView):
         # connect a selection-change in the modslist to updating the tree
         selection_list.selectedModChanged.connect(self.on_mod_changed)
 
-        self.resizeColumnToContents(0)
-        self.resizeColumnToContents(1)
-        self.resizeColumnToContents(2)
+        # turn off horizontal scrollbar
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        # self.setSizeAdjustPolicy(self.AdjustToContents)
+        # self.setSizeAdjustPolicy(self.AdjustIgnored)
+
+
+        # self.header().installEventFilter(HeaderResizeFixer(self))
+
+        # self.resizeColumnToContents(0)
+        # self.resizeColumnToContents(1)
+        # self.resizeColumnToContents(2)
 
         # stop the header sections from being dragged around
         # h = self.header()
@@ -138,9 +150,9 @@ class FileTabTreeView(QtWidgets.QTreeView):
 
         # self.viewport().width()
 
-        self.resizeColumnToContents(0)
-        self.resizeColumnToContents(1)
-        self.resizeColumnToContents(2)
+        # self.resizeColumnToContents(0)
+        # self.resizeColumnToContents(1)
+        # self.resizeColumnToContents(2)
 
 
         # if not self._resized:
@@ -170,6 +182,58 @@ class FileTabTreeView(QtWidgets.QTreeView):
         # or the default sizeHint, whichever is larger
         return max(self.viewport().width() // 3,
                    super().sizeHintForColumn(column))
+
+    def resizeEvent(self, event):
+        """Override the resize event to make sure the columns remain
+        reasonably-sized when the window/viewport is resized"""
+        super().resizeEvent(event)
+
+
+        # w = self.width()
+
+        # print(self.width()) # usually 3-4 px wider than the other two
+        # print(self.viewport().width())
+        # print(self.header().width())
+
+        # self.header().setMaximumWidth(w)
+
+        # h = self.header() # type: QtWidgets.QHeaderView
+        # h.setWidth(w)
+
+        # col_count = self.model().columnCount()
+        #
+        # # if each col gets an even num of pixels:
+        # col_width = w // col_count
+        #
+        # # but if we try to give each column an equal num of pixels,
+        # # we'll surely have a few left over
+        # extra_px = w % col_count # will be in range 0-2
+        #
+        # for column in range(col_count):
+        #     # divvy the few extra pixels to the first columns;
+        #     # NTS: we could just give them to the first column, and
+        #     # likely none would be the wiser...
+        #     if extra_px > 0:
+        #         self.setColumnWidth(column, col_width + 1)
+        #         extra_px -= 1
+        #     else:
+        #         self.setColumnWidth(column, col_width)
+
+    @Slot(int, int, int)
+    def on_section_resize(self, col_index, old_size, new_size):
+        """
+
+        :param col_index:
+        :param old_size:
+        :param new_size:
+        :return:
+        """
+
+        # record new ratio of column's width:total width
+        h = self.header() # type: QtWidgets.QHeaderView
+
+
+        self._column_ratios[col_index] = self.width() / new_size
 
     @Slot(str)
     def on_filter_changed(self, text):
@@ -210,3 +274,19 @@ class FileTabTreeView(QtWidgets.QTreeView):
 
             # expand full tree by default
             self.expandAll()
+
+
+
+class HeaderResizeFixer(QObject):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+
+    def eventFilter(self, header_obj, event):
+
+        if event.type() == QEvent.Resize:
+            print("Resize!!")
+            # return True # here if we want to cancel the event
+
+        return super().eventFilter(header_obj, event)
