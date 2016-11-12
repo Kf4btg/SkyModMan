@@ -30,6 +30,7 @@ class FileTabTreeView(QtWidgets.QTreeView):
         self._resized = False
 
         # static ref to headerview
+        # self.setHeader(BetterHeader(Qt.Horizontal, self))
         self._header = self.header() # type: QtWidgets.QHeaderView
 
         # track changes in viewport width
@@ -100,7 +101,7 @@ class FileTabTreeView(QtWidgets.QTreeView):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         # h = self.header() # type: QtWidgets.QHeaderView
-
+        self._header.setStretchLastSection(False)
         self._header.sectionResized.connect(self.on_section_resize)
 
         self._viewport_width = self.viewport().width()
@@ -203,8 +204,8 @@ class FileTabTreeView(QtWidgets.QTreeView):
         reasonably-sized when the window/viewport is resized"""
 
         ## seems to be unnecessary
-        # super().resizeEvent(event)
-
+        super().resizeEvent(event)
+        return
         # print("resize event")
 
         # newsize=event.size()
@@ -235,7 +236,7 @@ class FileTabTreeView(QtWidgets.QTreeView):
 
         # block signals from the header to avoid recursively calling
         # our on_section_resized() handler
-        self._header.blockSignals(True)
+        # self._header.blockSignals(True)
 
 
         # just add the extra pixels to the first column...
@@ -260,8 +261,9 @@ class FileTabTreeView(QtWidgets.QTreeView):
 
         # fixme: blocking signals makes the header sections look wonky until they get manually resized
         # reenable header signals
-        self._header.blockSignals(False)
+        # self._header.blockSignals(False)
 
+    no_recurse=False
 
     @Slot(int, int, int)
     def on_section_resize(self, col_index, old_size, new_size):
@@ -275,16 +277,81 @@ class FileTabTreeView(QtWidgets.QTreeView):
         :param new_size:
         :return:
         """
-
-        # if not self._ignore_section_resize:
         print("section", col_index, "resize")
-        # record new ratio of column's width:total width
-        # h = self.header() # type: QtWidgets.QHeaderView
-
-        # h.section
 
 
-        # self._column_ratios[col_index] = self.width() / new_size
+        if not FileTabTreeView.no_recurse:
+            h = self._header
+            max_width=h.width()
+
+            ssize=h.sectionSize
+            ssizes=[ssize(0), ssize(1), ssize(2)]
+            tot_width=sum(ssizes)
+
+            delta_w = new_size - old_size
+
+            if delta_w>0 and tot_width > max_width:
+
+                FileTabTreeView.no_recurse=True
+                # todo: store as const
+                minsize = h.minimumSectionSize()
+
+                # h.resizeSection(col_index, old_size)
+
+                # column number < columnCount() -1
+                s=2
+                while s>col_index:
+                    if ssizes[s]>minsize:
+                        h.resizeSection(s, ssizes[s] - delta_w)
+                        break
+                    s-=1
+                else:
+                    # all following columns are at minimum already;
+                    # disallow the change
+                    h.resizeSection(col_index, old_size)
+
+                    # apply the difference to the next section
+                    # h.resizeSection(2, max_width - sum(
+                    #     ssizes[:-1]))
+
+                    # h.resizeSection(2, ssizes[2] - new_size - old_size)
+                    # h.resizeSection(col_index, old_size)
+
+                # else:
+                #     # disallow the change
+                #     h.resizeSection(col_index, old_size)
+
+
+                FileTabTreeView.no_recurse=False
+            elif delta_w < 0 and col_index<2:
+                # if we're shrinking, expand the final section
+                FileTabTreeView.no_recurse = True
+                h.resizeSection(2, max_width-sum(ssizes[:-1]))
+                FileTabTreeView.no_recurse = False
+
+                # edit: this next idea didn't work so well...last section
+                # kept disappearing (2nd section got huge, i suppose)
+                # then reappearing (2nd section returned to normal size?)
+
+                # # if we're shrinking, expand the NEXT section
+                # FileTabTreeView.no_recurse = True
+                # h.resizeSection(col_index+1, max_width-sum(ssizes[i] for i in range(2) if i!=col_index))
+                # FileTabTreeView.no_recurse = False
+
+
+
+
+
+                # print("total section width:", twidth, "/", hw)
+
+                # if not self._ignore_section_resize:
+                # record new ratio of column's width:total width
+                # h = self.header() # type: QtWidgets.QHeaderView
+
+                # h.section
+
+
+                # self._column_ratios[col_index] = self.width() / new_size
 
     @Slot(str)
     def on_filter_changed(self, text):
@@ -325,6 +392,35 @@ class FileTabTreeView(QtWidgets.QTreeView):
 
             # expand full tree by default
             self.expandAll()
+
+
+class BetterHeader(QtWidgets.QHeaderView):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+
+        print("header resize:", event.size())
+
+
+    def resizeSection(self, colnum, size):
+        super().resizeSection(colnum, size)
+
+        print("After section resize:", self.width())
+
+    def resizeSections(self, mode=None):
+
+        super().resizeSection(mode)
+
+        print("resizeSections")
+
+    def updateSection(self, col):
+        super().updateSection(col)
+
+        print("updateSection", col)
 
 
 
