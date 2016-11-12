@@ -8,6 +8,9 @@ from skymodman import Manager
 # @withlogger
 class FileTabTreeView(QtWidgets.QTreeView):
 
+    ## SIR HAXALOT
+    _ignore_section_resize = False
+
     def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
@@ -25,6 +28,12 @@ class FileTabTreeView(QtWidgets.QTreeView):
         """:type: skymodman.interface.designer.plugins.widgets.escapeablelineedit.EscapeableLineEdit"""
 
         self._resized = False
+
+        # static ref to headerview
+        self._header = self.header() # type: QtWidgets.QHeaderView
+
+        # track changes in viewport width
+        self._viewport_width = -1
 
         # by default, name col will be 1/2 of the total width,
         # path will be 1/3, conflicts 1/6.  Because this is IMPORTANT
@@ -89,6 +98,12 @@ class FileTabTreeView(QtWidgets.QTreeView):
 
         # turn off horizontal scrollbar
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        # h = self.header() # type: QtWidgets.QHeaderView
+
+        self._header.sectionResized.connect(self.on_section_resize)
+
+        self._viewport_width = self.viewport().width()
 
         # self.setSizeAdjustPolicy(self.AdjustToContents)
         # self.setSizeAdjustPolicy(self.AdjustIgnored)
@@ -186,12 +201,21 @@ class FileTabTreeView(QtWidgets.QTreeView):
     def resizeEvent(self, event):
         """Override the resize event to make sure the columns remain
         reasonably-sized when the window/viewport is resized"""
-        super().resizeEvent(event)
 
+        ## seems to be unnecessary
+        # super().resizeEvent(event)
 
-        # w = self.width()
+        # print("resize event")
+
+        # newsize=event.size()
+        # newwidth = newsize.x()
+        w = self._viewport_width = event.size().width()
+
+        # print("vpw:", w)
+        # print(event.size())
 
         # print(self.width()) # usually 3-4 px wider than the other two
+        ## apparently due to those below excluding the scrollbar width
         # print(self.viewport().width())
         # print(self.header().width())
 
@@ -200,16 +224,31 @@ class FileTabTreeView(QtWidgets.QTreeView):
         # h = self.header() # type: QtWidgets.QHeaderView
         # h.setWidth(w)
 
-        # col_count = self.model().columnCount()
-        #
-        # # if each col gets an even num of pixels:
-        # col_width = w // col_count
-        #
-        # # but if we try to give each column an equal num of pixels,
-        # # we'll surely have a few left over
+        col_count = self.model().columnCount()
+
+        # each col gets an even num of pixels:
+        # but if we try to give each column an equal num of pixels,
+        # we'll surely have a few left over
+        col_width, extra_px = w // col_count, w % col_count
+
         # extra_px = w % col_count # will be in range 0-2
-        #
+
+        # block signals from the header to avoid recursively calling
+        # our on_section_resized() handler
+        self._header.blockSignals(True)
+
+
+        # just add the extra pixels to the first column...
+        # surely no one will notice.
+        self.setColumnWidth(0, col_width + extra_px)
+
+        # the rest get the normal width
+        for column in range(1, col_count):
+            self.setColumnWidth(column, col_width)
+
         # for column in range(col_count):
+        #     # print("set width for col", column)
+        #
         #     # divvy the few extra pixels to the first columns;
         #     # NTS: we could just give them to the first column, and
         #     # likely none would be the wiser...
@@ -219,9 +258,17 @@ class FileTabTreeView(QtWidgets.QTreeView):
         #     else:
         #         self.setColumnWidth(column, col_width)
 
+        # fixme: blocking signals makes the header sections look wonky until they get manually resized
+        # reenable header signals
+        self._header.blockSignals(False)
+
+
     @Slot(int, int, int)
     def on_section_resize(self, col_index, old_size, new_size):
         """
+        Don't know how else to do it...so, we're going to listen for
+        all section resize events and force correction based on
+        viewport width()
 
         :param col_index:
         :param old_size:
@@ -229,11 +276,15 @@ class FileTabTreeView(QtWidgets.QTreeView):
         :return:
         """
 
+        # if not self._ignore_section_resize:
+        print("section", col_index, "resize")
         # record new ratio of column's width:total width
-        h = self.header() # type: QtWidgets.QHeaderView
+        # h = self.header() # type: QtWidgets.QHeaderView
+
+        # h.section
 
 
-        self._column_ratios[col_index] = self.width() / new_size
+        # self._column_ratios[col_index] = self.width() / new_size
 
     @Slot(str)
     def on_filter_changed(self, text):
