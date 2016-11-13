@@ -46,6 +46,8 @@ class ConfigManager(Submanager, BaseConfigManager):
         :param str config_file_name:
         """
 
+        self.LOGGER << "Initializing ConfigManager"
+
         self._config_dir = config_dir
         self._data_dir = data_dir
 
@@ -333,7 +335,11 @@ class ConfigManager(Submanager, BaseConfigManager):
             # finally, if we have successfully deduced the path, set
             # it on the PathManager
             if p is not None:
-                self.mainmanager.Folders[path_key].path = p
+                self.LOGGER << "Setting appfolder {0!r} to {1}".format(path_key, p)
+
+                # force notification since this is the first 'official'
+                # contact with the folder paths
+                self.mainmanager.Folders[path_key].set_path(p, force_notify=True)
 
             # and update config-file mirror
             # note -- have to use strings to keep config parser happy

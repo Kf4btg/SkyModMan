@@ -65,6 +65,8 @@ class DBManager(BaseDBManager, Submanager):
 
         # TODO: once we're testing this at scale (with real mods), we really should check the memory usage of the modfiles table...I wouldn't be suprised if it got enormous. Might want to consider using a disk-based db, in that case.
 
+        self.LOGGER << "Initializing DBManager"
+
         # track which tables are currently empty
         self._empty = {tn:True for tn in self._tablenames}
 

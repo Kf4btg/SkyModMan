@@ -62,6 +62,11 @@ class AppFolder:
 
         ## listeners, if any ##
 
+        # if something requests it in "set_path()" or a similar method, we force the
+        # invokation of change listeners the next time the _notify()
+        # is called, regardless of whether the path actually changed or not
+        self._force_next_notify = False
+
         # callables listening for a change in the path
         self._listeners = set()
 
@@ -151,25 +156,25 @@ class AppFolder:
     ## Modification
     ##=============================================
 
-    def _change_current(self, new):
+    def _change_current(self, new, force_notify):
         """internal method for updating the path and notifying listeners"""
+        self._force_next_notify = force_notify
         prev=self.spath
         self.current_path = new
 
-        if prev!=self.spath:
-            self._notify(prev, self.spath)
+        self._notify(prev, self.spath)
 
-    def clear_path(self):
+    def clear_path(self, force_notify=False):
         """Unset this path. Do not revert to the default path even if
         there is one."""
-        self._change_current(None)
+        self._change_current(None, force_notify)
 
-    def reset_path(self):
+    def reset_path(self, force_notify=False):
         """Reset to the default path. If there is no default,
         clears the path."""
-        self._change_current(self.default_path)
+        self._change_current(self.default_path, force_notify)
 
-    def set_path(self, new_path, validate=False):
+    def set_path(self, new_path, validate=False, force_notify=False):
         """
 
         :param new_path: New path location to point to. If this is passed
@@ -178,6 +183,9 @@ class AppFolder:
             without resetting to default, use ``clear_path()``)
         :param validate: If True, check that `new_path` exists before
             updating.
+        :param force_notify: If True, force invokation of the change
+            listeners after updating the path here, regardless of whether
+            the new value actually differs from the old
         :return: True if the path was updated, False if not
         """
 
@@ -186,16 +194,17 @@ class AppFolder:
 
         # print("<==Folder["+self.name+"].set_path("+repr(new_path)+")")
 
+
         if not new_path:
-            self.reset_path()
+            self.reset_path(force_notify)
             # return True
         else:
             _new = Path(new_path)
 
             if not validate or _new.exists():
-                self._change_current(_new)
+                self._change_current(_new, force_notify)
 
-    def set_override(self, path, validate=False):
+    def set_override(self, path, validate=False, force_notify=False):
         """
         While this override is active, `path` will be returned as the
         value of this AppFolder rather than whatever is set as the
@@ -207,6 +216,7 @@ class AppFolder:
         :param path:
         :param validate:
         """
+        self._force_next_notify = force_notify
 
         prev=self.spath
 
@@ -218,16 +228,15 @@ class AppFolder:
         self._override_active = True
 
         # dont notify if override is same as current
-        if prev!=self.spath:
-            self._notify(prev, self.spath)
+        self._notify(prev, self.spath)
 
 
-    def remove_override(self):
+    def remove_override(self, force_notify=False):
         """Deactivate the current override and revert to ``current_path``"""
         if self._override_active:
+            self._force_next_notify = force_notify
             self._override_active = False
-            if self.current_path!=self._override:
-                self._notify(self._override, self.current_path)
+            self._notify(self._override, self.current_path)
 
 
 
@@ -336,9 +345,11 @@ class AppFolder:
     ##=============================================
 
     def register_change_listener(self, listener):
-        """`listener` should be a callable; it will be invoked with this
+        """
+        `listener` should be a callable; it will be invoked with this
         AppFolder instance as its first positional parameter upon
-        a path change"""
+        a path change.
+        """
         # """
         # `listener` should be a callable that accepts 3 parameters;
         # it will be invoked as ``listener(appfolder, old_path, new_path)``,
@@ -347,7 +358,9 @@ class AppFolder:
         # """
 
         if callable(listener):
+            # print("adding change listener '{}' to appfolder '{}'".format(listener.__name__, self.name))
             self._listeners.add(listener)
+
 
     def remove_listener(self, listener):
         """Remove a listener by providing the same callable object
@@ -357,6 +370,13 @@ class AppFolder:
     def _notify(self, old, new):
         """Invoke--in no particular or guaranteed order--all registered
          change-listeners with the change information"""
-        for l in self._listeners:
-            l(self)
-            # l(self, old, new)
+
+        if old != new or self._force_next_notify:
+
+            for l in self._listeners:
+                # print("{0}: notifying listener {1!r}".format(self.name, l.__name__))
+                l(self)
+                # l(self, old, new)
+
+            # always reset to false at this point
+            self._force_next_notify = False

@@ -34,6 +34,9 @@ class IOManager(Submanager):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        self.LOGGER << "Initializing DiskManager"
+
+
         # track which dlc are present
         # TODO: actually use this
         self.dlc_present = {

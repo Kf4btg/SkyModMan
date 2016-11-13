@@ -51,6 +51,7 @@ class ModManager:
     """
 
     def __init__(self):
+        self.LOGGER << "Creating ModManager"
 
         # first, initialize the alerts
         self._diralerts={}
@@ -94,6 +95,8 @@ class ModManager:
 
     def setup(self):
         """Initialize the subcomponents and load all required data."""
+
+        self.LOGGER << "Initializing manager sub-components"
         # use appdirs to get base paths
         import appdirs
         _appdata = appdirs.user_data_dir(APPNAME)
@@ -346,6 +349,8 @@ class ModManager:
 
         :param AppFolder folder:
         """
+        self.LOGGER << "on_dir_change({0.name})".format(folder)
+
 
         # an appfolder instance is "False" if the path is unset or invalid
         if not folder:
@@ -771,10 +776,13 @@ class ModManager:
         if modfiles:
             if self._folders['mods']:
                 # iterate over returned pairs (name, list) from iomanager
+                c=0
                 for mod, file_list in self._ioman.load_all_mod_files():
+                    c+=len(file_list)
                     # insert into db
                     self._dbman.add_files('mod', mod, file_list)
                     # self._dbman.add_to_modfiles_table(mod, file_list)
+                self.LOGGER << "Loaded {} files".format(c)
 
 
             # try:

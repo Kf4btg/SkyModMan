@@ -7,10 +7,15 @@ from skymodman.types import ModEntry, ModCollection
 
 @withlogger
 class ModCollectionManager(Submanager):
-    """Intended to replace (at least some) of the database manager"""
+    """Creates the ModCollection instance that will be used by the rest
+    of the application. Provides methods to validate the list of mods,
+    query enabled and managed states, and tracks errors encountered
+    during mod-loading."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        self.LOGGER << "Initializing ModCollectionManager"
 
         # temporary storage for info about unmanaged mods
         self._vanilla_mod_info = []
@@ -89,6 +94,8 @@ class ModCollectionManager(Submanager):
         # reset error field to None
         errors_cleared = self.clear_errors()
 
+        self.LOGGER << "Cleared {} mod errors".format(errors_cleared)
+
         # list of mods marked as 'managed' in the collection
         in_coll = list(m.directory for m in self.managed_mods())
 
@@ -144,6 +151,9 @@ class ModCollectionManager(Submanager):
             dict.fromkeys(errmap[ModError.DIR_NOT_FOUND],
                           ModError.DIR_NOT_FOUND)
         ))
+
+        self.LOGGER << "Discovered {} new mod errors".format(len(self._errors))
+
 
         # for key in errmap[ModError.MOD_NOT_LISTED]:
         #     self._errors[key] = ModError.MOD_NOT_LISTED
