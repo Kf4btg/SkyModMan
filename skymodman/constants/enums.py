@@ -28,6 +28,9 @@ class Tab(IntEnum):
 class Column(IntEnum):
     ENABLED, ORDER, NAME, DIRECTORY, MODID, VERSION, ERRORS = range(7)
 
+class FileTreeColumn(IntEnum):
+    NAME, PATH, CONFLICTS = range(3)
+
 ##=============================================
 ## "Plain" enum subclasses
 ##=============================================

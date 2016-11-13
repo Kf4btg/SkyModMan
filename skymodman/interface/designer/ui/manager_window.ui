@@ -243,9 +243,6 @@
               <property name="uniformRowHeights">
                <bool>true</bool>
               </property>
-              <attribute name="headerMinimumSectionSize">
-               <number>100</number>
-              </attribute>
              </widget>
             </item>
             <item>

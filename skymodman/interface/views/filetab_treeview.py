@@ -2,14 +2,21 @@ from PyQt5 import QtWidgets
 from PyQt5.QtCore import Qt, pyqtSlot as Slot, QObject, QEvent
 
 from skymodman import Manager
+from skymodman.constants.enums import FileTreeColumn
 # from skymodman.log import withlogger
 
 
 # @withlogger
+
+COL_NAME, COL_PATH, COL_CONFLICTS = (
+    FileTreeColumn.NAME, FileTreeColumn.PATH, FileTreeColumn.CONFLICTS)
+
+_stretch_mode = QtWidgets.QHeaderView.Stretch
+_fixed_mode = QtWidgets.QHeaderView.Fixed
+_interactive_mode = QtWidgets.QHeaderView.Interactive
+
 class FileTabTreeView(QtWidgets.QTreeView):
 
-    ## SIR HAXALOT
-    _ignore_section_resize = False
 
     def __init__(self, *args, **kwargs):
 
@@ -29,9 +36,13 @@ class FileTabTreeView(QtWidgets.QTreeView):
 
         self._resized = False
 
+        # noinspection PyTypeChecker
+        self._column_count = len(FileTreeColumn)
+
         # static ref to headerview
-        # self.setHeader(BetterHeader(Qt.Horizontal, self))
+        self.setHeader(BetterHeader(Qt.Horizontal, self))
         self._header = self.header() # type: QtWidgets.QHeaderView
+        self._header.setMinimumSectionSize(100)
 
         # track changes in viewport width
         self._viewport_width = -1
@@ -39,6 +50,8 @@ class FileTabTreeView(QtWidgets.QTreeView):
         # by default, name col will be 1/2 of the total width,
         # path will be 1/3, conflicts 1/6.  Because this is IMPORTANT
         self._column_ratios=[2, 3, 6]
+
+        self._first_show=True
 
     @property
     def filter(self):
@@ -101,8 +114,30 @@ class FileTabTreeView(QtWidgets.QTreeView):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         # h = self.header() # type: QtWidgets.QHeaderView
+
+        #=================================
+        # Header setup
+        #---------------------------------
+
+        # turn off last section stretch to allow us to manipulate its size
         self._header.setStretchLastSection(False)
-        self._header.sectionResized.connect(self.on_section_resize)
+
+        # don't allow rearranging columns
+        self._header.setSectionsMovable(False)
+
+        # set last section to Fixed mode to prevent user from trying
+        # to resize it; they actually shouldn't even be ABLE to try to
+        # resize it if everything were working perfectly because the
+        # resize handle (on the right edge of the) section would be
+        # inaccessible to mouse clicks. But since things don't always
+        # line up quite right, it is sometimes visible.
+        self._header.setSectionResizeMode(self._column_count-1,
+                                          QtWidgets.QHeaderView.Fixed)
+
+
+
+
+        # self._header.sectionResized.connect(self.on_section_resize)
 
         self._viewport_width = self.viewport().width()
 
@@ -112,26 +147,13 @@ class FileTabTreeView(QtWidgets.QTreeView):
 
         # self.header().installEventFilter(HeaderResizeFixer(self))
 
-        # self.resizeColumnToContents(0)
-        # self.resizeColumnToContents(1)
-        # self.resizeColumnToContents(2)
+        # for c in range(self.model().columnCount()):
+        #     self.resizeColumnToContents(c)
+
+        # self.apply_default_column_widths()
 
         # stop the header sections from being dragged around
         # h = self.header()
-
-        # h.setSectionsMovable(False)
-
-        # h=self.header()
-
-        # one_third_width = h.length() // 3
-
-        # make name and path columns equal to 1/3 of the available
-        # space
-        # h.resizeSection(2, 50)
-        # h.resizeSection(0, h.length() // 2)
-        # h.resizeSection(1, h.length() // 3)
-        # h.setSectionResizeMode(type(h).Interactive)
-        # h.setSectionResizeMode(0, type(h).Stretch)
 
         # cleanup
         del ModFileTreeModel_QUndo, FileViewerTreeFilter
@@ -187,25 +209,74 @@ class FileTabTreeView(QtWidgets.QTreeView):
         #
         #     self._resized = True
 
+    # def apply_default_column_widths(self):
+    #     w = self.width()
+    #
+    #     col_count = self.model().columnCount()
+    #
+    #     # each col gets an even num of pixels:
+    #     # but if we try to give each column an equal num of pixels,
+    #     # we'll surely have a few left over
+    #     col_width, extra_px = w // col_count, w % col_count
+    #
+    #     # just add the extra pixels to the first column...
+    #     # surely no one will notice.
+    #     self.setColumnWidth(0, col_width + extra_px)
+    #
+    #     # the rest get the normal width
+    #     for column in range(1, col_count):
+    #         self.setColumnWidth(column, col_width)
+
+    @Slot(int, int, int)
+    def on_section_resize(self, col, old, new):
+
+        self._header.resizeSections(_stretch_mode)
+
+
 
     def sizeHintForColumn(self, column):
         # this is called during resizeColumnToContents()
 
-        if column == 2: # conflicts
-            return self.header().minimumSectionSize()
+        min_size = self._header.minimumSectionSize()
 
-        # for name/path, return either 1/3 of the viewport width
+        if column == COL_CONFLICTS:
+            # keep conflicts column at minimum size
+            # return self.header().minimumSectionSize()
+            return min_size
+
+        # for name/path, return either 1/2 of the remaining width
         # or the default sizeHint, whichever is larger
-        return max(self.viewport().width() // 3,
-                   super().sizeHintForColumn(column))
+        remaining = self._viewport_width - min_size
+        half_remaining, extra_px = remaining // 2, remaining % 2
+
+        if column == COL_NAME:
+            # add any extra pixels to the first column
+            return max(half_remaining + extra_px,
+                       super().sizeHintForColumn(column))
+
+        return max(half_remaining, super().sizeHintForColumn(column))
 
     def resizeEvent(self, event):
         """Override the resize event to make sure the columns remain
         reasonably-sized when the window/viewport is resized"""
+        # if self._first_show:
+        #     # self.apply_default_column_widths()
+        #     for c in range(self.model().columnCount()):
+        #         self.resizeColumnToContents(c)
+        #     self._first_show=False
+        # else:
+        #     ## seems to be unnecessary
+        #     super().resizeEvent(event)
+        # return
+        # print("resize event")
 
-        ## seems to be unnecessary
-        super().resizeEvent(event)
+        self._viewport_width = event.size().width()
+
+        for c in range(self.model().columnCount()):
+            self.resizeColumnToContents(c)
         return
+
+    def _resizeEvent(self, event):
         # print("resize event")
 
         # newsize=event.size()
@@ -263,96 +334,6 @@ class FileTabTreeView(QtWidgets.QTreeView):
         # reenable header signals
         # self._header.blockSignals(False)
 
-    no_recurse=False
-
-    @Slot(int, int, int)
-    def on_section_resize(self, col_index, old_size, new_size):
-        """
-        Don't know how else to do it...so, we're going to listen for
-        all section resize events and force correction based on
-        viewport width()
-
-        :param col_index:
-        :param old_size:
-        :param new_size:
-        :return:
-        """
-        print("section", col_index, "resize")
-
-
-        if not FileTabTreeView.no_recurse:
-            h = self._header
-            max_width=h.width()
-
-            ssize=h.sectionSize
-            ssizes=[ssize(0), ssize(1), ssize(2)]
-            tot_width=sum(ssizes)
-
-            delta_w = new_size - old_size
-
-            if delta_w>0 and tot_width > max_width:
-
-                FileTabTreeView.no_recurse=True
-                # todo: store as const
-                minsize = h.minimumSectionSize()
-
-                # h.resizeSection(col_index, old_size)
-
-                # column number < columnCount() -1
-                s=2
-                while s>col_index:
-                    if ssizes[s]>minsize:
-                        h.resizeSection(s, ssizes[s] - delta_w)
-                        break
-                    s-=1
-                else:
-                    # all following columns are at minimum already;
-                    # disallow the change
-                    h.resizeSection(col_index, old_size)
-
-                    # apply the difference to the next section
-                    # h.resizeSection(2, max_width - sum(
-                    #     ssizes[:-1]))
-
-                    # h.resizeSection(2, ssizes[2] - new_size - old_size)
-                    # h.resizeSection(col_index, old_size)
-
-                # else:
-                #     # disallow the change
-                #     h.resizeSection(col_index, old_size)
-
-
-                FileTabTreeView.no_recurse=False
-            elif delta_w < 0 and col_index<2:
-                # if we're shrinking, expand the final section
-                FileTabTreeView.no_recurse = True
-                h.resizeSection(2, max_width-sum(ssizes[:-1]))
-                FileTabTreeView.no_recurse = False
-
-                # edit: this next idea didn't work so well...last section
-                # kept disappearing (2nd section got huge, i suppose)
-                # then reappearing (2nd section returned to normal size?)
-
-                # # if we're shrinking, expand the NEXT section
-                # FileTabTreeView.no_recurse = True
-                # h.resizeSection(col_index+1, max_width-sum(ssizes[i] for i in range(2) if i!=col_index))
-                # FileTabTreeView.no_recurse = False
-
-
-
-
-
-                # print("total section width:", twidth, "/", hw)
-
-                # if not self._ignore_section_resize:
-                # record new ratio of column's width:total width
-                # h = self.header() # type: QtWidgets.QHeaderView
-
-                # h.section
-
-
-                # self._column_ratios[col_index] = self.width() / new_size
-
     @Slot(str)
     def on_filter_changed(self, text):
         """
@@ -399,30 +380,185 @@ class BetterHeader(QtWidgets.QHeaderView):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        self.iswearimnotrecursing=True
+        self._minsectsize=0
+        self._count = 0
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
+        # self._no_recurse = -1
 
-        print("header resize:", event.size())
+        self.sectionResized.connect(self.on_section_resize)
+
+        self.sectionCountChanged.connect(self._update_section_count)
+
+    def setMinimumSectionSize(self, px):
+        self._minsectsize=px
+        super().setMinimumSectionSize(px)
+
+    # noinspection PyUnusedLocal
+    @Slot(int, int)
+    def _update_section_count(self, old, new):
+        self._count=new
+
+    @Slot(int, int, int)
+    def on_section_resize(self, col_index, old_size, new_size):
+        """
+        Don't know how else to do it...so, we're going to listen for
+        all section resize events and force correction based on
+        viewport width()
+
+        note:: this requires ``setStretchLastSection(False)``
+
+        :param col_index:
+        :param old_size:
+        :param new_size:
+        :return:
+        """
+        # print("section", col_index, "resize")
+
+        # TODO: mostly works, but can still be kinda wonky, mainly when moving the mouse quickly: it'll cause some gaps after the last column and inconsistencies in the "minimum" size of a column. I suspect the solution is to clamp the sizes below to minimumSectionSize rather than just going by calculated sizes since they may not add up correctly.
+
+        minsize = self._minsectsize
+
+        # print(col_index, new_size)
+
+        # correct sizes smaller than minsize
+        if new_size < minsize:
+
+            # re-call resizeSection w/ minsize; the value of
+            # ..notrecursing shouldn't be affected here--
+            # if it is True, then this call will continue the handling
+            # w/ the correct size; if it's False, it'll
+            # just set the new size as normal
+            self.resizeSection(col_index, minsize)
+        elif self.iswearimnotrecursing:
+
+        # if self._no_recurse < 0:
+        # if self.iswearimnotrecursing:
+            max_width = self.width()
+            num_cols = self._count
+
+            ssize = self.sectionSize
+            ssizes = [ssize(i) for i in range(num_cols)]
+            tot_width = sum(ssizes)
 
 
-    def resizeSection(self, colnum, size):
-        super().resizeSection(colnum, size)
+            delta_w = new_size - old_size
 
-        print("After section resize:", self.width())
+            # if we're expanding a section
+            if delta_w > 0 and tot_width > max_width:
 
-    def resizeSections(self, mode=None):
+                # prevent infinite loops
+                self.iswearimnotrecursing = False
+                # self._no_recurse = col_index
 
-        super().resizeSection(mode)
+                # find out how far we went over
+                excess = tot_width - max_width
 
-        print("resizeSections")
+                sect = col_index+1
+                # find the first column past this one that can
+                # still have its size reduced
+                while sect < num_cols:
+                    s = ssizes[sect]
 
-    def updateSection(self, col):
-        super().updateSection(col)
+                    # if it's bigger than minsize, we can shrink it
+                    if s > minsize:
+                        # remove the excess width from the column
+                        self.resizeSection(sect, s - excess)
+                        break
+                    # move left
+                    sect += 1
+                else:
+                    # all following columns are at minimum already;
+                    # disallow the change
+                    self.resizeSection(col_index, old_size)
 
-        print("updateSection", col)
+                self.iswearimnotrecursing = True
+                # self._no_recurse = -1
+
+            elif delta_w < 0 and col_index < num_cols-1:
+                self.iswearimnotrecursing = False
+
+                ##########################
+                ## THIS idea was to, when shrinking a section, set
+                ## the resize mode for the next section to stretch;
+                ## when the resize is done, set it back to interactive.
+                ## And, well, it actually KINDA worked! Things got a
+                ## little jerky sometimes--sections would spring from
+                ## a small size to a bigger size when changing
+                ## drag directions, and occasionally a section wouldn't
+                ## get set back to interactive correctly--but it's worth
+                ## remembering, mulling over, and keeping in mind for
+                ## later.
+
+                # self._no_recurse = col_index
+                #
+                # self.setSectionResizeMode(col_index+1, _stretch_mode)
+                #
+                # self._no_recurse = -1
+                #
+                # return
+
+                ##########################
 
 
+                # see how much empty space we need to fill
+                to_fill = max_width - tot_width
+
+                # if we're shrinking, expand the NEXT section
+                if new_size > minsize:
+                    # that is, if we still CAN shrink this section
+
+                    next_size = ssizes[col_index+1]
+
+
+                    self.resizeSection(col_index+1,
+                                       next_size + to_fill)
+                else:
+                    ## FIXME: this doesn't really work...when dragging past the min size, the "shrink prev. sections" code will be called once, but then stops. I guess maybe because it knows it has already reached the min. size and so doesn't bother emitting the resizeEvent after that
+                    # if the section being resized has reached the min. size
+                    # but the user is still dragging, we need to expand
+                    # any following sections and shrink any previous
+                    # sections if possible
+
+                    shrink_by = -delta_w # invert negative
+
+                    # because delta_w doesn't always line up correctly
+                    # with the difference between the total and max
+                    # widths, we need to calculate that difference
+                    grow_by = max_width - tot_width - shrink_by
+
+                    sect = col_index - 1
+                    while sect >= 0:
+                        s = ssizes[sect]
+
+                        # if it's bigger than minsize, we can shrink it
+                        if s > minsize:
+                            # remove the excess width from the column
+                            self.resizeSection(sect, s - shrink_by)
+                            break
+                        # move left
+                        sect -= 1
+                    else:
+                        # we couldn't shrink anything, so we can't
+                        # expand anything either; undo change
+                        self.resizeSection(col_index, old_size)
+
+                        # then short-circuit outta here
+                        self.iswearimnotrecursing = True
+                        return
+
+
+                    # now expand
+                    sect = col_index + 1 # we know we're not on the last section
+                    self.resizeSection(sect, ssizes[sect]+grow_by)
+
+                self.iswearimnotrecursing = True
+
+        # else:
+        #     self.setSectionResizeMode(self._no_recurse+1, _interactive_mode)
+
+
+                # self._column_ratios[col_index] = self.width() / new_size
 
 class HeaderResizeFixer(QObject):
 
