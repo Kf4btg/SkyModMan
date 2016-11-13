@@ -39,8 +39,8 @@ class HideDirectoryCommand(QUndoCommand):
         # directory
         curr_state = [((None,), item.checkState)] # type: list [tuple[tuple[int], int]]
 
-        def _(base_path):
-            for c in item.iterchildren(True):
+        def _(base_item, base_path):
+            for c in base_item.iterchildren(False):
 
                 # append row path as tuple(row, row, row...),
                 # then value as int (Qt.*Checked)
@@ -50,10 +50,10 @@ class HideDirectoryCommand(QUndoCommand):
                 if c.isdir:
                     # recurse, extending the base rel-path with row
                     # of child directory
-                    _(base_path+[c.row])
+                    _(c, base_path+[c.row])
 
         # build snapshot, starting w/ empty list (path)
-        _([])
+        _(item, [])
 
         # save the "current state" as the state to revert to during undo
         self.undo_state = curr_state
