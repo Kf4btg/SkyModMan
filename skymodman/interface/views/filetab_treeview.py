@@ -384,8 +384,6 @@ class BetterHeader(QtWidgets.QHeaderView):
         self._minsectsize=0
         self._count = 0
 
-        # self._no_recurse = -1
-
         self.sectionResized.connect(self.on_section_resize)
 
         self.sectionCountChanged.connect(self._update_section_count)
@@ -404,7 +402,7 @@ class BetterHeader(QtWidgets.QHeaderView):
         """
         Don't know how else to do it...so, we're going to listen for
         all section resize events and force correction based on
-        viewport width()
+        width()
 
         note:: this requires ``setStretchLastSection(False)``
 
@@ -414,8 +412,6 @@ class BetterHeader(QtWidgets.QHeaderView):
         :return:
         """
         # print("section", col_index, "resize")
-
-        # TODO: mostly works, but can still be kinda wonky, mainly when moving the mouse quickly: it'll cause some gaps after the last column and inconsistencies in the "minimum" size of a column. I suspect the solution is to clamp the sizes below to minimumSectionSize rather than just going by calculated sizes since they may not add up correctly.
 
         minsize = self._minsectsize
 
@@ -432,8 +428,6 @@ class BetterHeader(QtWidgets.QHeaderView):
             self.resizeSection(col_index, minsize)
         elif self.iswearimnotrecursing:
 
-        # if self._no_recurse < 0:
-        # if self.iswearimnotrecursing:
             max_width = self.width()
             num_cols = self._count
 
@@ -457,28 +451,61 @@ class BetterHeader(QtWidgets.QHeaderView):
                 sect = col_index+1
                 # find the first column past this one that can
                 # still have its size reduced
-                while sect < num_cols:
+                while sect < num_cols and excess:
                     s = ssizes[sect]
 
                     # if it's bigger than minsize, we can shrink it
                     if s > minsize:
+                        # buuuut only by the amount by which it differs
+                        # from minsize...
+                        remove = min(excess, s-minsize)
                         # remove the excess width from the column
-                        self.resizeSection(sect, s - excess)
-                        break
-                    # move left
+                        self.resizeSection(sect, s - remove)
+
+                        # subtract the amount removed from excess
+                        excess -= remove
+                        # if not excess:
+                            # if we've consumed all of excess, break out
+                            # break
+                    # move right
                     sect += 1
-                else:
+                # else:
                     # all following columns are at minimum already;
-                    # disallow the change
-                    self.resizeSection(col_index, old_size)
+
+                    # disallow change
+                    # self.resizeSection(col_index, old_size)
+
+
+                # if there's any excess left, adjust original section
+                # to make up for it
+                if excess:
+                    # however much we could not remove from following
+                    # sections, remove now from original to reduce
+                    # total width
+                    self.resizeSection(col_index, new_size-excess)
 
                 self.iswearimnotrecursing = True
-                # self._no_recurse = -1
 
             elif delta_w < 0 and col_index < num_cols-1:
-                self.iswearimnotrecursing = False
 
-                ##########################
+                if new_size >= minsize:
+                    # make sure we still CAN shrink this section
+
+                    self.iswearimnotrecursing = False
+
+                    # see how much empty space we need to fill
+                    to_fill = max_width - tot_width
+
+                    next_size = ssizes[col_index+1]
+
+
+                    self.resizeSection(col_index+1,
+                                       next_size + to_fill)
+
+                    self.iswearimnotrecursing = True
+
+
+                    ##########################
                 ## THIS idea was to, when shrinking a section, set
                 ## the resize mode for the next section to stretch;
                 ## when the resize is done, set it back to interactive.
@@ -501,58 +528,107 @@ class BetterHeader(QtWidgets.QHeaderView):
                 ##########################
 
 
-                # see how much empty space we need to fill
-                to_fill = max_width - tot_width
-
-                # if we're shrinking, expand the NEXT section
-                if new_size > minsize:
-                    # that is, if we still CAN shrink this section
-
-                    next_size = ssizes[col_index+1]
 
 
-                    self.resizeSection(col_index+1,
-                                       next_size + to_fill)
-                else:
-                    ## FIXME: this doesn't really work...when dragging past the min size, the "shrink prev. sections" code will be called once, but then stops. I guess maybe because it knows it has already reached the min. size and so doesn't bother emitting the resizeEvent after that
-                    # if the section being resized has reached the min. size
-                    # but the user is still dragging, we need to expand
-                    # any following sections and shrink any previous
-                    # sections if possible
+                # if new_size >= minsize:
+                #     # make sure we still CAN shrink this section
+                #
+                #     # see how much empty space we need to fill
+                #     to_fill = max_width - tot_width
+                #
+                #     next_size = ssizes[col_index+1]
+                #
+                #
+                #     self.resizeSection(col_index+1,
+                #                        next_size + to_fill)
 
-                    shrink_by = -delta_w # invert negative
+                # ## Actually, i decided that the whole next part was
+                # a bad idea...that is, the part where we
+                # tried to shrink the columns to the left when
+                # "shrinking" a column that was already the minimum
+                # size--we'll call it the 'drag left' action. It
+                # would make some symmetry with the way the 'drag
+                # right' action worked, but I realize that it's not
+                # really how any other program with columns works,
+                # and so would probably be unintuitive to use. If it
+                # worked, that is, which it didn't. So removing it
+                # actually makes the whole thing nicer, so there's
+                # that, too.
 
-                    # because delta_w doesn't always line up correctly
-                    # with the difference between the total and max
-                    # widths, we need to calculate that difference
-                    grow_by = max_width - tot_width - shrink_by
+                # else:
+                #     ## IXME: this doesn't really work...when dragging past the min size, the "shrink prev. sections" code will be called once, but then stops. I guess maybe because it knows it has already reached the min. size and so doesn't bother emitting the resizeEvent after that
+                #     # if the section being resized has reached the min. size
+                #     # but the user is still dragging, we need to expand
+                #     # any following sections and shrink any previous
+                #     # sections if possible
+                #
+                #     shrink_by = -delta_w # invert negative
+                #
+                #     # because delta_w doesn't always line up correctly
+                #     # with the difference between the total and max
+                #     # widths, we need to calculate that difference
+                #     # grow_by = to_fill + shrink_by
+                #
+                #     sect = col_index - 1
+                #     while sect >= 0 and shrink_by:
+                #         s = ssizes[sect]
+                #
+                #         # if it's bigger than minsize, we can shrink it
+                #         if s > minsize:
+                #
+                #             remove = min(shrink_by, s - minsize)
+                #             # remove the excess width from the column
+                #             self.resizeSection(sect, s - remove)
+                #
+                #             shrink_by -= remove
+                #             # if not shrink_by:
+                #             #     break
+                #         # move left
+                #         sect -= 1
+                #     # else:
+                #         # we couldn't shrink anything, so we can't
+                #         # expand anything either; undo change
+                #         # self.resizeSection(col_index, old_size)
+                #         # self.resizeSection(col_index, old_size)
+                #
+                #         # then short-circuit outta here
+                #         # self.iswearimnotrecursing = True
+                #         # return
+                #
+                #
+                #     if shrink_by:
+                #
+                #         # if shrink_by is STILL equal to delta_w, then
+                #         # we were unable to shrink previous sections at
+                #         # all; this means that this section and all prev
+                #         # sections are at minimum size, so there's no
+                #         # empty space to fill; thus we need to disallow the action
+                #
+                #         if shrink_by == -delta_w:
+                #             # unchanged; this SHOULD mean this section and
+                #             # all prior sections are already at minsize,
+                #             # and that that we have no empty space to
+                #             # fill; however, that doesn't always appear
+                #             # to be the case...
+                #             # so in case it isn't, see if we have
+                #             # some space to fill
+                #             grow_by = to_fill
+                #         else:
+                #             # if we have any of shrink_by remaining, adjust
+                #             # grow_by to compensate
+                #             grow_by = to_fill - delta_w - shrink_by
+                #
+                #     else:
+                #         # we expand by the calculate empty space plus
+                #         # the amount by which we reduced the prior sectors
+                #         grow_by = to_fill - delta_w # add neg.
+                #
+                #     if grow_by:
+                #         # now expand
+                #         sect = col_index + 1 # we know we're not on the last section
+                #         self.resizeSection(sect, ssizes[sect]+grow_by)
 
-                    sect = col_index - 1
-                    while sect >= 0:
-                        s = ssizes[sect]
-
-                        # if it's bigger than minsize, we can shrink it
-                        if s > minsize:
-                            # remove the excess width from the column
-                            self.resizeSection(sect, s - shrink_by)
-                            break
-                        # move left
-                        sect -= 1
-                    else:
-                        # we couldn't shrink anything, so we can't
-                        # expand anything either; undo change
-                        self.resizeSection(col_index, old_size)
-
-                        # then short-circuit outta here
-                        self.iswearimnotrecursing = True
-                        return
-
-
-                    # now expand
-                    sect = col_index + 1 # we know we're not on the last section
-                    self.resizeSection(sect, ssizes[sect]+grow_by)
-
-                self.iswearimnotrecursing = True
+                # self.iswearimnotrecursing = True
 
         # else:
         #     self.setSectionResizeMode(self._no_recurse+1, _interactive_mode)
