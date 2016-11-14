@@ -32,15 +32,21 @@ _SCHEMA = """
         CREATE TABLE hiddenfiles (
             directory TEXT REFERENCES mods(directory) DEFERRABLE INITIALLY DEFERRED,
                                 -- the mod directory under which this file resides
-            filepath      TEXT      -- path to the file that has been hidden
+            filepath      TEXT,      -- path to the file that has been hidden
+            CONSTRAINT no_duplicates UNIQUE (directory, filepath) ON CONFLICT IGNORE
+                --make sure we don't add the same file twice
         );
         CREATE TABLE modfiles (
             directory     TEXT REFERENCES mods(directory) DEFERRABLE INITIALLY DEFERRED, -- the mod directory under which this file resides
-            filepath      TEXT      -- path to the file
+            filepath      TEXT,      -- path to the file
+            CONSTRAINT no_duplicates UNIQUE (directory, filepath) ON CONFLICT IGNORE
+                --make sure we don't add the same file twice
         );
         CREATE TABLE missingfiles (
             directory     TEXT REFERENCES mods(directory) DEFERRABLE INITIALLY DEFERRED, -- the mod directory under which this file should reside
-            filepath      TEXT      -- expected path to the file
+            filepath      TEXT,      -- expected path to the file
+            CONSTRAINT no_duplicates UNIQUE (directory, filepath) ON CONFLICT IGNORE
+                --make sure we don't add the same file twice
         );
         """
 # having the foreign key deferrable should prevent the db freaking
