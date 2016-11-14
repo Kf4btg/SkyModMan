@@ -865,6 +865,9 @@ class ModManager:
         """
         self.LOGGER << "<==Method called"
 
+        print("unhide:", unhide)
+        print("hide:", hide)
+
 
         # delete 'unhide' files
         self._dbman.remove_hidden_files(for_mod, unhide)

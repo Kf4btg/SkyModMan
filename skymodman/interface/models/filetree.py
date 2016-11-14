@@ -56,9 +56,9 @@ class ModFileTreeModel(QAbstractItemModel):
         # maintain a flattened list of the files for the current mod
         self._files = [] # type: list [QFSItem]
 
-        # list of hidden files for the current 'clean state' of the tree
+        # set of hidden files for the current 'clean state' of the tree
         # (should correspond to entries in "hiddenfiles" db table)
-        self._saved_state = []
+        self._saved_state = set()
 
         self.command_queue = deque()
 
@@ -179,6 +179,7 @@ class ModFileTreeModel(QAbstractItemModel):
 
     def _mark_hidden_files(self):
 
+        hidden = set()
         # locate the hidden files in the file list using binary search:
         for hf in self.DB.hidden_files(self.mod.directory):
             try:
@@ -187,8 +188,12 @@ class ModFileTreeModel(QAbstractItemModel):
                 # also use the internal _set_checkstate to avoid the
                 # parent.child_state invalidation step
                 self._files[idx]._set_checkstate(Qt_Unchecked, False)
+                hidden.add(idx)
             except ValueError:
                 self.LOGGER.error("Hidden file {0!r} was not found".format(hf))
+
+        # reset the "saved state" (indices of hidden files on load)
+        self._saved_state = hidden
 
     def getitem(self, index) -> QFSItem:
         """Extracts actual item from given index
@@ -433,7 +438,7 @@ class ModFileTreeModel(QAbstractItemModel):
         current_state = set(self._hidden_file_indices())
 
         # hidden files when last saved
-        clean_state = set(self._saved_state)
+        clean_state = self._saved_state
 
         # deltas
         to_hide = [self._files[i].path for i in sorted(current_state - clean_state)]
