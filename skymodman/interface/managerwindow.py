@@ -232,6 +232,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self._setupui_toolbar()
         self._setupui_statusbar()
         self._setupui_table() # must wait for manager for model
+        self._setupui_file_tree()
 
         self._setupui_actions()
         self._setupui_button_connections()
@@ -393,11 +394,10 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.LOGGER.debug("_setup_file_tree")
 
+
         self._filetreesplitter.setSizes(
             [1, 500])  # just make the left one smaller ok?
 
-        ## resize 'name' column to be larger at first than 'path' column
-        self.filetree_fileviewer.header().resizeSection(0, 400)
         # todo: remember user column resizes
 
     def _setupui_actions(self):
