@@ -38,7 +38,8 @@ _DEFAULT_CONFIG_={
 @withlogger
 class ConfigManager(Submanager, BaseConfigManager):
 
-    def __init__(self, config_dir, data_dir, config_file_name, mcp, *args, **kwargs):
+    def __init__(self, config_dir, data_dir, config_file_name, mcp,
+                 *args, **kwargs):
         """
 
         :param str config_dir: path of Application configuration folder (e.g. ~/.config/appname/)
@@ -67,7 +68,8 @@ class ConfigManager(Submanager, BaseConfigManager):
 
         super().__init__(
             template = _DEFAULT_CONFIG_,
-            config_file = fsutils.join_path(self._config_dir, config_file_name),
+            config_file = fsutils.join_path(self._config_dir,
+                                            config_file_name),
             environ_vars = EnvVars,
             mcp=mcp, *args, **kwargs)
 
@@ -170,15 +172,18 @@ class ConfigManager(Submanager, BaseConfigManager):
         # path to directory which holds all the profile info
         # TODO: should this stuff actually be in XDG_DATA_HOME??
         try:
-            self.mainmanager.Folders['profiles'].path = self._get_value_from(
-                config, _SECTION_DIRS, _KEY_PROFDIR)
+            self.mainmanager.Folders['profiles'].path = \
+                self._get_value_from(config,
+                                     _SECTION_DIRS,
+                                     _KEY_PROFDIR)
 
         except (exceptions.MissingConfigKeyError,
                     exceptions.MissingConfigSectionError) as e:
             # XXX: on thinking about this, it may actually be beneficial to ignore a missing key here and just implicitly use the default. If the user ever customizes the path in the preferences dialog, we can write it to the config file then. This may prevent accidental changes to the path or even issues if some sort of upgrade changes the default.
             self.missing_keys.append((e.section, _KEY_PROFDIR))
 
-            self.LOGGER.warning("Key for profiles directory missing; using default.")
+            self.LOGGER.warning("Key for profiles directory missing;"
+                                " using default.")
             ## Should be default already
 
         ## check that profiles dir exists, create if missing ##
@@ -262,7 +267,8 @@ class ConfigManager(Submanager, BaseConfigManager):
         pdir = self.mainmanager.Folders['profiles'].path / pname
 
         if not pdir.exists():
-            self.LOGGER.warning("{}: Profile directory '{}' not found".format(key, pname))
+            self.LOGGER.warning("{}: Profile directory '{}' not found"
+                                .format(key, pname))
 
             # if the profile is not already the default, set it so.
             if pname != FALLBACK_PROFILE:
@@ -281,8 +287,8 @@ class ConfigManager(Submanager, BaseConfigManager):
         """
         Lookup the paths for the directories of game-related data (e.g.
         the main Skyrim folder, the mods-installation directory, and the
-        virtual fs mount point). If the user has not configured these, use
-        the default.
+        virtual fs mount point). If the user has not configured these,
+        use the default.
 
         :param configparser.ConfigParser config:
         """
@@ -294,7 +300,7 @@ class ConfigManager(Submanager, BaseConfigManager):
         ):
             p = None  # type: Path
 
-            # first, check if the user has specified an environment variable
+            # first, check if the user has specified an environment var
             envval = self._environment[evar]
             if envval:
                 if check_path(envval):
@@ -318,8 +324,8 @@ class ConfigManager(Submanager, BaseConfigManager):
 
             if p is None:
                 # if key wasn't in config file for some reason,
-                # check that we have a default value (skydir, for example,
-                # does not (i.e. the default val is ""))
+                # check that we have a default value (skydir, for
+                # example, does not (i.e. the default val is ""))
                 def_path = _DEFAULT_CONFIG_[_SECTION_DIRS][
                         path_key]
 
@@ -335,11 +341,13 @@ class ConfigManager(Submanager, BaseConfigManager):
             # finally, if we have successfully deduced the path, set
             # it on the PathManager
             if p is not None:
-                self.LOGGER << "Setting appfolder {0!r} to {1}".format(path_key, p)
+                self.LOGGER << "Setting appfolder {0!r} to {1}".format(
+                    path_key, p)
 
                 # force notification since this is the first 'official'
                 # contact with the folder paths
-                self.mainmanager.Folders[path_key].set_path(p, force_notify=True)
+                self.mainmanager.Folders[
+                    path_key].set_path(p, force_notify=True)
 
             # and update config-file mirror
             # note -- have to use strings to keep config parser happy
@@ -349,7 +357,8 @@ class ConfigManager(Submanager, BaseConfigManager):
         if self.path_errors:
             for att, errlist in self.path_errors.items():
                 for err in errlist:
-                    self.LOGGER << "Path error [" + att + "]: " + err
+                    self.LOGGER.warning(
+                        "Path error [" + att + "]: " + err)
 
         ######################################################################
         #  check env for vfs mount
@@ -400,7 +409,6 @@ class ConfigManager(Submanager, BaseConfigManager):
 
         :param key:
         :param value:
-        :return:
         """
         self.update_value(_SECTION_GENERAL, key, value)
 
@@ -409,10 +417,11 @@ class ConfigManager(Submanager, BaseConfigManager):
         Get the value of a setting from the General section of the
         config.
 
-        This is just a shortcut for config_manager.get_value("General", key)
+        This is just a shortcut for config_manager.get_value("General",
+        key)
 
         (though of course contants.keystrings.Section.GENERAL is
-        preferred to the raw string "Directories")
+        preferred to the raw string "General")
 
         :param key: setting config key
         :return:

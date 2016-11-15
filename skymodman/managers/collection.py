@@ -152,7 +152,8 @@ class ModCollectionManager(Submanager):
                           ModError.DIR_NOT_FOUND)
         ))
 
-        self.LOGGER << "Discovered {} new mod errors".format(len(self._errors))
+        self.LOGGER << "Discovered {} new mod errors".format(
+            len(self._errors))
 
 
         # for key in errmap[ModError.MOD_NOT_LISTED]:

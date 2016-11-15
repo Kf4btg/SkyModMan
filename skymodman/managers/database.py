@@ -20,13 +20,13 @@ _SQLMAX=900
 # XXX: 'directory' should probably be renamed, then, since it's not accurate for unmanaged mods
 #             ordinal   INTEGER unique, --mod's rank in the install order
 #             error     INTEGER default 0 -- Type code for errors encountered during load
+# name      TEXT,           --user-editable label for mod
+#             modid     INTEGER,        --nexus id, or 0 if none
+#             version   TEXT,           --arbitrary, set by mod author
+#             enabled   INTEGER default 1,  --effectively a boolean value (0,1)
 _SCHEMA = """
         CREATE TABLE mods (
             directory TEXT    unique, --folder on disk holding mod's files
-            name      TEXT,           --user-editable label for mod
-            modid     INTEGER,        --nexus id, or 0 if none
-            version   TEXT,           --arbitrary, set by mod author
-            enabled   INTEGER default 1,  --effectively a boolean value (0,1)
             managed   INTEGER default 1  --boolean; is this in our mods folder?
         );
         CREATE TABLE hiddenfiles (
@@ -255,38 +255,6 @@ class DBManager(BaseDBManager, Submanager):
         if not self._empty['modfiles']:
             self.LOGGER.info("Detecting file conflicts")
 
-            # if we're reloading the status of conflicted mods,
-            # delete the view if it exists
-
-            # create the view
-            # with self.conn:
-            # self.conn.execute("DROP VIEW IF EXISTS filesbymodorder")
-            #
-            # # self._con.execute(q)
-            # self.conn.execute("""
-            #     CREATE VIEW filesbymodorder AS
-            #         SELECT ordinal, f.directory, filepath
-            #         FROM modfiles f, mods m
-            #         WHERE f.directory=m.directory
-            #         ORDER BY ordinal
-            #     """)
-
-            # [print(*r) for r in self._con.execute(detect_dupes_query)]
-            # for r in self._con.execute(detect_dupes_query):
-
-            # query view to detect duplicates
-            # for r in self.conn.execute("""
-            #     SELECT f.filepath, f.directory
-            #         FROM filesbymodorder f
-            #         INNER JOIN (
-            #             SELECT filepath, COUNT(*) AS C
-            #             FROM filesbymodorder
-            #             GROUP BY filepath
-            #             HAVING C > 1
-            #         ) dups ON f.filepath=dups.filepath
-            #         ORDER BY f.filepath, f.directory
-            #         """):
-
             ## Ordinal is no longer stored in database;
             # the 'winning' mod will be determined elsewhere based
             # on dynamic ordering of mod collection
@@ -329,10 +297,6 @@ class DBManager(BaseDBManager, Submanager):
         #     for m in conflicts[c]:
         #         if m!='Bethesda Hi-Res DLC Optimized':
         #             print('\t', m)
-
-    ##=============================================
-    ## Queeries
-    ##=============================================
 
     def find_matching_files(self, mod_key, pattern):
         """
@@ -431,38 +395,6 @@ class DBManager(BaseDBManager, Submanager):
 
         return htree
 
-    # def enabled_mods(self, name_only = False):
-    #     """
-    #     Fetches all mods from the mod database that are marked as enabled.
-    #
-    #     :param name_only: Return only the names of the mods
-    #     :return:
-    #     :rtype: typing.Generator[str|tuple, Any, None]
-    #     """
-    #     if name_only:
-    #         yield from (t[0] for t in
-    #                     self.conn.execute(
-    #                         "SELECT name FROM mods WHERE enabled = 1"))
-    #     else:
-    #         yield from self.conn.execute(
-    #             "SELECT * FROM mods WHERE enabled = 1")
-    #
-    # def disabled_mods(self, name_only = False):
-    #     """
-    #     Fetches all mods from the mod database that are marked as disabled.
-    #
-    #     :param name_only: Return only the names of the mods
-    #     :return:
-    #     :rtype: typing.Generator[str|tuple, Any, None]
-    #     """
-    #     if name_only:
-    #         yield from (t[0] for t in
-    #                     self.conn.execute(
-    #                         "SELECT name FROM mods WHERE enabled = 0"))
-    #     else:
-    #         yield from self.conn.execute(
-    #                             "SELECT * FROM mods WHERE enabled = 0")
-    #
     # def mods_with_error(self, error_type):
     #     """
     #     Fetches all mods from the db with the given ModError type
@@ -474,25 +406,6 @@ class DBManager(BaseDBManager, Submanager):
     #     yield from self.conn.execute(
     #         "SELECT * FROM mods WHERE error = ?", (error_type, ))
 
-    # def get_mod_info(self, raw_cursor = False):
-    #     """
-    #     Yields Row objects containing all information about installed mods
-    #
-    #     :param raw_cursor: If true, return the db cursor object instead of yielding Rows
-    #     :return:   Tuple of mod info or sqlite3.cursor
-    #     :rtype: __generator[sqlite3.Row, Any, None]|sqlite3.Cursor
-    #     """
-    #
-    #     # ignore the 'Skyrim' entry
-    #     cur = self.conn.execute("SELECT * FROM mods WHERE directory != 'Skyrim'")
-    #     if raw_cursor:
-    #         return cur
-    #     yield from cur
-
-                # self.LOGGER << "dumping db contents to disk"
-        # with open('res/test2.dump.sql', 'w') as f:
-        #     for l in self._con.iterdump():
-        #         f.write(l+'\n')
 
     # def validate_mods_list(self, managed_mods):
     #     """
@@ -510,7 +423,6 @@ class DBManager(BaseDBManager, Submanager):
     #         encountered and/or removed from table
     #     """
     #
-    #     # TODO: include unmanaged mods
     #
     #     # I wish there were a...lighter way to do this, but I
     #     # believe only directly comparing dirnames will allow
@@ -568,23 +480,6 @@ class DBManager(BaseDBManager, Submanager):
     #     # still update its contents
     #     return not (not_listed or not_found or num_removed)
 
-    # def _update_errors(self, error_type, dir_list):
-    #     """helper method for validate_mods_list"""
-    #
-    #     with self.conn:
-    #         ## for each mod-directory name in `dir_list`, update the
-    #         ## 'error' field for that mod's db-entry to be `error_type`
-    #         query = "UPDATE mods SET error = {} " \
-    #                 "WHERE directory IN (".format(
-    #                 # use int() for a bit of added security
-    #                 int(error_type))
-    #
-    #         # get the appropriate number of '?'.
-    #         # i don't think we need to worry about this going over
-    #         # 999...do we?
-    #         query += ", ".join("?" * len(dir_list)) + ")"
-    #
-    #         self.conn.execute(query, dir_list)
 
     ##=============================================
     ## Data loading
@@ -622,7 +517,6 @@ class DBManager(BaseDBManager, Submanager):
     #
     #     # now get unmanaged mods
     #     if not self.load_unmanaged_mods():
-    #         # TODO: figure out what to do in this case; does this need to be in a separate method that is called individually by the Manager?
     #         self.LOGGER.warning("Failed to load unmanaged data")
     #
     #     if success:
@@ -675,7 +569,6 @@ class DBManager(BaseDBManager, Submanager):
     #
     #             # support loading information read from meta.ini
     #             # (ModOrganizer) file
-    #             # TODO: check case-insensitively
     #             meta_ini_path = mod_dir / "meta.ini"
     #
     #             if meta_ini_path.exists():
@@ -714,7 +607,6 @@ class DBManager(BaseDBManager, Submanager):
     # def load_unmanaged_mods(self):
     #     """Check the skyrim/data folder for the vanilla game files, dlc,
     #     and any mods the user installed into the game folder manually."""
-    #     # TODO: store enabled status, custom-name for these; also see if version info can be pulled from files
     #
     #     # um_mods = []
     #
@@ -820,58 +712,6 @@ class DBManager(BaseDBManager, Submanager):
     #     self._empty['modfiles'] = self.count("modfiles") < 1
     #     self._empty['missingfiles'] = self.count("missingfiles") < 1
 
-
-    # def add_to_modfiles_table(self, mod_key, file_list):
-    #     """
-    #
-    #     :param str mod_key: The unique identifier for the mod (directory
-    #         for managed mods)
-    #     :param collections.abc.Iterable file_list:
-    #     """
-    #
-    #     if file_list:
-    #         self._add_to_files_table('mod', mod_key, file_list)
-    #
-    # def add_to_missing_files_table(self, mod_key, file_list):
-    #     """
-    #
-    #     :param str mod_key: The unique identifier for the mod (directory,
-    #         for managed mods)
-    #     :param collections.abc.Iterable file_list: known missing filepaths
-    #     """
-    #
-    #     if file_list:
-    #         self._add_to_files_table('missing', mod_key, file_list)
-    #
-    # def add_to_hidden_files_table(self, mod, files):
-    #     if files:
-    #         self._add_to_files_table('hidden', mod, files)
-    #
-    #
-    #
-    # def _add_to_files_table(self, which, mod_key, file_list):
-    #     """
-    #     Generic helper for adding entries to the various '___files'
-    #     tables
-    #
-    #     :param which: string indicating which table to use; either
-    #         'mod', 'hidden', or 'missing'
-    #     :param mod_key: unique mod identifier
-    #     :param file_list: list of file paths
-    #     """
-    #
-    #     table = which+"files"
-    #
-    #     if table in self._tablenames:
-    #
-    #         with self.conn:
-    #             self.conn.executemany(
-    #                 "INSERT INTO " + table + " VALUES (?, ?)",
-    #                 zip(repeat(mod_key), file_list))
-    #
-    #             self._empty[table] = False
-
-
     # def add_files_from_dir(self, mod_name, mod_root):
     #     """
     #     Given a directory `mod_root` containing files for a mod named `mod_name`, add those files to the modfiles table.
@@ -940,16 +780,6 @@ class DBManager(BaseDBManager, Submanager):
     #     with json_target.open('w') as f:
     #         json.dump(modinfo, f, indent=1)
     #
-    # @staticmethod
-    # def json_write(json_target, pyobject):
-    #     """Dump the given object to a json file specified by the given Path object.
-    #
-    #     :param Path json_target:
-    #     :param pyobject:
-    #     """
-    #     with json_target.open('w') as f:
-    #         json.dump(pyobject, f, indent=1)
-
 
     # def load_hidden_files(self, json_source):
     #     """
@@ -1111,107 +941,4 @@ class DBManager(BaseDBManager, Submanager):
 #         ) for field in _db_fields)
 #
 #
-#
-# ## NTS: these shouldn't even be in this module...
-#
-# def vanilla_mods(skyrim_dir):
-#     """
-#     return pre-constructed ModEntries for the vanilla skyrim files
-#
-#     :param Path skyrim_dir: Path of skyrim installation
-#     :rtype: list[tuple[str, dict[str, Any]]]
-#     """
-#
-#     from skymodman.constants import SkyrimGameInfo as skyinfo
-#
-#     # NTS: only DLC should appear in mod list (skyrim/update do not,
-#     # though their files will appear in archives/files lists)
-#
-#     # get 'skyrim/data'
-#     datadir=None
-#     for f in skyrim_dir.iterdir():
-#         if f.is_dir() and f.name.lower() == "data":
-#             datadir=str(f)
-#             break
-#
-#
-#
-#     skyrim_mod = {
-#         'name': "Skyrim",
-#         'directory': 'Skyrim', # should be 'data'?
-#         'ordinal': -1, # is this a good idea? Just to designate this is always first
-#         'files': [*skyinfo.masters, *skyinfo.skyrim_archives],
-#         'missing': [] # any missing files
-#     }
-#
-#     # walk the data directory for all files
-#     um_files = []
-#     for root, dirs, files in os.walk(datadir):
-#         um_files.extend(
-#             _relpath(_join(root, f), datadir).lower() for f in files
-#         )
-#
-#     # print(um_files)
-#
-#     for f in skyrim_mod['files']:
-#         # mark any files that should be there but aren't
-#         try:
-#             # attempt to remove an expected file from list
-#             um_files.remove(f.lower())
-#         except ValueError:
-#         # if f.lower() not in um_files:
-#             skyrim_mod['missing'].append(f)
-#
-#
-#     # names/default ordering of dlc mods;
-#     # some or all of these may not be present
-#     dlc_names = ["Dawnguard", "HearthFires", "Dragonborn",
-#                  "HighResTexturePack01", "HighResTexturePack02",
-#                  "HighResTexturePack03"]
-#     dlc_mods = {}
-#
-#     # dg, hf, db
-#     for n in dlc_names[:3]:
-#         dlc_mods[n] = {
-#             "name": n,
-#             "files": [n+".esm", n+".bsa"],
-#             "present": False, # set to True if dlc is installed
-#             "missing": [] # if the dlc is Partially present, record missing files
-#         }
-#
-#     # hi-res packs
-#     for n in dlc_names[3:]:
-#         dlc_mods[n] = {
-#             "name": n,
-#             "files": [n+".esp", n+".bsa"],
-#             "present": False,
-#             "missing": []
-#         }
-#
-#     for dlc, info in dlc_mods.items():
-#         p = False # present?
-#         for f in info['files']:
-#             try:
-#                 um_files.remove(f.lower())
-#                 p=True
-#             except KeyError:
-#                 # if f.lower() not in um_files:
-#                 p|=False
-#                 info['missing'].append(f)
-#
-#         info['present'] = p
-#
-#     # any remaining files can be aggregated into 'Data'
-#     data_mod = {
-#         'name': "Unmanaged Data",
-#         'directory': 'data',
-#         'files': um_files,
-#         'present': len(um_files) > 0,
-#         'missing': []
-#     }
-#
-#     del skyinfo
-#
-#     # return tuples of (name: modinfo)
-#     return [("Skyrim", skyrim_mod), *[(n, dlc_mods[n]) for n in dlc_names], ("Unmanaged Data", data_mod)]
 #

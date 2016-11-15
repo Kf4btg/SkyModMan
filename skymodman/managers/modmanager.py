@@ -51,7 +51,7 @@ class ModManager:
     """
 
     def __init__(self):
-        self.LOGGER << "Creating ModManager"
+        self.LOGGER.info("Creating ModManager")
 
         # first, initialize the alerts
         self._diralerts={}
@@ -111,10 +111,11 @@ class ModManager:
         ## sub-managers ##
         # the order here matters; profileManager requires config,
 
-        self._configman = _config.ConfigManager(config_dir=_appconf,
-                                                data_dir=_appdata,
-                                                config_file_name=MAIN_CONFIG,
-                                                mcp=self)
+        self._configman = _config.ConfigManager(
+            config_dir=_appconf,
+            data_dir=_appdata,
+            config_file_name=MAIN_CONFIG,
+            mcp=self)
 
         self._profileman = _profiles.ProfileManager(mcp=self)
 
@@ -131,7 +132,6 @@ class ModManager:
 
         del appdirs
 
-
     def _setup_folders(self, appdata, appconf):
         for name, info in appfolder_defaults.items():
             self._folders[name] = AppFolder(
@@ -145,10 +145,13 @@ class ModManager:
 
         # listen for changes to folder paths
         for f in ('mods', 'skyrim', 'profiles', 'vfs'):
-            self._folders[f].register_change_listener(self.on_dir_change)
+            self._folders[f].register_change_listener(
+                self.on_dir_change)
 
         self._folders['mods'].register_change_listener(
             self.refresh_modlist)
+
+    #<editor-fold desc="<<Properties>>">
 
     @property
     def Folders(self):
@@ -156,8 +159,10 @@ class ModManager:
         return self._folders
 
     ##=============================================
-    ## Sub-manager access properties
+    ## Properties
     ##=============================================
+
+    ## Sub-manager access properties ##
 
     @property
     def Config(self):
@@ -181,7 +186,9 @@ class ModManager:
 
     @property
     def IO(self):
-        """Access the IOManager (disk read/write) for the current session """
+        """
+        Access the IOManager (disk read/write) for the current session
+        """
         return self._ioman
 
     ## Various things what need easy access ##
@@ -239,15 +246,8 @@ class ModManager:
 
         return self._file_conflicts
 
-    def getdbcursor(self):
-        """
-        Using this, a component can request a cursor object for
-        interacting with the database
+    #</editor-fold>
 
-        :return: sqlite3.Cursor
-        """
-        return self._dbman.conn.cursor()
-    
     ##=============================================
     ## Alerts
     ##=============================================
@@ -357,13 +357,6 @@ class ModManager:
         for key in ks_dir:
             self.check_dir(key)
 
-    def refresh_modlist(self, modfolder: AppFolder):
-        """Regenerate the cached list of installed mods"""
-        self.LOGGER << "Refreshing mods list"
-        # this actually reads the disk
-        self._managed_mods = list(iter(modfolder))
-        # self._managed_mods = [n for n in modfolder]
-
     # def on_dir_change(self, folder, previous, current):
     def on_dir_change(self, folder):
         """
@@ -374,7 +367,7 @@ class ModManager:
         self.LOGGER << "on_dir_change({0.name})".format(folder)
 
 
-        # an appfolder instance is "False" if the path is unset or invalid
+        # an appfolder instance is "False" if the path is unset/invalid
         if not folder:
             self.add_alert(self._diralerts[folder.name])
         else:
@@ -386,10 +379,6 @@ class ModManager:
             except AttributeError:
                 # config manager not initialized yet
                 pass
-
-        # if self._configman and not self.in_profile_switch and not folder.is_overriden:
-        #     self._configman.update_folderpath(folder)
-        #     self.set_config_value(folder.name, folder.path, ks_sec.DIRECTORIES)
 
     ##=============================================
     ## Profile Management Interface
@@ -468,8 +457,8 @@ class ModManager:
 
     def rename_profile(self, new_name, profile=None):
         """
-        Change the name of profile `current` to `new_name`. If `current` is
-        passed as None, rename the active profile. This renames the
+        Change the name of profile `current` to `new_name`. If `current`
+        is passed as None, rename the active profile. This renames the
         profile's directory on disk.
 
         :param new_name:
@@ -482,7 +471,7 @@ class ModManager:
         elif isinstance(profile, str):
             profile = self._profileman[profile]
 
-        self.LOGGER << "Renaming profile: {}->{}".format(profile.name,
+        self.LOGGER << "Renaming profile: {0!r}->{1!r}".format(profile.name,
                                                      new_name)
         self._profileman.rename_profile(profile, new_name)
 
@@ -544,7 +533,7 @@ class ModManager:
             self.set_config_value(ks_ini.DEFAULT_PROFILE, profile_name)
 
     ##=================================
-    ## Internal profile mgmt
+    ## Internal profile mgmt helpers
     ##---------------------------------
 
     def _load_profile(self, profile:str):
@@ -575,7 +564,6 @@ class ModManager:
             self._file_conflicts = self._dbman.detect_file_conflicts()
 
         self.load_hidden_files()
-        # self._dbman.load_hidden_files(self.profile.hidden_files)
 
         self._enabledmods = None
 
@@ -616,9 +604,9 @@ class ModManager:
         # always need to re-check hidden files
         # todo: clear out saved hidden files for mods that have been uninstalled.
         self.load_hidden_files()
-        # self._dbman.load_hidden_files(self.profile.hidden_files)
 
-        # finally, clear the "list of enabled mods" cache (used by installer)
+        # finally, clear the "list of enabled mods" cache
+        # (used by installer)
         self._enabledmods = None
 
     def _update_modinfo(self, moddir_changed, skydir_changed):
@@ -645,7 +633,6 @@ class ModManager:
         self.LOGGER << "<==Method called"
 
         # first, reinitialize the db tables
-        # self._dbman.reinit(files=moddir_changed, sky=skydir_changed)
         self._dbman.reinit(files=moddir_changed)
 
         # and the mod collection
@@ -657,11 +644,8 @@ class ModManager:
             # print(self._collman.collection.verbose_str())
 
             # populate the db
-            # self._dbman.populate_mods_table(self._collman.collection)
-            self._dbman.populate_mods_table(
-                tuple(entry) for entry in
-                self._collman.collection
-            )
+            self._populate_mods_table()
+
 
         # if self._dbman.load_mod_info(self.profile.modinfo):
             # if successful, validate modinfo (i.e. synchronize the list
@@ -689,27 +673,40 @@ class ModManager:
 
         if self._ioman.load_raw_mod_info(self._collman.collection):
             # populate db from collection
-            self._dbman.populate_mods_table(self._collman.collection)
+            self._populate_mods_table()
+
             # save info (to generate file since it likely doesn't exist)
             self.save_mod_info()
             return True
 
-
-        # if self._folders['mods']:
-            # populate the mods table from the main mods directory
-            # self._dbman.get_mod_data_from_directory(self._folders['mods'].path)
-            # self._dbman.load_mod_info_from_disk(self._folders['mods'].path)
-            # and (re)generate the modinfo file using default values
-            # self.save_mod_info()
-            # return success
-            # return True
         else:
             self.LOGGER.error("Mods Folder is unset or could not be found")
             return False
 
+    def _populate_mods_table(self):
+        """Fill the mods db table using the modcollection"""
+        # mods table now only contains mod directory, managed status
+        with self._dbman.conn as con:
+            con.executemany(
+                "INSERT INTO mods VALUES (?, ?)",
+                ((m.directory, m.managed)
+                 for m in self.modcollection)
+            )
+
     ##=============================================
     ## Mod Information
     ##=============================================
+
+    def refresh_modlist(self, modfolder):
+        """
+        Regenerate the cached list of installed mods
+
+        :param AppFolder modfolder:
+        """
+
+        self.LOGGER << "Refreshing mods list"
+        # this actually reads the disk
+        self._managed_mods = list(iter(modfolder))
 
     def get_mod_errors(self):
         """
@@ -719,36 +716,6 @@ class ModManager:
             mod in the database
         """
         return self._collman.errors
-
-
-        # return {r['directory']: r['error'] for r in
-        #         self._dbman.select("mods", "directory", "error")}
-
-    # def allmodinfo(self):
-    #     """
-    #     Obtain an iterator over all the rows in the database which yields
-    #     _all_ the info for a mod as a dict, intended for feeding to
-    #     ModEntry(**d) or using directly.
-    #
-    #     This ignores the fake 'Skyrim' mod, though it is still
-    #     accessible in the database table
-    #
-    #     :rtype: __generator[dict[str, sqlite3.Row], Any, None]
-    #     """
-    #     for row in self._dbman.get_mod_info():
-    #         yield dict(zip(row.keys(), row))
-
-    def enabled_mods(self):
-        """
-        yields the names of enabled mods for the currently active profile
-        """
-        # yield from self._dbman.enabled_mods(True)
-        yield from (m.name for m in self._collman.enabled_mods())
-
-    def disabled_mods(self):
-        yield from (m.name for m in self._collman.disabled_mods())
-
-        # yield from self._dbman.disabled_mods(True)
 
     def validate_mod_installs(self):
         """
@@ -761,11 +728,21 @@ class ModManager:
         self.LOGGER << "Validating installed mods"
         return self._collman.validate_mods(self.managed_mod_folders)
 
-        # try:
-        # return self._dbman.validate_mods_list(self.managed_mod_folders)
-        # except exceptions.InvalidAppDirectoryError as e:
-        #     self.LOGGER.error(e)
-        #     return False
+    def enabled_mods(self):
+        """
+        yields the names of enabled mods for the currently active profile
+        """
+        yield from (m.name for m in self._collman.enabled_mods())
+
+    def disabled_mods(self):
+        """
+        yields the names of disabled mods for the currently active profile
+        """
+        yield from (m.name for m in self._collman.disabled_mods())
+
+    ##=============================================
+    ## Mod Files Management
+    ##=============================================
 
     def find_all_mod_files(self, modfiles=True, skyfiles=True):
         """
@@ -803,7 +780,6 @@ class ModManager:
                     c+=len(file_list)
                     # insert into db
                     self._dbman.add_files('mod', mod, file_list)
-                    # self._dbman.add_to_modfiles_table(mod, file_list)
                 self.LOGGER << "Loaded {} files".format(c)
 
 
@@ -813,6 +789,54 @@ class ModManager:
             # except exceptions.InvalidAppDirectoryError as e:
                 self.LOGGER.error("Mods directory is unset or could not be found")
 
+    def iter_mod_files(self, mod_ident):
+        """
+        Iterate over the files contained by the given mod as stored
+        in the database
+
+        :param str mod_ident: the unique identifier of the mod (the
+            mod's directory name, for managed mods)
+        """
+
+        yield from (r[0] for r in
+                    self._dbman.select(
+                        'filepath',
+                        FROM='modfiles',
+                        WHERE="directory = ?",
+                        params=(mod_ident,)))
+
+    # cache the results of the ... most recent queries
+    # TODO: evaluate the effectiveness of this
+    @lru_cache(12)
+    def get_mod_file_list(self, mod_ident):
+        """
+        Get the list of files contained in the given mod
+
+        :param str mod_ident: the unique identifier of the mod (the
+            mod's directory name, for managed mods)
+        """
+        return list(self.iter_mod_files(mod_ident))
+
+    @lru_cache(12)
+    def get_mod_file_tree(self, mod_ident):
+        """
+
+        :param mod_ident: the unique identifier of the mod (the
+            mod's directory name, for managed mods)
+        :return: an AutoTree structure where each containing dict
+            represents a directory and the leaves-list of each
+            dict are the files contained within that directory
+        """
+
+        ftree = _tree.Tree()
+        for f in self.iter_mod_files(mod_ident):
+            # convert to path
+            fpath = PurePath(f)  # XXX: should we add mod root?
+            pathparts = fpath.parts[:-1]
+
+            ftree.insert(pathparts, fpath.name)
+
+        return ftree
 
     def load_hidden_files(self):
         """
@@ -824,52 +848,31 @@ class ModManager:
                 self.profile.hidden_files):
             # add to database
             self._dbman.add_files('hidden', mod_key, hidden_list)
-            # self._dbman.add_to_hidden_files_table(mod_key, hidden_list)
+
+    def hidden_files_for_mod(self, mod_ident):
+        """
+        Yield the paths of the currently hidden files for the given mod,
+        ordered by full path
+
+        :param mod_ident:
+        """
+
+        # the 'rows' in the cursor all contain just one element
+        yield from (r[0] for r in
+                    self._dbman.hidden_files(mod_ident))
 
     ##=============================================
     ## Data Persistence
     ##=============================================
 
-    # def save_user_edits(self, changes):
-    #     """
-    #     :param collections.abc.Iterable[ModEntry] changes: an iterable of ModEntry objects
-    #     """
-    #
-    #     rows_to_delete = [(m.ordinal,) for m in changes]
-    #
-    #     # a generator that creates tuples of values by sorting the
-    #     # values of the modentry according the order defined in
-    #     # constants._db_fields
-    #     dbrowgen = (
-    #         tuple([getattr(mod, field)
-    #                for field in sorted(mod._fields,
-    #                                    key=_field_order.get)
-    #                ])
-    #         for mod in changes)
-    #
-    #     # using the context manager may allow deferrable foreign
-    #     # to go unsatisfied for a moment
-    #
-    #     with self._dbman.conn:
-    #         # delete the row with the given ordinal
-    #         self._dbman.delete("mods", "ordinal=?", rows_to_delete, True)
-    #
-    #         # and reinsert
-    #
-    #         self._dbman.insert(len(_db_fields), "mods", *_db_fields,
-    #                            params=dbrowgen)
-    #
-    #     # And finally save changes to disk
-    #     self.save_mod_info()
-
     def save_mod_info(self):
-        """Have database manager save modinfo to disk"""
+        """Save current state of mod collection to disk in the
+        current profile's modinfo file"""
         self.LOGGER << "<==Method called"
 
         self._ioman.save_mod_info(self.profile.modinfo,
                                   self._collman.collection)
 
-        # self._dbman.save_mod_info(self.profile.modinfo)
         # reset so that next install will reflect the new state
         self._enabledmods = None
 
@@ -899,8 +902,6 @@ class ModManager:
 
         with self.profile.hidden_files.open('w') as f:
             f.write(str(self._dbman.get_hidden_file_tree()))
-
-        # self._dbman.save_hidden_files_to(self.profile.hidden_files)
 
     ##=============================================
     ## Configuration Management Interface
@@ -948,58 +949,6 @@ class ModManager:
         #     self._configman.update_genvalue(name, value)
         # else:
         #     raise exceptions.InvalidConfigSectionError(section)
-
-    # cache the results of the ... most recent queries
-    # TODO: evaluate the effectiveness of this
-    @lru_cache(12)
-    def get_mod_file_list(self, mod_ident):
-        """
-        Get the list of files contained in the given mod
-
-        :param str mod_ident: the unique identifier of the mod (the
-            mod's directory name, for managed mods)
-        """
-        return list(self.iter_mod_files(mod_ident))
-
-    @lru_cache(12)
-    def get_mod_file_tree(self, mod_ident):
-
-        ftree = _tree.Tree()
-        for f in  self.iter_mod_files(mod_ident):
-            # convert to path
-            fpath = PurePath(f) # XXX: should we add mod root?
-            pathparts = fpath.parts[:-1]
-
-            ftree.insert(pathparts, fpath.name)
-
-        return ftree
-
-    def iter_mod_files(self, mod_ident):
-        """
-        Iterate over the files contained by the given mod as stored
-        in the database
-
-        :param str mod_ident: the unique identifier of the mod (the
-            mod's directory name, for managed mods)
-        """
-
-        yield from (r[0] for r in
-                    self._dbman.select(
-                        'filepath',
-                        FROM='modfiles',
-                        WHERE="directory = ?",
-                        params=(mod_ident,)))
-
-    def hidden_files_for_mod(self, mod_ident):
-        """
-        Yield the paths of the currently hidden files for the given mod,
-        ordered by full path
-
-        :param mod_ident:
-        """
-
-        # the 'rows' in the cursor all contain just one element
-        yield from (r[0] for r in self._dbman.hidden_files(mod_ident))
 
 
     ##=============================================
@@ -1116,6 +1065,13 @@ class ModManager:
         return mod_directory in self._enabledmods
 
 
-
+# def getdbcursor(self):
+    #     """
+    #     Using this, a component can request a cursor object for
+    #     interacting with the database
+    #
+    #     :return: sqlite3.Cursor
+    #     """
+    #     return self._dbman.conn.cursor()
 
 

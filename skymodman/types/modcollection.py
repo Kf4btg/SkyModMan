@@ -17,10 +17,10 @@ class ModCollection(abc.MutableSequence):
     is more like O(2k), where k is determined by where the insertion/
     deletion takes place). Insertion at the end of the collection is O(1).
 
-    The trade off for speed is, off course, space. At least three
+    The trade off for speed is, of course, space. At least three
     different underlying containers are used to track the various
     aspects of the collection; to be fair, though, they're mostly
-    fairly small (just containing strings and ints), so I don't expect
+    quite small (just containing strings and ints), so I don't expect
     the memory usage to be much of a problem, either--at least not
     for a reasonably-sized collection."""
 
