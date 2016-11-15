@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from os.path import exists
 from itertools import count
@@ -9,8 +10,6 @@ from PyQt5.QtWidgets import (QWizard, QWizardPage,
                              QStyle, QProxyStyle,
                              QPushButton)
 
-import asyncio
-import quamash
 
 # from skymodman.installer.fomod import Fomod
 from skymodman.managers import installer
@@ -48,6 +47,10 @@ class FomodInstaller(QWizard):
         # tracking page ids
         self.page_count = count()
 
+        # placeholders
+        # self._start_page = None
+        # self._final_page = None
+
         self.initUI()
 
         # make it big
@@ -70,13 +73,18 @@ class FomodInstaller(QWizard):
                         QWizard.NoBackButtonOnLastPage   |
                         QWizard.NoCancelButtonOnLastPage
                         )
-        self.setWindowTitle("Mod Installation: " + self.fomod.modname.name)
+        self.setWindowTitle("Mod Installation: " +
+                            self.fomod.modname.name)
 
         # create and add the title/splash/firstwhatever page.
-        self.page_start = StartPage(self.rootpath, self.fomod.modname, self.fomod.modimage, next(self.page_count))
+        # self._start_page = StartPage(self.rootpath,
+        _start_page = StartPage(self.rootpath,
+                                     self.fomod.modname,
+                                     self.fomod.modimage,
+                                     next(self.page_count))
 
-        self.addPage(self.page_start)
-        FomodInstaller.Pages.append(self.page_start)
+        self.addPage(_start_page)
+        FomodInstaller.Pages.append(_start_page)
 
         # create a page for every install step in the fomod
         steplist=self.fomod.installsteps
@@ -94,14 +102,17 @@ class FomodInstaller(QWizard):
         FomodInstaller.Pages.extend(self.step_pages)
 
         # create final page that will show files being installed
-        self._final_page = FinalPage(self.rootpath,
+        # ...there doesn't seem to be any reason to keep this as a
+        # an instance attribute
+        # self._final_page = FinalPage(self.rootpath,
+        _final_page = FinalPage(self.rootpath,
                                      self.fomod.modname.name,
                                      self.fomod.modimage,
                                      self.installer,
                                      parent=self)
 
-        self.addPage(self._final_page)
-        FomodInstaller.Pages.append(self._final_page)
+        self.addPage(_final_page)
+        FomodInstaller.Pages.append(_final_page)
 
 
 class StartPage(QWizardPage):
@@ -111,7 +122,6 @@ class StartPage(QWizardPage):
         self.modroot = path
 
         self.pageid = pageid
-
 
         modimgpath = Path(self.modroot, modimage.path).as_posix()
 
@@ -127,7 +137,12 @@ class FinalPage(QWizardPage, Ui_FinalPage):
     files are in the mod directory, the finish button is enabled and
     the user can exit the installer.
     """
-    def __init__(self, path, modname, modimage, install_manager, *args, **kwargs):
+    def __init__(self, path, modname, modimage, install_manager,
+                 *args, **kwargs):
+        # although we ignore path and modimage here, we still keep them
+        # in the signature in that order to match signatures of other
+        # Page classes
+
         super().__init__(*args, **kwargs)
 
         # the install manager will do the actual install work;
@@ -138,6 +153,7 @@ class FinalPage(QWizardPage, Ui_FinalPage):
 
         # create a custom button that will allow the user to stop
         # the installation process if desired.
+        # noinspection PyArgumentList,PyTypeChecker
         self.btn_cancel_unpack = QPushButton(QIcon.fromTheme("stop"),
                                              "Stop", self)
         # track the asyncio.Task that wraps the install method;
@@ -169,7 +185,8 @@ class FinalPage(QWizardPage, Ui_FinalPage):
 
         # enable the "Stop" button and connect it to the stop_install method
         self.wizard().setOption(QWizard.HaveCustomButton1)
-        self.wizard().setButton(QWizard.CustomButton1, self.btn_cancel_unpack)
+        self.wizard().setButton(QWizard.CustomButton1,
+                                self.btn_cancel_unpack)
         self.wizard().customButtonClicked.connect(self.stop_install)
 
         # make sure that the conditional installs are analyzed and
@@ -203,11 +220,12 @@ class FinalPage(QWizardPage, Ui_FinalPage):
 
     def setprogress(self, current_item, num_complete):
         """
-        As items are installed, change the label above the progress bar to the name of the `current_item`, and calculate the bar's percentage done from `num_complete`
+        As items are installed, change the label above the progress
+        bar to the name of the `current_item`, and calculate the bar's
+        percentage done from `num_complete`
 
         :param current_item:
         :param num_complete:
-        :return:
         """
         self.progress_label.setText(current_item)
         self.install_progress.setValue(num_complete)
@@ -215,7 +233,10 @@ class FinalPage(QWizardPage, Ui_FinalPage):
 
     async def do_install(self):
         """
-        This is the coroutine that handles calling the installation methods in the install manager. If the operation is cancelled, it will also request that the manager remove any files installed so far.
+        This is the coroutine that handles calling the installation
+        methods in the install manager. If the operation is cancelled,
+        it will also request that the manager remove any files
+        installed so far.
         """
         try:
             await self.man.install_files(callback=self.setprogress)
@@ -225,17 +246,20 @@ class FinalPage(QWizardPage, Ui_FinalPage):
 
     def stop_install(self, button):
         """
-        If the "Stop" button is pressed (NOT the wizard's cancel button, which isn't shown on this page), cancel the installation task via its saved handle and disable the stop button.
+        If the "Stop" button is pressed (NOT the wizard's cancel button,
+        which isn't shown on this page), cancel the installation task
+        via its saved handle and disable the stop button.
+
         :param button:
-        :return:
         """
         self.task.cancel()
         self.btn_cancel_unpack.setEnabled(False)
 
-
     def on_install_done(self, install_task):
         """
-        Callback that is invoked after the installation progress finishes (or rewinds if cancelled). Does a final update of the buttons and text
+        Callback that is invoked after the installation progress
+        finishes (or rewinds if cancelled). Does a final update of the
+        buttons and text
 
         :param install_task:
         """
@@ -413,7 +437,8 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
         # print(self.step.visible)
 
         if self.step.visible:
-            return self.installman.check_dependencies_pattern(self.step.visible)
+            return self.installman.check_dependencies_pattern(
+                self.step.visible)
 
         # if no visible element, always True
         return True
@@ -443,7 +468,8 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
             # because each sub-tree represents a plugin group, notify
             # the parent (the group) of the clicked item to handle any
             # special group-related actions that need to be taken
-            item.parent().on_child_checkstateChanged(item, ostate, item.checkState(column))
+            item.parent().on_child_checkstateChanged(
+                item, ostate, item.checkState(column))
 
             # noinspection PyUnresolvedReferences
             # tell wizard to recheck the page's completed status
@@ -497,9 +523,6 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
 
         return next_id
 
-
-
-
 class PluginGroup(QTreeWidgetItem):
     """
     An abstraction that represents an "optionalFileGroup" as defined in a
@@ -522,19 +545,19 @@ class PluginGroup(QTreeWidgetItem):
 
 
     _check_isvalid =  {
-            GroupType.EXO:
+            GroupType.EXO: # EXactly One
                 lambda g: sum(1 for c in g.children() if
                                (c.checkState(0) & Qt.Checked)) == 1,
-            GroupType.AMO:
+            GroupType.AMO: # At Most One
                 lambda g: sum(1 for c in g.children() if
                                (c.checkState(0) & Qt.Checked)) <= 1,
-            GroupType.ALO:
+            GroupType.ALO: # At Least One
                 lambda g: any((c.checkState(0) & Qt.Checked) for c in
                                g.children()),
-            GroupType.ALL:
+            GroupType.ALL: # ALL...er, all
                 lambda g: all((c.checkState(0) & Qt.Checked) for c in
                                g.children()),
-            GroupType.ANY:
+            GroupType.ANY: # any
                 lambda g: True
         }
     """
@@ -564,14 +587,14 @@ class PluginGroup(QTreeWidgetItem):
         Iterates over the plugins in the group (a flat list; there
         are no subtrees here)
         """
-        for i in range(self.childCount()):
-            yield self.child(i)
+
+        yield from (self.child(i) for i in range(self.childCount()))
 
     def get_plugin(self, item):
         """
         Return the Plugin object stored in the TreeWidgetItem `item`
+
         :param QTreeWidgetItem item:
-        :return:
         """
         return item.data(0, Qt.UserRole)
 
@@ -581,7 +604,6 @@ class PluginGroup(QTreeWidgetItem):
         :param QTreeWidgetItem item:
         :param old_state:
         :param new_state:
-        :return:
         """
         if old_state != new_state:
 
@@ -599,8 +621,12 @@ class PluginGroup(QTreeWidgetItem):
     def check_child_type(self, child):
         """
         Notes:
-        default-type: The default type of the plugin used if none of the specified dependency states are satisfied.
-        dependencyPatterns: The list of dependency patterns against which to match the user's installation. The first pattern that matches the user's installation determines the type of the plugin.
+        default-type: The default type of the plugin used if none of the
+            specified dependency states are satisfied.
+        dependencyPatterns: The list of dependency patterns against
+            which to match the user's installation. The first pattern
+            that matches the user's installation determines the type of
+            the plugin.
 
         :param PluginItem child:
         :return:
@@ -610,7 +636,8 @@ class PluginGroup(QTreeWidgetItem):
 
         if child.plugin.patterns:
             for pat in child.plugin.patterns:
-                if self.installman.check_dependencies_pattern(pat.dependencies):
+                if self.installman.check_dependencies_pattern(
+                        pat.dependencies):
                     ctype = pat.type
                     break
 
@@ -683,6 +710,7 @@ class PluginItem(QTreeWidgetItem):
     ``PluginGroup``.
     """
     def __init__(self, plugin, *args, **kwargs):
+        # noinspection PyArgumentList
         super().__init__(*args, **kwargs)
 
         self.group = self.parent()
@@ -695,10 +723,6 @@ class PluginItem(QTreeWidgetItem):
         super().setCheckState(column, state)
 
         self.group.change_plugin_status(self.plugin, state & Qt.Checked)
-
-
-
-
 
 class RadioItem(PluginItem):
     """
@@ -722,8 +746,6 @@ class RadioItem(PluginItem):
             elif self.group_type == GroupType.AMO:
                 super().setCheckState(column, state)
 
-
-
 class RadioButtonStyle(QProxyStyle):
 
     def drawPrimitive(self, element, option, painter, widget=None):
@@ -737,7 +759,9 @@ class RadioButtonStyle(QProxyStyle):
         :param QTreeWidget widget:
         :return:
         """
-        if element == QStyle.PE_IndicatorCheckBox and isinstance(option.widget.itemFromIndex(option.index), RadioItem):
+        if element == QStyle.PE_IndicatorCheckBox and isinstance(
+                option.widget.itemFromIndex(option.index), RadioItem):
+
                 super().drawPrimitive(QStyle.PE_IndicatorRadioButton,
                                   option, painter, widget)
         else:
@@ -746,30 +770,31 @@ class RadioButtonStyle(QProxyStyle):
 
 
 
-if __name__ == '__main__':
-    from PyQt5.QtWidgets import QApplication, QTreeWidget
-    import sys
-
-    app = QApplication(sys.argv)
-    loop = quamash.QEventLoop(app)
-    asyncio.set_event_loop(loop)
-
-    # ffile, fpath = 'res/STEP/ModuleConfig.xml','res/STEP'
-    ffile, fpath = 'res/SMIM/fomod/ModuleConfig.xml','res/SMIM'
-    # ffile, fpath = 'res/SkyFallsMills/FOMod/ModuleConfig.xml','res/SkyFallsMills'
-
-    im = installer.InstallManager()
-    im.prepare_fomod(ffile)
-    fwiz = FomodInstaller(im, fpath)
-
-    # img='res/PerMa.jpg'
-    # img='res/STEP/STEP.png'
-    # fwiz.setPixmap(QWizard.BannerPixmap, QPixmap(img))
-    # fwiz.setPixmap(QWizard.LogoPixmap, QPixmap(img))
-    # fwiz.setPixmap(QWizard.WatermarkPixmap, QPixmap(img))
-    fwiz.show()
-
-    with loop:
-        loop.run_forever()
-
-    # sys.exit(app.exec_())
+# if __name__ == '__main__':
+#     from PyQt5.QtWidgets import QApplication, QTreeWidget
+#     import quamash
+#     import sys
+#
+#     app = QApplication(sys.argv)
+#     loop = quamash.QEventLoop(app)
+#     asyncio.set_event_loop(loop)
+#
+#     # ffile, fpath = 'res/STEP/ModuleConfig.xml','res/STEP'
+#     ffile, fpath = 'res/SMIM/fomod/ModuleConfig.xml','res/SMIM'
+#     # ffile, fpath = 'res/SkyFallsMills/FOMod/ModuleConfig.xml','res/SkyFallsMills'
+#
+#     im = installer.InstallManager()
+#     im.prepare_fomod(ffile)
+#     fwiz = FomodInstaller(im, fpath)
+#
+#     # img='res/PerMa.jpg'
+#     # img='res/STEP/STEP.png'
+#     # fwiz.setPixmap(QWizard.BannerPixmap, QPixmap(img))
+#     # fwiz.setPixmap(QWizard.LogoPixmap, QPixmap(img))
+#     # fwiz.setPixmap(QWizard.WatermarkPixmap, QPixmap(img))
+#     fwiz.show()
+#
+#     with loop:
+#         loop.run_forever()
+#
+#     # sys.exit(app.exec_())

@@ -394,7 +394,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.LOGGER.debug("_setup_file_tree")
 
-
         self._filetreesplitter.setSizes(
             [1, 500])  # just make the left one smaller ok?
 
@@ -676,12 +675,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # ensure proper UI state for current tab
         self.update_UI()
 
-        # self._update_visible_components()
-        # self._update_enabled_actions()
-
-        # also change the current undo stack
-        # self._update_active_undostack()
-
     @pyqtSlot('QString')
     def on_profile_load(self, profile_name):
         """
@@ -698,9 +691,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # update the UI components for the current tab/profile/data
         self.update_UI()
-
-        # self._update_visible_components()
-        # self._update_enabled_actions()
 
         # also recheck alerts when loading new profile
         # self.update_alerts()
@@ -943,7 +933,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     # todo: change window title (or something) to reflect current folder
     # def on_filetree_fileviewer_rootpathchanged(self, newpath):
-    #     self.filetree_fileviewer.resizeColumnToContents(0)
+    #
 
     def table_prompt_if_unsaved(self):
         """
@@ -1068,23 +1058,23 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         the archive and allow the user to choose which parts to install.
 
         """
+        from PyQt5.QtWidgets import QFileDialog
+        from PyQt5.QtCore import QDir
+
         # fixme: default to home folder or something instead of current dir
-        # filename=QFileDialog.getOpenFileName(
-        #     self, "Select Mod Archive",
-        #     QDir.currentPath() + "/res",
-        #     "Archives [zip, 7z, rar] (*.zip *.7z *.rar);;All Files(*)")[0]
+        filename=QFileDialog.getOpenFileName(
+            self, "Select Mod Archive",
+            QDir.homePath(),
+            # QDir.currentPath() + "/res",
+            "Archives [zip, 7z, rar] (*.zip *.7z *.rar);;All Files(*)")[0]
 
         # short-circuit for testing
-        filename='res/7ztest.7z'
+        # filename='res/7ztest.7z'
         if filename:
             installui = InstallerUI(self.Manager) # helper class
             if manual:
+                # show busy indicator while archive is examined
                 self.show_statusbar_progress("Loading archive:")
-
-                # self.task = asyncio.get_event_loop().create_task(
-                #     installui.do_manual_install(
-                #         filename, self.hide_statusbar_progress))
-
             else:
                 # show busy indicator while installer loads
                 self.show_statusbar_progress("Preparing installer:")
@@ -1096,6 +1086,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
                 # todo: add callback to show the new mod if install succeeded
                 # self.task.add_done_callback(self.on_new_mod())
+
+        del QFileDialog
+        del QDir
 
     def reinstall_mod(self):
         """

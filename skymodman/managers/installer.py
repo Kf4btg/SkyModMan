@@ -5,7 +5,8 @@ from functools import lru_cache
 from pathlib import PurePath, Path
 
 # import re
-# from skymodman.constants import SkyrimGameInfo # TopLevelDirs_Bain, TopLevelSuffixes
+# from skymodman.constants import SkyrimGameInfo # TopLevelDirs_Bain,
+# TopLevelSuffixes
 
 from skymodman.managers.base import Submanager
 from skymodman.installer import common
@@ -32,7 +33,8 @@ from skymodman.utils.fsutils import dir_move_merge
 @withlogger
 class InstallManager(Submanager):
     """
-    Handles unpacking of mod archives and moving mod files and directories into the appropriate locations.
+    Handles unpacking of mod archives and moving mod files and
+    directories into the appropriate locations.
     """
 
     # noinspection PyArgumentList
@@ -101,18 +103,26 @@ class InstallManager(Submanager):
                       # srcdestpairs=None,
     async def extract(self, destination, entries=None, callback=None):
         """
-        Extract all or select items from the installer's associated mod archive to the `destination`. If either `entries` or `srcdestpairs` is specified, only the items found in those collections will be extracted (srcdestpairs takes precedence if both are provided). If neither are given, all files from the archive will be extracted to the destination.
+        Extract all or select items from the installer's associated
+        mod archive to the `destination`. If either `entries` or
+        `srcdestpairs` is specified, only the items found in those
+        collections will be extracted (srcdestpairs takes precedence
+        if both are provided). If neither are given, all files from
+        the archive will be extracted to the destination.
 
         :param str destination: extraction destination
-        :param collections.abc.Iterable[str] entries: list of archive entries (i.e. directories or files) to extract
+        :param collections.abc.Iterable[str] entries: list of archive
+            entries (i.e. directories or files) to extract
         """
-        # :param srcdestpairs: A list of 2-tuples where the first item is the source path within the archive of a file to install, and the second item is the path (relative to the mod installation directory) where the source should be extracted.
+        # :param srcdestpairs: A list of 2-tuples where the first item
+        # is the source path within the archive of a file to install,
+        # and the second item is the path (relative to the mod
+        # installation directory) where the source should be extracted.
 
-        await self.archiver.extract(
-            archive=self.archive,
-            destination=destination,
-            specific_entries=entries,
-            callback=callback)
+        await self.archiver.extract(archive=self.archive,
+                                    destination=destination,
+                                    specific_entries=entries,
+                                    callback=callback)
         # srcdestpairs = srcdestpairs,
 
     async def archive_contents(self, *, dirs=True, files=True):
@@ -124,7 +134,8 @@ class InstallManager(Submanager):
         :return:
         """
         if self.archive_files is None:
-            self.archive_dirs, self.archive_files = await self.archiver.list_archive(self.archive)
+            self.archive_dirs, self.archive_files = \
+                await self.archiver.list_archive(self.archive)
 
         if dirs and not files:
             return self.archive_dirs
@@ -162,8 +173,10 @@ class InstallManager(Submanager):
 
     async def mkarchivefs(self):
         """
-        Create an instance of an ArchiveFS pseudo-filesystem from the installer's associated mod archive.
-        :return:
+        Create an instance of an ArchiveFS pseudo-filesystem from the
+        installer's associated mod archive.
+
+        :return: the created archivefs instance
         """
         # create an empty archivefs--just has a root.
         modfs = arcfs.ArchiveFS()
@@ -181,11 +194,19 @@ class InstallManager(Submanager):
 
     async def prepare_fomod(self, xmlfile, extract_dir=None):
         """
-        Using the specified ModuleConfig.xml file `xmlfile`, (most likely extracted from this installer's associated archive in an earlier phase of installation), parse and analyze the script to prepare a Fomod object to give to an installer interface. Go ahead and mark any files marked as 'required installs' for installation. Finally, extract any images that were referenced in the script so that they can be shown during the installation process.
+        Using the specified ModuleConfig.xml file `xmlfile`,
+        (most likely extracted from this installer's associated
+        archive in an earlier phase of installation), parse and
+        analyze the script to prepare a Fomod object to give to an
+        installer interface. Go ahead and mark any files marked as
+        'required installs' for installation. Finally, extract any
+        images that were referenced in the script so that they can be
+        shown during the installation process.
 
         :param xmlfile:
-        :param extract_dir: Where any images referenced by the script will be extracted. It is best to use a temporary directory for this so it can be easily cleaned up after install.
-        :return:
+        :param extract_dir: Where any images referenced by the script
+            will be extracted. It is best to use a temporary directory
+            for this so it can be easily cleaned up after install.
         """
         self.init_install_state()
         # self.install_state = installState() # tracks flags, install files
@@ -205,7 +226,9 @@ class InstallManager(Submanager):
 
         # pprint(self.files_to_install)
 
-    async def _extract_fomod_images(self, extract_dir, *, join=os.path.join, relpath=os.path.relpath):
+    async def _extract_fomod_images(self, extract_dir, *,
+                                    join=os.path.join,
+                                    relpath=os.path.relpath):
         """
         if there is a (legitimate) common base-path to the images
         (they are often kept in a single directory), then extract
@@ -235,7 +258,10 @@ class InstallManager(Submanager):
 
     def get_fomod_image(self, image_path):
         """
-        Guaranteed to return the actual extraction path for an image path specified in a fomod config file even in spite of name-case-conflicts, so long as the file exists. If it does not exist, None is returned.
+        Guaranteed to return the actual extraction path for an image
+        path specified in a fomod config file even in spite of
+        name-case-conflicts, so long as the file exists. If it does
+        not exist, None is returned.
         """
         try:
             return self.normalized_imgpaths[image_path.lower()]
@@ -251,13 +277,20 @@ class InstallManager(Submanager):
 
     def mark_file_for_install(self, file, install=True):
         """
+
         :param common.File file:
-        :param install: if true, mark the file for install; if False, remove it from the list of files to install
+        :param install: if true, mark the file for install; if False,
+            remove it from the list of files to install
         """
         if install:
             self.files_to_install.append(file)
         else:
-            self.files_to_install.remove(file)
+            try:
+                self.files_to_install.remove(file)
+            except ValueError:
+                # file wasn't there??
+                self.LOGGER.error("ValueError: {}".format(file))
+                raise
 
     dep_checks = { # s=self, d=dependency item (key=dependency type)
         "fileDependency": lambda s, d: s.check_file(d.file, d.state),
