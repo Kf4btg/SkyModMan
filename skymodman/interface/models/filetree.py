@@ -46,7 +46,6 @@ class ModFileTreeModel(QAbstractItemModel):
         super().__init__(parent=parent,**kwargs)
         self._parent = parent
         self.manager = Manager() # should be initialized by now
-        self.DB = self.manager.DB
         self.modname = None #type: str
         self.rootitem = None #type: QFSItem
 
@@ -62,9 +61,7 @@ class ModFileTreeModel(QAbstractItemModel):
 
         self.command_queue = deque()
 
-    @property
-    def root_item(self):
-        return self.rootitem
+
 
     def setMod(self, mod_entry):
         """Set the mod that this model is focusing on to `mod_entry`.
@@ -93,6 +90,16 @@ class ModFileTreeModel(QAbstractItemModel):
         # data from model & reset itself
         self.endResetModel()
 
+    @property
+    def root_item(self):
+        return self.rootitem
+
+    @property
+    def current_hidden_file_indices(self):
+        """Rather than querying the database, this examines the current
+        state of the FSItems in the internal _files list"""
+        return [i for i, item in enumerate(self._files) if item.hidden]
+
     def _setup_or_reload_tree(self):
         """
         Loads thde data from the db and disk
@@ -100,7 +107,7 @@ class ModFileTreeModel(QAbstractItemModel):
         self._load_tree()
 
         # now mark hidden files
-        self._mark_hidden_files()
+        self._mark_hidden_files(self._saved_state)
 
         # this used to call resetModel() stuff, too, but I decided
         # this wasn't the place for that. It's a little barren now...
@@ -123,6 +130,10 @@ class ModFileTreeModel(QAbstractItemModel):
                        self.rootitem.iterchildren(recursive=True)
                        if not f.isdir]
 
+        # reset the "saved state" (indices of hidden files on load)
+        self._saved_state = self._get_hidden_file_indices()
+
+
     @lru_cache()
     def _locate(self, file):
         """Given an FSItem or a file path (str), return the index of
@@ -144,12 +155,12 @@ class ModFileTreeModel(QAbstractItemModel):
 
         raise ValueError
 
-    def _hidden_file_indices_db(self):
-        """Get the list of currently hidden files from the database
+    def _get_hidden_file_indices(self):
+        """Get the set of currently hidden files from the database
         and return a list of the indices corresponding to those files
         in self._files"""
 
-        idxs=[]
+        hidden = set()
 
         # the alternative to this (searching for each file by path to
         # get index) would be to do some sort of...math...or something
@@ -157,7 +168,7 @@ class ModFileTreeModel(QAbstractItemModel):
         # referencing position of each file returned...
         # but ehhhhhhhh, math.
 
-        for hf in self.DB.hidden_files(self.mod.directory):
+        for hf in self.manager.hidden_files_for_mod(self.mod.directory):
             # NTS: As the number of hidden files approaches the total
             # number of files in the mod, this bin search algo becomes
             # less and less efficient compared to just going through
@@ -165,35 +176,37 @@ class ModFileTreeModel(QAbstractItemModel):
             # as hiding the vast majority of files in a mod seems a
             # very unlikely thing to want to do.
             try:
-                idxs.append(self._locate(hf))
+                hidden.add(self._locate(hf))
             except ValueError:
                 self.LOGGER.error("Hidden file {0!r} was not found".format(hf))
 
-        # it's probably in order already, but just to be sure...
-        return sorted(idxs)
+        return hidden
 
-    def _hidden_file_indices(self):
-        """Rather than querying the database, this examines the current
-        state of the FSItems in the internal _files list"""
-        return [i for i, item in enumerate(self._files) if item.hidden]
+    def _mark_hidden_files(self, hidden_file_indices):
 
-    def _mark_hidden_files(self):
+        # note:: if there is an IndexError here, THE WORLD WILL BURN
+        for idx in hidden_file_indices:
+            # use the internal _set_checkstate to avoid the
+            # parent.child_state invalidation step
+            self._files[idx]._set_checkstate(Qt_Unchecked, False)
 
-        hidden = set()
-        # locate the hidden files in the file list using binary search:
-        for hf in self.DB.hidden_files(self.mod.directory):
-            try:
-                idx = self._locate(hf)
-                # don't recurse, these should all be files;
-                # also use the internal _set_checkstate to avoid the
-                # parent.child_state invalidation step
-                self._files[idx]._set_checkstate(Qt_Unchecked, False)
-                hidden.add(idx)
-            except ValueError:
-                self.LOGGER.error("Hidden file {0!r} was not found".format(hf))
+
+
+        # hidden = set()
+        # # locate the hidden files in the file list using binary search:
+        # for hf in self.manager.hidden_files_for_mod(self.mod.directory):
+        #     try:
+        #         idx = self._locate(hf)
+        #         # don't recurse, these should all be files;
+        #         # also use the internal _set_checkstate to avoid the
+        #         # parent.child_state invalidation step
+        #         self._files[idx]._set_checkstate(Qt_Unchecked, False)
+        #         hidden.add(idx)
+        #     except ValueError:
+        #         self.LOGGER.error("Hidden file {0!r} was not found".format(hf))
 
         # reset the "saved state" (indices of hidden files on load)
-        self._saved_state = hidden
+        # self._saved_state = hidden
 
     def getitem(self, index) -> QFSItem:
         """Extracts actual item from given index
@@ -306,7 +319,7 @@ class ModFileTreeModel(QAbstractItemModel):
             else: # column must be "Conflicts"
                 try:
                     # TODO: provide a way (perhaps a drop-down list on the Conflicts column) to easily identify and navigate to the other mods containing a conflicting file
-                    if item.lpath in self.DB.file_conflicts.by_mod[self.modname]:
+                    if item.lpath in self.manager.file_conflicts.by_mod[self.modname]:
                         return "Yes"
                 # if the mod was not in the conflict map,
                 # then return none
@@ -435,7 +448,7 @@ class ModFileTreeModel(QAbstractItemModel):
         """
 
         # hidden files right now
-        current_state = set(self._hidden_file_indices())
+        current_state = set(self.current_hidden_file_indices)
 
         # hidden files when last saved
         clean_state = self._saved_state

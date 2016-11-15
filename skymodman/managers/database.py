@@ -78,12 +78,6 @@ class DBManager(BaseDBManager, Submanager):
 
         # self._con.set_trace_callback(print)
 
-        # These are created from the database, so it seems like it may
-        # be best just to store them in this class:
-
-        # initialize empty file conflict map
-        self._conflict_map = File_Conflict_Map({},{})
-
     ##=============================================
     ## Properties
     ##=============================================
@@ -95,21 +89,6 @@ class DBManager(BaseDBManager, Submanager):
     #     :rtype: list[sqlite3.Row]
     #     """
     #     return self.get_mod_info(True).fetchall()
-
-    @property
-    def file_conflicts(self):
-        """
-        Return an object containing information about conflicting files.
-        Use as follows:
-
-            * file_conflicts.by_file: dict[str, list[str]] -- a mapping
-                of file paths to a list of mods containing a file with
-                the same file path
-            * file_conflicts.by_mod: dict[str, list[str]] -- a mapping
-                of mod names to a list of files contained by that mod
-                which are in conflict with some other mod.
-        """
-        return self._conflict_map
 
 
     ######################
@@ -341,7 +320,7 @@ class DBManager(BaseDBManager, Submanager):
             self.LOGGER << "No entries present in modfiles table"
 
         # convert to normal dicts when adding to conflict map
-        self._conflict_map = File_Conflict_Map(
+        return File_Conflict_Map(
             by_file=dict(conflicts),
             by_mod=dict(mods_with_conflicts))
 
@@ -416,16 +395,22 @@ class DBManager(BaseDBManager, Submanager):
 
     def hidden_files(self, for_mod):
         """
-        Yield paths of currently hidden files for the given mod
+        Obtain paths of currently hidden files for the given mod
 
         :param for_mod: directory name of the mod
+        :return: the cursor of the executed command. can be used
+            as an iterator.
         """
 
-        yield from (r["filepath"]
-                    for r in self.conn.execute(
-            "SELECT * FROM hiddenfiles WHERE directory = ?",
-            (for_mod,)
-        ))
+        return self.conn.execute(
+            "SELECT filepath FROM hiddenfiles WHERE directory = ? ORDER BY filepath", (for_mod, )
+        )
+
+        # yield from (r["filepath"]
+        #             for r in self.conn.execute(
+        #     "SELECT filepath FROM hiddenfiles WHERE directory = ? ORDER BY filepath",
+        #     (for_mod,)
+        # ))
 
     def get_hidden_file_tree(self):
         """

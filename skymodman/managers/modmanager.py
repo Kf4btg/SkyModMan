@@ -75,6 +75,9 @@ class ModManager:
         ## should pretty much manage themselves.
         self._folders = {} # type: dict [str, AppFolder]
 
+        ## conflicting files
+        self._file_conflicts = None
+
         # used when the installer needs to query mod state
         self._enabledmods = None
 
@@ -216,6 +219,25 @@ class ModManager:
         data folder
         """
         return self._managed_mods
+
+    @property
+    def file_conflicts(self):
+        """
+        Return an object containing information about conflicting files.
+        Use as follows:
+
+            * file_conflicts.by_file: dict[str, list[str]] -- a mapping
+                of file paths to a list of mods containing a file with
+                the same file path
+            * file_conflicts.by_mod: dict[str, list[str]] -- a mapping
+                of mod names to a list of files contained by that mod
+                which are in conflict with some other mod.
+        """
+        # this type is defined in DB-manager
+        #File_Conflict_Map = namedtuple("File_Conflict_Map",
+        #                               "by_file by_mod")
+
+        return self._file_conflicts
 
     def getdbcursor(self):
         """
@@ -550,7 +572,7 @@ class ModManager:
 
         if self._update_modinfo(True, True):
             self.find_all_mod_files(True, True)
-            self._dbman.detect_file_conflicts()
+            self._file_conflicts = self._dbman.detect_file_conflicts()
 
         self.load_hidden_files()
         # self._dbman.load_hidden_files(self.profile.hidden_files)
@@ -589,7 +611,7 @@ class ModManager:
             self.find_all_mod_files(moddir_changed, skydir_changed)
             # with all discovered files loaded into the database,
             # detect which mods contain files with the same name
-            self._dbman.detect_file_conflicts()
+            self._file_conflicts = self._dbman.detect_file_conflicts()
 
         # always need to re-check hidden files
         # todo: clear out saved hidden files for mods that have been uninstalled.
@@ -865,10 +887,6 @@ class ModManager:
         """
         self.LOGGER << "<==Method called"
 
-        print("unhide:", unhide)
-        print("hide:", hide)
-
-
         # delete 'unhide' files
         self._dbman.remove_hidden_files(for_mod, unhide)
 
@@ -971,6 +989,18 @@ class ModManager:
                         FROM='modfiles',
                         WHERE="directory = ?",
                         params=(mod_ident,)))
+
+    def hidden_files_for_mod(self, mod_ident):
+        """
+        Yield the paths of the currently hidden files for the given mod,
+        ordered by full path
+
+        :param mod_ident:
+        """
+
+        # the 'rows' in the cursor all contain just one element
+        yield from (r[0] for r in self._dbman.hidden_files(mod_ident))
+
 
     ##=============================================
     ## Installation
