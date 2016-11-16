@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (QWizard, QWizardPage,
 
 
 # from skymodman.installer.fomod import Fomod
-from skymodman.managers import installer
+# from skymodman.managers import installer
 from skymodman.installer.common import GroupType, PluginType#, Dependencies, Operator
 from skymodman.interface.designer.uic.plugin_wizpage_ui import Ui_InstallStepPage
 from skymodman.interface.designer.uic.installation_wizpage_ui import Ui_FinalPage
@@ -24,7 +24,7 @@ class FomodInstaller(QWizard):
     def __init__(self, install_manager, files_path, *args, **kwargs):
         """
 
-        :param installer.InstallManager install_manager:
+        :param skymodman.managers.installer.InstallManager install_manager:
         :param files_path:
         :param args:
         :param kwargs:
@@ -116,6 +116,8 @@ class FomodInstaller(QWizard):
 
 
 class StartPage(QWizardPage):
+    """Splashpage-like page that shows at the start of fomods with
+    a mod image"""
     def __init__(self,path, modname, modimage, pageid, *args):
         super().__init__(*args)
         self.setTitle(modname.name)
@@ -131,11 +133,11 @@ class StartPage(QWizardPage):
 
 class FinalPage(QWizardPage, Ui_FinalPage):
     """
-    Always shown as the final page of the wizard, this displays a list
-    of files that will be installed and shows a progress bar detailing
-    how many of those files have been properly installed so far. When all
-    files are in the mod directory, the finish button is enabled and
-    the user can exit the installer.
+    Always shown as the final page of the wizard, this displays a
+    list of files that will be installed and shows a progress bar
+    detailing how many of those files have been properly installed so
+    far. When all files are in the mod directory, the finish button
+    is enabled and the user can exit the installer.
     """
     def __init__(self, path, modname, modimage, install_manager,
                  *args, **kwargs):
@@ -148,6 +150,8 @@ class FinalPage(QWizardPage, Ui_FinalPage):
         # the install manager will do the actual install work;
         # this page just interfaces with it.
         self.man = install_manager
+        """:type: skymodman.managers.installer.InstallManager"""
+        self.fomod = install_manager.fomod
 
         self.setupUi(self)
 
@@ -191,11 +195,12 @@ class FinalPage(QWizardPage, Ui_FinalPage):
 
         # make sure that the conditional installs are analyzed and
         # added to the list of files to be installed
-        self.man.check_conditional_installs()
+        self.fomod.add_conditional_install_files()
 
         # build the list (in html) of files chosen for install
         self._html.append(self._opening_html)
-        for f in self.man.files_to_install:
+
+        for f in self.fomod.files_to_install:
             self._html.append("<li>{0.source}</li>".format(f))
         self._html.append(self._closing_html)
 
@@ -205,9 +210,9 @@ class FinalPage(QWizardPage, Ui_FinalPage):
         # set progress bar to empty, calculate maximum
         self.install_progress.reset()
         self.install_progress.setMaximum(
-            self.man.num_files_to_install)
+            self.man.num_fomod_files_to_install)
 
-        print("max:",self.install_progress.maximum())
+        # print("max:",self.install_progress.maximum())
 
         self.progress_label.setText("")
 
@@ -239,7 +244,8 @@ class FinalPage(QWizardPage, Ui_FinalPage):
         installed so far.
         """
         try:
-            await self.man.install_files(callback=self.setprogress)
+            await self.man.install_fomod_files(
+                callback=self.setprogress)
         except asyncio.CancelledError:
             await self.man.rewind_install(self.setprogress)
             raise
@@ -278,7 +284,9 @@ class FinalPage(QWizardPage, Ui_FinalPage):
 
 
     def isComplete(self):
-        """Will return true when the installation is done (or cancelled)"""
+        """
+        Will return true when the installation is done (or cancelled)
+        """
         return (self.task is not None) and self.task.done()
 
 
@@ -319,8 +327,6 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
         :param step:
         :param pageid:
         :param install_manager:
-        :param args:
-        :return:
         """
         super().__init__(*args)
         self.step = step
@@ -418,26 +424,28 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
 
     def cleanupPage(self):
         """
-        When going 'back' to a previous page, unmark all groups and reset
-        any flags that were set so far on this page.
+        When going 'back' to a previous page, unmark all groups and
+        reset any flags that were set so far on this page.
         """
         for g in self.groups:
             g.reset()
 
     def checkVisible(self):
         """
-        If the install step represented by this page contains a 'visible'
-        element, check the dependency patterns in that element and return
-        the result of the analysis; if they were satisfied (or the visible
-        element did not exist), return True and the page will be shown.
-        Otherwise, return False and the page will be skipped.
+        If the install step represented by this page contains a
+        'visible' element, check the dependency patterns in that
+        element and return the result of the analysis; if they were
+        satisfied (or the visible element did not exist), return True
+        and the page will be shown. Otherwise, return False and the
+        page will be skipped.
 
         :return:
         """
         # print(self.step.visible)
 
         if self.step.visible:
-            return self.installman.check_dependencies_pattern(
+            # return self.installman.check_dependencies_pattern(
+            return self.installman.fomod.check_dependencies_pattern(
                 self.step.visible)
 
         # if no visible element, always True
@@ -446,13 +454,13 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
 
     def on_plugin_list_itemClicked(self, item, column):
         """
-        Since we do weird things (like having a qlabel display the text
-        for the tree items, enabling/disabling different part of the item,
-        using custom items, etc.), we can't really rely on being able to
-        actually click the checkbox as normal. Thus, we react to every
-        click event on an item as if it were a click on the checkbox/
-        radiobutton (that being the only meaningful action that a user can
-        do with these items).
+        Since we do weird things (like having a qlabel display the
+        text for the tree items, enabling/disabling different part of
+        the item, using custom items, etc.), we can't really rely on
+        being able to actually click the checkbox as normal. Thus,
+        we react to every click event on an item as if it were a
+        click on the checkbox/ radiobutton (that being the only
+        meaningful action that a user can do with these items).
 
         :param QTreeWidgetItem item:
         :param column:
@@ -478,10 +486,11 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
 
     def show_item_info(self, item):
         """
-        When a user moves their mouse over an item in the list of plugins,
-        update the description on the right with the description of that
-        item. If the fomod defines an image associated with the plugin,
-        also load and display said image (if it can be found).
+        When a user moves their mouse over an item in the list of
+        plugins, update the description on the right with the
+        description of that item. If the fomod defines an image
+        associated with the plugin, also load and display said image
+        (if it can be found).
 
         :param QTreeWidgetItem item:
         """
@@ -501,15 +510,18 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
                     self.label.setScaledPixmap(imgpath)
 
     def isComplete(self):
-        """If all groups on this page have a valid selection,
-        enable the next/finish buttons"""
+        """
+        Return True if all groups on this page have a valid selection.
+
+        Used to enable the next/finish buttons
+        """
         return all(g.isValid for g in self.groups)
     
     def nextId(self):
         """
-        Return the id of the next installation step whose visible parameter
-        evaluates to True; if No further steps evaluate such, return -1
-        :return:
+        Return the id of the next installation step whose visible
+        parameter evaluates to True; if No further steps evaluate
+        such, return -1
         """
 
         next_id = super().nextId()
@@ -525,12 +537,13 @@ class InstallStepPage(QWizardPage, Ui_InstallStepPage):
 
 class PluginGroup(QTreeWidgetItem):
     """
-    An abstraction that represents an "optionalFileGroup" as defined in a
-    Fomod's ModuleConfig.xml. These are displayed on the top level of the
-    list (treewidget) as a plain text label, visually dividing the various
-    plugin groups from each other. On the backend, though, they hold a lot
-    of functions for handling the specifics of the various group- and plugin-
-    types, as well as interactions with the non-gui install-manager.
+    An abstraction that represents an "optionalFileGroup" as defined
+    in a Fomod's ModuleConfig.xml. These are displayed on the top
+    level of the list (treewidget) as a plain text label, visually
+    dividing the various plugin groups from each other. On the
+    backend, though, they hold a lot of functions for handling the
+    specifics of the various group- and plugin- types, as well as
+    interactions with the non-gui install-manager.
     """
 
     def __init__(self, group_type, plugin_order, install_manager, *args, **kwargs):
@@ -541,7 +554,9 @@ class PluginGroup(QTreeWidgetItem):
 
         self.order = plugin_order
 
-        self.installman = install_manager
+        # self.installer = install_manager
+
+        self.fomod = install_manager.fomod
 
 
     _check_isvalid =  {
@@ -560,12 +575,10 @@ class PluginGroup(QTreeWidgetItem):
             GroupType.ANY: # any
                 lambda g: True
         }
-    """
-    Used when verifying that a group has a valid selection, based on the
-    defined type of the group; the "Next" button on the wizard page will not
-    become active until every group on the page returns True from its valid
-    check.
-    """
+    """Used when verifying that a group has a valid selection, based
+    on the defined type of the group; the "Next" button on the wizard
+    page will not become active until every group on the page returns
+    True from its valid check. """
 
     @pyqtProperty(bool)
     def isValid(self):
@@ -613,10 +626,10 @@ class PluginGroup(QTreeWidgetItem):
                     self.uncheck_others(item)
 
                 for flag in self.get_plugin(item).conditionFlags:
-                    self.installman.set_flag(flag.name, flag.value)
+                    self.fomod.set_flag(flag.name, flag.value)
             else:
                 for flag in self.get_plugin(item).conditionFlags:
-                    self.installman.unset_flag(flag.name)
+                    self.fomod.unset_flag(flag.name)
 
     def check_child_type(self, child):
         """
@@ -629,39 +642,38 @@ class PluginGroup(QTreeWidgetItem):
             the plugin.
 
         :param PluginItem child:
-        :return:
         """
 
         ctype = child.plugin.type # default type
 
         if child.plugin.patterns:
             for pat in child.plugin.patterns:
-                if self.installman.check_dependencies_pattern(
+                if self.fomod.check_dependencies_pattern(
                         pat.dependencies):
                     ctype = pat.type
                     break
 
         # print(child.plugin.name, ctype)
 
-        if ctype == PluginType.REQ:
+        if ctype == PluginType.REQ: # Required
             child.setCheckState(0, Qt.Checked)
             # child.setDisabled(True)
             child.setFlags(Qt.ItemNeverHasChildren)
 
-        elif ctype == PluginType.NOT:
+        elif ctype == PluginType.NOT: # NotUsable
             child.setCheckState(0, Qt.Unchecked)
             child.setFlags(Qt.ItemNeverHasChildren)
             child.label.setEnabled(False)
 
-        elif ctype == PluginType.REC:
+        elif ctype == PluginType.REC: # Recommended
             child.setCheckState(0, Qt.Checked)
 
 
     def reset(self):
         """
-        When going back to a previous page, need to clear any modifications
-        to the install state that were made for this group.
-        :return:
+        When going back to a previous page, need to clear any
+        modifications to the install state that were made for this
+        group.
         """
         for c in self.children():
             if c.checkState(0) & Qt.Checked:
@@ -669,24 +681,30 @@ class PluginGroup(QTreeWidgetItem):
 
     def change_plugin_status(self, plugin, enable):
         """
+        For the given plugin, if `enable` is True, set any condition
+        flags on the plugin to their associated value and mark any
+        included files for installation.
+
+        If `enable` is False, unset any flags if they are set and remove
+        any listed files from the installation list if they are already
+        on it.
 
         :param plugin:
         :param bool enable:
-        :return:
         """
 
         # print(plugin.files)
 
         if enable:
             for flag in plugin.conditionFlags:
-                self.installman.set_flag(flag.name, flag.value)
+                self.fomod.set_flag(flag.name, flag.value)
             for file in plugin.files:
-                self.installman.mark_file_for_install(file)
+                self.fomod.mark_file_for_install(file)
         else:
             for flag in plugin.conditionFlags:
-                self.installman.unset_flag(flag.name)
+                self.fomod.unset_flag(flag.name)
             for file in plugin.files:
-                self.installman.mark_file_for_install(file, False)
+                self.fomod.mark_file_for_install(file, False)
 
     def uncheck_others(self, checked_item):
         """
@@ -726,9 +744,10 @@ class PluginItem(QTreeWidgetItem):
 
 class RadioItem(PluginItem):
     """
-    A specialized plugin item that is used when a group defines a mutually-
-    exclusive selection type. These items are shown with a radio button rather
-    than the usual checkbox, and only per-group can ever be active.
+    A specialized plugin item that is used when a group defines a
+    mutually-exclusive selection type. These items are shown with a
+    radio button rather than the usual checkbox, and only one per-group
+    can ever be active.
     """
     def __init__(self, *args, **kwargs):
         """
@@ -739,12 +758,14 @@ class RadioItem(PluginItem):
 
     def setCheckState(self, column, state):
         if self.checkState(0) != state:
-            if state & Qt.Checked:
+            if (state & Qt.Checked) or (
+                    # only the "AtMostOne" radio groups
+                    # should be uncheckable
+                    self.group_type == GroupType.AMO):
                 super().setCheckState(column, state)
 
-        # only the "AtMostOne" radio groups should be uncheckable
-            elif self.group_type == GroupType.AMO:
-                super().setCheckState(column, state)
+            # elif self.group_type == GroupType.AMO:
+            #     super().setCheckState(column, state)
 
 class RadioButtonStyle(QProxyStyle):
 

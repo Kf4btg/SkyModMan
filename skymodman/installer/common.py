@@ -79,8 +79,8 @@ class Dependencies:
                  fommDependency=None):
 
         self.operator = operator
-        self.fileDependency = [] if fileDependency is None else fileDependency
-        self.flagDependency = [] if flagDependency is None else flagDependency
+        self.fileDependency = fileDependency or []
+        self.flagDependency = flagDependency or []
         self.gameDependency = gameDependency
         self.fommDependency = fommDependency
 
@@ -111,7 +111,7 @@ class Pattern:
     def __init__(self, type_ = None, depends = None, files = None):
         self.type = type_
         self.dependencies = depends
-        self.files = [] if not files else files
+        self.files = files or []
 
 # @humanize
 class InstallStep:
@@ -138,7 +138,7 @@ class Plugin:
 
     def __init__(self, name, description=None, image=None):
         self.name = name
-        self.description = "" if not description else description
+        self.description = description or ""
         self.image = image
         self.conditionFlags = []
         self.files = []

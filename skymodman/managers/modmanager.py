@@ -84,11 +84,6 @@ class ModManager:
         # cached list of mods in mod directory
         self._managed_mods = []
 
-        # mod collection instance
-        self._modcollection = ModCollection()
-        # set as collection for all ModEntry objects
-        ModEntry.collection = self._modcollection
-
         # track when we're switching profiles
         self.in_profile_switch=False
 
@@ -685,13 +680,16 @@ class ModManager:
 
     def _populate_mods_table(self):
         """Fill the mods db table using the modcollection"""
+
+        self._dbman.populate_mods_table(self.modcollection)
+
         # mods table now only contains mod directory, managed status
-        with self._dbman.conn as con:
-            con.executemany(
-                "INSERT INTO mods VALUES (?, ?)",
-                ((m.directory, m.managed)
-                 for m in self.modcollection)
-            )
+        # with self._dbman.conn as con:
+        #     con.executemany(
+        #         "INSERT INTO mods VALUES (?, ?)",
+        #         ((m.directory, m.managed)
+        #          for m in self.modcollection)
+        #     )
 
     ##=============================================
     ## Mod Information
@@ -1014,6 +1012,7 @@ class ModManager:
     ##=============================================
 
 
+    @lru_cache(256)
     def checkFileState(self, file, state):
         """
         Query the database of known mod files for the given filename and
@@ -1032,14 +1031,13 @@ class ModManager:
                        self._dbman.select(
                            "directory",
                            FROM="modfiles",
-                           WHERE="filepath = ?",
+                           WHERE="lower(filepath) = ?",
                            params=(file.lower(), )
                                           ))
 
         if matches:
-            if any(m == 'Skyrim'
-                   or self.mod_is_enabled(m)
-                   for m in matches):
+            # if any(m == 'Skyrim' or
+            if any(self.mod_is_enabled(m) for m in matches):
                 # at least one mod containing the matched file is
                 # enabled (or base skyrim), so return true iff desired
                 # state is 'active'
@@ -1058,11 +1056,14 @@ class ModManager:
         :param mod_directory:
         :return: True if mod is marked as enabled for the current profile
         """
-        if not self._enabledmods:
-            # self._enabledmods is uninitialized
-            self._enabledmods = list(self.enabled_mods())
 
-        return mod_directory in self._enabledmods
+        return self.modcollection[mod_directory].enabled
+
+        # if not self._enabledmods:
+            # self._enabledmods is uninitialized
+            # self._enabledmods = list(self.enabled_mods())
+
+        # return mod_directory in self._enabledmods
 
 
 # def getdbcursor(self):

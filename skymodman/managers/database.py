@@ -144,29 +144,34 @@ class DBManager(BaseDBManager, Submanager):
 
     def add_to_mods_table(self, mod_list):
         """
-        Dynamically build the INSERT statement from the list of fields,
-        then insert the values from mod_list (a sequence of tuples) into
-        the database. The changes are committed after all values have
-        been inserted.
-
         Does not check for an empty mods table.
 
-        :param mod_list:
+        :param mod_list: list of mod entries
         """
         self.LOGGER << "<==Method call"
 
-        # ignore the error field for now
-        with self.conn:
-            # insert the list of row-tuples into the in-memory db
-            self.conn.executemany(
-                "INSERT INTO mods({}) VALUES ({})".format(
-                    ", ".join(ModEntry._fields),
-                    ", ".join("?" * len(ModEntry._fields))
-                ),
-                mod_list)
+        with self.conn as con:
+            c=con.executemany(
+                "INSERT INTO mods VALUES (?, ?)",
+                ((m.directory, m.managed)
+                 for m in mod_list)
+            )
+
+            if c.rowcount:
+                # mark db as initialized (if it wasn't already)
+                self._empty['mods'] = False
+
+
+
+                # insert the list of row-tuples into the in-memory db
+            # self.conn.executemany(
+            #     "INSERT INTO mods({}) VALUES ({})".format(
+            #         ", ".join(ModEntry._fields),
+            #         ", ".join("?" * len(ModEntry._fields))
+            #     ),
+            #     mod_list)
 
             # mark db as initialized (if it wasn't already)
-            self._empty['mods'] = False
 
     def populate_mods_table(self, mod_list):
         """Similar to add_to_mods_table, but this first checks to see if
