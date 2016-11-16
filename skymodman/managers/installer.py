@@ -1,7 +1,7 @@
 import asyncio
 import os
 from collections import deque
-from functools import lru_cache
+from itertools import chain
 from pathlib import PurePath, Path
 
 # import re
@@ -9,7 +9,6 @@ from pathlib import PurePath, Path
 # TopLevelSuffixes
 
 from skymodman.managers.base import Submanager
-from skymodman.installer import common
 from skymodman.installer.fomod import Fomod
 
 from skymodman.types.archivefs import archivefs as arcfs
@@ -47,12 +46,12 @@ class InstallManager(Submanager):
         self.archive_files = None
         self.archive_dirs = None
         self.fomod = None
-        self.fomoddir = None
+        # self.fomoddir = None
 
-        self.toplevitems = []
-        self.docs = []
-        self.inis = []
-        self.baditems = []
+        # self.toplevitems = []
+        # self.docs = []
+        # self.inis = []
+        # self.baditems = []
 
 
         # self.install_state = installState()
@@ -67,17 +66,21 @@ class InstallManager(Submanager):
         # self.install_dir = self.mainmanager.Paths.dir_mods / self.arc_path.stem.lower()
         self.install_dir = self.mainmanager.Folders['mods'].path / self.arc_path.stem.lower()
         # Used to track state during installation
-        self.files_to_install = []
+        # self.files_to_install = []
         self.files_installed = deque()
-        self.flags = {}
+        # self.flags = {}
 
         self.LOGGER << "Init installer for '{}'".format(self.archive)
         self.LOGGER << "Install destination: {}".format(self.install_dir)
 
-    def init_install_state(self):
-        self.files_to_install = []
-        self.files_installed = deque()
-        self.flags = {}
+    # def init_install_state(self):
+    #     self.files_to_install = []
+    #     self.files_installed = deque()
+    #     self.flags = {}
+
+    ##=============================================
+    ## FOMOD handling
+    ##=============================================
 
     @property
     def has_fomod(self):
@@ -100,14 +103,122 @@ class InstallManager(Submanager):
                 return e
         return None
 
-                      # srcdestpairs=None,
+    async def prepare_fomod(self, xmlfile, extract_dir=None):
+        """
+        Using the specified ModuleConfig.xml file `xmlfile`,
+        (most likely extracted from this installer's associated
+        archive in an earlier phase of installation), parse and
+        analyze the script to prepare a Fomod object to give to an
+        installer interface. Go ahead and mark any files marked as
+        'required installs' for installation. Finally, extract any
+        images that were referenced in the script so that they can be
+        shown during the installation process.
+
+        :param xmlfile:
+        :param extract_dir: Where any images referenced by the script
+            will be extracted. It is best to use a temporary directory
+            for this so it can be easily cleaned up after install.
+        """
+
+        # make sure this is clear
+        self.files_installed = deque()
+
+        # todo: figure out what sort of things can go wrong while reading the fomod config, wrap them in a FomodError (within fomod.py), and catch that here so we can report it without crashing
+        self.fomod = Fomod(xmlfile)
+
+        # we don't want to extract the entire archive before we start,
+        # but we do need to extract any images defined in the
+        # config file so that they can be shown during installation
+        if self.archive \
+                and self.fomod.all_images \
+                and extract_dir is not None:
+            # await self._extract_fomod_images(extract_dir)
+
+            # this is the only place we do this, so no need to have
+            # another coroutine for it...
+
+            await self.extract(extract_dir,
+                               entries=self.fomod.all_images)
+
+            join = os.path.join
+            relpath = os.path.relpath
+            # get lowercase, relative versions of all files extracted so far and
+            # store them for later reference
+            norm_fomodfiles = {}
+            for root, dirs, files in os.walk(extract_dir):
+                for f in files:
+                    norm_fomodfiles[
+                        relpath(join(root, f), extract_dir).lower()
+                    ] = join(root, f)
+
+            # ok, so this contains more than just the img paths...but it's the most
+            # reliable way to make sure all the images are represented correctly.
+            self.normalized_imgpaths = norm_fomodfiles
+
+        # pprint(self.files_to_install)
+
+    # async def _extract_fomod_images(self, extract_dir, *,
+    #                                 join=os.path.join,
+    #                                 relpath=os.path.relpath):
+    #     """
+    #     if there is a (legitimate) common base-path to the images
+    #     (they are often kept in a single directory), then extract
+    #     that entire folder. Otherwise, extract each image path
+    #     individually.
+    #
+    #     :param extract_dir:
+    #     :return:
+    #     """
+    #     # todo: maybe check to see if the images were inside the fomod directory, in which case they're already extracted.  Or, maybe only extract the config file by default instead of the entire fomod dir...
+    #     await self.extract(extract_dir, entries=self.fomod.all_images)
+    #
+    #     # get lowercase, relative versions of all files extracted so far and
+    #     # store them for later reference
+    #     norm_fomodfiles = {}
+    #     for root, dirs, files in os.walk(extract_dir):
+    #         for f in files:
+    #             norm_fomodfiles[
+    #                 relpath(join(root, f), extract_dir).lower()
+    #             ] = join(root, f)
+    #
+    #     # ok, so this contains more than just the img paths...but it's the most
+    #     # reliable way to make sure all the images are represented correctly.
+    #     self.normalized_imgpaths = norm_fomodfiles
+
+    def get_fomod_image(self, image_path):
+        """
+        Guaranteed to return the actual extraction path for an image
+        path specified in a fomod config file even in spite of
+        name-case-conflicts, so long as the file exists. If it does
+        not exist, None is returned.
+        """
+        try:
+            return self.normalized_imgpaths[image_path.lower()]
+        except KeyError:
+            return None
+
+    @property
+    def num_fomod_files_to_install(self):
+        n = 0
+        for f in self.fomod.files_to_install:
+            if f.type == "folder":
+                n += self.count_folder_contents(f.source)
+            else:
+                n += 1
+
+        return n
+
+    ##=============================================
+    ## Archive Handling
+    ##=============================================
+
     async def extract(self, destination, entries=None, callback=None):
+                      # srcdestpairs=None,
         """
         Extract all or select items from the installer's associated
-        mod archive to the `destination`. If either `entries` or
-        `srcdestpairs` is specified, only the items found in those
-        collections will be extracted (srcdestpairs takes precedence
-        if both are provided). If neither are given, all files from
+        mod archive to the `destination`. If `entries`
+        is provided, only the items found in that
+        collection will be extracted. If not given, all files from
         the archive will be extracted to the destination.
 
         :param str destination: extraction destination
@@ -155,6 +266,18 @@ class InstallManager(Submanager):
         self.LOGGER << "counting files"
         return len(await self.archive_contents(dirs=include_dirs))
 
+    def count_folder_contents(self, folder):
+        """
+        Given a path to a folder within the archive, return the
+        number of files and directories contained within that folder
+        and its children
+        """
+        folder += '/'
+
+        return len(
+            [f for f in chain(self.archive_files, self.archive_dirs)
+             if f.startswith(folder)])
+
     async def mod_structure_tree(self):
         """
         Build a Tree structure where the names of the branches and
@@ -192,209 +315,57 @@ class InstallManager(Submanager):
 
         return modfs
 
-    async def prepare_fomod(self, xmlfile, extract_dir=None):
-        """
-        Using the specified ModuleConfig.xml file `xmlfile`,
-        (most likely extracted from this installer's associated
-        archive in an earlier phase of installation), parse and
-        analyze the script to prepare a Fomod object to give to an
-        installer interface. Go ahead and mark any files marked as
-        'required installs' for installation. Finally, extract any
-        images that were referenced in the script so that they can be
-        shown during the installation process.
+    ##=============================================
+    ## Actual installation
+    ##=============================================
 
-        :param xmlfile:
-        :param extract_dir: Where any images referenced by the script
-            will be extracted. It is best to use a temporary directory
-            for this so it can be easily cleaned up after install.
-        """
-        self.init_install_state()
-        # self.install_state = installState() # tracks flags, install files
-
-        # todo: figure out what sort of things can go wrong while reading the fomod config, wrap them in a FomodError (within fomod.py), and catch that here so we can report it without crashing
-        self.fomod = Fomod(xmlfile)
-
-        # we don't want to extract the entire archive before we start,
-        # but we do need to extract any images defined in the
-        # config file so that they can be shown during installation
-        if self.archive and self.fomod.all_images and extract_dir is not None:
-            await self._extract_fomod_images(extract_dir)
-
-        # go ahead and mark any required installs
-        if self.fomod.reqfiles:
-            self.files_to_install=self.fomod.reqfiles
-
-        # pprint(self.files_to_install)
-
-    async def _extract_fomod_images(self, extract_dir, *,
-                                    join=os.path.join,
-                                    relpath=os.path.relpath):
-        """
-        if there is a (legitimate) common base-path to the images
-        (they are often kept in a single directory), then extract
-        that entire folder. Otherwise, extract each image path
-        individually.
-
-        :param extract_dir:
-        :return:
-        """
-        # todo: maybe check to see if the images were inside the fomod directory, in which case they're already extracted.  Or, maybe only extract the config file by default instead of the entire fomod dir...
-        await self.extract(
-            extract_dir,
-            entries=self.fomod.all_images)
-
-        # get lowercase, relative versions of all files extracted so far and
-        # store them for later reference
-        norm_fomodfiles = {}
-        for root, dirs, files in os.walk(extract_dir):
-            for f in files:
-                norm_fomodfiles[
-                    relpath(join(root, f), extract_dir).lower()
-                    ]=join(root, f)
-
-        # ok, so this contains more than just the img paths...but it's the most
-        # reliable way to make sure all the images are represented correctly.
-        self.normalized_imgpaths = norm_fomodfiles
-
-    def get_fomod_image(self, image_path):
-        """
-        Guaranteed to return the actual extraction path for an image
-        path specified in a fomod config file even in spite of
-        name-case-conflicts, so long as the file exists. If it does
-        not exist, None is returned.
-        """
-        try:
-            return self.normalized_imgpaths[image_path.lower()]
-        except KeyError:
-            return None
-
-    def set_flag(self, flag, value):
-        self.flags[flag]=value
-
-    def unset_flag(self, flag):
-        try: del self.flags[flag]
-        except KeyError: pass
-
-    def mark_file_for_install(self, file, install=True):
+    async def install_fomod_files(self, dest_dir=None, callback=None):
         """
 
-        :param common.File file:
-        :param install: if true, mark the file for install; if False,
-            remove it from the list of files to install
-        """
-        if install:
-            self.files_to_install.append(file)
-        else:
-            try:
-                self.files_to_install.remove(file)
-            except ValueError:
-                # file wasn't there??
-                self.LOGGER.error("ValueError: {}".format(file))
-                raise
-
-    dep_checks = { # s=self, d=dependency item (key=dependency type)
-        "fileDependency": lambda s, d: s.check_file(d.file, d.state),
-        "flagDependency": lambda s, d: s.check_flag(d.flag, d.value),
-        "gameDependency": lambda s, d: s.check_game_version(d),
-        "fommDependency": lambda s, d: s.check_fomm_version(d),
-    }  ## used below
-
-    operator_func = {
-        common.Operator.OR:  any, # true if any item is true
-        common.Operator.AND: all  # true iff all items are true
-    } ## also used below
-
-    def check_dependencies_pattern(self, dependencies):
-        """
-
-        :param common.Dependencies dependencies: A ``Dependencies`` object extracted from the fomod config.
-        :return: boolean indicating whether the dependencies were satisfied.
-        """
-        # print(self.check_file.cache_info())
-
-        condition = self.operator_func[dependencies.operator]
-
-        return condition(self.dep_checks[dtype](self, dep)
-                         for dtype, dep in dependencies)
-
-    @lru_cache(256)
-    def check_file(self, file, state):
-        return self.mainmanager.checkFileState(file, state)
-
-    def check_flag(self, flag, value):
-        return flag in self.flags \
-               and self.flags[flag] == value
-
-    def check_game_version(self, version):
-        return True
-
-    def check_fomm_version(self, version):
-        return True
-
-    def check_conditional_installs(self):
-        """
-        Called after all the install steps have run.
-        """
-        flist = self.files_to_install
-        if self.fomod.condinstalls:
-            for pattern in self.fomod.condinstalls:
-                if self.check_dependencies_pattern(pattern.dependencies):
-                    flist.extend(pattern.files)
-
-    @property
-    def num_files_to_install(self):
-        n=0
-        for f in self.files_to_install:
-            if f.type=="folder":
-                n+=self._count_folder_contents(f.source)
-            else:
-                n+=1
-
-        return n
-        # return len(self.files_to_install)
-
-    def _count_folder_contents(self, folder):
-        folder += '/'
-
-        return len([f for f in self.archive_files+self.archive_dirs
-                    if f.startswith(folder)])
-
-    async def install_files(self, dest_dir=None, callback=None):
-        """
-
-        :param str dest_dir: path to installation directory for this mod
+        :param str dest_dir: path to installation directory for this
+            mod; if not provided, the files will be installed to the
+            main Mod-install directory in a folder with the same name
+            as the archive.
         :param callback: called with args (name_of_file, total_extracted_so_far) during extraction process to indicate progress
         """
+
 
         if dest_dir is None:
             # dest_dir="/tmp/testinstall"
             dest_dir = self.install_dir
 
-        flist = self.files_to_install
+        # get list of files from fomod
+        to_install = self.fomod.files_to_install
+
+        # flist = self.files_to_install
         progress = self.files_installed
 
         # sort files by priority, then by name
-        flist.sort(key=lambda f: f.priority)
-        flist.sort(key=lambda f: f.source.lower())
+        to_install.sort(key=lambda f: f.priority)
+        to_install.sort(key=lambda f: f.source.lower())
 
-        _callback = callback
-        if _callback is None:
+
+        if callback is None:
             def _callback(*args): pass
+        else:
+            _callback = callback
 
         def track_progress(filename, num_done):
             progress.append(filename)
             _callback(filename, num_done)
 
-        asyncio.get_event_loop().call_soon_threadsafe(_callback("Starting extraction...", 0))
+        asyncio.get_event_loop().call_soon_threadsafe(
+            _callback, "Starting extraction...", 0)
 
         await self.extract(destination=dest_dir,
-                           entries=[f.source for f in flist],
+                           entries=[f.source for f in to_install],
                            # srcdestpairs=[(f.source, f.destination)
                            #               for f in flist],
                            callback=track_progress)
 
-        # after unpack, files must be moved to correct destinations as specified by fomod config
-        for file_item in flist:
+        # after unpack, files must be moved to correct destinations
+        # as specified by fomod config
+        for file_item in to_install:
 
             installed = Path(dest_dir, file_item.source)
             destination = Path(dest_dir, file_item.destination.lower())
@@ -415,13 +386,14 @@ class InstallManager(Submanager):
         Any files that have already been moved to the install directory
         will be removed.
 
-        :param callback:
+        :param (callback:
         :return:
         """
         uninstalls=self.files_installed
         remaining=len(uninstalls)
 
         while remaining>0:
+            # note: there was a reason for this...though I can't quite remember what it was...I think I recall it being a problem that Guido thought wasn't really a problem because you could do this? Although people were arguing that there's *nothing* intuitive about this and you'd only know to do it if you already knew to do it? Yeah...I should look that up again.
             await asyncio.sleep(0.02)
             f=uninstalls.pop()
             remaining -= 1

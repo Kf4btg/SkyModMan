@@ -1,69 +1,32 @@
 from itertools import chain
 
+from skymodman import Manager
 from skymodman.installer.common import *
+from skymodman.installer.element import Element
 from skymodman.thirdparty.untangle import untangle
 from skymodman.types.color import Color
 
 
-class Element(untangle.Element):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+dep_checks = {
+    # key is dependency type
+    # s=self, d=dependency item
+    "fileDependency": lambda s, d: s.check_file(d.file,
+                                                d.state),
+    "flagDependency": lambda s, d: s.check_flag(d.flag,
+                                                d.value),
+    "gameDependency": lambda s, d: s.check_game_version(d),
+    "fommDependency": lambda s, d: s.check_fomm_version(d),
+}
+"""determine which check method to invoke based on dep. type"""
 
-        # part of a hack to prevent empty lines from filling up all
-        # the 'cdata' attributes
-        self.prev2=""
-        self.prev1=""
-
-    @property
-    def attributes_(self)->dict:
-        return self._attributes
-
-    def get_attribute(self, key, default=None):
-        value = super().get_attribute(key)
-
-        return default if value is None else value
-
-    def __getattr__(self, key):
-        try:
-            return super().__getattr__(key)
-        except AttributeError:
-            return []
-
-    def iter_all(self):
-        """
-        Recursively iterate over this element and all its children
-
-        """
-        yield self
-        if len(self):
-            for c in self.children:
-                yield from c.iter_all()
-
-    def add_cdata(self, cdata):
-        """
-        Squeezes blank lines together
-        :param cdata:
-        """
-        if cdata.isspace():
-            if self.prev1=="": return
-            if self.prev1=="\n" \
-                    and self.prev2 in ["","\n"]: return
-            cdata='\n' # reduce all blank lines to a bare newline
-
-        super().add_cdata(cdata)
-
-        self.prev2=self.prev1
-        self.prev1=cdata.strip(" \r")
-
-    def attribute_pairs(self):
-        """
-
-        :yields: the attributes of the element as (key, value) tuples
-        """
-        yield from ((k,v) for k,v in self._attributes.items())
-
+# map operators to python functors
+operator_func = {
+    Operator.OR:  any,  # true if any item is true
+    Operator.AND: all  # true iff all items are true
+}
 
 class Fomod:
+
     def __init__(self, config_xml):
         self.fomod_config = untangle.parse(config_xml)
 
@@ -77,8 +40,19 @@ class Fomod:
         self.installsteps = []
         self.condinstalls = []
 
+        # used during run
+        self.files_to_install = []
+        self.flags = {}
+
         self.analyze()
 
+    ##=============================================
+    ## XML-parsing and script setup
+    ## --------------------------------------------
+    ## should only ever be called once (during
+    ## __init__) for each Fomod instance
+    ##=============================================
+    # <editor-fold desc="setup">
 
     def analyze(self):
         root = self.fomod_config.config # type: Element
@@ -116,6 +90,10 @@ class Fomod:
         ## required install files
         self.reqfiles = self._getfiles(root.requiredInstallFiles)
 
+        # go ahead and add these to install list
+        if self.reqfiles:
+            self.files_to_install.extend(self.reqfiles)
+
         ## conditional file installs
         self.condinstalls = self._getpatterns(root.conditionalFileInstalls)
 
@@ -124,7 +102,8 @@ class Fomod:
 
     @staticmethod
     def _getdeps(element):
-        if not element: return None
+        if not element:
+            return None
 
         dparent = element.dependencies
         deps = Dependencies()
@@ -134,25 +113,28 @@ class Fomod:
         else:
             dparent = element
 
-        if not len(dparent): return None
+        if not len(dparent):
+            return None
 
         deps.fileDependency = [FileDep(_pathfix(d["file"]),
                                        FileState(d["state"]))
                                for d in dparent.fileDependency]
 
-        deps.flagDependency = [FlagDep(d["flag"], d["value"]) for d in dparent.flagDependency]
+        deps.flagDependency = [FlagDep(d["flag"], d["value"])
+                               for d in dparent.flagDependency]
 
+        deps.gameDependency = dparent.gameDependency[
+            "version"] if dparent.gameDependency else None
 
-        deps.gameDependency = dparent.gameDependency["version"] if dparent.gameDependency else None
-
-        deps.fommDependency = dparent.fommDependency["version"] if dparent.fommDependency else None
+        deps.fommDependency = dparent.fommDependency[
+            "version"] if dparent.fommDependency else None
 
         return  deps
 
-
     @staticmethod
     def _getfiles(element, defs = DEFAULTS["file"]):
-        if not element: return None
+        if not element:
+            return None
 
         fparent = element.files or element
 
@@ -160,25 +142,35 @@ class Fomod:
         for f in chain(fparent.file, fparent.folder):
             # ftype = File if f._name == "file" else Folder
 
-            files.append(
-                File(f._name.lower(), # either 'file' or 'folder'
-                    _pathfix(f["source"]),
-                      "" if f["destination"]=="" else
-                      _pathfix(f["destination"] or f["source"]),
+            # File(type, source, destination,
+            #      priority, alwaysInstall, installIfUsable)
 
-                      int(f["priority"]
-                          or defs["priority"]),
+            files.append(File(
 
-                      _tobool(f["alwaysInstall"]
-                              or defs["alwaysInstall"]),
+                # type (either 'file' or 'folder')
+                f._name.lower(),
 
-                      _tobool(f["installIfUsable"]
-                              or defs["installIfUsable"])
-                      ))
+                # source
+                _pathfix(f["source"]),
+
+                # destination
+                "" if f["destination"]==""
+                   else _pathfix(f["destination"] or f["source"]),
+
+                # priority
+                int(f["priority"] or defs["priority"]),
+
+                # alwaysInstall
+                _tobool(f["alwaysInstall"] or defs["alwaysInstall"]),
+
+                # installIfUsable
+                _tobool(f["installIfUsable"] or defs["installIfUsable"])
+              ))
         return files
 
     def _getpatterns(self, element):
-        if not element: return None
+        if not element:
+            return None
 
         pats=[]
         parent = element.patterns
@@ -197,7 +189,8 @@ class Fomod:
         return pats
 
     def _getinstallsteps(self, element):
-        if not element: return None
+        if not element:
+            return None
 
         steps = []
 
@@ -207,12 +200,11 @@ class Fomod:
             s.optionalFileGroups = self._getgroups(step.optionalFileGroups)
 
             steps.append(s)
-
-
         return steps
 
     def _getgroups(self, element):
-        if not element: return None
+        if not element:
+            return None
 
         groups = []
 
@@ -225,8 +217,11 @@ class Fomod:
 
         return groups
 
+
     def _getplugins(self, element):
-        if not element: return None
+        if not element:
+            return None
+
         plugs = []
 
         for plugin in element.plugin:
@@ -256,6 +251,101 @@ class Fomod:
 
         return plugs
 
+    # </editor-fold>
+
+    ##=============================================
+    ## Called by script-runner during installation
+    ##=============================================
+
+    def add_conditional_install_files(self):
+        """
+        Called after all the install steps have run; Adds any files
+        that meet a conditional-install check to the list of files to
+        install
+        """
+
+        if self.condinstalls:
+            for pattern in self.condinstalls:
+                if self.check_dependencies_pattern(
+                        pattern.dependencies):
+                    self.files_to_install.extend(pattern.files)
+
+
+    def mark_file_for_install(self, file, install=True):
+        """
+
+        :param common.File file:
+        :param install: if true, mark the file for install; if False,
+            remove it from the list of files to install
+        """
+        if install:
+            self.files_to_install.append(file)
+        else:
+            try:
+                self.files_to_install.remove(file)
+            except ValueError:
+                # file may not have been in list to begin with, which is ok
+                print("ValueError: {}".format(file))
+                pass
+
+    #=================================
+    # dependency checks
+    #---------------------------------
+
+    def check_dependencies_pattern(self, dependencies):
+        """
+
+        :param common.Dependencies dependencies: A ``Dependencies``
+            object extracted from the fomod config.
+        :return: boolean indicating whether the dependencies were
+            satisfied.
+        """
+        # print(self.check_file.cache_info())
+
+        # condition will be one of the builtin 'any' or 'all' functions
+        condition = operator_func[dependencies.operator]
+
+        return condition(
+            dep_checks[dtype](self, dep)
+            for dtype, dep in dependencies)
+
+    def check_file(self, file, state):
+        # Manager caches the results of the most recent checks
+        return Manager().checkFileState(file, state)
+
+    def check_flag(self, flag, value):
+        return flag in self.flags \
+               and self.flags[flag] == value
+
+    ### The game and fomm version checks are specified in the FOMOD
+    # spec file, but don't ever really apply to us, so we just return
+    # True
+
+    # noinspection PyUnusedLocal
+    def check_game_version(self, version):
+        return True
+
+    # noinspection PyUnusedLocal
+    def check_fomm_version(self, version):
+        return True
+
+    ##=============================================
+    ## Other
+    ##=============================================
+
+    def set_flag(self, flag, value):
+        self.flags[flag] = value
+
+    def unset_flag(self, flag):
+        try:
+            del self.flags[flag]
+        except KeyError:
+            pass
+
+
+
+
+# <editor-fold desc="helpers">
 def _pathfix(path:str):
 
     return path.replace('\\', '/')
@@ -270,6 +360,7 @@ def _tobool(val):
     # fallback
     return bool(val)
 
+# </editor-fold>
 
 # I don't know if this is the right way to do this...
 # but it was the only way I could figure out (short of
