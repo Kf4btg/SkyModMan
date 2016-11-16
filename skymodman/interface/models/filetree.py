@@ -61,13 +61,9 @@ class ModFileTreeModel(QAbstractItemModel):
 
         self.command_queue = deque()
 
-
-
     def setMod(self, mod_entry):
         """Set the mod that this model is focusing on to `mod_entry`.
         Pass ``None`` to reset the model to empty"""
-
-        # if mod_entry is self.mod: return
 
         # clear the index-cache
         self._locate.cache_clear()
@@ -189,24 +185,6 @@ class ModFileTreeModel(QAbstractItemModel):
             # use the internal _set_checkstate to avoid the
             # parent.child_state invalidation step
             self._files[idx]._set_checkstate(Qt_Unchecked, False)
-
-
-
-        # hidden = set()
-        # # locate the hidden files in the file list using binary search:
-        # for hf in self.manager.hidden_files_for_mod(self.mod.directory):
-        #     try:
-        #         idx = self._locate(hf)
-        #         # don't recurse, these should all be files;
-        #         # also use the internal _set_checkstate to avoid the
-        #         # parent.child_state invalidation step
-        #         self._files[idx]._set_checkstate(Qt_Unchecked, False)
-        #         hidden.add(idx)
-        #     except ValueError:
-        #         self.LOGGER.error("Hidden file {0!r} was not found".format(hf))
-
-        # reset the "saved state" (indices of hidden files on load)
-        # self._saved_state = hidden
 
     def getitem(self, index) -> QFSItem:
         """Extracts actual item from given index
@@ -385,7 +363,6 @@ class ModFileTreeModel(QAbstractItemModel):
                 self.getIndexFromItem(item_topleft),
                 self.getIndexFromItem(item_botright)
             )
-
 
     def queue_command(self, command):
         """

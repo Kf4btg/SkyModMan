@@ -54,9 +54,19 @@ class ModCollectionManager(Submanager):
     ##=============================================
 
     def enabled_mods(self):
+        """
+
+        :return: an iterator over all currently enabled mods in the
+            collection
+        """
         return filter(lambda m: m.enabled, self._collection)
 
     def disabled_mods(self):
+        """
+
+        :return: an iterator over all currently disabled mods in the
+            collection
+        """
         return itertools.filterfalse(lambda m: m.managed,
                                      self._collection)
 
@@ -67,16 +77,29 @@ class ModCollectionManager(Submanager):
         return filter(lambda m: m.managed, self._collection)
 
     def unmanaged_mods(self):
+        """
+        Iterate over all mods marked as "unmanaged"
+        """
         return itertools.filterfalse(lambda m: m.managed,
                                      self._collection)
 
+    def mods_with_error(self, error_type):
+        """
+        Yield all mods that currently have the given `error_type`
+
+        :param ModError error_type:
+        """
+        yield from (m for m in self._collection
+                    if m.key in self._errors
+                    and self._errors[m.key]==error_type)
 
     ##=============================================
     ## validation
     ##=============================================
 
     def validate_mods(self, managed_mods_list):
-        """Compare the mods held in the collection with
+        """
+        Compare the mods held in the collection with
         `managed_mods_list`, a list of the mods actually present on disk
         in the mod-installation directory.
 
@@ -89,6 +112,13 @@ class ModCollectionManager(Submanager):
               previously listed in the user's list of installed mods
             * Mods Not Found: for mods listed in the list of installed
               mods whose installation folders were not found on disk.
+
+        :return: True ONLY if no errors were known before this method
+            was called and no errors were found during execution. Always
+            returns False if any errors were present before this and/or
+            errors were found by this call. This is intended to serve
+            as a notification that errors are either present or changed,
+            so any interface can be updated accordingly/
         """
 
         # reset error field to None
@@ -109,22 +139,16 @@ class ModCollectionManager(Submanager):
             ModError.MOD_NOT_LISTED: []
         }
 
-        # selector = len(in_coll) > len(on_disk)
-        #
-        # objs = (
-        #     (in_coll, on_disk)[selector],
-        #     (on_disk, in_coll)[selector],
-        #     errmap[(ModError.DIR_NOT_FOUND, ModError.MOD_NOT_LISTED)[selector]],
-        #     (ModError.MOD_NOT_LISTED, ModError.DIR_NOT_FOUND)[selector]
-        # )
-        #
-        # for modname in objs[0]:
-        #     try:
-        #         objs[1].remove(modname)
-        #     except ValueError:
-        #         objs[2].append(modname)
-        #     errmap[objs[3]]=objs[1]
+        #! note:: I wish there were a...lighter way to do this, but I
+        #! believe only directly comparing dirnames will allow
+        #! us to provide useful feedback to the user about
+        #! problems with the mod installation
 
+
+        # we always iterate over the smaller list, attempting
+        # to remove all the files in it from the larger one. Which
+        # list we're iterating over determines which error-list we
+        # append to on error.
         if len(in_coll) > len(on_disk):
             l_smaller = on_disk
             l_larger = in_coll
@@ -137,32 +161,30 @@ class ModCollectionManager(Submanager):
             receive_errors = errmap[ModError.DIR_NOT_FOUND]
             leftovers = ModError.MOD_NOT_LISTED
 
+        # perform iteration/error-determination
         for modname in l_smaller:
             try:
                 l_larger.remove(modname)
             except ValueError:
                 receive_errors.append(modname)
+            # anything left in the larger list belongs to the other
+            # error type;
             errmap[leftovers]=l_larger
 
-
-        self._errors.update(itertools.chain(
-            dict.fromkeys(errmap[ModError.MOD_NOT_LISTED],
-                          ModError.MOD_NOT_LISTED),
-            dict.fromkeys(errmap[ModError.DIR_NOT_FOUND],
-                          ModError.DIR_NOT_FOUND)
-        ))
+        # add all discovered errors to the errors collection;
+        # self._errors is keyed with the mod-key, and each value is
+        # the appropriate ModError type
+        self._errors.update(
+            itertools.chain(
+                dict.fromkeys(errmap[ModError.MOD_NOT_LISTED],
+                              ModError.MOD_NOT_LISTED),
+                dict.fromkeys(errmap[ModError.DIR_NOT_FOUND],
+                              ModError.DIR_NOT_FOUND)
+            ))
 
         self.LOGGER << "Discovered {} new mod errors".format(
             len(self._errors))
 
-
-        # for key in errmap[ModError.MOD_NOT_LISTED]:
-        #     self._errors[key] = ModError.MOD_NOT_LISTED
-        #     # self._collection[key].error = ModError.MOD_NOT_LISTED
-        # # for key in not_found:
-        # for key in errmap[ModError.DIR_NOT_FOUND]:
-        #     self._errors[key] = ModError.DIR_NOT_FOUND
-        #     # self._collection[key].error = ModError.DIR_NOT_FOUND
-
+        # return True iff no errors were found or cleared
         return not (self._errors or errors_cleared)
 

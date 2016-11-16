@@ -247,7 +247,7 @@ class FinalPage(QWizardPage, Ui_FinalPage):
             await self.man.install_fomod_files(
                 callback=self.setprogress)
         except asyncio.CancelledError:
-            await self.man.rewind_install(self.setprogress)
+            await self.man.rewind_fomod_install(self.setprogress)
             raise
 
     def stop_install(self, button):

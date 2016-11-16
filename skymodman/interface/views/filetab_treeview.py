@@ -18,7 +18,6 @@ class FileTabTreeView(QtWidgets.QTreeView):
 
         super().__init__(*args, **kwargs)
 
-
         # source model
         self._srcmodel = None
         """:type: skymodman.interface.models.ModFileTreeModel_QUndo"""
@@ -30,12 +29,7 @@ class FileTabTreeView(QtWidgets.QTreeView):
         self._filterbox = None
         """:type: skymodman.interface.designer.plugins.widgets.escapeablelineedit.EscapeableLineEdit"""
 
-        # replace header with customized header;
-        # fwheader = FixedWidthHeader(Qt.Horizontal, self)
-        # fwheader.setDefaultSectionSize(200)
-        # fwheader.setMinimumSectionSize(100)
-        # self.setHeader(fwheader)
-
+        # replace header with customized header
         self.setHeader(FixedWidthHeader(
             Qt.Horizontal, self,
             default_ratios=(3, 2, 1))) # set initial width ratios
@@ -146,7 +140,6 @@ class FileTabTreeView(QtWidgets.QTreeView):
         """
 
         # first, clear the filter box
-
         if new_mod is not self._srcmodel.mod:
             self._filterbox.clear()
 

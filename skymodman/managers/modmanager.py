@@ -879,14 +879,19 @@ class ModManager:
         Write the collection of hidden files (stored on the profile
         object) to disk.
 
-        :param for_mod: key (directory) of mod to which these files
-            belong
-        :param unhide: list of filepaths to remove from the hidden files
-            list
-        :param hide: list of filepaths to add to the hidden files list
-
+        :param for_mod:
+            key (directory) of mod to which these files belong
+        :param unhide:
+            list of filepaths to remove from the hidden files list
+        :param hide:
+            list of filepaths to add to the hidden files list
         """
         self.LOGGER << "<==Method called"
+
+        # NTS: ModOrganizer adds a '.mohidden' extension to
+        # every file it hides (or to the parent directory)...I'd
+        # like to avoid changing the files on disk if possible, but
+        # I can certainly see the advantages of that...
 
         # delete 'unhide' files
         self._dbman.remove_hidden_files(for_mod, unhide)

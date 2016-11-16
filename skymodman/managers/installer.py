@@ -4,10 +4,6 @@ from collections import deque
 from itertools import chain
 from pathlib import PurePath, Path
 
-# import re
-# from skymodman.constants import SkyrimGameInfo # TopLevelDirs_Bain,
-# TopLevelSuffixes
-
 from skymodman.managers.base import Submanager
 from skymodman.installer.fomod import Fomod
 
@@ -17,17 +13,6 @@ from skymodman.utils.tree import Tree
 from skymodman.utils.archive import ArchiveHandler
 from skymodman.utils.fsutils import dir_move_merge
 
-
-## todo: clean this thing up
-
-# class installState:
-#     def __init__(self):
-#         self.file_path = None
-#         self.install_dest = None
-#         self.files_to_install = []
-#         self.files_installed_so_far = deque()
-#
-#         self.flags = {}
 
 @withlogger
 class InstallManager(Submanager):
@@ -46,15 +31,6 @@ class InstallManager(Submanager):
         self.archive_files = None
         self.archive_dirs = None
         self.fomod = None
-        # self.fomoddir = None
-
-        # self.toplevitems = []
-        # self.docs = []
-        # self.inis = []
-        # self.baditems = []
-
-
-        # self.install_state = installState()
 
         # maintain a mapping of lower-case versions of the image-paths
         # defined in the fomod config to the actual filesystem-location
@@ -65,18 +41,13 @@ class InstallManager(Submanager):
         # we get the `mainmanager` attribute from our Submanager base
         # self.install_dir = self.mainmanager.Paths.dir_mods / self.arc_path.stem.lower()
         self.install_dir = self.mainmanager.Folders['mods'].path / self.arc_path.stem.lower()
-        # Used to track state during installation
-        # self.files_to_install = []
+
+        # Used to track progress during installation and allow
+        # for "rewinding" a failed/cancelled partial install
         self.files_installed = deque()
-        # self.flags = {}
 
         self.LOGGER << "Init installer for '{}'".format(self.archive)
         self.LOGGER << "Install destination: {}".format(self.install_dir)
-
-    # def init_install_state(self):
-    #     self.files_to_install = []
-    #     self.files_installed = deque()
-    #     self.flags = {}
 
     ##=============================================
     ## FOMOD handling
@@ -86,7 +57,7 @@ class InstallManager(Submanager):
     def has_fomod(self):
         """
         :return: True if this installer has found and prepared a
-         Fomod configuration within the mod
+            Fomod configuration within the mod
         """
         return self.fomod is not None
 
@@ -132,18 +103,20 @@ class InstallManager(Submanager):
         if self.archive \
                 and self.fomod.all_images \
                 and extract_dir is not None:
-            # await self._extract_fomod_images(extract_dir)
 
             # this is the only place we do this, so no need to have
             # another coroutine for it...
+            #XX await self._extract_fomod_images(extract_dir)
+
+            # todo: maybe check to see if the images were inside the fomod directory, in which case they're already extracted.  Or, maybe only extract the config file by default instead of the entire fomod dir...
 
             await self.extract(extract_dir,
                                entries=self.fomod.all_images)
 
             join = os.path.join
             relpath = os.path.relpath
-            # get lowercase, relative versions of all files extracted so far and
-            # store them for later reference
+            # get lowercase, relative versions of all files extracted
+            # so far and store them for later reference
             norm_fomodfiles = {}
             for root, dirs, files in os.walk(extract_dir):
                 for f in files:
@@ -151,39 +124,12 @@ class InstallManager(Submanager):
                         relpath(join(root, f), extract_dir).lower()
                     ] = join(root, f)
 
-            # ok, so this contains more than just the img paths...but it's the most
-            # reliable way to make sure all the images are represented correctly.
+            # ok, so this contains more than just the img paths...but
+            # it's the most reliable way to make sure all the images
+            # are represented correctly.
             self.normalized_imgpaths = norm_fomodfiles
 
         # pprint(self.files_to_install)
-
-    # async def _extract_fomod_images(self, extract_dir, *,
-    #                                 join=os.path.join,
-    #                                 relpath=os.path.relpath):
-    #     """
-    #     if there is a (legitimate) common base-path to the images
-    #     (they are often kept in a single directory), then extract
-    #     that entire folder. Otherwise, extract each image path
-    #     individually.
-    #
-    #     :param extract_dir:
-    #     :return:
-    #     """
-    #     # todo: maybe check to see if the images were inside the fomod directory, in which case they're already extracted.  Or, maybe only extract the config file by default instead of the entire fomod dir...
-    #     await self.extract(extract_dir, entries=self.fomod.all_images)
-    #
-    #     # get lowercase, relative versions of all files extracted so far and
-    #     # store them for later reference
-    #     norm_fomodfiles = {}
-    #     for root, dirs, files in os.walk(extract_dir):
-    #         for f in files:
-    #             norm_fomodfiles[
-    #                 relpath(join(root, f), extract_dir).lower()
-    #             ] = join(root, f)
-    #
-    #     # ok, so this contains more than just the img paths...but it's the most
-    #     # reliable way to make sure all the images are represented correctly.
-    #     self.normalized_imgpaths = norm_fomodfiles
 
     def get_fomod_image(self, image_path):
         """
@@ -242,7 +188,6 @@ class InstallManager(Submanager):
 
         :param dirs: include directories in the output
         :param files: include files in the output
-        :return:
         """
         if self.archive_files is None:
             self.archive_dirs, self.archive_files = \
@@ -253,6 +198,8 @@ class InstallManager(Submanager):
         if files and not dirs:
             return self.archive_files
 
+        # otherwise return concat of both (even if `dirs` and `files`
+        # are both false...because that's dumb)
         return self.archive_dirs + self.archive_files
 
     async def get_file_count(self, *, include_dirs=True):
@@ -260,7 +207,6 @@ class InstallManager(Submanager):
         returns the total number of files (and possibly directories)
         within the mod archive
         :param include_dirs:
-        :return:
         """
 
         self.LOGGER << "counting files"
@@ -326,7 +272,9 @@ class InstallManager(Submanager):
             mod; if not provided, the files will be installed to the
             main Mod-install directory in a folder with the same name
             as the archive.
-        :param callback: called with args (name_of_file, total_extracted_so_far) during extraction process to indicate progress
+        :param callback: called with args
+            (name_of_file, total_extracted_so_far) during extraction
+            process to indicate progress
         """
 
 
@@ -337,7 +285,6 @@ class InstallManager(Submanager):
         # get list of files from fomod
         to_install = self.fomod.files_to_install
 
-        # flist = self.files_to_install
         progress = self.files_installed
 
         # sort files by priority, then by name
@@ -357,6 +304,8 @@ class InstallManager(Submanager):
         asyncio.get_event_loop().call_soon_threadsafe(
             _callback, "Starting extraction...", 0)
 
+        # FIXME: we need to unpack to a different directory thatn the destination directory (and probably not the temp dir we've been using, either, since that's likely on a RAM disk and we may have many MBs or even GBs of data to unpack). Right now, the folders from the archive are extracted as-is (e.g. we get folder '11-Your-Option' in the mod install dir) when what we really want is the files inside those folders to be placed in the root of the installation dir (or wherever the 'destination' attribute in the fomod config specifies).
+
         await self.extract(destination=dest_dir,
                            entries=[f.source for f in to_install],
                            # srcdestpairs=[(f.source, f.destination)
@@ -367,26 +316,28 @@ class InstallManager(Submanager):
         # as specified by fomod config
         for file_item in to_install:
 
+            # FIXME: this loop right here is supposed to address the problem discussed in the above FIXME, but it doesn't seem to work...
+
             installed = Path(dest_dir, file_item.source)
             destination = Path(dest_dir, file_item.destination.lower())
 
             if file_item.type == 'file':
                 # files are moved "inside" the destination
                 destination.mkdir(parents=True, exist_ok=True)
-                # dest = Path(dest_dir, file_item.destination, installed.name)
                 installed.rename(destination / installed.name)
 
             elif not installed.samefile(destination):
-                # folder are moved "to" the destination (their contents are merged with it)
+                # folder are moved "to" the destination (their contents
+                # are merged with it)
                 dir_move_merge(installed, destination, overwite=True, name_mod=str.lower)
 
-    async def rewind_install(self, callback=print):
+    async def rewind_fomod_install(self, callback=print):
         """
         Called when an install is cancelled during file copy/unpacking.
         Any files that have already been moved to the install directory
         will be removed.
 
-        :param (callback:
+        :param callback: called with (str, int) args
         :return:
         """
         uninstalls=self.files_installed
@@ -399,59 +350,3 @@ class InstallManager(Submanager):
             remaining -= 1
             asyncio.get_event_loop().call_soon_threadsafe(
                 callback, f.source, remaining)
-
-
-    # def analyze_structure_tree(self, mod_tree, *, topdirs = SkyrimGameInfo.TopLevelDirs_Bain, topsuffixes = SkyrimGameInfo.TopLevelSuffixes):
-    #     """
-    #     check the mod-structure for an already-created tree
-    #
-    #     :param mod_tree:
-    #
-    #     :param topsuffixes:
-    #     :param topdirs:
-    #
-    #     :return: a tuple where the first item is the number of recognized
-    #     top-level items found, and the second is a dict with the keys
-    #     "files" and "folders", containing those recognized items, as
-    #     well as "docs" and "fomod_dir", if anything of that kind was found.
-    #     """
-    #     self.logger.debug("Analyzing structure of tree")
-    #     mod_data = {
-    #         "folders": [],
-    #         "files": [],
-    #         "docs": [],
-    #         # some mods have a fomod dir that just contains information
-    #         # about the mod, with no config script
-    #         "fomod_dir": None
-    #     }
-    #     doc_match = re.compile(r'(read.?me|doc(s|umentation)|info)', re.IGNORECASE)
-    #     for topdir in mod_tree.keys():
-    #         # grab anything that looks like mod data from the
-    #         # the top level of the tree
-    #         if topdir.lower() in topdirs:
-    #             mod_data["folders"].append(topdir)
-    #
-    #         elif doc_match.search(topdir):
-    #             mod_data["docs"].append(topdir)
-    #         elif topdir.lower()=="fomod":
-    #             mod_data["fomod_dir"] = topdir
-    #
-    #     for topfile in mod_tree.leaves:
-    #         if os.path.splitext(topfile)[-1].lstrip('.').lower() in  topsuffixes:
-    #             mod_data["files"].append(topfile)
-    #         elif doc_match.search(topfile):
-    #             mod_data["docs"].append(topfile)
-    #
-    #     # one last check: if there is only one item on the top level
-    #     # of the mod and that item is a directory, then check inside that
-    #     # directory for the necessary files.
-    #     if not mod_data["folders"] and not mod_data["files"]:
-    #         if len(mod_tree) == 1 and "_files" not in mod_tree.keys():
-    #             for _, subtree in mod_tree.items():
-    #                 # this recursive call could obviously dig deeper than
-    #                 # one more level in the tree, but there'd have to be
-    #                 # several 1-folder nested directories of non-top-level
-    #                 # dirs for that to happen, which seems rather unlikely.
-    #                 return self.analyze_structure_tree(subtree)
-    #
-    #     return len(mod_data["folders"])+len(mod_data["files"]), mod_data

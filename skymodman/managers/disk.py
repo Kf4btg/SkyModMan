@@ -76,8 +76,7 @@ class IOManager(Submanager):
             # read from json file and convert mappings
             # to ModEntry objects
             try:
-                modentry_list = json.load(f,
-                                          object_hook=_to_mod_entry)
+                modentry_list = json.load(f, object_hook=_to_mod_entry)
 
             except json.decoder.JSONDecodeError:
                 self.LOGGER.error(
@@ -92,6 +91,7 @@ class IOManager(Submanager):
         if not self.load_unmanaged_mods(container):
             # TODO: figure out what to do in this case; does this need to be in a separate method that is called individually by the Manager?
             self.LOGGER.warning("Failed to load unmanaged data")
+            # for now, at least, still return success if unmanaged fails
 
         return success
 
@@ -145,22 +145,26 @@ class IOManager(Submanager):
 
         return success
 
-    def load_raw_mod_info(self, container, include_skyrim=True):
-                                # save_modinfo=False):
+    def load_raw_mod_info(self, container, include_unmanaged=True):
         """
-        scan the actual mods-directory and populate the database from
-        there instead of a cached json file.
+        scan the actual mods-directory and populate the collection
+        (`container`) from there instead of a cached json file.
 
         Will need to do this on first run and periodically to make sure
         cache is in sync.
 
-        :param include_skyrim:
-        :param container:
+        :param include_unmanaged: load unmanaged mods from the Skyrim
+            "Data" directory
+        :param container: Receives the ModEntry objects. Likely a
+            ModCollection instance
+
+        :return: True if everything went well, False is some sort of
+            error was encountered, such as the Mods directory missing
+            or being empty.
         """
-        # :param save_modinfo:
         # NTS: Perhaps this should be run on every startup? At least to make sure it matches the stored data.
 
-        if include_skyrim:
+        if include_unmanaged:
             self.load_unmanaged_mods()
 
         # list of installed mod folders
@@ -170,13 +174,11 @@ class IOManager(Submanager):
             self.LOGGER << "Mods directory empty"
             return False
 
-        mods_dir = self.mainmanager.Folders['mods']
-
-        if not mods_dir:
+        if not self.mainmanager.Folders['mods']:
             self.LOGGER.error("Mod directory unset or invalid")
             return False
 
-        mods_dir = mods_dir.path
+        mods_dir = self.mainmanager.Folders['mods'].path
 
         # use config parser to read modinfo 'meta.ini' files, if present
         import configparser as _config
@@ -218,9 +220,6 @@ class IOManager(Submanager):
 
         return True
 
-        # finally, populate the table with the discovered mods
-        # self.populate_mods_table(self._collection)
-
     ##=============================================
     ## Loading file lists
     ##=============================================
@@ -232,13 +231,31 @@ class IOManager(Submanager):
         generator to get all files on disk.
         """
 
+        ## notes from old dbmanager version:
+        # """
+        # Here's an experiment to load ALL files from disk when the
+        # program starts up...let's see how long it takes
+        #
+        # Update: about 12 seconds to load info for 223 mods from an
+        # ntfs-3g partition on a 7200rpm WD-Black...
+        # not the horriblest, but still likely needs to be shunted to
+        # another thread.  Especially since that was pretty much just
+        # reading file names; no operations such as checking for conflicts
+        # were done. Also, dumping the db to disk (in txt form) made a
+        # 2.7 MB file.
+        #
+        # Update to update: 2nd time around, didn't even take 2 seconds. I
+        # did make some tweaks to the code, but still...I'm guessing the
+        # files were still in the system RAM?
+        # """
+
         mods_dir = self.mainmanager.Folders['mods'].path
 
         # use the list of on-disk mods from manager (rather than
         # the 'theoretical' list of mods in the mod collection)
         installed = self.mainmanager.managed_mod_folders
 
-
+        # go through each folder individually
         for mdir in installed:
 
             # abs-path to each directory
@@ -257,18 +274,23 @@ class IOManager(Submanager):
             yield (mdir, mfiles)
 
     def load_unmanaged_files(self):
-        """Yield the files for the unamanged 'Vanilla' mods and any other
+        """
+        Yield the files for the unamanged 'Vanilla' mods and any other
         files found in the Skyrim Data directory
 
 
         Yielded tuples have 3 fields:
             0) Mod name
             1) list of files found
-            2) list of files that were expected but not found (missing files)
+            2) list of files that were expected but not found
+               (missing files)
 
 
         The second and third fields may be empty lists depending on what
         was found on disk.
+
+        Note:
+            'Skyrim' should always be the first entry
         """
 
         if not self._vanilla_mod_info:
@@ -286,6 +308,10 @@ class IOManager(Submanager):
 
     def load_hidden_files(self, json_source):
         """
+        A generator which reads the list of hidden files from the saved
+        file in the profile directory and yields a (str, list[str])
+        tuple of (mod, hidden_file_paths) for each mod/files combination
+        it discovers.
 
         :param json_source:
         """
@@ -298,14 +324,13 @@ class IOManager(Submanager):
                 # due to the way we saved the hidden files, this
                 # loads a nested dict structure. The top-level keys
                 # are the names of mods (directories); the values for
-                # these are nested (tree-like) dicts where each value
-                # is either a dict
-                # or a list; if the value is a dict, then the key for
-                # that value is a directory name and the contents of
-                # the value-dict are the contents of the directory. If value
-                # is a list, then the items of that list are the regular
-                # files (i.e. non-directories) within the current
-                # directory
+                # these are nested (tree-like) dicts where each
+                # value is either another dict or a list; if it's a
+                # dict, then the key for that item is a directory
+                # name and the contents of the value are the
+                # contents of the directory. If value is a list,
+                # then the items of that list are the regular files
+                # (i.e. non-directories) within the parent directory
                 hidden_files = json.load(f)
             except json.decoder.JSONDecodeError:
                 self.LOGGER.warning("No hidden files listed in {}, "
@@ -344,13 +369,15 @@ class IOManager(Submanager):
                         # yield name of mod, hidden file list
                         yield mod, hfilelist
 
-
     ##=============================================
     ## Writing Data
     ##=============================================
 
     def save_mod_info(self, json_target, mod_container):
         """
+        Write the data from the sequence of ``ModEntry`` objects
+        `mod_container` to a json file on disk (`json_target`). The file
+        will be overwritten if it exists or created if it does not.
 
         :param str|Path json_target:
         :param mod_container: an in-order sequence of ModEntry objects
@@ -361,7 +388,8 @@ class IOManager(Submanager):
 
         # create list of mods as dicts (actually Ordered dicts)
         ## note -- ignore 'Skyrim' fakemod (always first in list)
-        modinfo=[me._asdict() for me in mod_container if me.directory != 'Skyrim']
+        modinfo=[me._asdict()
+                 for me in mod_container if me.directory != 'Skyrim']
 
         with json_target.open('w') as f:
             # NTS: maybe remove the indent when shipping (for space)

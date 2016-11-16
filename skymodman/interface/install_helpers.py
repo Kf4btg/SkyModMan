@@ -39,6 +39,7 @@ class InstallerUI:
             await self._show_manual_install_dialog(modfs)
 
         else:
+            # FIXME: make sure this temp dir is cleaned up even if we crash and burn during the install
             with TemporaryDirectory() as tmpdir:
                 self.LOGGER << "Created temporary directory at %s" % tmpdir
 
