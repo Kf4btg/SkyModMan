@@ -111,8 +111,8 @@ class ModCollection(abc.MutableSequence):
                 # start, stop, step = self.__unslice(index)
 
                 # build and return a list
-                return [self._map[k] for i in range(*self.__unslice(index))
-                        for k in self._keyfromindex(i)]
+                return [self._map[self._keyfromindex(i)]
+                        for i in range(*self.__unslice(index))]
             else:
                 raise TypeError("Collection indices must be integers, slices, or a valid str key, not {}".format(type(index))) from None
         # else:
@@ -298,9 +298,6 @@ class ModCollection(abc.MutableSequence):
 
     def clear(self):
         # override for speed; no need to pop everything off 1by1;
-        # having weakrefs to all nodes will allow gc to collect them
-        # after they've been cleared from our mapping, so there
-        # shouldn't be any problems w/ memory leaks here.
         self._map.clear()
         self._index.clear()
         self._order.clear()
