@@ -162,7 +162,8 @@ class IOManager(Submanager):
             error was encountered, such as the Mods directory missing
             or being empty.
         """
-        # NTS: Perhaps this should be run on every startup? At least to make sure it matches the stored data.
+        # NTS: Perhaps this should be run on every startup? At least
+        # to make sure it matches the stored data.
 
         if include_unmanaged:
             self.load_unmanaged_mods()
@@ -178,47 +179,56 @@ class IOManager(Submanager):
             self.LOGGER.error("Mod directory unset or invalid")
             return False
 
-        mods_dir = self.mainmanager.Folders['mods'].path
-
-        # use config parser to read modinfo 'meta.ini' files, if present
-        import configparser as _config
-        configP = _config.ConfigParser()
-
-        # for managed mods, mod_key is the directory name
-        for mod_key in installed_mods:
-            mod_dir = mods_dir / mod_key
-
-            # support loading information read from meta.ini
-            # (ModOrganizer) file
-            # TODO: check case-insensitively
-            meta_ini_path = mod_dir / "meta.ini"
-
-            if meta_ini_path.exists():
-                configP.read(str(meta_ini_path))
-                try:
-                    modid = configP['General']['modid']
-                    version = configP['General']['version']
-                except KeyError:
-                    # if the meta.ini file was malformed or something,
-                    # ignore it
-                    add_me = _make_mod_entry(directory=mod_key,
-                                                managed=1)
-                else:
-                    add_me = _make_mod_entry(directory=mod_key,
-                                                managed=1,
-                                                modid=modid,
-                                                version=version)
-            else:
-                # no meta file
-                add_me = _make_mod_entry(directory=mod_key,
-                                                managed=1)
-
-            container.append(add_me)
-
-        # get rid of import
-        del _config
+        # create entries from directories, add them as they are created
+        for me in self.create_mods_from_directories(installed_mods):
+            container.append(me)
 
         return True
+
+    def create_mods_from_directories(self, directories):
+        """Given the names of some directories within the Mod-install
+        Appfolder, create ModEntry objects representing each directory.
+        The entries are yielded as they are created"""
+
+        if directories:
+
+            mods_dir = self.mainmanager.Folders['mods'].path
+
+            # use config parser to read modinfo 'meta.ini' files,
+            # if present
+            import configparser as _config
+            configP = _config.ConfigParser()
+
+            for dir_name in directories:
+                # get real path to dir
+                mod_dir = mods_dir / dir_name
+
+                # support loading information read from meta.ini
+                # (ModOrganizer) file
+                # TODO: check case-insensitively
+                meta_ini_path = mod_dir / "meta.ini"
+
+                if meta_ini_path.exists():
+                    configP.read(str(meta_ini_path))
+                    try:
+                        modid = configP['General']['modid']
+                        version = configP['General']['version']
+                    except KeyError:
+                        # if the meta.ini file was malformed or
+                        # something, ignore it
+                        yield _make_mod_entry(directory=dir_name,
+                                                 managed=1)
+                    else:
+                        yield _make_mod_entry(directory=dir_name,
+                                                 managed=1,
+                                                 modid=modid,
+                                                 version=version)
+                else:
+                    # no meta file
+                    yield _make_mod_entry(directory=dir_name,
+                                             managed=1)
+            # get rid of import
+            del _config
 
     ##=============================================
     ## Loading file lists

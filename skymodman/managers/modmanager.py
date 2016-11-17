@@ -4,7 +4,7 @@ from functools import lru_cache
 from skymodman.utils import tree as _tree
 
 # from skymodman import exceptions
-from skymodman.types import ModEntry, ModCollection, Alert, AppFolder
+from skymodman.types import Alert, AppFolder
 from skymodman.managers import (config as _config,
                                 database as _database,
                                 profiles as _profiles,
@@ -12,7 +12,7 @@ from skymodman.managers import (config as _config,
                                 collection as _collection
                                 # , paths as _paths
                                 )
-from skymodman.constants import APPNAME, MAIN_CONFIG #overrideable_dirs,
+from skymodman.constants import APPNAME, MAIN_CONFIG, ModError #overrideable_dirs,
 from skymodman.constants.keystrings import (Dirs as ks_dir,
                                             Section as ks_sec,
                                             INI as ks_ini)
@@ -638,15 +638,16 @@ class ModManager:
                                           self._collman.collection):
             # print(self._collman.collection.verbose_str())
 
+            # if successful, validate modinfo (i.e. synchronize the list
+            # of mods from the modinfo file with mod folders actually
+            # present in Mods directory). Do this before populating
+            # the db because mods may be added to the collection
+            # in this step.
+            self.validate_mod_installs()
+
             # populate the db
             self._populate_mods_table()
 
-
-        # if self._dbman.load_mod_info(self.profile.modinfo):
-            # if successful, validate modinfo (i.e. synchronize the list
-            # of mods from the modinfo file with mod folders actually
-            # present in Mods directory)
-            self.validate_mod_installs()
             return True
         else:
             # if it fails, (re-)read mod data from disk and create
@@ -667,11 +668,12 @@ class ModManager:
         self.LOGGER << "<==Method called"
 
         if self._ioman.load_raw_mod_info(self._collman.collection):
+            # save info (to generate file since it likely doesn't exist)
+            self.save_mod_info()
+
             # populate db from collection
             self._populate_mods_table()
 
-            # save info (to generate file since it likely doesn't exist)
-            self.save_mod_info()
             return True
 
         else:
@@ -724,7 +726,21 @@ class ModManager:
         :return: True if no errors encountered, False otherwise
         """
         self.LOGGER << "Validating installed mods"
-        return self._collman.validate_mods(self.managed_mod_folders)
+
+        errs_cleared, errs_found, err_types = \
+            self._collman.validate_mods(self.managed_mod_folders)
+
+        self.LOGGER << "Cleared {} mod error(s)".format(errs_cleared)
+        self.LOGGER << "Found {} new mod error(s)".format(errs_found)
+
+        # if new errors are present and some of them are MOD_NOT_LISTED
+        # errors, save the modinfo file since new mods will have been
+        # added to the collection
+        if errs_found and err_types & ModError.MOD_NOT_LISTED:
+            self.save_mod_info()
+
+        ## interface may use these at some point...
+        # return errs_cleared, errs_found, err_types
 
     def enabled_mods(self):
         """
