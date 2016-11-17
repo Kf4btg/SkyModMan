@@ -166,7 +166,7 @@ class IOManager(Submanager):
         # to make sure it matches the stored data.
 
         if include_unmanaged:
-            self.load_unmanaged_mods()
+            self.load_unmanaged_mods(container)
 
         # list of installed mod folders
         installed_mods = self.mainmanager.managed_mod_folders
