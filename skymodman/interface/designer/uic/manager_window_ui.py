@@ -303,7 +303,6 @@ class Ui_MainWindow(object):
         self.menu_profiles.addAction(self.action_delete_profile)
         self.menu_profiles.addAction(self.action_rename_profile)
         self.menu_file.addAction(self.menu_profiles.menuAction())
-        self.menu_file.addAction(self.action_choose_mod_folder)
         self.menu_file.addAction(self.action_preferences)
         self.menu_file.addSeparator()
         self.menu_file.addAction(self.action_quit)
@@ -340,7 +339,7 @@ class Ui_MainWindow(object):
         self.profile_label.setBuddy(self.profile_selector)
 
         self.retranslateUi(MainWindow)
-        self.manager_tabs.setCurrentIndex(1)
+        self.manager_tabs.setCurrentIndex(0)
         self.action_show_search.triggered.connect(self.modtable_search_button.click)
         self.modtable_search_box.escapeLineEdit.connect(self.modtable_search_button.click)
         self.filetree_modfilter.escapeLineEdit.connect(self.filetree_modfilter.clear)

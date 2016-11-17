@@ -18,7 +18,7 @@
     <item row="0" column="0" colspan="5">
      <widget class="QTabWidget" name="manager_tabs">
       <property name="currentIndex">
-       <number>1</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="installed_mods_tab">
        <property name="sizePolicy">
@@ -391,7 +391,6 @@
      <addaction name="action_rename_profile"/>
     </widget>
     <addaction name="menu_profiles"/>
-    <addaction name="action_choose_mod_folder"/>
     <addaction name="action_preferences"/>
     <addaction name="separator"/>
     <addaction name="action_quit"/>

@@ -425,7 +425,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             (self.action_manual_install     , partial(self.install_mod_archive, True)),
             (self.action_reinstall_mod      , self.reinstall_mod),
             (self.action_uninstall_mod      , self.uninstall_mod),
-            (self.action_choose_mod_folder  , self.choose_mod_folder),
+            # (self.action_choose_mod_folder  , self.choose_mod_folder),
             (self.action_toggle_mod         , self.mod_table.toggle_selection_checkstate),
             (self.action_save_changes       , self.on_save_command),
             (self.action_revert_changes     , self.on_revert_command),
@@ -1015,37 +1015,37 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # self.Manager.check_dirs()
         # self.update_alerts()
 
-    @pyqtSlot()
-    def choose_mod_folder(self):
-        """
-        Show dialog allowing user to choose a mod folder.
-
-        This updates the default mod folder. If a profile override is
-        active, it will be disabled. Use the preferences dialog
-        to set up and enable a profile-specific override.
-
-        """
-
-        # noinspection PyTypeChecker, PyArgumentList
-        moddir = QtWidgets.QFileDialog.getExistingDirectory(
-            self,
-            "Choose Directory Containing Installed Mods",
-            self.Manager.Folders['mods'].spath
-        )
-
-        # update config with new path
-        if check_path(moddir):
-            mfolder = self.Manager.Folders[KeyStr_Dirs.MODS]
-
-            mfolder.set_path(moddir)
-
-            if mfolder.is_overriden:
-                mfolder.remove_override()
-                self.Manager.profile.disable_override(KeyStr_Dirs.MODS)
-
-            # reverify and reload the mods.
-            if not self.Manager.validate_mod_installs():
-                self.mod_table.model().reload_errors_only()
+    # @pyqtSlot()
+    # def choose_mod_folder(self):
+    #     """
+    #     Show dialog allowing user to choose a mod folder.
+    #
+    #     This updates the default mod folder. If a profile override is
+    #     active, it will be disabled. Use the preferences dialog
+    #     to set up and enable a profile-specific override.
+    #
+    #     """
+    #
+    #     # noinspection PyTypeChecker, PyArgumentList
+    #     moddir = QtWidgets.QFileDialog.getExistingDirectory(
+    #         self,
+    #         "Choose Directory Containing Installed Mods",
+    #         self.Manager.Folders['mods'].spath
+    #     )
+    #
+    #     # update config with new path
+    #     if check_path(moddir):
+    #         mfolder = self.Manager.Folders[KeyStr_Dirs.MODS]
+    #
+    #         mfolder.set_path(moddir)
+    #
+    #         if mfolder.is_overriden:
+    #             mfolder.remove_override()
+    #             self.Manager.profile.disable_override(KeyStr_Dirs.MODS)
+    #
+    #         # reverify and reload the mods.
+    #         if not self.Manager.validate_mod_installs():
+    #             self.mod_table.model().reload_errors_only()
 
     # noinspection PyTypeChecker,PyArgumentList
     def install_mod_archive(self, manual=False):
