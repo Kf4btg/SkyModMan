@@ -708,6 +708,13 @@ class ModManager:
         # this actually reads the disk
         self._managed_mods = list(iter(modfolder))
 
+    @property
+    def mod_errors(self):
+        return self._collman.errors
+    @property
+    def mod_error_types(self):
+        return self._collman.error_types
+
     def get_mod_errors(self):
         """
 

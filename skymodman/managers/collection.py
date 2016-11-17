@@ -1,4 +1,4 @@
-import itertools
+from itertools import filterfalse
 
 from skymodman.constants import ModError
 from skymodman.managers.base import Submanager
@@ -26,7 +26,7 @@ class ModCollectionManager(Submanager):
         ModEntry.collection = self._collection
 
         self._errors = {} # store mod errors here
-
+        self._errtypes = ModError.NONE
 
     @property
     def collection(self):
@@ -36,18 +36,79 @@ class ModCollectionManager(Submanager):
     def errors(self):
         return self._errors
 
+    @property
+    def error_types(self):
+        return self._errtypes
+
     def reset(self):
         self._collection.clear()
 
-    def clear_errors(self):
-        """Reset the 'error' field on each mod to ModError.None"""
+    ##=============================================
+    ## Collection manipulation
+    ##=============================================
 
-        # number of mods currently having errors
-        num_errors = len(self._errors)
-        self._errors.clear()
+    def delete_items(self, start, count):
+        """
+        Delete a contiguous section of entries from the collection based
+        on the current order
 
-        # return True if some mods had errors (but now do not)
-        return num_errors
+        :param int start: Ordinal of first mod to deleted
+        :param int count: How many entries (including the one at `start`
+            should be deleted.
+        """
+
+        # hang on to the entries we're about to remove for a sec
+        removed = self._collection[start:start+count]
+
+        # remove the entries
+        del self._collection[start:start+count]
+
+        # if the items were in the errors collection, remove them
+        # from there, too
+        if self._errors:
+            for m in removed:
+                try:
+                    del self._errors[m.key]
+                except KeyError:
+                    # just means it had no errors
+                    pass
+
+            # and reevaluate our error types
+            self.update_error_types()
+
+    def insert_items(self, position, entries, errors=None):
+        """
+        Insert the ModEntries from the sequence `entries` into the
+        collection starting at index (order/ordinal) `position`
+
+        :param int position: index of insertion
+        :param collections.abc.Iterable[ModEntry] entries:
+        :param dict[str, int] errors: if the error types of the entries
+            being inserted are somehow known beforehand, pass a dict
+            with the key for each errored-mod mapped to the ModError
+            type.
+        :return:
+        """
+
+        if position == len(self._collection):
+            # if appending, just extend the collection
+            self._collection.extend(entries)
+        else:
+            i=position
+            for m in entries:
+                self._collection.insert(i, m)
+                i+=1
+
+        # if known error types were passed, assign them and
+        # update the _errtypes attribute
+        if errors:
+            err_types = self._errtypes # current error types
+
+            for mkey, etype in errors.items():
+                self._errors[mkey] = etype
+                err_types |= etype
+
+            self._errtypes = err_types
 
     ##=============================================
     ## Mod-trait queries
@@ -67,7 +128,7 @@ class ModCollectionManager(Submanager):
         :return: an iterator over all currently disabled mods in the
             collection
         """
-        return itertools.filterfalse(lambda m: m.managed,
+        return filterfalse(lambda m: m.managed,
                                      self._collection)
 
     def managed_mods(self):
@@ -80,22 +141,53 @@ class ModCollectionManager(Submanager):
         """
         Iterate over all mods marked as "unmanaged"
         """
-        return itertools.filterfalse(lambda m: m.managed,
+        return filterfalse(lambda m: m.managed,
                                      self._collection)
 
-    def mods_with_error(self, error_type):
+    def mods_with_error(self, error_type=None):
         """
         Yield all mods that currently have the given `error_type`
 
-        :param ModError error_type:
+        :param ModError error_type: Filter mods by this ModError type.
+            If `error_type` is ``None``, yield mods with any error
+            type (other than ``ModError.NONE``).
         """
-        yield from (m for m in self._collection
+
+        if error_type is None:
+            yield from (m for m in self._collection
+                    if m.key in self._errors)
+        elif error_type == ModError.NONE:
+            yield from (m for m in self._collection
+                        if m.key not in self._errors)
+        else:
+            yield from (m for m in self._collection
                     if m.key in self._errors
                     and self._errors[m.key]==error_type)
 
     ##=============================================
     ## validation
     ##=============================================
+
+    def clear_errors(self):
+        """Reset the 'error' field on each mod to ModError.None"""
+
+        # number of mods currently having errors
+        num_errors = len(self._errors)
+        self._errors.clear()
+
+        # return True if some mods had errors (but now do not)
+        return num_errors
+
+    def update_error_types(self):
+        """To be called when entries have been removed from the
+        collection; recalculates current error types without doing
+        a full re-validation"""
+
+        types = ModError.NONE
+        for t in set(self._errors.values()):
+            types |= t
+
+        self._errtypes = types
 
     def validate_mods(self, managed_mods_list):
         """
@@ -196,6 +288,7 @@ class ModCollectionManager(Submanager):
             # update errors collection;
             self._errors.update(dict.fromkeys(errmap[eDNF], eDNF))
 
+        self._errtypes = err_types
 
         return errors_cleared, len(self._errors), err_types
 

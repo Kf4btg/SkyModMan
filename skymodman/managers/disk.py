@@ -36,7 +36,6 @@ class IOManager(Submanager):
 
         self.LOGGER << "Initializing DiskManager"
 
-
         # track which dlc are present
         # TODO: actually use this
         self.dlc_present = {
@@ -295,7 +294,6 @@ class IOManager(Submanager):
             2) list of files that were expected but not found
                (missing files)
 
-
         The second and third fields may be empty lists depending on what
         was found on disk.
 
@@ -418,11 +416,6 @@ class IOManager(Submanager):
                 json.dump(pyobject, f, indent=indent)
             else:
                 json.dump(pyobject, f)
-
-
-
-
-
 
 
 

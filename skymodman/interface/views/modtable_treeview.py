@@ -487,6 +487,29 @@ class ModTable_TreeView(QtWidgets.QTreeView):
     ## Internal slots
     ##=============================================
 
+    @pyqtSlot(int)
+    def _analyze_errors(self, err_types):
+        """
+        Determines whether to hide the Errors column, and emits the
+        errorschanged signal if the type of errors present in the table
+        changes.
+
+        :param err_types:
+        """
+        self.LOGGER << "_analyze_errors({})".format(err_types)
+
+        old_err_types = self._err_types
+
+        if err_types:
+            self.setColumnHidden(Column.ERRORS, False)
+            self.resizeColumnToContents(Column.ERRORS)
+        else:
+            self.setColumnHidden(Column.ERRORS, True)
+
+        self._err_types = err_types
+
+        if old_err_types != err_types:
+            self.errorsChanged.emit(err_types)
 
     # def on_rows_moved(self, parent, start, end, destination, row):
     # noinspection PyUnusedLocal
@@ -503,29 +526,6 @@ class ModTable_TreeView(QtWidgets.QTreeView):
 
         if self._selection_model.hasSelection():
             self._selection_moved()
-
-    @pyqtSlot(int)
-    def _analyze_errors(self, err_types):
-        """
-        Determines whether to hide the Errors column, and emits the
-        errorschanged signal if the type of errors present in the table
-        changes.
-
-        :param err_types:
-        """
-
-        old_err_types = self._err_types
-
-        if err_types:
-            self.setColumnHidden(Column.ERRORS, False)
-            self.resizeColumnToContents(Column.ERRORS)
-        else:
-            self.setColumnHidden(Column.ERRORS, True)
-
-        self._err_types = err_types
-
-        if old_err_types != err_types:
-            self.errorsChanged.emit(err_types)
 
     def _selection_moved(self):
         """

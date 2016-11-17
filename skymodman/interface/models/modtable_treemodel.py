@@ -106,11 +106,13 @@ class ModTable_TreeModel(QAbstractItemModel):
         self._parent = parent
 
         self.Manager = manager
+        """:type: skymodman.managers.modmanager.ModManager"""
 
         # initialize as empty list so our rowCount() method doesn't crash
         self.mods = []
         """:type: skymodman.types.modcollection.ModCollection"""
         self.errors = {} # type: dict [str, int]
+        # self.errtypes = ModError.NONE
 
         # self.vheader_field = COL_ORDER
 
@@ -254,7 +256,7 @@ class ModTable_TreeModel(QAbstractItemModel):
                             if role == Qt_ToolTipRole
                         else None)
 
-            if mod.error & ModError.MOD_NOT_LISTED:
+            if err_type & ModError.MOD_NOT_LISTED:
                 # noinspection PyArgumentList,PyTypeChecker
                 return (QtGui.QIcon.fromTheme('dialog-warning')
                             if role == Qt_DecorationRole
@@ -606,40 +608,23 @@ class ModTable_TreeModel(QAbstractItemModel):
         self.endResetModel()
         self.tablehaschanges.emit(False)
 
-    def check_mod_errors(self, refresh = False):
+    def check_mod_errors(self):
         """
         Check which mods, if any, encountered errors during load and
         show or hide the Errors column appropriately.
-
-        If refresh is True, ask the manager to return a mapping of all
-        mods (by directory name) to the value of their error-type
-        (ModError.* -- hopefully NONE).
-
-        Hide or show the Errors column based on whether any of the mods
-        have a non-zero error type
         """
 
-        # reset
-        err_types = ModError.NONE
+        self.errors = self.Manager.mod_errors
 
-        # if we need to query manager to refresh errors, do it here
-        if refresh:
-            self.errors = self.Manager.get_mod_errors()
-
-        # TODO: use itertools.groupby (or something similar) to avoid this loop
-        for err_type in self.errors.values():
-            # we're just checking for any errors in any mod;
-            # err_types is a bit-combo indicating the types of errors
-            # we encountered
-            err_types |= err_type
-
-        # let rest of app know what we found; this should show/hide
+        # Hide or show the Errors column based on whether any of the mods
+        # have a non-zero error type
+        # let rest of app know what we have; this should show/hide
         # the Errors column as needed
-        self.errorsAnalyzed.emit(err_types)
+        self.errorsAnalyzed.emit(self.Manager.mod_error_types)
 
     def reload_errors_only(self):
         self.beginResetModel()
-        self.check_mod_errors(True)
+        self.check_mod_errors()
         self.endResetModel()
 
     ##===============================================
@@ -658,7 +643,7 @@ class ModTable_TreeModel(QAbstractItemModel):
 
     def missing_mods(self):
         """Yield all the mods in the model that are currently showing
-        the MOD_NOT_FOUND error type."""
+        the DIR_NOT_FOUND error type."""
 
         yield from (m for m in self.mods if self.mod_missing(m))
 
@@ -727,7 +712,7 @@ class ModTable_TreeModel(QAbstractItemModel):
     # super() during the dropMimeData method...
     def remove_rows(self, row, count, parent=QModelIndex()):
         """
-        Remove mod[s] (row[s]) from the model. Undoable action
+        Remove mod[s] (row[s]) from the model.
 
         :param int row:
         :param int count:
@@ -739,36 +724,33 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         self.beginRemoveRows(parent, row, end)
 
-        del self.mods[row:row+count]
+        self.Manager.Collector.delete_items(row, count)
 
         self.endRemoveRows()
 
         return True
 
-    def insert_entries(self, row, entries, parent=QModelIndex()):
+    def insert_entries(self, row, entries, errors=None,
+                       parent=QModelIndex()):
         """
         Add the given mod(s) to the mod collection at position `row`
 
         :param row:
         :param entries:
         :param parent:
-        :return:
+        :param errors: if the error types for all/some of the entries
+            are known beforehand (e.g., when undoing the removal of a
+            mod w/ an error), pass a {mod_key: ModError} dict to assign
+            those error types upon insertion.
         """
         # don't allow out-of-bounds insertions
-        row = max(row, len(self.mods))
+        row = min(row, len(self.mods))
 
         end = row + len(entries) - 1
 
         self.beginInsertRows(parent, row, end)
 
-        # if appending, just extend
-        if row == len(self.mods):
-            self.mods.extend(entries)
-        else:
-            pos=row
-            for m in entries:
-                self.mods.insert(pos, m)
-                pos+=1
+        self.Manager.Collector.insert_items(row, entries, errors)
 
         self.endInsertRows()
 

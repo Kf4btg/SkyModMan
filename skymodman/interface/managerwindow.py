@@ -437,19 +437,18 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             (self.action_find_previous      , partial(self.mod_table.on_table_search, -1)),
             (self.action_select_all         , self.on_select_all),
             (self.action_select_none        , self.on_select_none),
-
         ]
 
         # tuple(action, shortcut-sequence)
         qks = QtGui.QKeySequence
         shortcuts = [
-            (self.action_quit, qks.Quit),
-            (self.action_save_changes, qks.Save),
-            (self.action_show_search, qks.Find),
-            (self.action_find_next, qks.FindNext),
-            (self.action_find_previous, qks.FindPrevious),
-            (self.action_select_all, qks.SelectAll),
-            (self.action_select_none, qks.Deselect),
+            (self.action_quit          , qks.Quit),
+            (self.action_save_changes  , qks.Save),
+            (self.action_show_search   , qks.Find),
+            (self.action_find_next     , qks.FindNext),
+            (self.action_find_previous , qks.FindPrevious),
+            (self.action_select_all    , qks.SelectAll),
+            (self.action_select_none   , qks.Deselect),
         ]
 
         ################################################
@@ -463,8 +462,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         ################################################
 
-        # # self.action_choose_mod_folder.setIcon(icons.get(
-        # # 'folder', color_disabled=QPalette().color(QPalette.Midlight)))
+        # self.action_choose_mod_folder.setIcon(icons.get(
+        # 'folder', color_disabled=QPalette().color(QPalette.Midlight)))
 
         ## clear missing-from-disk mods
         # add to movement toolbar

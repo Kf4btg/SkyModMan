@@ -1,5 +1,8 @@
 from PyQt5.QtWidgets import QUndoCommand
 
+from skymodman.constants import ModError
+
+
 class ClearMissingModsCommand(QUndoCommand):
 
     # noinspection PyArgumentList
@@ -60,12 +63,14 @@ class ClearMissingModsCommand(QUndoCommand):
         self._model.blockSignals(True)
 
         for g in self.groups:
-            # g is a list of (int, ModEntry) tuples
+            # g is a list of (int, ModEntry) tuples;
+            #   g[0] => first (row, mod) tuple in this group;
+            #       g[0][0] => the row number of the first mod
             self._model.remove_rows(g[0][0], len(g))
 
         self._model.blockSignals(False)
         # have model re-evaluate the current errors
-        self._model.check_mod_errors(True)
+        self._model.check_mod_errors()
         self._model.endResetModel()
 
     def undo(self):
@@ -77,13 +82,21 @@ class ClearMissingModsCommand(QUndoCommand):
         self._model.beginResetModel()
         self._model.blockSignals(True)
 
+        DNF = ModError.DIR_NOT_FOUND
+
         # send each group of sequential entries to the model
         for g in self.groups:
-            self._model.insert_entries(g[0][0], [e for o,e in g])
+            entry_list = []
+            errors = {}
+            for o,e in g:
+                entry_list.append(e)
+                errors[e.key] = DNF
+
+            self._model.insert_entries(g[0][0], entry_list, errors)
 
         self._model.blockSignals(False)
         # have model re-evaluate the current errors
-        self._model.check_mod_errors(True)
+        self._model.check_mod_errors()
         self._model.endResetModel()
 
 
