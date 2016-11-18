@@ -1,6 +1,7 @@
 import asyncio
 from tempfile import TemporaryDirectory
 
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QProgressDialog
 import quamash
 
@@ -63,13 +64,14 @@ class InstallerUI:
                     ## check the root of the file hierarchy for usable data
                     if modfs.fsck_quick():
                         ## if it's there, install the mod automatically
+                        self.LOGGER << "Performing auto-install"
 
-                        # await self.extraction_progress_dialog()
-                        message("information", title="Game Data Found",
-                                text="Here's where I'd automatically "
-                                     "install the mod for you if I were "
-                                     "working correctly. But I won't, "
-                                     "because I'm not.")
+                        await self.extraction_progress_dialog(installer)
+                        # message("information", title="Game Data Found",
+                        #         text="Here's where I'd automatically "
+                        #              "install the mod for you if I were "
+                        #              "working correctly. But I won't, "
+                        #              "because I'm not.")
 
 
                         # await installer.extract("/tmp/testinstall",
@@ -101,14 +103,16 @@ class InstallerUI:
 
     async def run_fomod_installer(self, installer, tmpdir):
         """
-        Create and execute the Guided Fomod Installer, using the fomod config
-        info loaded by `installer`; ``installer.has_fomod()`` must return True for
-        this method to run.
+        Create and execute the Guided Fomod Installer, using the
+        fomod config info loaded by `installer`; ``installer.has_fomod``
+        must return True for this method to run.
 
-        :param installer: InstallManager instance that has already loaded a Fomod Config file.
-        :param tmpdir: temporary directory where the files necessary for running the installer
-        (and only those files) will be extracted. After the install, the folder and its contents
-        will be deleted automatically.
+        :param installer: InstallManager instance that has already
+            loaded a Fomod Config file.
+        :param tmpdir: temporary directory where the files necessary for
+            running the installer (and only those files) will be
+            extracted. After the install, the folder and its contents
+            will be deleted automatically.
         """
         from skymodman.interface.dialogs.fomod_installer_wizard import FomodInstaller
 
@@ -151,9 +155,37 @@ class InstallerUI:
         del ManualInstallDialog
 
 
-    async def extraction_progress_dialog(self, archive, entries, numfiles):
-        dlg = QProgressDialog("Extracting Files...", "Cancel", 0, numfiles)
+    async def extraction_progress_dialog(self, installer):
+        """
+
+        :param skymodman.managers.installer.InstallManager installer:
+        :return:
+        """
+
+        # TODO: show notification when extraction is finished; add new mod to mods table
+
+        dlg = QProgressDialog("Extracting Files...", "Cancel", 0,
+                              await installer.get_archive_file_count())
+        dlg.setWindowModality(Qt.WindowModal)
+
+        task = asyncio.get_event_loop().create_task(self._do_archive_install(installer, dlg))
+
+        dlg.canceled.connect(task.cancel)
 
 
+    async def _do_archive_install(self, installer, progress_dlg):
+        try:
+            await installer.install_archive(
+                lambda f, c: progress_dlg.setValue(c))
+        except asyncio.CancelledError:
+            progress_dlg.setLabelText("Cleaning up...")
+            # this hides & deletes the cancel button
+            progress_dlg.setCancelButtonText("")
+            progress_dlg.setMaximum(installer.num_files_installed_so_far)
+            progress_dlg.setValue(0)
+            await installer.rewind_install(
+                lambda f, c: progress_dlg.setValue(c))
 
+        # Or we could make sure that value == maximum at end...
+        progress_dlg.reset()
 

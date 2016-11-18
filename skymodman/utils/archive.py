@@ -74,9 +74,9 @@ class ArchiveHandler:
 
         try:
             dirs, files = ArchiveHandler._list_archive_cache[archive]
-            ArchiveHandler._cache_hits+=1
+            # ArchiveHandler._cache_hits+=1
         except KeyError:
-            ArchiveHandler._cache_misses+=1
+            # ArchiveHandler._cache_misses+=1
 
             retcode, dirs, files = await self._archive_contents(archive)
 
@@ -87,7 +87,7 @@ class ArchiveHandler:
             else:
                 ArchiveHandler._list_archive_cache[archive] = (dirs, files)
 
-        self.LOGGER << "Cache hits: {0._cache_hits}, misses: {0._cache_misses}".format(ArchiveHandler)
+        # self.LOGGER << "Cache hits: {0._cache_hits}, misses: {0._cache_misses}".format(ArchiveHandler)
         return dirs, files
 
 
@@ -220,7 +220,7 @@ class ArchiveHandler:
             # print("{!r}".format(line))
             if not line: break
 
-            # 7z logs filenames on lines starting w/ '- '
+            # 7z logs filepaths on lines starting w/ '- '
             if line.startswith(b'- '):
                 loop.call_soon_threadsafe(callback, line[2:].decode(), next(c))
 

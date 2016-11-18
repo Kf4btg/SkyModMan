@@ -11,7 +11,7 @@ from skymodman.types.archivefs import archivefs as arcfs
 from skymodman.log import withlogger
 from skymodman.utils.tree import Tree
 from skymodman.utils.archive import ArchiveHandler
-from skymodman.utils.fsutils import dir_move_merge
+from skymodman.utils import fsutils
 
 
 @withlogger
@@ -48,6 +48,13 @@ class InstallManager(Submanager):
 
         self.LOGGER << "Init installer for '{}'".format(self.archive)
         self.LOGGER << "Install destination: {}".format(self.install_dir)
+
+    @property
+    def num_files_installed_so_far(self):
+        """There are only rare circumstances in which this property
+        should be accessed. Namely, just immediately after the
+        cancellation of an in-progress installation."""
+        return len(self.files_installed)
 
     ##=============================================
     ## FOMOD handling
@@ -202,7 +209,7 @@ class InstallManager(Submanager):
         # are both false...because that's dumb)
         return self.archive_dirs + self.archive_files
 
-    async def get_file_count(self, *, include_dirs=True):
+    async def get_archive_file_count(self, *, include_dirs=True):
         """
         returns the total number of files (and possibly directories)
         within the mod archive
@@ -265,6 +272,89 @@ class InstallManager(Submanager):
     ## Actual installation
     ##=============================================
 
+    async def install_archive(self, callback=None):
+        """
+        Install the entire contents of the associated archive to its
+        default location in the Mods folder
+
+        :param callback: called with args
+            (name_of_file, total_extracted_so_far) during extraction
+            process to indicate progress
+        """
+
+        self.LOGGER << "installing archive"
+
+        progress = self.files_installed
+        progress.clear()
+
+        if callback is None:
+            def _callback(*args): pass
+        else:
+            _callback = callback
+
+        def track_progress(filepath, num_done):
+            progress.append(filepath)
+            _callback(filepath, num_done)
+
+        asyncio.get_event_loop().call_soon_threadsafe(
+            _callback, "Starting extraction...", 0)
+
+        await self.extract(destination=self.install_dir,
+                           callback=track_progress)
+
+    async def rewind_install(self, callback=print):
+        """
+        Called when an install is cancelled during file copy/unpacking.
+        Any files that have already been moved to the install directory
+        will be removed.
+
+        :param callback: called with (str, int) args
+        :return:
+        """
+        uninstalls=self.files_installed
+
+        i=0
+        asyncio.get_event_loop().call_soon_threadsafe(
+            callback, "Removing installed files...", i)
+
+        instdir = self.install_dir
+
+        while uninstalls:
+            # if we remove from the end, that should ensure that when we
+            # reach a directory, all of its contents have already been
+            # removed, and we can use rmdir() on it (assuming it had
+            # no other contents beforehand)
+            f=uninstalls.pop()
+            f_installed = instdir / f
+
+            if f_installed.is_dir():
+                try:
+                    f_installed.rmdir()
+                except OSError as e:
+                    # not empty; there may have been something there
+                    # before we installed files
+                    self.LOGGER.error("Could not remove directory")
+                    self.LOGGER.exception(e)
+            else:
+                f_installed.unlink()
+
+            i+=1
+            asyncio.get_event_loop().call_soon_threadsafe(
+                callback, f, i)
+
+        # finally, try to remove the mod install folder
+        try:
+            instdir.rmdir()
+        except OSError as e:
+            self.LOGGER.error("Could not remove mod directory")
+            self.LOGGER.exception(e)
+
+
+
+    #=================================
+    # Fomod Installation
+    #---------------------------------
+
     async def install_fomod_files(self, dest_dir=None, callback=None):
         """
 
@@ -314,6 +404,7 @@ class InstallManager(Submanager):
 
         # after unpack, files must be moved to correct destinations
         # as specified by fomod config
+        dmm = fsutils.dir_move_merge
         for file_item in to_install:
 
             # FIXME: this loop right here is supposed to address the problem discussed in the above FIXME, but it doesn't seem to work...
@@ -329,7 +420,8 @@ class InstallManager(Submanager):
             elif not installed.samefile(destination):
                 # folder are moved "to" the destination (their contents
                 # are merged with it)
-                dir_move_merge(installed, destination, overwite=True, name_mod=str.lower)
+                dmm(installed, destination,
+                    overwite=True, name_mod=str.lower)
 
     async def rewind_fomod_install(self, callback=print):
         """
@@ -343,8 +435,10 @@ class InstallManager(Submanager):
         uninstalls=self.files_installed
         remaining=len(uninstalls)
 
+        # FIXME: this doesn't actually do anything...
+
         while remaining>0:
-            # note: there was a reason for this...though I can't quite remember what it was...I think I recall it being a problem that Guido thought wasn't really a problem because you could do this? Although people were arguing that there's *nothing* intuitive about this and you'd only know to do it if you already knew to do it? Yeah...I should look that up again.
+            # fake a slow operation...
             await asyncio.sleep(0.02)
             f=uninstalls.pop()
             remaining -= 1
