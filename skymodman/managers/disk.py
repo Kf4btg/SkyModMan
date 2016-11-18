@@ -229,6 +229,13 @@ class IOManager(Submanager):
             # get rid of import
             del _config
 
+    def mod_from_directory(self, directory):
+        """Given the name of a directory in the Mod-install folder,
+        create and return a ModEntry representing that directory.
+        """
+
+        return next(self.create_mods_from_directories([directory]))
+
     ##=============================================
     ## Loading file lists
     ##=============================================
@@ -258,7 +265,7 @@ class IOManager(Submanager):
         # files were still in the system RAM?
         # """
 
-        mods_dir = self.mainmanager.Folders['mods'].path
+        mods_dir = str(self.mainmanager.Folders['mods'].path)
 
         # use the list of on-disk mods from manager (rather than
         # the 'theoretical' list of mods in the mod collection)
@@ -266,21 +273,56 @@ class IOManager(Submanager):
 
         # go through each folder individually
         for mdir in installed:
+            yield mdir, self.files_for_mod_dir(mods_dir, mdir)
 
-            # abs-path to each directory
-            mroot = str(mods_dir / mdir)
+            # # abs-path to each directory
+            # mroot = str(mods_dir / mdir)
+            #
+            # mfiles = []
+            # # this gets the lowercase path to each file, starting at the
+            # # root of this mod folder. So:
+            # #   '/path/to/modstorage/CoolMod42/Meshes/WhatEver.NIF'
+            # # becomes:
+            # #   'meshes/whatever.nif'
+            # for root, dirs, files in os.walk(mroot):
+            #     mfiles.extend(_relpath(
+            #         _join(root, f), mroot).lower() for f in files)
+            #
+            # yield (mdir, mfiles)
 
-            mfiles = []
-            # this gets the lowercase path to each file, starting at the
-            # root of this mod folder. So:
-            #   '/path/to/modstorage/CoolMod42/Meshes/WhatEver.NIF'
-            # becomes:
-            #   'meshes/whatever.nif'
-            for root, dirs, files in os.walk(mroot):
-                mfiles.extend(_relpath(
-                    _join(root, f), mroot).lower() for f in files)
+    @staticmethod
+    def files_for_mod_dir(mod_repo, dir_name,
+                          ## byte-code opti-hack
+                          join=os.path.join,
+                          relpath=os.path.relpath,
+                          walk=os.walk):
+        """
+        Walk the file-hierarchy of the mod installed in
+        `mod_directory` in the ModInstall AppFolder and return a
+        flattened list of the filepaths found there.
 
-            yield (mdir, mfiles)
+        :param str mod_repo:
+        :param str dir_name:
+        """
+        mfiles = []
+
+        # abs-path to each directory
+        mod_root = join(mod_repo, dir_name)
+
+        # this gets the lowercase path to each file, starting at the
+        # root of this mod folder. So:
+        #   '/path/to/modstorage/CoolMod42/Meshes/WhatEver.NIF'
+        # becomes:
+        #   'meshes/whatever.nif'
+        for root, dirs, files in walk(mod_root):
+            mfiles.extend(relpath(join(root, f),
+                                  mod_root).lower()
+                          for f in files)
+
+        return mfiles
+
+
+
 
     def load_unmanaged_files(self):
         """

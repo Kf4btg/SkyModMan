@@ -70,6 +70,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # for cancelling asyncio actions
         self.task = None
+        self.install_helper = None
 
         # setup trackers for all of our models and proxies
         self.models  = {} #type: dict [M,QtCore.QAbstractItemModel]
@@ -216,6 +217,11 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # perform some setup that requires the manager
         self._setup_data_interface()
+
+        # instantiate installation helper
+        self.install_helper = InstallerUI(self)
+        self.install_helper.modAdded.connect(self.on_mod_install)
+
 
         # load the initial profile (or not, depending on profile load policy)
         self.profile_helper.load_initial_profile(
@@ -757,6 +763,21 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if self.current_tab == TAB.MODTABLE:
             self.mod_table.clearSelection()
 
+    @pyqtSlot(str)
+    def on_mod_install(self, mod_key):
+        """Add a newly-installed mod to the mod table. The mod must be
+        a managed mod (i.e., it must be in the main Mod-repo"""
+
+        # get the mod entry from the manager (which also adds the mod
+        # and its files to the appropriate tables) add it to the mod-
+        # table model. When the model is done inserting, the table will
+        # save the current collection and discard the undo-history
+        # for the mod table.
+        self.mod_table.model().add_mod(
+            self.Manager.load_newly_installed_mod(mod_key))
+
+
+
     # </editor-fold>
 
     ##=============================================
@@ -1060,17 +1081,17 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         from PyQt5.QtWidgets import QFileDialog
         from PyQt5.QtCore import QDir
 
-        # fixme: default to home folder or something instead of current dir
         filename=QFileDialog.getOpenFileName(
             self, "Select Mod Archive",
+            # todo: remember recent dirs
             QDir.homePath(),
             # QDir.currentPath() + "/res",
-            "Archives [zip, 7z, rar] (*.zip *.7z *.rar);;All Files(*)")[0]
+            filter="Archives [zip, 7z, rar] (*.zip *.7z *.rar);;All Files(*)")[0]
 
         # short-circuit for testing
         # filename='res/7ztest.7z'
         if filename:
-            installui = InstallerUI(self.Manager) # helper class
+            # installui = InstallerUI(self.Manager) # helper class
             if manual:
                 # show busy indicator while archive is examined
                 self.show_statusbar_progress("Loading archive:")
@@ -1079,7 +1100,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.show_statusbar_progress("Preparing installer:")
 
             self.task = asyncio.get_event_loop().create_task(
-                installui.do_install(filename,
+                self.install_helper.do_install(filename,
                                      self.hide_statusbar_progress,
                                      manual))
 

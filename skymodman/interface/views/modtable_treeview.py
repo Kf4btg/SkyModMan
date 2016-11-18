@@ -158,6 +158,10 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         # only show error col if there are errors
         self._model.errorsAnalyzed.connect(self._analyze_errors)
 
+        # when a brand new mod is added, we'll have to save the table
+        # and drop the undo stack
+        self._model.newEntryAdded.connect(self.on_new_mod)
+
         ## some final UI adjustments ##
 
         # hide directory column by default
@@ -420,7 +424,6 @@ class ModTable_TreeView(QtWidgets.QTreeView):
             self._undo_stack.push(
                 clear_missing_mods.cmd(self._model))
 
-
     def revert_changes(self):
         """
         Revert the state of the table to that of the last save-point
@@ -612,6 +615,19 @@ class ModTable_TreeView(QtWidgets.QTreeView):
                 text=text,
                 redo=forward_cmd,
                 undo=reverse_cmd))
+
+    def on_new_mod(self):
+        """
+        Called when a new mod is installed and added to the model.
+        """
+
+        # save the mod collection
+        self._model.save()
+
+        # drop the undostack
+        self._undo_stack.clear()
+
+
 
 
 class CheckBoxDelegate(QtWidgets.QStyledItemDelegate):

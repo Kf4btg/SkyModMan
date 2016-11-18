@@ -91,6 +91,11 @@ class ModTable_TreeModel(QAbstractItemModel):
     # noinspection PyArgumentList
     errorsAnalyzed = pyqtSignal(int)
 
+    newEntryAdded = pyqtSignal()
+    """
+    Signals that an entirely new entry has been entered into the table.
+    """
+
     # noinspection PyArgumentList
     rowsDropped = pyqtSignal(int, int, int)
     """emitted when a user drags a row or section of rows from
@@ -753,6 +758,13 @@ class ModTable_TreeModel(QAbstractItemModel):
         self.Manager.Collector.insert_items(row, entries, errors)
 
         self.endInsertRows()
+
+    def add_mod(self, entry):
+        """Add an entirely new Mod to the table"""
+
+        self.insert_entries(len(self.mods), [entry])
+
+        self.newEntryAdded.emit()
 
 
 

@@ -56,6 +56,12 @@ class InstallManager(Submanager):
         cancellation of an in-progress installation."""
         return len(self.files_installed)
 
+    @property
+    def install_destination(self):
+        """The Path to the directory in which the current archive will
+        be installed"""
+        return self.install_dir
+
     ##=============================================
     ## FOMOD handling
     ##=============================================

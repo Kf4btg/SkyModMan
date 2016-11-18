@@ -983,6 +983,31 @@ class ModManager:
     ## Some methods below are asynchronous
     ##=============================================
 
+    def load_newly_installed_mod(self, dirname):
+        """When a new mod is installed, call this method to create
+        the ModEntry for it, insert it into the mods table, and
+        get its files into the mod-files db table. When that is all
+        done, return the new ModEntry.
+
+        Note:
+            The entry is NOT automatically added to the ModCollection!
+        """
+
+        new_entry = self._ioman.mod_from_directory(dirname)
+
+        self._dbman.add_to_mods_table([new_entry])
+
+        mod_files = self._ioman.files_for_mod_dir(
+            self._folders['mods'].spath, dirname)
+
+        # just double check that there were any
+        if mod_files:
+            self._dbman.add_files('mod', new_entry.key, mod_files)
+
+        # now return the new entry. It can be added to the mod
+        # collection at this point
+        return new_entry
+
     async def get_installer(self, archive, extract_dir=None):
         """
         Generate and return an InstallManager instance for the given
