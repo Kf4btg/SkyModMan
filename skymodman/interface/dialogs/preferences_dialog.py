@@ -127,7 +127,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
         # load and store the current policy
         self._active_plp = self._selected_plp = app_settings.Get(
-                             UI.PROFILE_LOAD_POLICY)
+            "ManagerWindow", UI.PROFILE_LOAD_POLICY)
 
         # reuse the main profile-combobox-model for this one here
         self.combo_profiles.setModel(profilebox_model)
@@ -197,12 +197,12 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
 
         # -- checkboxes should reflect current settings
         self.cbox_restore_size.setChecked(
-            app_settings.Get(UI.RESTORE_WINSIZE))
+            app_settings.Get("ManagerWindow", UI.RESTORE_WINSIZE))
         # enable Apply button after clicking
         self.cbox_restore_size.toggled.connect(self._mark_changed)
 
         self.cbox_restore_pos.setChecked(
-            app_settings.Get(UI.RESTORE_WINPOS))
+            app_settings.Get("ManagerWindow", UI.RESTORE_WINPOS))
         self.cbox_restore_pos.toggled.connect(self._mark_changed)
 
         # check the appropriate radio button based on current policy;
@@ -453,11 +453,11 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
         # TODO: allow resetting the paths to default
 
         for pref, cbox in self.checkboxes.items():
-            app_settings.Set(pref, cbox.isChecked())
+            app_settings.Set("ManagerWindow", pref, cbox.isChecked())
 
         # check for a change in the profile-load-policy
         if self._active_plp != self._selected_plp:
-            app_settings.Set(
+            app_settings.Set("ManagerWindow",
                 UI.PROFILE_LOAD_POLICY,
                 self._selected_plp)
 

@@ -1,5 +1,6 @@
 from functools import partial
 import asyncio
+import os
 
 from PyQt5 import QtWidgets, QtGui
 # specifically import some frequently used names
@@ -8,16 +9,18 @@ from PyQt5.QtWidgets import QMessageBox
 
 from skymodman import constants, Manager
 from skymodman.constants import qModels as M, Tab as TAB
-from skymodman.constants.keystrings import (Dirs as KeyStr_Dirs,
+from skymodman.constants.keystrings import UI as KeyStr_UI
+# (
+    # Dirs as KeyStr_Dirs,
                                             # INI as KeyStr_INI,
-                                            UI as KeyStr_UI)
+                                            # UI as KeyStr_UI)
 
 from skymodman.interface import models, app_settings, profile_handler #, ui_utils
 # from skymodman.interface.dialogs import message
 from skymodman.interface.widgets import alerts_button
 from skymodman.interface.install_helpers import InstallerUI
 from skymodman.log import withlogger #, icons
-from skymodman.utils.fsutils import check_path #, join_path
+# from skymodman.utils.fsutils import check_path #, join_path
 
 from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow
 
@@ -154,10 +157,14 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         Add the necessary properties and callbacks to the AppSettings instance
         """
 
-        ## define the boolean/toggle preferences ##
-        app_settings.add(KeyStr_UI.RESTORE_WINSIZE, True)
+        groups = (g1, g2) = ["ManagerWindow", "RecentFiles"]
 
-        app_settings.add(KeyStr_UI.RESTORE_WINPOS, True)
+        app_settings.init(*groups)
+
+        ## define the boolean/toggle preferences ##
+        app_settings.add(g1, KeyStr_UI.RESTORE_WINSIZE, True)
+
+        app_settings.add(g1, KeyStr_UI.RESTORE_WINPOS, True)
 
         ## setup window-state prefs ##
 
@@ -165,22 +172,39 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         def _resize(size):
             # noinspection PyArgumentList
             self.resize(size
-                        if size and app_settings.Get(
+                        if size and app_settings.Get("ManagerWindow",
                                 KeyStr_UI.RESTORE_WINSIZE)
                         else QtGui.QGuiApplication.primaryScreen()
                                 .availableSize() * 5 / 7)
 
         def _move(pos):
-            if pos and app_settings.Get(KeyStr_UI.RESTORE_WINPOS):
+            if pos and app_settings.Get("ManagerWindow", KeyStr_UI.RESTORE_WINPOS):
                 self.move(pos)
 
         # add the properties w/ callbacks
-        app_settings.add("size", self.size, apply=_resize)
-        app_settings.add("pos", self.pos, apply=_move)
+        app_settings.add(g1, "size", self.size, apply=_resize)
+        app_settings.add(g1, "pos", self.pos, apply=_move)
 
         # TODO: handle and prioritize the SMM_PROFILE env var
-        app_settings.add(KeyStr_UI.PROFILE_LOAD_POLICY,
+        app_settings.add(g1, KeyStr_UI.PROFILE_LOAD_POLICY,
                          constants.ProfileLoadPolicy.last.value, int)
+
+        #=================================
+        # Keep track of recently-visited
+        # folders for file-dialogs
+        #---------------------------------
+
+        # keep caches for the "install mod archive" dialog,
+        # the "select app folder" dialog(s), and ... what else?
+        for dialog in ["installer", "appdirs"]:
+            app_settings.add_mru("RecentFiles", dialog,
+                             [], str)
+        # note from pyqt5 docs: "If the value of the setting is a
+        # container (corresponding to either QVariantList,
+        # QVariantMap or QVariantHash) then the type is applied to
+        # the contents of the container."
+        # --which is why we're using `str` as the type
+
 
         ## ----------------------------------------------------- ##
         ## Now that we've defined them all, time to read them in ##
@@ -225,7 +249,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # load the initial profile (or not, depending on profile load policy)
         self.profile_helper.load_initial_profile(
-            app_settings.Get(KeyStr_UI.PROFILE_LOAD_POLICY)
+            app_settings.Get("ManagerWindow", KeyStr_UI.PROFILE_LOAD_POLICY)
         )
 
     def _setup_ui_interface(self):
@@ -1083,29 +1107,39 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         filename=QFileDialog.getOpenFileName(
             self, "Select Mod Archive",
-            # todo: remember recent dirs
-            QDir.homePath(),
+            # start in use most-recently accessed directory
+            # (or home dir if none have been recorded)
+            app_settings.Get("RecentFiles", "installer") or QDir.homePath(),
             # QDir.currentPath() + "/res",
             filter="Archives [zip, 7z, rar] (*.zip *.7z *.rar);;All Files(*)")[0]
 
         # short-circuit for testing
         # filename='res/7ztest.7z'
         if filename:
-            # installui = InstallerUI(self.Manager) # helper class
-            if manual:
-                # show busy indicator while archive is examined
-                self.show_statusbar_progress("Loading archive:")
+            dirname = os.path.dirname(filename)
+            archive_name = os.path.splitext(os.path.basename(filename))[0]
+
+            # Add the containing directory to the MRU-list
+            app_settings.Set("RecentFiles", "installer", dirname)
+
+            # check that the given mod does not already exist
+            if archive_name.lower() not in self.Manager.managed_mod_folders:
+                # installui = InstallerUI(self.Manager) # helper class
+                if manual:
+                    # show busy indicator while archive is examined
+                    self.show_statusbar_progress("Loading archive:")
+                else:
+                    # show busy indicator while installer loads
+                    self.show_statusbar_progress("Preparing installer:")
+
+                self.task = asyncio.get_event_loop().create_task(
+                    self.install_helper.do_install(filename,
+                                         self.hide_statusbar_progress,
+                                         manual))
             else:
-                # show busy indicator while installer loads
-                self.show_statusbar_progress("Preparing installer:")
+                # tODO: inform the user and offer reinstall/cancel options
+                self.LOGGER.warning("Mod {0!r} already installed!".format(archive_name))
 
-            self.task = asyncio.get_event_loop().create_task(
-                self.install_helper.do_install(filename,
-                                     self.hide_statusbar_progress,
-                                     manual))
-
-                # todo: add callback to show the new mod if install succeeded
-                # self.task.add_done_callback(self.on_new_mod())
 
         del QFileDialog
         del QDir

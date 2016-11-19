@@ -20,3 +20,10 @@ class QS_Property:
         self.accessor = accessor
         self.apply = apply
         self.on_change = on_change
+
+    def __str__(self):
+        return "{}({})".format(
+            type(self).__name__,
+            ", ".join("{} = {}".format(a,getattr(self, a))
+                      for a in self.__slots__)
+        )
