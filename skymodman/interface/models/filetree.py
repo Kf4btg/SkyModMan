@@ -483,8 +483,9 @@ class ModFileTreeModel_QUndo(ModFileTreeModel):
             try:
                 self._stack.push(self.dequeue_command())
             except IndexError as e:
-                print(e)
                 # if there was no command in the queue...well, what happened?
+                self.LOGGER.error("No command queued")
+                self.LOGGER.exception(e)
                 # pass
 
             return True

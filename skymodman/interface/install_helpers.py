@@ -73,21 +73,7 @@ class InstallerUI(QObject):
                     ## check the root of the file hierarchy for usable data
                     if modfs.fsck_quick():
                         ## if it's there, install the mod automatically
-                        self.LOGGER << "Performing auto-install"
-
                         await self.extraction_progress_dialog()
-                        # message("information", title="Game Data Found",
-                        #         text="Here's where I'd automatically "
-                        #              "install the mod for you if I were "
-                        #              "working correctly. But I won't, "
-                        #              "because I'm not.")
-
-
-                        # await installer.extract("/tmp/testinstall",
-                        #                         entries=toplevdata["folders"]
-                        #                                 +toplevdata["files"],
-                        #                         callback=
-                        #              )
                     else:
                         ## perform one last check if the previous search turned up nothing:
                         # if there is only one item on the top level
@@ -102,11 +88,14 @@ class InstallerUI(QObject):
                         if len(root_items) == 1 \
                                 and modfs.is_dir(root_items[0]) \
                                 and modfs.fsck_quick(root_items[0]):
-                            message("information", title="Game Data Found",
-                                    text="In immediate subdirectory '{}'. Automatic install of this data would be performed now.".format(root_items[0]))
+                            self.LOGGER << "Game data found in immediate" \
+                                           "subdirectory {0!r}.".format(str(root_items[0]))
+                            await self.extraction_progress_dialog(str(root_items[0]))
+                            # message("information", title="Game Data Found",
+                            #         text="In immediate subdirectory '{}'. Automatic install of this data would be performed now.".format(root_items[0]))
 
                         else:
-                            self.logger.debug("no toplevel items found; showing manual install dialog")
+                            self.logger.warning("no toplevel items found; showing manual install dialog")
                             await self._show_manual_install_dialog(modfs)
 
 
@@ -118,11 +107,6 @@ class InstallerUI(QObject):
 
         # emit modAdded w/ just the name of the installation target dir
         self.modAdded.emit(self.installer.install_destination.name)
-
-
-
-
-
 
     async def run_fomod_installer(self, tmpdir):
         """
@@ -177,19 +161,30 @@ class InstallerUI(QObject):
         del ManualInstallDialog
 
 
-    async def extraction_progress_dialog(self):
+    async def extraction_progress_dialog(self, start_dir=None):
         """
+        Have the install manager extract the contents of its archive
+        to the default installation location. Create a progress dialog
+        that will show if the process is estimated to take more than
+        ~4 seconds.
+
+        :param start_dir: If the items to be extracted are not under the
+            root of the archive but rather in a subfolder, pass the
+            path to that folder as `start_dir`
 
         :return:
         """
+        self.LOGGER << "Performing auto-install"
 
-        # TODO: show notification when extraction is finished; add new mod to mods table
+        # TODO: show notification when extraction is finished
 
-        dlg = QProgressDialog("Extracting Files...", "Cancel", 0,
-                              await self.installer.get_archive_file_count())
+        num_to_extract = (await self.installer.get_archive_file_count()) if not start_dir else self.installer.count_folder_contents(start_dir)
+
+        dlg = QProgressDialog("Extracting Files...", "Cancel", 0, num_to_extract)
         dlg.setWindowModality(Qt.WindowModal)
 
-        task = asyncio.get_event_loop().create_task(self._do_archive_install(dlg))
+        task = asyncio.get_event_loop().create_task(
+            self._do_archive_install(dlg, start_dir))
 
         dlg.canceled.connect(task.cancel)
 
@@ -213,12 +208,13 @@ class InstallerUI(QObject):
             self.LOGGER.info("Installation completed")
             self.modAdded.emit(self.installer.install_destination.name)
 
-    async def _do_archive_install(self, progress_dlg):
+    async def _do_archive_install(self, progress_dlg, start_dir=None):
         try:
-            await self.installer.install_archive(
+            await self.installer.install_archive(start_dir,
                 lambda f, c: progress_dlg.setValue(c))
 
         except asyncio.CancelledError:
+            self.LOGGER.warning("Extraction task cancelled")
             progress_dlg.setLabelText("Cleaning up...")
             # this hides & deletes the cancel button
             progress_dlg.setCancelButtonText("")

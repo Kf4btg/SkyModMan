@@ -231,6 +231,8 @@ class InstallManager(Submanager):
         number of files and directories contained within that folder
         and its children
         """
+        self.LOGGER << "Counting contents of archive folder {0!r}".format(folder)
+
         folder += '/'
 
         return len(
@@ -278,10 +280,16 @@ class InstallManager(Submanager):
     ## Actual installation
     ##=============================================
 
-    async def install_archive(self, callback=None):
+    async def install_archive(self, start_dir=None, callback=None):
         """
         Install the entire contents of the associated archive to its
         default location in the Mods folder
+
+        :param str start_dir: usually, files will be extracted from the
+            root of the archive. If `start_dir` is provided, it must be
+            a path (relative to the root of the archive files) to a
+            directory that will be considered the 'root' when unpacking
+            the archive.
 
         :param callback: called with args
             (name_of_file, total_extracted_so_far) during extraction
@@ -305,7 +313,24 @@ class InstallManager(Submanager):
         asyncio.get_event_loop().call_soon_threadsafe(
             _callback, "Starting extraction...", 0)
 
-        await self.extract(destination=self.install_dir,
+        if start_dir:
+            # make sure startdir ends with a single "/"
+            start_dir = start_dir.rstrip("/")+"/"
+
+            await self.extract(destination=self.install_dir,
+                               # filter archive contents based on
+                               # containing directory
+                               entries=[e for e in
+                                        await self.archive_contents(dirs=False)
+                                        if e.startswith(start_dir)],
+                               callback=track_progress)
+
+            # fix file paths
+            self.remove_basepath(start_dir)
+
+        else:
+
+            await self.extract(destination=self.install_dir,
                            callback=track_progress)
 
     async def rewind_install(self, callback=print):
@@ -355,6 +380,50 @@ class InstallManager(Submanager):
             self.LOGGER.error("Could not remove mod directory")
             self.LOGGER.exception(e)
 
+
+    def remove_basepath(self, basepath):
+        """For the current install_dir, given a `basepath` relative
+        to the root of that directory, remove that path from all files
+        under it, essentially moving them up in the file hierarchy.
+
+        For example, if the current install_dir is "$MOD_REPO/mod42":
+
+            >>> remove_basepath("mod42_data")
+
+            then for every item under "$MOD_REPO/mod42/mod42_data/"
+            directory, e.g.:
+                "mod42/mod42_data/textures/"
+                "mod42/mod42_data/scripts/"
+                "mod42/mod42_data/mod42.esp"
+
+            remove "mod42_data" from their path. The new file-
+            structure would then be:
+
+                "mod42/textures/"
+                "mod42/scripts/"
+                "mod42/mod42.esp"
+
+        This is to handle mod-archives that do not place the data in the
+        top-level of the archive.
+        """
+
+        # remove leading '/' from basepath so it doesn't screw stuff up
+        target = self.install_dir / basepath.lstrip('/')
+
+        try:
+            # move all contents to the mod-root
+            for f in target.iterdir():
+                f.rename(self.install_dir / f.name)
+        except Exception as e:
+            self.LOGGER.exception(e)
+            raise
+
+        # folder should be empty; try to remove it
+        try:
+            target.rmdir()
+        except OSError as e:
+            self.LOGGER.error("Could not remove directory {0!r}".format(str(target)))
+            self.LOGGER.exception(e)
 
 
     #=================================

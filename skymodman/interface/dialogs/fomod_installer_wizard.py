@@ -275,7 +275,7 @@ class FinalPage(QWizardPage, Ui_FinalPage):
         else:
             # if everything went well and the install was not cancelled
             self.progress_label.setText("Done!")
-            print("final:",self.install_progress.value())
+            # print("final:",self.install_progress.value())
 
         # can't cancel a task that isn't running
         self.btn_cancel_unpack.setEnabled(False)
