@@ -835,6 +835,17 @@
     <string>Invert Selection</string>
    </property>
   </action>
+  <action name="action_show_in_file_manager">
+   <property name="icon">
+    <iconset theme="system-file-manager"/>
+   </property>
+   <property name="text">
+    <string>Show in File Manager</string>
+   </property>
+   <property name="toolTip">
+    <string>Open directory in default File Manager</string>
+   </property>
+  </action>
  </widget>
  <customwidgets>
   <customwidget>

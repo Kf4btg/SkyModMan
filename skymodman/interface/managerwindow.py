@@ -1,6 +1,7 @@
 from functools import partial
 import asyncio
 import os
+import subprocess
 
 from PyQt5 import QtWidgets, QtGui
 # specifically import some frequently used names
@@ -467,6 +468,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             (self.action_find_previous      , partial(self.mod_table.on_table_search, -1)),
             (self.action_select_all         , self.on_select_all),
             (self.action_select_none        , self.on_select_none),
+            (self.action_show_in_file_manager, self.open_dir_in_fm)
         ]
 
         # tuple(action, shortcut-sequence)
@@ -1163,6 +1165,33 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if row > -1:
             # mod = self.models[M.mod_table][row]
             self.LOGGER << "Here's where we'd uninstall this mod."
+
+
+    def open_dir_in_fm(self):
+        """
+        Open the selected mod's directory in the default file manager
+        """
+
+        # XXX: should this use the selected index? (And thus not work w.o a selection?)
+        mod = self.mod_table.model().get_mod_for_index(
+            self.mod_table.currentIndex())
+
+        if mod.managed:
+            # launch and forget
+            # note:: obviously, this only works on linux (maybe bsd?).
+            # I probably don't care.
+            try:
+                subprocess.Popen(["xdg-open",
+                                  os.path.join(
+                                      self.Manager.Folders['mods'].spath,
+                                      mod.directory)])
+            except FileNotFoundError:
+                # thrown when the command (xdg-open) cannot be found
+                self.LOGGER.error("Cannot find 'xdg-open' executable")
+        else:
+            self.LOGGER.warning("Cannot open directory for unmanaged mod")
+            # TODO: open directory for unmanaged mod
+
 
     @pyqtSlot()
     def remove_missing(self):

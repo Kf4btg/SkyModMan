@@ -299,6 +299,10 @@ class Ui_MainWindow(object):
         icon = QtGui.QIcon.fromTheme("edit-select-invert")
         self.action_select_inverse.setIcon(icon)
         self.action_select_inverse.setObjectName("action_select_inverse")
+        self.action_show_in_file_manager = QtWidgets.QAction(MainWindow)
+        icon = QtGui.QIcon.fromTheme("system-file-manager")
+        self.action_show_in_file_manager.setIcon(icon)
+        self.action_show_in_file_manager.setObjectName("action_show_in_file_manager")
         self.menu_profiles.addAction(self.action_new_profile)
         self.menu_profiles.addAction(self.action_delete_profile)
         self.menu_profiles.addAction(self.action_rename_profile)
@@ -433,6 +437,8 @@ class Ui_MainWindow(object):
         self.action_select_all.setText(_translate("MainWindow", "S&elect All"))
         self.action_select_none.setText(_translate("MainWindow", "C&lear Selection"))
         self.action_select_inverse.setText(_translate("MainWindow", "Invert Selection"))
+        self.action_show_in_file_manager.setText(_translate("MainWindow", "Show in File Manager"))
+        self.action_show_in_file_manager.setToolTip(_translate("MainWindow", "Open directory in default File Manager"))
 
 from skymodman.interface.designer.plugins.widgets.escapeablelineedit import EscapeableLineEdit
 from skymodman.interface.views.filetab_modlist import FileTabModList

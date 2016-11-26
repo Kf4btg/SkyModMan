@@ -218,6 +218,7 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         menu = qmenu(self)
         menu.addActions([mw.action_toggle_mod,
                          mw.action_uninstall_mod,
+                         mw.action_show_in_file_manager
                          ])
 
         if not self.isColumnHidden(Column.ERRORS):
