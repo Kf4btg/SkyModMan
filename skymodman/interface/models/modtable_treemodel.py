@@ -91,6 +91,7 @@ class ModTable_TreeModel(QAbstractItemModel):
     # noinspection PyArgumentList
     errorsAnalyzed = pyqtSignal(int)
 
+    # noinspection PyArgumentList
     newEntryAdded = pyqtSignal()
     """
     Signals that an entirely new entry has been entered into the table.
@@ -328,7 +329,9 @@ class ModTable_TreeModel(QAbstractItemModel):
         :param QModelIndex index:
         """
         if not index.isValid():
-            return Qt_ItemIsEnabled
+            # drop enabled allows dropping "before" rows and also
+            # after the final row
+            return Qt_ItemIsEnabled | Qt_ItemIsDropEnabled
 
         col = index.column()
 
@@ -693,18 +696,43 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         :param QMimeData data: contains a string that is 2 ints separated by whitespace, e.g.:  '4 8' This string corresponds to the first and last row in the block of rows being dragged
         :param Qt.DropAction action:
-        :param int row: ignored; always -1
-        :param int column: ignored; always -1
+        :param int row:
+        :param int column:
         :param QModelIndex parent: The hovered item (drop target)
-        :return: True so long as the parent is valid, otherwise False
+        :return: True unless drop would place selection in same spot
         """
 
-        if not parent.isValid():
-            return False
+        # from the qt docs: "When row and column are -1 it means that
+        # the dropped data should be considered as dropped directly
+        # on parent. Usually this will mean appending the data as
+        # child items of parent. If row and column are greater than
+        # or equal zero, it means that the drop occurred just before
+        # the specified row and column in the specified parent."
 
+
+        # split the text (e.g. "3 3", "5 12", etc)
         start, end = [int(r) for r in data.text().split()]
 
-        self.rowsDropped.emit(start, end, parent.row())
+        if row < 0:
+            # "dropped directly on parent"
+
+            if not parent.isValid(): # dropped in empty space
+                # -- place after final item
+                self.rowsDropped.emit(start, end, self.rowCount())
+            elif start-1 != parent.row():
+                # make sure this wouldn't place the selection back
+                # in the exact same spot
+
+                # -- place below parent
+                self.rowsDropped.emit(start, end, parent.row() + 1)
+            else:
+                return False
+        else:
+            # "occurred just before the specified row and column"
+
+            # parent is always invalid in this case, but "row" is just
+            # before what would appear to be the parent
+            self.rowsDropped.emit(start, end, row)
 
         return True
 
