@@ -114,7 +114,10 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         # setup the animation to show/hide the search bar
         self.animate_show_search = QtCore.QPropertyAnimation(
             self._searchbox, b"maximumWidth")
+        # how long the animation takes
+        # NTS: maybe don't hardcode this value?
         self.animate_show_search.setDuration(300)
+        # hide searchbox initially
         self._searchbox.setMaximumWidth(0)
 
         self._searchbox.textChanged.connect(
@@ -123,8 +126,6 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         # i prefer searching only when i'm ready
         self._searchbox.returnPressed.connect(
             self._on_searchbox_return)
-
-
 
     def reset_view(self):
         """Clears the search box & undo stack, and reloads the table data"""
@@ -202,10 +203,10 @@ class ModTable_TreeView(QtWidgets.QTreeView):
             event.acceptProposedAction()
         else:
             super().dragEnterEvent(event)
-
-    ## XXX: What's the point of this??
-    def dragMoveEvent(self, event):
-        super().dragMoveEvent(event)
+    #
+    # ## XXX: What's the point of this??
+    # def dragMoveEvent(self, event):
+    #     super().dragMoveEvent(event)
 
     def contextMenuEvent(self, event):
         """
@@ -221,7 +222,10 @@ class ModTable_TreeView(QtWidgets.QTreeView):
                          mw.action_show_in_file_manager
                          ])
 
-        if not self.isColumnHidden(Column.ERRORS):
+        # only show if error column visible and
+        # at least one mod has DIR_NOT_FOUND error
+        if (not self.isColumnHidden(Column.ERRORS)
+            and bool(self._err_types & ModError.DIR_NOT_FOUND)):
             menu.addAction(mw.action_clear_missing)
 
         menu.exec_(event.globalPos())
@@ -270,8 +274,6 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         :return:
         """
 
-        # fixme: this crashes now...
-
         cindex = self.currentIndex()
 
         result = self._model.search(text, cindex, direction)
@@ -309,8 +311,8 @@ class ModTable_TreeView(QtWidgets.QTreeView):
 
             if not found:
                 if found is None:
-                    # this means we DID find the text, but it was the same
-                    # row that we started on
+                    # this means we DID find the text, but it was the
+                    # same row that we started on
                     # TODO: don't hardcode these colors
                     self._searchbox.setStyleSheet(
                         'QLineEdit { color: gray }')
@@ -561,7 +563,18 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         :param dest:
         :return:
         """
-        self.move_rows(start, dest, end-start+1, text="Drag Rows")
+        count = end - start + 1
+
+        # since we can't drop a selection on itself, we don't need
+        # to worry about dest being between start and end
+        if start < dest: # moving down
+            # we need to account for the section we're dragging
+            # being essentially "removed" from the list for now;
+            # otherwise the section will end up shifted down from
+            # where it should be
+            dest -= count  # real dest
+
+        self.move_rows(start, dest, count, text="Drag Rows")
 
     def _reorder_selection(self, dest, rows=None, text="Reorder"):
         """
