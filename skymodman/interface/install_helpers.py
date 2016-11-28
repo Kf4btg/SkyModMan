@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import QProgressDialog
 import quamash
 
 from skymodman import Manager
-from skymodman.interface.dialogs import message
+# from skymodman.interface.dialogs import message
 from skymodman.log import withlogger
 
 
@@ -56,6 +56,13 @@ class InstallerUI(QObject):
                 self.installer = await self.Manager.get_installer(archive, tmpdir)
 
                 ready_callback()
+
+                # mod name could come from info.xml, or we may have to
+                # derive it elsewhise
+                self.installer.derive_mod_name()
+
+                # short circuit for testing
+                # return
 
                 # Fomod config was found and prepared
                 if self.installer.has_fomod:

@@ -2,34 +2,34 @@
 
 from skymodman.thirdparty.untangle import untangle
 
-example_xml="""
-<?xml version="1.0" encoding="UTF-16"?>
-<!--header line may not be present-->
-<fomod>
-  <Name>Super Duper Mod Redux</Name>
-  <Author>Arthur McModder</Author>
-  <Email>PM ArtyMcModdy at Skyrim Nexus</Email> <!--obv. not always an email-->
-  <Version>1.4.2</Version>
-  <LastKnownVersion>1.6a</LastKnownVersion> <!--What the heck is this? Only rarely seen-->
-  <Id>12345678</Id> <!--(Optional?)-->
-  <Description>
-This Mod does really cool things.
-
-I mean like crazy things.
-
-Note: The things are cool.
-
-Note2: This description may not be present. Or may be empty. And [b]may[/b] include bbcode.
-  </Description>
-  <Website>http://www.nexusmods.com/skyrim/mods/12345678</Website>
-  <!--<Website type="old format">http://skyrim.nexusmods.com/mods/12345678/</Website>-->
-
-  <Groups> <!--(Optional?)-->
-    <element>Immersion</element>
-    <element>replacers/textures</element>
-  </Groups>
-</fomod>
-"""
+# example_xml="""
+# <?xml version="1.0" encoding="UTF-16"?>
+# <!--header line may not be present-->
+# <fomod>
+#   <Name>Super Duper Mod Redux</Name>
+#   <Author>Arthur McModder</Author>
+#   <Email>PM ArtyMcModdy at Skyrim Nexus</Email> <!--obv. not always an email-->
+#   <Version>1.4.2</Version>
+#   <LastKnownVersion>1.6a</LastKnownVersion> <!--What the heck is this? Only rarely seen-->
+#   <Id>12345678</Id> <!--(Optional?)-->
+#   <Description>
+# This Mod does really cool things.
+#
+# I mean like crazy things.
+#
+# Note:: The things are cool.
+#
+# Note2: This description may not be present. Or may be empty. And [b]may[/b] include bbcode.
+#   </Description>
+#   <Website>http://www.nexusmods.com/skyrim/mods/12345678</Website>
+#   <!--<Website type="old format">http://skyrim.nexusmods.com/mods/12345678/</Website>-->
+#
+#   <Groups> <!--(Optional?)-->
+#     <element>Immersion</element>
+#     <element>replacers/textures</element>
+#   </Groups>
+# </fomod>
+# """
 
 class InfoXML:
 
@@ -60,7 +60,7 @@ class InfoXML:
                 text = g.cdata.strip()
                 if text:
                     self.groups.append(text)
-        except AttributeError as e:
+        except AttributeError:# as e:
             # print("Groups AttributeError:", e)
             # no listed groups
             pass
@@ -68,7 +68,22 @@ class InfoXML:
 
     def get_set_value(self, root, name):
         try:
+            # so...it seems that replacing the normal Element
+            # class in fomod.py with my customized Element subclass
+            # means that we get the new Element wherever we use untangle
+            # in the rest of the project...ok then. well, the only
+            # big difference is that, instead of throwing AttributeError
+            # when the element doesn't exist, it instead returns an
+            # empty list
             element = _elgetter[name](root)
+
+            # but we don't want to assume that we'll _never_ be using
+            # the native Element class...whoops. Guess we'll keep
+            # the try.except block, with a silly hack
+
+            # make sure we didn't get an empty list back
+            if not element:
+                raise AttributeError
         except AttributeError:
             # xml did not include the requested element
             setattr(self, name, None)
@@ -84,7 +99,6 @@ _elgetter = {
     "description": lambda r: r.Description,
     "email": lambda r: r.Email,
 }
-
 
 
 if __name__ == '__main__':

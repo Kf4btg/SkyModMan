@@ -1,6 +1,5 @@
 from itertools import chain
 
-from skymodman import Manager
 from skymodman.installer.common import *
 from skymodman.installer.element import Element
 from skymodman.thirdparty.untangle import untangle
@@ -17,7 +16,7 @@ dep_checks = {
     "gameDependency": lambda s, d: s.check_game_version(d),
     "fommDependency": lambda s, d: s.check_fomm_version(d),
 }
-"""determine which check method to invoke based on dep. type"""
+"""determine which "check_*" method to invoke based on dep. type"""
 
 # map operators to python functors
 operator_func = {
@@ -27,11 +26,19 @@ operator_func = {
 
 class Fomod:
 
-    def __init__(self, config_xml):
-        self.fomod_config = untangle.parse(config_xml)
+    def __init__(self, config_xml, check_file_method):
+        """
 
+        :param config_xml:
+        :param (str, FileState)->bool check_file_method: method to call with arguments
+            (relative_file_path:str, check_state:FileState) to see if a
+            given file is in a certain state (installed/missing/
+            inactive); implementation-specific
+        """
+        fomod_config = untangle.parse(config_xml)
+
+        ## setup placeholders
         self.all_images = []
-
 
         self.modname = None
         self.modimage = None
@@ -40,11 +47,18 @@ class Fomod:
         self.installsteps = []
         self.condinstalls = []
 
-        # used during run
+        # used during wizard
         self.files_to_install = []
         self.flags = {}
 
-        self.analyze()
+        if callable(check_file_method):
+            self._check_file = check_file_method
+        else:
+            # just override to return False always;
+            # only for testing; should throw error in practice
+            self._check_file = lambda f,s: False
+
+        self.analyze(fomod_config)
 
     ##=============================================
     ## XML-parsing and script setup
@@ -54,11 +68,15 @@ class Fomod:
     ##=============================================
     # <editor-fold desc="setup">
 
-    def analyze(self):
-        root = self.fomod_config.config # type: Element
+    def analyze(self, fomod):
+        """
+
+        :param fomod: The top-level element of the xml file
+        """
+        root = fomod.config # type: Element
 
         ## mod name
-        self.modname = ModName(root.moduleName.cdata,
+        self.modname = ModName(root.moduleName.cdata.strip(),
                                Position(root.moduleName['position']
                                         or DEFAULTS["moduleName"]
                                         ["position"]),
@@ -311,7 +329,7 @@ class Fomod:
 
     def check_file(self, file, state):
         # Manager caches the results of the most recent checks
-        return Manager().checkFileState(file, state)
+        return self._check_file(file, state)
 
     def check_flag(self, flag, value):
         return flag in self.flags \

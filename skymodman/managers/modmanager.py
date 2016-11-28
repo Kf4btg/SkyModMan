@@ -1,5 +1,6 @@
 from pathlib import Path, PurePath
 from functools import lru_cache
+from itertools import chain
 
 from skymodman.utils import tree as _tree
 
@@ -1015,16 +1016,16 @@ class ModManager:
 
         :param archive:
         :param extract_dir: if provided, the installer will search
-            for a "fomod" directo5ry within the archive and extract
+            for a "fomod" directory within the archive and extract
             its contents to the given directory. If ``None`` or omitted,
             the archive is not examined before returning
         :return: the prepared installer
         """
 
-        from skymodman.managers import installer as _install
+        from skymodman.managers.installer import InstallManager
 
         # instantiate a new install manager
-        installer = _install.InstallManager(archive, mcp=self)
+        installer = InstallManager(archive, mcp=self)
 
 
         if extract_dir is not None: # we're expecting a fomod
@@ -1042,19 +1043,42 @@ class ModManager:
                 # modconf = os.path.join(extract_dir, fomodpath,
                 #                        "ModuleConfig.xml")
 
+                modconf_found = False
+                info_found = False
                 # path to extracted fomod folder
                 fdirpath = Path(extract_dir, fomodpath)
-                for fpath in fdirpath.iterdir():
+                for fpath in chain(fdirpath.glob("*.xml"),
+                                   fdirpath.glob("*.XML")):
+
+                    fname = fpath.stem.lower()
 
                     # make sure we have actually have a fomod config script
-                    if fpath.name.lower() == 'moduleconfig.xml':
+                    if not modconf_found and fname == 'moduleconfig':
+                        self.LOGGER << "Located 'ModuleConfig.xml'"
 
                         # if so, get it ready for the installer
                         await installer.prepare_fomod(str(fpath),
                                                        extract_dir)
-                        break
+                        # break if we've found both
+                        if info_found: break
+                        # otherwise remember that we found this and continue
+                        modconf_found = True
+                        continue # since we know this won't be "info.xml"
 
-        del _install
+
+                    # see if we have an info.xml file
+                    if not info_found and fname == "info":
+                        self.LOGGER << "Located 'info.xml'"
+
+                        installer.prepare_info(str(fpath))
+
+                        # break if we've found both
+                        if modconf_found: break
+                        # otherwise remember that we found this and continue
+                        info_found = True
+
+
+        del InstallManager
         return installer
 
     ##=============================================

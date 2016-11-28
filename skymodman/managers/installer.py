@@ -1,18 +1,19 @@
 import asyncio
 import os
+import re
 from collections import deque
 from itertools import chain
 from pathlib import PurePath, Path
 
 from skymodman.managers.base import Submanager
 from skymodman.installer.fomod import Fomod
+from skymodman.installer.infoxml import InfoXML
 
 from skymodman.types.archivefs import archivefs as arcfs
 from skymodman.log import withlogger
 from skymodman.utils.tree import Tree
 from skymodman.utils.archive import ArchiveHandler
 from skymodman.utils import fsutils
-
 
 @withlogger
 class InstallManager(Submanager):
@@ -30,7 +31,8 @@ class InstallManager(Submanager):
         self.arc_path = Path(mod_archive)
         self.archive_files = None
         self.archive_dirs = None
-        self.fomod = None
+        self.fomod = None # holds parsed fomod config
+        self.info = None  # holds parsed info.xml
 
         # maintain a mapping of lower-case versions of the image-paths
         # defined in the fomod config to the actual filesystem-location
@@ -38,16 +40,20 @@ class InstallManager(Submanager):
         # extracted for display with the Fomod-installer)
         self.normalized_imgpaths = {}
 
+        # name of the directory where we will install the mod
+        # (initial value is tentative)
+        self._install_dirname = self.arc_path.stem.lower()
+
         # we get the `mainmanager` attribute from our Submanager base
         # self.install_dir = self.mainmanager.Paths.dir_mods / self.arc_path.stem.lower()
-        self.install_dir = self.mainmanager.Folders['mods'].path / self.arc_path.stem.lower()
+        # self.install_dir = self.mainmanager.Folders['mods'].path / self.arc_path.stem.lower()
 
         # Used to track progress during installation and allow
         # for "rewinding" a failed/cancelled partial install
         self.files_installed = deque()
 
         self.LOGGER << "Init installer for '{}'".format(self.archive)
-        self.LOGGER << "Install destination: {}".format(self.install_dir)
+        # self.LOGGER << "Install destination: {}".format(self.install_dir)
 
     @property
     def num_files_installed_so_far(self):
@@ -60,7 +66,13 @@ class InstallManager(Submanager):
     def install_destination(self):
         """The Path to the directory in which the current archive will
         be installed"""
-        return self.install_dir
+        # return self.install_dir
+        return self.mainmanager.Folders['mods'].path / self._install_dirname
+
+    @property
+    def install_dir(self):
+        ## temporary; replace w/ install_destination
+        return self.install_destination
 
     ##=============================================
     ## FOMOD handling
@@ -74,6 +86,13 @@ class InstallManager(Submanager):
         """
         return self.fomod is not None
 
+    @property
+    def has_info(self):
+        """
+        :return: True if the archive included an info.xml file
+        """
+        return self.info is not None
+
     async def get_fomod_path(self):
         """
         If the associated mod archive contains a directory named 'fomod',
@@ -86,6 +105,16 @@ class InstallManager(Submanager):
             if os.path.basename(e.rstrip('/')).lower() == "fomod":
                 return e
         return None
+
+    def prepare_info(self, infoxml_file):
+        """If the mod archive included an info.xml file, parse it
+        and make it available via the "info" attribute
+
+        :param infoxml_file: path to previously-extracted info.xml file
+        """
+
+        self.info = InfoXML(infoxml_file)
+
 
     async def prepare_fomod(self, xmlfile, extract_dir=None):
         """
@@ -108,7 +137,7 @@ class InstallManager(Submanager):
         self.files_installed = deque()
 
         # todo: figure out what sort of things can go wrong while reading the fomod config, wrap them in a FomodError (within fomod.py), and catch that here so we can report it without crashing
-        self.fomod = Fomod(xmlfile)
+        self.fomod = Fomod(xmlfile, self.mainmanager.checkFileState)
 
         # we don't want to extract the entire archive before we start,
         # but we do need to extract any images defined in the
@@ -188,6 +217,8 @@ class InstallManager(Submanager):
         # is the source path within the archive of a file to install,
         # and the second item is the path (relative to the mod
         # installation directory) where the source should be extracted.
+
+        # TODO: ignore "._"-prefixed mac-cruft files
 
         await self.archiver.extract(archive=self.archive,
                                     destination=destination,
@@ -279,6 +310,84 @@ class InstallManager(Submanager):
     ##=============================================
     ## Actual installation
     ##=============================================
+
+    def derive_mod_name(self):
+        """
+        Attempt to determine the "proper" name of the mod from
+        all available information.
+        """
+
+        # a) if we're lucky, this is a Fomod install w/ a modname attr
+        # TODO: some non-Fomod mods still include an "info.xml" file
+        if self.has_fomod:
+            fname = self.fomod.modname.name
+            # fix: the fomod name often includes a version number on the end (like "Soul Gem Things v1.4.5")
+            vmatch = _version_format.search(fname)
+            if vmatch:
+                fname = fname[:vmatch.start()].strip()
+
+            print("fomod found:")
+            print("  orig:", self.fomod.modname.name)
+            print("  name:", fname)
+
+            # return self.fomod.modname.name
+            return fname
+
+        # if not, we'll have to get clever
+
+        # b) if the mod includes esp/bsa/etc. files, they're often
+        #   labeled with the mod's "real" name
+        bname = os.path.basename
+        split = os.path.splitext
+
+        # check top 2 levels
+        # accumulate names
+        _names = []
+        ext_re = re.compile(r".*\.(es[pm]|bsa)$")
+        for f in filter(lambda s: ext_re.search(s.lower()),
+                           self.archive_files):
+            # if re.search(r".*\.(es[pm]|bsa)$", f.lower()):
+                _names.append(split(bname(f))[0])
+
+        print("names from esp/bsa ({}):".format(len(_names)))
+        for n in _names:
+            print(" ", n)
+
+        # c) see if we can figure it out from the archive name;
+        # try to ignore the version numbers
+        archive_name = self.arc_path.stem
+
+        # archives downloaded from the nexus generally have
+        # the mod name, then a hyphen followed by the modid, then
+        # (optionally) another hyphen and version info
+        m = _nexus_archive_name_format.match(archive_name)
+
+        if m:
+            name = m.group('name')
+
+            # TODO: if we can get the modid, we should be able to look up the mod info on the nexus...though that would of course require writing an async web-request module...
+            modid = m.group('modid')
+            ver = m.group('version')
+
+            if name:
+                # ==> eventually, this should pull the name from the nexus
+
+                # sometimes there's some extra stuff like (redundant)
+                # version info on the end of the name
+                exm = _extra_stuff.search(name)
+                if exm:
+                    name = name[:exm.start()]
+
+            if ver:
+                ver = ver.replace("-", ".")
+
+            print("Derived from archive name:")
+            print("  name:", name)
+            print("  modid:", modid)
+            print("  version:", ver)
+
+        return ""
+
 
     async def install_archive(self, start_dir=None, callback=None):
         """
@@ -519,3 +628,44 @@ class InstallManager(Submanager):
             remaining -= 1
             asyncio.get_event_loop().call_soon_threadsafe(
                 callback, f.source, remaining)
+
+
+##=============================================
+## Regular Expressions
+## -------------------
+## for matching names of archives downloaded
+## from the nexus
+##=============================================
+
+_nexus_archive_name_format = re.compile(
+    r"""^
+        (?P<name>.*)        # mod name
+        -                   # hyphen, no surrounding spaces
+        (?P<modid>\d{3,})   # nexus id; try for 3+ numbers
+
+        (-                  # next section may not be present.
+        (?P<version>.*)     # version; can include anything...
+        )?$
+    """, re.X)
+
+# (-  # next section may not be present
+            #  (?P<version>  # version; check for numbers, a,b,v
+            #    [abv0-9-]*)  # can include anything, though...
+            # )?$
+
+# _n = re.compile(r"^(.*)-(\d{3,})(-(.*))?$")
+
+__ver = r'v?(?:[0-9]+[._-])*[0-9]+[ab]?'
+__alphabeta = r'alpha|beta'
+__verfull = "{v}|{ab}".format(v=__ver, ab=__alphabeta)
+
+# composite
+__vcomp = r"\b({v}[_-])*{v}$".format(v=__verfull)
+
+# possible extra crap on end of name
+_extra_stuff = re.compile(__vcomp, re.I)
+    # r"([v]?[0-9_-]+)?(beta)?(alpha)?$", re.I)
+# --this is nowhere near robust enough...
+
+# _re_ver = re.compile(r"\b[vV](?:[0-9]+[._-])*[0-9]+[ab]?$")
+_version_format = re.compile(__ver, re.I)
