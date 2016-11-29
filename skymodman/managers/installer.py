@@ -115,6 +115,11 @@ class InstallManager(Submanager):
 
         self.info = InfoXML(infoxml_file)
 
+        if self.info.name:
+            self.LOGGER << "Mod Name from info.xml: {}".format(self.info.name)
+
+            self._install_dirname = self.info.name.lower()
+
 
     async def prepare_fomod(self, xmlfile, extract_dir=None):
         """
