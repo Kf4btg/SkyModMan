@@ -73,7 +73,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.setWindowTitle(constants.APPTITLE)
 
         # for cancelling asyncio actions
-        self.task = None
+        self.task = None # type: asyncio.Task
         self.install_helper = None
 
         # setup trackers for all of our models and proxies
@@ -111,6 +111,15 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             objectName="action_clear_missing",
             icon=QtGui.QIcon().fromTheme("edit-clear"),
             triggered=self.remove_missing)
+
+        ## Action that will cancel any active asyncio task
+        # noinspection PyArgumentList
+        self.action_cancel_task = QtWidgets.QAction(
+            "Cancel Operation",
+            self,
+            objectName="action_cancel_task",
+            icon=QtGui.QIcon.fromTheme("dialog-cancel"),
+            triggered=self.cancel_task)
 
         # Call the setup methods which do not rely on the data backend
         self._setup_ui_interface()
@@ -392,8 +401,19 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.sb_progress_bar = QtWidgets.QProgressBar(self)
         self.sb_progress_bar.setMaximumWidth(100)
 
+        # cancel button
+        self.sb_progress_cancel_btn = QtWidgets.QToolButton(self)
+        self.sb_progress_cancel_btn.setIcon(QtGui.QIcon.fromTheme('dialog-cancel'))
+        self.sb_progress_cancel_btn.setToolTip("Cancel Operation")
+        # connect click to cancel_task action
+        self.sb_progress_cancel_btn.clicked.connect(
+            self.action_cancel_task.trigger)
+
+        # button first, then label, then bar
+        self.status_bar.addPermanentWidget(self.sb_progress_cancel_btn)
         self.status_bar.addPermanentWidget(self.sb_progress_label)
         self.status_bar.addPermanentWidget(self.sb_progress_bar)
+        self.sb_progress_cancel_btn.setVisible(False)
         self.sb_progress_label.setVisible(False)
         self.sb_progress_bar.setVisible(False)
 
@@ -842,6 +862,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.sb_progress_bar.setRange(minimum, maximum)
         self.sb_progress_bar.setTextVisible(show_bar_text)
 
+        self.sb_progress_cancel_btn.setVisible(True)
         self.sb_progress_label.setVisible(True)
         self.sb_progress_bar.setVisible(True)
 
@@ -863,8 +884,16 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         Make the statusbar-progress go away.
         """
+        self.sb_progress_cancel_btn.setVisible(False)
         self.sb_progress_bar.setVisible(False)
         self.sb_progress_label.setVisible(False)
+
+    @pyqtSlot()
+    def cancel_task(self):
+        """Cancels the active task."""
+        self.LOGGER << "Cancelling task..."
+
+        self.task.cancel()
 
     ##===============================================
     ## UI Helper Functions
@@ -1107,7 +1136,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         from PyQt5.QtWidgets import QFileDialog
         from PyQt5.QtCore import QDir
 
-        filename=QFileDialog.getOpenFileName(
+        filepath=QFileDialog.getOpenFileName(
             self, "Select Mod Archive",
             # start in use most-recently accessed directory
             # (or home dir if none have been recorded)
@@ -1117,30 +1146,35 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # short-circuit for testing
         # filename='res/7ztest.7z'
-        if filename:
-            dirname = os.path.dirname(filename)
-            archive_name = os.path.splitext(os.path.basename(filename))[0]
+        if filepath:
+            directory = os.path.dirname(filepath)
+            # archive_name = os.path.splitext(os.path.basename(filename))[0]
 
             # Add the containing directory to the MRU-list
-            app_settings.Set("RecentFiles", "installer", dirname)
+            app_settings.Set("RecentFiles", "installer", directory)
 
             # check that the given mod does not already exist
-            if archive_name.lower() not in self.Manager.managed_mod_folders:
+            # if archive_name.lower() not in self.Manager.managed_mod_folders:
                 # installui = InstallerUI(self.Manager) # helper class
-                if manual:
-                    # show busy indicator while archive is examined
-                    self.show_statusbar_progress("Loading archive:")
-                else:
-                    # show busy indicator while installer loads
-                    self.show_statusbar_progress("Preparing installer:")
 
-                self.task = asyncio.get_event_loop().create_task(
-                    self.install_helper.do_install(filename,
-                                         self.hide_statusbar_progress,
-                                         manual))
+            ##-> we can't check for existence here because the mod name
+            # is not always the same/similar to the archive name
+
+
+            if manual:
+                # show busy indicator while archive is examined
+                self.show_statusbar_progress("Loading archive:")
             else:
+                # show busy indicator while installer loads
+                self.show_statusbar_progress("Preparing installer:")
+
+            self.task = asyncio.get_event_loop().create_task(
+                self.install_helper.do_install(filepath,
+                                     self.hide_statusbar_progress,
+                                     manual))
+            # else:
                 # tODO: inform the user and offer reinstall/cancel options
-                self.LOGGER.warning("Mod {0!r} already installed!".format(archive_name))
+                # self.LOGGER.warning("Mod {0!r} already installed!".format(archive_name))
 
 
         del QFileDialog

@@ -40,70 +40,82 @@ class InstallerUI(QObject):
         :param ready_callback: called when an installer dialog is about to be shown.
         """
 
-        if manual:
-            self.LOGGER << "initiating installer for manual install"
+        # this method is used as a task, so catch the CancelledError;
+        # cancel is provided mainly in case something goes wrong and
+        # whatever install-method was supposed to happen never gets
+        # executed. The user can click the cancel button to stop
+        # the "busy" indicator from running indefinitely
+        # TODO: I feel like we should be able to determine when there was an exception and clear the busy indicator in that case without needing a manual cancel from the user
 
-            self.installer = await self.Manager.get_installer(archive)
-            modfs = await self.installer.mkarchivefs()
-            ready_callback()
-            await self._show_manual_install_dialog(modfs)
+        try:
+            if manual:
+                self.LOGGER << "initiating installer for manual install"
 
-        else:
-            # FIXME: make sure this temp dir is cleaned up even if we crash and burn during the install
-            with TemporaryDirectory() as tmpdir:
-                self.LOGGER << "Created temporary directory at %s" % tmpdir
-
-                self.installer = await self.Manager.get_installer(archive, tmpdir)
-
+                self.installer = await self.Manager.get_installer(archive)
+                modfs = await self.installer.mkarchivefs()
                 ready_callback()
+                await self._show_manual_install_dialog(modfs)
 
-                # mod name could come from info.xml, or we may have to
-                # derive it elsewhise
-                self.installer.derive_mod_name()
+            else:
+                # FIXME: make sure this temp dir is cleaned up even if we crash and burn during the install
+                with TemporaryDirectory() as tmpdir:
+                    self.LOGGER << "Created temporary directory at %s" % tmpdir
 
-                # short circuit for testing
-                # return
+                    self.installer = await self.Manager.get_installer(archive, tmpdir)
 
-                # Fomod config was found and prepared
-                if self.installer.has_fomod:
-                    await self.run_fomod_installer(tmpdir)
+                    ready_callback()
 
-                else:
-                    self.LOGGER << "No FOMOD config found."
+                    # mod name could come from info.xml, or we may have to
+                    # derive it elsewhise
+                    self.installer.derive_mod_name()
 
-                    # count the files, and get the mod structure
-                    # count = await installer.get_file_count()
+                    # short circuit for testing
+                    # return
 
-                    # retrieve a view of the archive's contents as a pseudo-filesystem
-                    modfs = await self.installer.mkarchivefs()
+                    # Fomod config was found and prepared
+                    if self.installer.has_fomod:
+                        await self.run_fomod_installer(tmpdir)
 
-                    ## check the root of the file hierarchy for usable data
-                    if modfs.fsck_quick():
-                        ## if it's there, install the mod automatically
-                        await self.extraction_progress_dialog()
                     else:
-                        ## perform one last check if the previous search turned up nothing:
-                        # if there is only one item on the top level
-                        # of the mod and that item is a directory, then check inside that
-                        # directory for the necessary files.
+                        self.LOGGER << "No FOMOD config found."
 
-                        root_items = modfs.listdir("/")
+                        # count the files, and get the mod structure
+                        # count = await installer.get_file_count()
 
-                        ## only 1 item...
-                        # ## which is a directory...
-                        # ## that contains game data
-                        if len(root_items) == 1 \
-                                and modfs.is_dir(root_items[0]) \
-                                and modfs.fsck_quick(root_items[0]):
-                            self.LOGGER << "Game data found in immediate" \
-                                           "subdirectory {0!r}.".format(str(root_items[0]))
-                            await self.extraction_progress_dialog(str(root_items[0]))
-                            # message("information", title="Game Data Found",
-                            #         text="In immediate subdirectory '{}'. Automatic install of this data would be performed now.".format(root_items[0]))
+                        # retrieve a view of the archive's contents as a pseudo-filesystem
+                        modfs = await self.installer.mkarchivefs()
 
+                        ## check the root of the file hierarchy for usable data
+                        if modfs.fsck_quick():
+                            ## if it's there, install the mod automatically
+                            await self.extraction_progress_dialog()
                         else:
-                            self.logger.warning("no toplevel items found; showing manual install dialog")
-                            await self._show_manual_install_dialog(modfs)
+                            ## perform one last check if the previous search turned up nothing:
+                            # if there is only one item on the top level
+                            # of the mod and that item is a directory, then check inside that
+                            # directory for the necessary files.
+
+                            root_items = modfs.listdir("/")
+
+                            ## only 1 item...
+                            # ## which is a directory...
+                            # ## that contains game data
+                            if len(root_items) == 1 \
+                                    and modfs.is_dir(root_items[0]) \
+                                    and modfs.fsck_quick(root_items[0]):
+                                self.LOGGER << "Game data found in immediate" \
+                                               "subdirectory {0!r}.".format(str(root_items[0]))
+                                await self.extraction_progress_dialog(str(root_items[0]))
+                                # message("information", title="Game Data Found",
+                                #         text="In immediate subdirectory '{}'. Automatic install of this data would be performed now.".format(root_items[0]))
+
+                            else:
+                                self.logger.warning("no toplevel items found; showing manual install dialog")
+                                await self._show_manual_install_dialog(modfs)
+        except asyncio.CancelledError:
+            self.LOGGER.warning("Installation task cancelled!")
+            # invoke the callback if not already done
+            ready_callback()
 
 
     def install_successful(self):
