@@ -255,6 +255,10 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # instantiate installation helper
         self.install_helper = InstallerUI(self)
         self.install_helper.modAdded.connect(self.on_mod_install)
+        # when an install manager has been prepared and a dialog is
+        # about to shown, stop the activity indicator in the statusbar
+        self.install_helper.installerReady.connect(
+            self.hide_statusbar_progress)
 
 
         # load the initial profile (or not, depending on profile load policy)
@@ -894,6 +898,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.LOGGER << "Cancelling task..."
 
         self.task.cancel()
+        # hide the activity indicator if it's visible
+        self.hide_statusbar_progress()
 
     ##===============================================
     ## UI Helper Functions
@@ -1170,7 +1176,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
             self.task = asyncio.get_event_loop().create_task(
                 self.install_helper.do_install(filepath,
-                                     self.hide_statusbar_progress,
                                      manual))
             # else:
                 # tODO: inform the user and offer reinstall/cancel options
