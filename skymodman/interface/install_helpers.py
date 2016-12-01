@@ -61,6 +61,9 @@ class InstallerUI(QObject):
 
             #TODO: cleanup (...clean up what?)
 
+    # separate the manual/auto code into
+    # individual methods just for readability
+
     async def _do_install_manual(self, archive):
         """For explicitly-manual installs (not 'fallback-to-manual')"""
         self.LOGGER << "initiating installer for manual install"
@@ -137,15 +140,13 @@ class InstallerUI(QObject):
                         self.installerReady.emit()
                         await self.extraction_progress_dialog(
                             str(root_items[0]))
-                        # message("information", title="Game Data Found",
-                        #         text="In immediate subdirectory '{}'. Automatic install of this data would be performed now.".format(root_items[0]))
 
                     else:
-                        self.logger.warning(
+                        self.LOGGER.warning(
                             "no toplevel items found; "
                             "showing manual install dialog")
 
-
+                        self.installerReady.emit()
                         await self._show_manual_install_dialog(modfs)
 
     def install_successful(self):
