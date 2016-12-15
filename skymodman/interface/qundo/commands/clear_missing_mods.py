@@ -62,11 +62,15 @@ class ClearMissingModsCommand(QUndoCommand):
         self._model.beginResetModel()
         self._model.blockSignals(True)
 
+        # compensate for shifting indices as we remove from collection
+        num_removed=0
         for g in self.groups:
+            c=len(g)
             # g is a list of (int, ModEntry) tuples;
             #   g[0] => first (row, mod) tuple in this group;
             #       g[0][0] => the row number of the first mod
-            self._model.remove_rows(g[0][0], len(g))
+            self._model.remove_rows(g[0][0]-num_removed, c)
+            num_removed+=c
 
         self._model.blockSignals(False)
         # have model re-evaluate the current errors
