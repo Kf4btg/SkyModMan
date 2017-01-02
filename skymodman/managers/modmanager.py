@@ -2,6 +2,8 @@ from pathlib import Path, PurePath
 from functools import lru_cache
 from itertools import chain
 
+from typing import Set, Dict
+
 from skymodman.utils import tree as _tree
 
 # from skymodman import exceptions
@@ -57,24 +59,19 @@ class ModManager:
         # first, initialize the alerts
         self._diralerts={}
         # set of issues that arise during operation
-        self.alerts = set() # type: Set [Alert]
+        self.alerts: Set[Alert] = set()
 
         # init attributes for submanagers
-        self._configman = None
-        """:type: skymodman.managers.config.ConfigManager"""
-        self._profileman = None
-        """:type: skymodman.managers.profiles.ProfileManager"""
-        self._dbman = None
-        """:type: skymodman.managers.database.DBManager"""
-        self._ioman = None
-        """:type: skymodman.managers.disk.IOManager"""
-        self._collman = None
-        """:type: skymodman.managers.collection.ModCollectionManager"""
+        self._configman : _config.ConfigManager = None
+        self._profileman : _profiles.ProfileManager = None
+        self._dbman : _database.DBManager = None
+        self._ioman : _disk.IOManager = None
+        self._collman : _collection.ModCollectionManager = None
 
         ## these (probably) don't really
         ## need a separate manager; they
         ## should pretty much manage themselves.
-        self._folders = {} # type: dict [str, AppFolder]
+        self._folders : Dict[str, AppFolder] = {}
 
         ## conflicting files
         self._file_conflicts = None

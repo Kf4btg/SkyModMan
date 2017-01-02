@@ -2,10 +2,12 @@ from functools import partial
 import asyncio
 import os
 import subprocess
+from typing import Dict
 
-from PyQt5 import QtWidgets, QtGui
+
+from PyQt5 import QtWidgets, QtGui, QtCore
 # specifically import some frequently used names
-from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import Qt, pyqtSlot
 from PyQt5.QtWidgets import QMessageBox
 
 from skymodman import constants, Manager
@@ -39,19 +41,21 @@ from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow
 
 @withlogger
 class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
-    # noinspection PyArgumentList
-    modListModified     = pyqtSignal()
-    # noinspection PyArgumentList
-    modListSaved        = pyqtSignal()
+    # region signals
 
     # noinspection PyArgumentList
-    moveMods            = pyqtSignal(int)
+    modListModified     = QtCore.pyqtSignal()
     # noinspection PyArgumentList
-    moveModsToTop       = pyqtSignal()
-    # noinspection PyArgumentList
-    moveModsToBottom    = pyqtSignal()
+    modListSaved        = QtCore.pyqtSignal()
 
-    instance = None # type: ModManagerWindow
+    # noinspection PyArgumentList
+    moveMods            = QtCore.pyqtSignal(int)
+    # noinspection PyArgumentList
+    moveModsToTop       = QtCore.pyqtSignal()
+    # noinspection PyArgumentList
+    moveModsToBottom    = QtCore.pyqtSignal()
+
+    # endregion
 
     def __init__(self, **kwargs):
         """
@@ -65,7 +69,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """:type: skymodman.interface.qmodmanager.QModManager"""
 
         self.LOGGER.info("Initializing ModManager Window")
-        ModManagerWindow.instance = self
 
         # setup the base ui
         self.setupUi(self)
@@ -73,12 +76,12 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.setWindowTitle(constants.APPTITLE)
 
         # for cancelling asyncio actions
-        self.task = None # type: asyncio.Task
-        self.install_helper = None
+        self.task : asyncio.Task = None
+        self.install_helper : InstallerUI = None
 
         # setup trackers for all of our models and proxies
-        self.models  = {} #type: dict [M,QtCore.QAbstractItemModel]
-        self.filters = {} #type: dict [F,QtCore.QSortFilterProxyModel]
+        self.models : Dict[M, QtCore.QAbstractItemModel] = {}
+        # self.filters : Dict [F,QtCore.QSortFilterProxyModel] = {}
 
         self._currtab = TAB.MODTABLE
 
@@ -95,9 +98,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         ## only affect that tab.
         self.undoManager = QtWidgets.QUndoGroup(self)
         # initialize a map of the undo stacks
-        self.undo_stacks = {
-            TAB.MODTABLE: None, # type: QtWidgets.QUndoStack
-            TAB.FILETREE: None  # type: QtWidgets.QUndoStack
+        self.undo_stacks : Dict[TAB, QtWidgets.QUndoStack] = {
+            TAB.MODTABLE: None,
+            TAB.FILETREE: None
         }
 
         # ---------------------------------------------------
@@ -302,7 +305,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     ##=============================================
     ## Data-independent setup
     ##=============================================
-    #<editor-fold desc="interface setup">
+    # region interface setup
 
     def _setupui_alerts_button(self):
         """
@@ -336,7 +339,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         * Add/remove profile buttons
         * change mod-order buttons (up/down/top/bottom)
         """
-        self.LOGGER.debug("_setup_toolbar")
+        self.LOGGER << "_setup_toolbar"
 
         # Profile selector and add/remove buttons
 
@@ -395,7 +398,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         Add a progress bar to the status bar. Will be used for showing
         progress or activity of long-running processes.
         """
-        self.LOGGER.debug("_setup_statusbar")
+        self.LOGGER << "_setup_statusbar"
 
         # putting the bar and label together into a container
         # widget caused the 'busy' animation not to play...
@@ -425,11 +428,12 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         Prepare the mods-display table and related functionality
         """
-        self.LOGGER.debug("_setup_table_UI")
+        self.LOGGER << "_setup_table_UI"
 
         self.mod_table.setupui(self.modtable_search_box)
 
         # handler for [dis|en]abling the search actions
+        @pyqtSlot()
         def on_enable_searchactions(enable):
             self.action_find_next.setEnabled(enable)
             self.action_find_previous.setEnabled(enable)
@@ -460,12 +464,12 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         also set some shortcut sequences
         """
 
-        self.LOGGER.debug("_setup_actions")
+        self.LOGGER << "_setup_actions"
 
         # create containers to enable easily setting up connections/
         # shortcuts via simple loops
 
-        # tuple(action, slot_on_trigger)
+        ## tuple(action, call_on_trigger)
         connections = [
             (self.action_new_profile        ,
                 self.profile_helper.on_new_profile_action),
@@ -495,8 +499,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             (self.action_show_in_file_manager, self.open_dir_in_fm)
         ]
 
-        # tuple(action, shortcut-sequence)
         qks = QtGui.QKeySequence
+        # tuple(action, shortcut-sequence)
         shortcuts = [
             (self.action_quit          , qks.Quit),
             (self.action_save_changes  , qks.Save),
@@ -537,13 +541,13 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def _setupui_button_connections(self):
         """ Make the buttons do stuff
         """
-        self.LOGGER.debug("_setup_buttons")
+        self.LOGGER << "_setup_buttons"
 
         # use a dialog-button-box for save/cancel;
         # have to specify by standard button type
-        btn_apply = self.save_cancel_btnbox.button(
+        btn_apply : QtWidgets.QPushButton = self.save_cancel_btnbox.button(
             QtWidgets.QDialogButtonBox.Apply)
-        btn_reset = self.save_cancel_btnbox.button(
+        btn_reset : QtWidgets.QPushButton = self.save_cancel_btnbox.button(
             QtWidgets.QDialogButtonBox.Reset)
 
         # connect the apply button to the 'save-changes' action
@@ -560,10 +564,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         btn_reset.clicked.connect(
             self.action_revert_changes.trigger)
 
-        # using released since 'clicked' sends an extra
-        # bool argument (which means nothing in this context
-        # but messes up the callback)
-        self.modtable_search_button.released.connect(
+        # connect search button to expanding/collapsing the search box
+        self.modtable_search_button.clicked.connect(
             self.mod_table.toggle_search_box)
 
 
@@ -575,7 +577,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         of the main window) or non-local (part of a sub-component)
 
         """
-        self.LOGGER.debug("_setup_signals_and_slots")
+        self.LOGGER << "_setup_signals_and_slots"
 
         tbl=self.mod_table
         prof=self.profile_helper
@@ -613,9 +615,13 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         for signal, slot in connections:
             signal.connect(slot)
 
-    #</editor-fold>
+    # endregion
 
-    #<editor-fold desc="data-dependent setup">
+    ##=============================================
+    ## Data-dependent setup
+    ##=============================================
+
+    # region data provider setup
 
     def _setup_profile_selector(self):
         """
@@ -709,13 +715,13 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # self.undoView.show()
         # self.undoView.setAttribute(Qt.WA_QuitOnClose, False)
 
-    # </editor-fold>
+    # endregion
 
     ##=============================================
     ## Event Handlers/Slots
     ##=============================================
 
-    # <editor-fold desc="EventHandlers">
+    # region EventHandlers
 
     @pyqtSlot(int)
     def on_tab_changed(self, newindex):
@@ -826,13 +832,13 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.mod_table.model().add_mod(
             self.Manager.load_newly_installed_mod(mod_key))
 
+    # endregion
 
-
-    # </editor-fold>
 
     ##=============================================
     ## Statusbar operations
     ##=============================================
+    # region statusbar
 
     @pyqtSlot(str)
     def on_status_text_change_request(self, text):
@@ -901,9 +907,13 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # hide the activity indicator if it's visible
         self.hide_statusbar_progress()
 
+    # endregion
+
     ##===============================================
     ## UI Helper Functions
     ##===============================================
+
+    # region update UI
 
     def update_alerts(self):
         """
@@ -1016,6 +1026,22 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     # def on_filetree_fileviewer_rootpathchanged(self, newpath):
     #
 
+    @pyqtSlot(bool, str, bool)
+    def update_profile_actions(self, enable_remove, remove_tooltip,
+                               enable_rename):
+        """
+
+        :param bool enable_remove: whether to enable the 'delete profile' button
+        :param str remove_tooltip: tooltip for the delete profile button
+        :param bool enable_rename: whether to enable the 'rename profile' button
+        """
+
+        self.action_delete_profile.setEnabled(enable_remove)
+        self.action_delete_profile.setToolTip(remove_tooltip)
+        self.action_rename_profile.setEnabled(enable_rename)
+
+    # endregion
+
     def table_prompt_if_unsaved(self):
         """
         Check for unsaved changes to the mods list and show a prompt if
@@ -1047,18 +1073,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # may contine as normal
         return None
 
-    @pyqtSlot(bool, str, bool)
-    def update_profile_actions(self, enable_remove, remove_tooltip, enable_rename):
-        """
-
-        :param bool enable_remove: whether to enable the 'delete profile' button
-        :param str remove_tooltip: tooltip for the delete profile button
-        :param bool enable_rename: whether to enable the 'rename profile' button
-        """
-
-        self.action_delete_profile.setEnabled(enable_remove)
-        self.action_delete_profile.setToolTip(remove_tooltip)
-        self.action_rename_profile.setEnabled(enable_rename)
 
     ###=============================================
     ## Actions
@@ -1067,7 +1081,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     ## signals to connect to
     ###=============================================
 
-    #<editor-fold desc="actions">
+    # region action slots
 
     @pyqtSlot()
     def edit_preferences(self):
@@ -1243,7 +1257,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.mod_table.clear_missing_mods()
 
-    #</editor-fold>
+    # endregion
 
     ##=============================================
     ## Qt Overrides

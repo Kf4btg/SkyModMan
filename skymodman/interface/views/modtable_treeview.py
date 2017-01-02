@@ -51,20 +51,18 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         # noinspection PyArgumentList
         super().__init__(parent, *args, **kwargs)
 
-        self._model  = None
+        self._model = None
         """:type: skymodman.interface.models.ModTable_TreeModel"""
 
-        self._selection_model = None # type: qISM
+        self._selection_model: qISM = None
         # self.LOGGER << "Init ModTable_TreeView"
 
         # debugging: print modentry on click
         # self.clicked.connect(lambda i: print(i.internalPointer()))
 
         # placeholder for the associated search box and animation
-        self._searchbox = None
-        """:type: QtWidgets.QLineEdit"""
-        self.animate_show_search = None
-        """:type: QtCore.QPropertyAnimation"""
+        self._searchbox: QtWidgets.QLineEdit = None
+        self.animate_show_search: QtCore.QPropertyAnimation = None
 
         # a bitwise-OR combination of the types of errors currently
         # found in the table
@@ -371,9 +369,7 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         current_is_enabled = bool(self.currentIndex().internalPointer().enabled)
         sel = self.selectedIndexes()
 
-        # _text = ("Enable", "Disable")[currstate]
         _text = "Disable" if current_is_enabled else "Enable"
-        # _checked = (Qt_Checked, Qt_Unchecked)[currstate]
 
         # splitting these up may help with some undo weirdness...
 
@@ -654,7 +650,7 @@ class CheckBoxDelegate(QtWidgets.QStyledItemDelegate):
         super().__init__(parent, *args, **kwargs)
 
         # get the undo stack instance from the parent (the treeview)
-        self._stack = parent.undo_stack # type: QtWidgets.QUndoStack
+        self._stack : QtWidgets.QUndoStack = parent.undo_stack
 
 
 
@@ -689,7 +685,7 @@ class LineEditDelegate(QtWidgets.QStyledItemDelegate):
         super().__init__(parent, *args, **kwargs)
 
         # get the undo stack instance from the parent (the treeview)
-        self._stack = parent.undo_stack  # type: QtWidgets.QUndoStack
+        self._stack : QtWidgets.QUndoStack = parent.undo_stack
 
 
     def setModelData(self, editor, model, index):

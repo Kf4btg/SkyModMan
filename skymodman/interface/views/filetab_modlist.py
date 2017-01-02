@@ -31,6 +31,7 @@ class FileTabModList(qtW.QListView):
 
         # the source model
         self._srcmodel = None
+        """:type: PyQt5.QtCore.QAbstractItemModel.QAbstractItemModel"""
         # placeholder for the search filter
         self._filter = None
         """:type: skymodman.interface.models.ActiveModsListFilter"""
@@ -38,8 +39,8 @@ class FileTabModList(qtW.QListView):
         # placeholders for the associated checkbox and label; will
         # handle these here to keep all things related to the mods-list
         # coordinated in this class
-        self._label = None # type: qtW.QLabel
-        self._cbox = None # type: qtW.QCheckBox
+        self._label : qtW.QLabel = None
+        self._cbox : qtW.QCheckBox = None
         self._filterbox = None
         """:type: skymodman.interface.designer.plugins.widgets.escapeablelineedit.EscapeableLineEdit"""
 
@@ -84,7 +85,7 @@ class FileTabModList(qtW.QListView):
     def setup(self, source_model, label, checkbox, filterbox):
         """
 
-        :param QAbstractItemModel source_model: the main mod-table model
+        :param PyQt5.QtCore.QAbstractItemModel.QAbstractItemModel source_model: the main mod-table model
         :param qtW.QLabel label:
         :param qtW.QCheckBox checkbox:
         :param skymodman.interface.designer.plugins.widgets.escapeablelineedit.EscapeableLineEdit filterbox:
