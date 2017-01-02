@@ -42,7 +42,7 @@ class ArchiveHandler:
         rar files. Apparently not all versions of 7z have
         the "7z i" command...so we have to do it the hard way.
 
-        :return: True if the Rar codec lib
+        :return: True if the Rar codec lib exists
         """
         codec_dir = 'p7zip/Codecs'
         codec_name = re.compile(r'Rar[0-9]*\.so')
@@ -64,12 +64,13 @@ class ArchiveHandler:
         return False
 
     _list_archive_cache=diqt(maxlen_=8)
-    _cache_hits=0
-    _cache_misses=0
+    # _cache_hits=0
+    # _cache_misses=0
     async def list_archive(self, archive):
         """
 
-        Returns a 2-tuple where the first item is a list of all the directories in the `archive`, the second a list of all the files
+        Returns a 2-tuple where the first item is a list of all the
+        directories in the `archive`, the second a list of all the files
         """
 
         try:
@@ -92,18 +93,20 @@ class ArchiveHandler:
 
 
     async def _archive_contents(self, archive):
+        """
+        Use the 'list' option of 7z to examine the types of files
+        held within the archive without actually extracting them all
+        """
         # self.LOGGER << "BEGIN _archive_contents"
         files_buffer = bytearray()
         dirs_buffer = bytearray()
 
-        # self.LOGGER << "Creating 7z process"
         create = asyncio.create_subprocess_exec(
             "7z", "l", archive,
             stdout=asyncio.subprocess.PIPE)
 
         proc = await create
 
-        # self.LOGGER << "waiting for process creation"
         while True:
             # as each line comes in
             line = await proc.stdout.readline()
@@ -126,7 +129,8 @@ class ArchiveHandler:
         if not return_code: # == 0
             # self.LOGGER << "Return code was 0; parsing results"
             # decode bytes results to str and parse into a list
-            files = self._parse_7z_filelisting(bytes(files_buffer).decode())
+            files = self._parse_7z_filelisting(
+                bytes(files_buffer).decode())
 
             dirs = self._parse_7z_filelisting(
                 # add / to end of directories to differentiate them
@@ -141,7 +145,10 @@ class ArchiveHandler:
 
     def _parse_7z_filelisting(self, output, suffix=''):
         """
-        Split the lines returned from the ``7z l`` command into a list of filenames. If suffix is a non-empty string, it will be appended to the end of each file name.
+        Split the lines returned from the ``7z l`` command into a list
+        of filenames. If suffix is a non-empty string, it will be
+        appended to the end of each file name.
+
         :param output:
         :param suffix:
         :return:
@@ -151,7 +158,6 @@ class ArchiveHandler:
             return []
         lines = output.splitlines()
 
-        # normalize to lower case
         return [l+suffix for l in lines]
 
     async def extract(self, archive, destination,
@@ -216,6 +222,9 @@ class ArchiveHandler:
         c = count(start=1)
         loop = asyncio.get_event_loop()
         while True:
+            # simulate long processes
+            # await asyncio.sleep(1)
+
             line = await proc.stdout.readline()
             # print("{!r}".format(line))
             if not line: break
