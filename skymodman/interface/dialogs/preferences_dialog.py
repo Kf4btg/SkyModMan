@@ -562,8 +562,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
                 # TODO: remember choice. Also for everything else in app
                 # TODO: show progress dialog
                 do_move, remove_old = checkbox_message(
-                    title="Transfer {} Data?".format(
-                        MManager.Folders[key].display_name),
+                    title=f"Transfer {MManager.Folders[key].display_name} Data?",
                     text="Would you like to move your existing "
                          "data to the new location?",
                     checkbox_text="Also remove original directory",
@@ -610,7 +609,7 @@ class PreferencesDialog(QDialog, Ui_Preferences_Dialog):
             s = ""
             for file, exc in mfe.errors:
                 self.LOGGER.exception(exc)
-                s += "{0}: {1}\n".format(file, exc)
+                s += f"{file}: {exc}\n"
             message('critical',
                     title="Errors during move operation",
                     text="The move operation may not have fully completed. The following errors were encountered: ",

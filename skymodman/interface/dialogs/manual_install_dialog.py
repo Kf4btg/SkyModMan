@@ -146,32 +146,32 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         txtcol.setAlphaF(0.5)
 
         # normal border is main text color @ 50% opacity
-        border_color = "rgba{}".format(str(txtcol.getRgb()))
+        border_color = f"rgba{str(txtcol.getRgb())}"
         # hovered border is palette highlight color
         # hover_border_color = "rgba{}".format(str(hlcol.getRgb()))
 
         # hovered btn-bg is highlight color @ 30% opacity
         hlcol = pal.color(QPalette.Highlight)
         hlcol.setAlphaF(0.3)
-        hover_bg = "rgba{}".format(str(hlcol.getRgb()))
+        hover_bg = f"rgba{str(hlcol.getRgb())}"
 
-        btn_stylesheet = """QGroupBox {
+        btn_stylesheet = f"""QGroupBox {{
                                 background: transparent;
                                 padding: 6px;
-                           }
-                           QToolButton {
+                           }}
+                           QToolButton {{
                                background: transparent;
-                               border: 1px solid %s;
+                               border: 1px solid {border_color};
                                border-radius: 2px;
-                           }
-                           QToolButton:checked {
+                           }}
+                           QToolButton:checked {{
                                 background: palette(midlight);
-                            }
-                           QToolButton:hover {
-                               background: %s;
+                            }}
+                           QToolButton:hover {{
+                               background: {hover_bg};
                                border: 1px solid palette(highlight);
-                           }
-                           """ % (border_color, hover_bg)
+                           }}
+                           """
 
         ## create overlay for undo/redo buttons ##
         undo_overlay = Overlay("top", "right", btn_stylesheet)
@@ -311,8 +311,7 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
         # noinspection PyArgumentList,PyTypeChecker
         new_name = QInputDialog.getText(self, "New Folder",
-                                        "Create new folder in:\n{}"
-                                        .format(parent),
+                                        f"Create new folder in:\n{parent}",
                                         text=startname)[0]
 
         if new_name:

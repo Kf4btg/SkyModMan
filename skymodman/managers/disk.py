@@ -79,9 +79,8 @@ class IOManager(Submanager):
 
             except json.decoder.JSONDecodeError:
                 self.LOGGER.error(
-                    "No mod information present in {}, "
-                    "or file is malformed."
-                    .format(json_source))
+                    f"No mod information present in {json_source}, "
+                    "or file is malformed.")
                 success = False
             else:
                 container.extend(modentry_list)
@@ -383,9 +382,8 @@ class IOManager(Submanager):
                 # (i.e. non-directories) within the parent directory
                 hidden_files = json.load(f)
             except json.decoder.JSONDecodeError:
-                self.LOGGER.warning("No hidden files listed in {}, "
-                                   "or file is malformed."
-                                   .format(json_source))
+                self.LOGGER.warning(f"No hidden files listed in {json_source}, "
+                                   "or file is malformed.")
             else:
                 if hidden_files:
 

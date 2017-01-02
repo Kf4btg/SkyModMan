@@ -126,7 +126,7 @@ class AppFolder:
     def __repr__(self):
         # returns a representation of the CURRENT state of the object,
         # which is not necessarily the same as its initialization state.
-        return "AppFolder(name={0.name}, display_name={0.display_name}, default_path={0.default_path}, current_path={0.current_path}".format(self)
+        return f"AppFolder(name={self.name}, display_name={self.display_name}, default_path={self.default_path}, current_path={self.current_path}"
 
     def __eq__(self, other):
         # can compare with strings, paths, or other AppFolders
@@ -308,7 +308,7 @@ class AppFolder:
         """
 
         if not new_path:
-            raise ValueError("new_path must have a valid value, not '{}'".format(new_path))
+            raise ValueError(f"new_path must have a valid value, not '{new_path}'")
 
         try:
             fsutils.move_dir_contents(self.spath, str(new_path),

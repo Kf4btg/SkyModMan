@@ -25,29 +25,29 @@ class ConfigError(Error):
 class InvalidConfigSectionError(GeneralError):
     def __init__(self, section):
         self.section = section
-        super().__init__("Invalid section header '{}'".format(section))
+        super().__init__(f"Invalid section header '{section}'")
 
 class ConfigValueUnsetError(ConfigError):
     """The given key and section exist, but do not contain a valid value"""
     def __str__(self):
-        return "Configuration parameter '{0.key}' in section '{0.section}' is unset.".format(self)
+        return f"Configuration parameter '{self.key}' in section '{self.section}' is unset."
     
 class MissingConfigSectionError(GeneralError):
     def __init__(self, section):
         self.section = section
-        super().__init__("Section header '{}' not found".format(section))
+        super().__init__(f"Section header '{section}' not found")
 
 class MissingConfigKeyError(ConfigError):
     """Based on the config-file schema, the application has determined that a key that should be in the config file is not present."""
     def __str__(self):
-        return "Configuration file missing key '{0.key}' from section '{0.section}'.".format(self)
+        return f"Configuration file missing key '{self.key}' from section '{self.section}'."
 
 class InvalidConfigKeyError(ConfigError):
     """
     A key was requested from the configuration file that is not present in the schema
     """
     def __str__(self):
-        return "'{0.key}' is not a valid configuration key for section '{0.section}'.".format(self)
+        return f"'{self.key}' is not a valid configuration key for section '{self.section}'."
 
 #---------------------------
 class InvalidAppDirectoryError(GeneralError):
@@ -133,7 +133,7 @@ class MultiFileError(Error):
 
     def __str__(self):
         if self.msg:
-            return "{0.msg}: {0.errors}".format(self)
+            return f"{self.msg}: {self.errors}"
         return str(self.errors)
 
 
@@ -156,10 +156,10 @@ class FilesystemDesyncError(Error):
     def __str__(self):
         s=""
         if self.count_not_found:
-            s+="{} listed mods were not found on disk".format(self.count_not_found)
+            s+=f"{self.count_not_found} listed mods were not found on disk"
         if self.count_not_listed:
             if s: s+=", and "
-            s+="{} mods found on disk were not recognized".format(self.count_not_listed)
+            s+=f"{self.count_not_listed} mods found on disk were not recognized"
         return s+"."
 
 #------------------------------

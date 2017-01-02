@@ -73,8 +73,7 @@ class FomodInstaller(QWizard):
                         QWizard.NoBackButtonOnLastPage   |
                         QWizard.NoCancelButtonOnLastPage
                         )
-        self.setWindowTitle("Mod Installation: " +
-                            self.fomod.modname.name)
+        self.setWindowTitle(f"Mod Installation: {self.fomod.modname.name}")
 
         # create and add the title/splash/firstwhatever page.
         # self._start_page = StartPage(self.rootpath,
@@ -201,7 +200,7 @@ class FinalPage(QWizardPage, Ui_FinalPage):
         self._html.append(self._opening_html)
 
         for f in self.fomod.files_to_install:
-            self._html.append("<li>{0.source}</li>".format(f))
+            self._html.append(f"<li>{f.source}</li>")
         self._html.append(self._closing_html)
 
         # Set the box to display the html list

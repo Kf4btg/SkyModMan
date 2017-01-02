@@ -360,7 +360,7 @@ class ModManager:
 
         :param AppFolder folder:
         """
-        self.LOGGER << "on_dir_change({0.name})".format(folder)
+        self.LOGGER << f"on_dir_change({folder.name})"
 
 
         # an appfolder instance is "False" if the path is unset/invalid
@@ -467,8 +467,7 @@ class ModManager:
         elif isinstance(profile, str):
             profile = self._profileman[profile]
 
-        self.LOGGER << "Renaming profile: {0!r}->{1!r}".format(profile.name,
-                                                     new_name)
+        self.LOGGER << f"Renaming profile: {profile.name!r}->{new_name!r}"
         self._profileman.rename_profile(profile, new_name)
 
         if profile is self.profile:
@@ -548,7 +547,7 @@ class ModManager:
 
         ## **Notes on this stuff can be found under _change_profile()
 
-        self.LOGGER << "Loading initial profile: {}".format(profile_name)
+        self.LOGGER << f"Loading initial profile: {profile_name}"
 
         # this will enable any profile overrides there may be
         self._profileman.set_active_profile(profile_name)
@@ -571,8 +570,7 @@ class ModManager:
         :param profile_name:
         """
 
-        self.LOGGER << "loading data for profile: {}".format(
-            profile_name)
+        self.LOGGER << f"loading data for profile: {profile_name}"
         # keep references to currently (soon to be previously)
         # configured directories
         prev_dirs = {d: self._folders[d].path for d in ks_dir}
@@ -738,8 +736,8 @@ class ModManager:
         errs_cleared, errs_found, err_types = \
             self._collman.validate_mods(self.managed_mod_folders)
 
-        self.LOGGER << "Cleared {} mod error(s)".format(errs_cleared)
-        self.LOGGER << "Found {} new mod error(s)".format(errs_found)
+        self.LOGGER << f"Cleared {errs_cleared} mod error(s)"
+        self.LOGGER << f"Found {errs_found} new mod error(s)"
 
         # if new errors are present and some of them are MOD_NOT_LISTED
         # errors, save the modinfo file since new mods will have been
@@ -802,7 +800,7 @@ class ModManager:
                     c+=len(file_list)
                     # insert into db
                     self._dbman.add_files('mod', mod, file_list)
-                self.LOGGER << "Loaded {} files".format(c)
+                self.LOGGER << f"Loaded {c} files"
 
 
             # try:
@@ -1033,7 +1031,7 @@ class ModManager:
             # find the fomod folder, if there is one
             fomodpath = await installer.get_fomod_path()
 
-            self.LOGGER << "fomodpath: {}".format(fomodpath)
+            self.LOGGER << f"fomodpath: {fomodpath}"
 
             if fomodpath is not None:
 

@@ -1,5 +1,8 @@
 import sqlite3
 
+
+
+# TODO: remove this; this issue is apparently fixed in python 3.6
 # this Connection subclass courtesy of Ryan Kelly:
 # http://code.activestate.com/lists/python-list/189197/
 # during a discussion of the problems with savepoints
@@ -269,10 +272,9 @@ class BaseDBManager:
 
         if not kwargs:
             return int(self._con.execute(
-                "SELECT COUNT(*) FROM {}".format(table)
-            ).fetchone()[0])
+                f"SELECT COUNT(*) FROM {table}").fetchone()[0])
         else:
-            q = "SELECT COUNT(*) FROM {} WHERE ".format(table)
+            q = f"SELECT COUNT(*) FROM {table} WHERE "
             keys = []
             vals = []
             ## do this to make sure the keys and their associated

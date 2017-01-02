@@ -165,8 +165,7 @@ class ProfileHandler(QtCore.QObject):
                 self._selector.setCurrentIndex(old_index)
             else:
                 self.LOGGER.info(
-                    "Activating profile '{}'".format(
-                        new_profile))
+                    f"Activating profile '{new_profile}'")
 
                 if self.Manager.activate_profile(new_profile):
 
@@ -271,7 +270,7 @@ class ProfileHandler(QtCore.QObject):
         # noinspection PyTypeChecker,PyArgumentList
         newname = QtWidgets.QInputDialog.getText(
             self._parent,
-            "Rename Profile '{}'".format(profile_name),
+            f"Rename Profile '{profile_name}'",
             "New name")[0]
 
         if newname:

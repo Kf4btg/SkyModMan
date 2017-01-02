@@ -84,7 +84,7 @@ class _AppSettings:
             # otherwise, pref_name is not a known preference
             raise KeyError(pref_name)
         except KeyError as ke:
-            self.LOGGER.error("KeyError when retrieving preference {0!r} from group {1!r}: {2}".format(pref_name, group, ke))
+            self.LOGGER.error(f"KeyError when retrieving preference {pref_name!r} from group {group!r}: {ke}")
             return None
 
 
@@ -110,7 +110,7 @@ class _AppSettings:
                 d.appendleft(value)
 
         except KeyError:
-            self.LOGGER.error("Invalid app-settings group name: {0!r}".format(group))
+            self.LOGGER.error(f"Invalid app-settings group name: {group!r}")
         # self.setting_changed.emit(pref_name)
 
     # def _read_wrapper(self, func, name, value):

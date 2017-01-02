@@ -303,7 +303,7 @@ class Fomod:
                 self.files_to_install.remove(file)
             except ValueError:
                 # file may not have been in list to begin with, which is ok
-                print("ValueError: {}".format(file))
+                print(f"ValueError: {file}")
                 pass
 
     #=================================

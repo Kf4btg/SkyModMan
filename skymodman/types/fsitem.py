@@ -219,13 +219,14 @@ class FSItem:
 
 
     def __str__(self):
-        return  "{0.__class__.__name__}(name: '{0.name}', " \
-                "path: '{0.path}'," \
-                "row: {0.row}, " \
-                "isdir: {0.isdir}, " \
-                "kids: {0.child_count}, " \
-                "hidden: {0._hidden}" \
-                ")".format(self)
+        return  ", ".join([
+            f"{self.__class__.__name__}(name: '{self.name}'",
+            f"path: '{self.path}'",
+            f"row: {self.row}",
+            f"isdir: {self.isdir}",
+            f"kids: {self.child_count}",
+            f"hidden: {self._hidden})",
+            ])
 
     def __hash__(self):
         """Use the hash of this item's filepath as its hash value"""
@@ -238,11 +239,11 @@ class FSItem:
         use `file` to print to somewhere/something besides sys.stdout
         """
 
-        lines= ("Name: %s " % self.name,
-                  "  Path: %s" % self.path,
-                  "  row: %d" % self.row,
-                  "  kids: %d" % self.child_count,
-                  "  hidden: %s" % self._hidden)
+        lines= (f"Name: {self.name} ",
+                  f"  Path: {self.path}",
+                  f"  row: {self.row}",
+                  f"  kids: {self.child_count}",
+                  f"  hidden: {self._hidden}")
 
         if file is not None:
             for l in lines:

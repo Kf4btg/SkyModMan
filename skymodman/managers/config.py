@@ -210,7 +210,7 @@ class ConfigManager(Submanager, BaseConfigManager):
                     exceptions.MissingConfigSectionError) as e:
                 self.missing_keys.append((e.section, key))
 
-                self.LOGGER << "setting "+key+" to default value"
+                self.LOGGER << f"setting {key} to default value"
                 self._set_value(_SECTION_GENERAL, key, FALLBACK_PROFILE)
 
             finally:
@@ -267,8 +267,7 @@ class ConfigManager(Submanager, BaseConfigManager):
         pdir = self.mainmanager.Folders['profiles'].path / pname
 
         if not pdir.exists():
-            self.LOGGER.warning("{}: Profile directory '{}' not found"
-                                .format(key, pname))
+            self.LOGGER.warning(f"{key}: Profile directory {pname!r} not found")
 
             # if the profile is not already the default, set it so.
             if pname != FALLBACK_PROFILE:
@@ -336,13 +335,12 @@ class ConfigManager(Submanager, BaseConfigManager):
                 else:
                     # noinspection PyTypeChecker
                     self.path_errors[path_key].append(
-                        "default invalid: '{}'".format(def_path))
+                        f"default invalid: '{def_path}'")
 
             # finally, if we have successfully deduced the path, set
             # it on the PathManager
             if p is not None:
-                self.LOGGER << "Setting appfolder {0!r} to {1}".format(
-                    path_key, p)
+                self.LOGGER << f"Setting appfolder {path_key!r} to {p}"
 
                 # force notification since this is the first 'official'
                 # contact with the folder paths
@@ -358,7 +356,7 @@ class ConfigManager(Submanager, BaseConfigManager):
             for att, errlist in self.path_errors.items():
                 for err in errlist:
                     self.LOGGER.warning(
-                        "Path error [" + att + "]: " + err)
+                        f"Path error [{att}]: {err}")
 
         ######################################################################
         #  check env for vfs mount
@@ -397,7 +395,7 @@ class ConfigManager(Submanager, BaseConfigManager):
         given AppFolder instance
 
         :param skymodman.types.AppFolder folder:"""
-        self.LOGGER << "update folderpath: {}".format(folder.name)
+        self.LOGGER << f"update folderpath: {folder.name}"
 
         # TODO: [re]load skyrim fake-mods when skyrim dir is set/changed
 

@@ -29,11 +29,10 @@ class ProfileManager(Submanager):
 
         # make sure directory exists
         if not _profiles_dir.exists():
-            raise FileNotFoundError("Profile directory not found: {}"
-                                    .format(_profiles_dir))
+            raise FileNotFoundError(f"Profile directory not found: {_profiles_dir}")
 
         ## load profile names from folders in profiles-dir
-        self.LOGGER.info("loading profiles from {}".format(_profiles_dir))
+        self.LOGGER.info(f"loading profiles from {_profiles_dir}")
         self._profile_names = [] # type: list [str]
 
         for p in _profiles_dir.iterdir():
@@ -103,9 +102,8 @@ class ProfileManager(Submanager):
         # self.LOGGER.info("Loading profile '{}'.".format(profilename))
 
         if profilename in self.__cache:
-            self.LOGGER.info("Profile {} found in cache;"
-                             " returning cached object.".format(
-                profilename))
+            self.LOGGER.info(f"Profile {profilename} found in cache;"
+                             " returning cached object.")
         elif copy_from:
             try:
                 based_on=self[copy_from]

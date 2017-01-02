@@ -52,7 +52,7 @@ class InstallManager(Submanager):
         # for "rewinding" a failed/cancelled partial install
         self.files_installed = deque()
 
-        self.LOGGER << "Init installer for '{}'".format(self.archive)
+        self.LOGGER << f"Init installer for '{self.archive}'"
         # self.LOGGER << "Install destination: {}".format(self.install_dir)
 
     @property
@@ -116,7 +116,7 @@ class InstallManager(Submanager):
         self.info = InfoXML(infoxml_file)
 
         if self.info.name:
-            self.LOGGER << "Mod Name from info.xml: {}".format(self.info.name)
+            self.LOGGER << f"Mod Name from info.xml: {self.info.name}"
 
             self._install_dirname = self.info.name.lower()
 
@@ -267,7 +267,7 @@ class InstallManager(Submanager):
         number of files and directories contained within that folder
         and its children
         """
-        self.LOGGER << "Counting contents of archive folder {0!r}".format(folder)
+        self.LOGGER << f"Counting contents of archive folder {folder!r}"
 
         folder += '/'
 
@@ -354,7 +354,7 @@ class InstallManager(Submanager):
             # if re.search(r".*\.(es[pm]|bsa)$", f.lower()):
                 _names.append(split(bname(f))[0])
 
-        print("names from esp/bsa ({}):".format(len(_names)))
+        print(f"names from esp/bsa ({len(_names)}):")
         for n in _names:
             print(" ", n)
 
@@ -536,7 +536,7 @@ class InstallManager(Submanager):
         try:
             target.rmdir()
         except OSError as e:
-            self.LOGGER.error("Could not remove directory {0!r}".format(str(target)))
+            self.LOGGER.error(f"Could not remove directory '{target}'")
             self.LOGGER.exception(e)
 
 
@@ -662,7 +662,7 @@ _nexus_archive_name_format = re.compile(
 
 __ver = r'v?(?:[0-9]+[._-])*[0-9]+[ab]?'
 __alphabeta = r'alpha|beta'
-__verfull = "{v}|{ab}".format(v=__ver, ab=__alphabeta)
+__verfull = f"{__ver}|{__alphabeta}"
 
 # composite
 __vcomp = r"\b({v}[_-])*{v}$".format(v=__verfull)

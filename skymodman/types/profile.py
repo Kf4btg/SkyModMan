@@ -234,7 +234,7 @@ class Profile:
                     self._overrides[dirkey].path)
 
         else:
-            self.LOGGER.error("Attempted to set override for unrecognized path key '{}'".format(dirkey))
+            self.LOGGER.error(f"Attempted to set override for unrecognized path key '{dirkey}'")
 
     def diroverride(self, dirkey):
         """Return the dir_override namedtuple object for the given key.
@@ -311,8 +311,7 @@ class Profile:
         if not new_dir.exists() or self.folder.exists():
             raise exceptions.ProfileError(
                 self.name,
-                "Error while renaming profile '{name}' to '{new_name}'"
-                    .format(name=self.name, new_name=new_name))
+                f"Error while renaming profile '{self.name}' to '{new_name}'")
 
         ## update reference
         self.folder = new_dir

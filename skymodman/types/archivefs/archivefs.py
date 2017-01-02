@@ -134,7 +134,7 @@ class ArchiveFS:
             parts = path.parts
 
             if parts[0] != "/":
-                raise ValueError("Path must be absolute: ".format(path))
+                raise ValueError(f"Path must be absolute: {path}")
 
             if len(parts)==1:
                 self.caches["inodeof"][path] = self.ROOT_INODE

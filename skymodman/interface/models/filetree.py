@@ -174,7 +174,7 @@ class ModFileTreeModel(QAbstractItemModel):
             try:
                 hidden.add(self._locate(hf))
             except ValueError:
-                self.LOGGER.error("Hidden file {0!r} was not found".format(hf))
+                self.LOGGER.error(f"Hidden file {hf!r} was not found")
 
         return hidden
 

@@ -10,7 +10,7 @@ APPTITLE = "SkyModMan"
 
 ## configuration-related strings
 APPNAME = "skymodman" # mainly for use w/ appdirs
-MAIN_CONFIG = "{}.ini".format(APPNAME)
+MAIN_CONFIG = f"{APPNAME}.ini"
 PROFILES_DIRNAME = "profiles"
 
 # this profile must exist. If it doesn't, we must create it.

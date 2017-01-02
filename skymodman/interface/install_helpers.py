@@ -84,7 +84,7 @@ class InstallerUI(QObject):
 
         # FIXME: make sure this temp dir is cleaned up even if we crash and burn during the install
         with TemporaryDirectory() as tmpdir:
-            self.LOGGER << "Created temporary directory at %s" % tmpdir
+            self.LOGGER << f"Created temporary directory at {tmpdir}"
 
             self.installer = await self.Manager.get_installer(archive,
                                                               tmpdir)
@@ -133,9 +133,7 @@ class InstallerUI(QObject):
                     if len(root_items) == 1 \
                             and modfs.is_dir(root_items[0]) \
                             and modfs.fsck_quick(root_items[0]):
-                        self.LOGGER << "Game data found in immediate" \
-                                       "subdirectory {0!r}.".format(
-                            str(root_items[0]))
+                        self.LOGGER << f"Game data found in immediate subdirectory {str(root_items[0])!r}."
 
                         self.installerReady.emit()
                         await self.extraction_progress_dialog(
@@ -228,9 +226,12 @@ class InstallerUI(QObject):
 
         # TODO: show notification when extraction is finished
 
-        num_to_extract = (await self.installer.get_archive_file_count()) if not start_dir else self.installer.count_folder_contents(start_dir)
+        num_to_extract = (await self.installer.get_archive_file_count()
+                          ) if not start_dir \
+            else self.installer.count_folder_contents(start_dir)
 
-        dlg = QProgressDialog("Extracting Files...", "Cancel", 0, num_to_extract)
+        dlg = QProgressDialog("Extracting Files...", "Cancel",
+                              0, num_to_extract)
         dlg.setWindowModality(Qt.WindowModal)
 
         task = asyncio.get_event_loop().create_task(

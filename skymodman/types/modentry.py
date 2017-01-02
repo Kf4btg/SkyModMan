@@ -130,12 +130,7 @@ class ModEntry:
         fparts = []
         for f in self._fields:
             v=getattr(self, f)
-            if isinstance(v, int):
-                # numbers need no quotes
-                fparts.append("{}={}".format(f, v))
-            else:
-                # quotes around strings
-                fparts.append("{}='{}'".format(f, v))
+            fparts.append(f"{f}={v!r}")
 
         sparts.append(", ".join(fparts))
         sparts.append(")")

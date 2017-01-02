@@ -59,7 +59,10 @@ class diqt(deque):
 
 
     def __repr__(self):
-        return "{}({})".format(type(self).__name__, ", ".join(str(k)+'='+str(v) for k,v in zip(self, self._values)))
+        return "{}({})".format(type(self).__name__,
+                               ", ".join(
+                                   str(k)+'='+str(v)
+                                   for k,v in zip(self, self._values)))
 
     def __getitem__(self, item):
         if isinstance(item, int):

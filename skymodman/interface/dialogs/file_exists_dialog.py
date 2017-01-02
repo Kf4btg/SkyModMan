@@ -44,7 +44,7 @@ class FileExistsDialog(QDialog, Ui_FileExistsDialog):
             # self.btn_overwrite.setVisible(False)
             # self.btn_merge.setVisible(False)
 
-            self.label.setText("This operation would overwrite '{path}' with itself; please enter a new name:".format(path=self.path))
+            self.label.setText(f"This operation would overwrite '{self.path}' with itself; please enter a new name:")
 
         elif target_path.is_dir:
             if src_is_dir:
@@ -54,14 +54,14 @@ class FileExistsDialog(QDialog, Ui_FileExistsDialog):
                 self.btn_overwrite.setVisible(True)
                 self.btn_merge.setVisible(True)
 
-                self.label.setText("This operation will overwrite '{path}'. How would you like to proceed?".format(path=self.path))
+                self.label.setText(f"This operation will overwrite '{self.path}'. How would you like to proceed?")
             else:
                 self.setWindowTitle("Destination exists as directory.")
 
                 # self.btn_overwrite.setVisible(False)
                 # self.btn_merge.setVisible(False)
 
-                self.label.setText("A directory with the name '{name}' already exists. Please enter a new name:".format(name=self.path.name))
+                self.label.setText(f"A directory with the name '{self.path.name}' already exists. Please enter a new name:")
         else:
             # target is a file, src is whatever
             self.setWindowTitle("File exists.")
@@ -70,7 +70,7 @@ class FileExistsDialog(QDialog, Ui_FileExistsDialog):
             # self.btn_merge.setVisible(False)
 
             self.label.setText(
-                "This operation will overwrite '{path}'. How would you like to proceed?".format(path=self.path))
+                f"This operation will overwrite '{self.path}'. How would you like to proceed?")
             # self.label.setText(self.label.text().format(path=self.path))
 
 

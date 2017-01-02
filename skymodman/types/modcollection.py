@@ -114,7 +114,7 @@ class ModCollection(abc.MutableSequence):
                 return [self._map[self._keyfromindex(i)]
                         for i in range(*self.__unslice(index))]
             else:
-                raise TypeError("Collection indices must be integers, slices, or a valid str key, not {}".format(type(index))) from None
+                raise TypeError(f"Collection indices must be integers, slices, or a valid str key, not {type(index)}") from None
         # else:
             # raises index error if index is out of range
             # key = self._keyfromindex(index)
@@ -370,7 +370,8 @@ class ModCollection(abc.MutableSequence):
         """
         s = self.__class__.__name__ + "("
         s += ", ".join(
-            "[{}: {}]".format(o, str(self._map[k])) for o, k in self._order.items())
+            "[{}: {}]".format(o, str(self._map[k]))
+            for o, k in self._order.items())
         return s + ")"
 
     ##=============================================

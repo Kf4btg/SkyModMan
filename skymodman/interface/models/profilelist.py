@@ -49,8 +49,7 @@ class ProfileListModel(QAbstractListModel):
 
         except ValueError as e:
             # name not found
-            self.LOGGER.error("Profile '{}' not found".format(
-                current_name))
+            self.LOGGER.error(f"Profile '{current_name}' not found")
             return False
 
         return self.setData(self.index(row), new_name)

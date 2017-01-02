@@ -20,14 +20,14 @@ class ArchiveHandler:
     A reimplementation of the archive handler that leans heavily on 7zip
     """
 
-    FORMATS = ["zip", "rar", "7z"]
-    PROGRAM = "7z"
+    # FORMATS = ["zip", "rar", "7z"]
+    # PROGRAM = "7z"
 
     # read the 7z manual to figure out what all these switches mean
-    TEMPLATES = {
-        "extract", "{prog} x -o{dest} {includes} {archive}",
-        "list", "{prog} l {archive}",
-    }
+    # TEMPLATES = {
+    #     "extract", "{prog} x -o{dest} {includes} {archive}",
+    #     "list", "{prog} l {archive}",
+    # }
 
     INCLUDE_FILTER = lambda paths: ["-i!"+p.rstrip('/') for p in paths]
 
@@ -83,8 +83,7 @@ class ArchiveHandler:
 
             if retcode:
                 raise ArchiverError(
-                    "7z-list process returned a non-zero exit code: {}".format(
-                        retcode))
+                    f"7z-list process returned a non-zero exit code: {retcode}")
             else:
                 ArchiveHandler._list_archive_cache[archive] = (dirs, files)
 
@@ -175,7 +174,7 @@ class ArchiveHandler:
         dpath = Path(destination)
 
         if not dpath.is_absolute():
-            raise ArchiverError("Destination path '{}' is not an absolute path.".format(destination))
+            raise ArchiverError(f"Destination path '{destination}' is not an absolute path.")
 
         if not dpath.exists():
             dpath.mkdir(parents=True, exist_ok=True)
@@ -187,8 +186,7 @@ class ArchiveHandler:
 
         if retcode:
             raise ArchiverError(
-                "7z-extraction process returned a non-zero exit code: {}".format(
-                    retcode))
+                f"7z-extraction process returned a non-zero exit code: {retcode}")
 
 
     async def _extract_files(self, archive, dest, entries, callback):
@@ -211,7 +209,7 @@ class ArchiveHandler:
         #       "-y",     # assume yes to queries
         #       )
         create = asyncio.create_subprocess_exec(
-            "7z", "x", *_7zopts, "-o{}".format(dest),
+            "7z", "x", *_7zopts, f"-o{dest}",
             *includes, archive,
             stdout=asyncio.subprocess.PIPE
         )

@@ -244,7 +244,7 @@ class PathManager(Submanager):
         # allow invaliddir error to propagate
         mpath = self.path(keystrings.Dirs.MODS, use_profile_override)
 
-        self.LOGGER.info("Getting list of mod directories from {}".format(mpath))
+        self.LOGGER.info(f"Getting list of mod directories from {mpath}")
 
         # only return names of folders, not any other type of file
         return [f.name for f in mpath.iterdir() if f.is_dir()]

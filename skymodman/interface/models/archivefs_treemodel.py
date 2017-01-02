@@ -37,7 +37,7 @@ class TrashCommand(UndoCmd):
         :param dict trash_info:
         """
         super().__init__("trash",
-                         "Delete {}".format(path.name),
+                         f"Delete {path.name}",
                          *args, **kwargs)
 
         self.inode = path.inode
@@ -130,7 +130,7 @@ class MoveCommand(UndoCmd):
 
 class RenameCommand(UndoCmd):
     def __init__(self, path, new_name, *args, **kwargs):
-        super().__init__("rename", "Rename {}".format(path.name), *args, **kwargs)
+        super().__init__("rename", f"Rename {path.name}", *args, **kwargs)
 
         self.end = self.end_redo
         self.inode = path.inode
@@ -310,7 +310,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
             # not internalPointer()
             return self.createIndex(row, col, child.inode)
         except IndexError as e:
-            print("index({}, {}, {}({})): IndexError({})".format(row, col, parentpath, parent.internalId(), e))
+            print(f"index({row}, {col}, {parentpath}({parent.internalId()})): IndexError({e})")
             print(self._sorted_dirlist(parentpath))
             # self.LOGGER << "index({}, {}, {}): IndexError".format(
             #   row, col, parent.internalId())
@@ -679,7 +679,7 @@ class ModArchiveTreeModel(QAbstractItemModel):
         :param dest: path to be removed and replaced.
         """
 
-        self.undostack.beginMacro("Replace {}".format(dest.name))
+        self.undostack.beginMacro(f"Replace {dest.name}")
 
         self.delete(self._fs.inodeof(dest))
 

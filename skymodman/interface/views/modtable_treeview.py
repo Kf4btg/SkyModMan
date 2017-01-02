@@ -381,7 +381,7 @@ class ModTable_TreeView(QtWidgets.QTreeView):
             # multiple rows selected
 
             # bind them all into one undo-action
-            with undomacro(self.undo_stack, "{} Mods".format(_text)):
+            with undomacro(self.undo_stack, f"{_text} Mods"):
 
                 # only use the indexes for the "enabled" column
                 for index in (idx for idx in sel if idx.column() == COL_ENABLED):
@@ -405,7 +405,7 @@ class ModTable_TreeView(QtWidgets.QTreeView):
 
             # push the command to the stack
             self._undo_stack.push(UndoCommand(
-                text="{} Mod".format(_text),
+                text=f"{_text} Mod",
                 redo=partial(self._model.setData, index,
                              not current_is_enabled, Qt.EditRole),
                 undo=partial(self._model.setData, index,
@@ -502,7 +502,7 @@ class ModTable_TreeView(QtWidgets.QTreeView):
 
         :param err_types:
         """
-        self.LOGGER << "_analyze_errors({})".format(err_types)
+        self.LOGGER << f"_analyze_errors({err_types})"
 
         old_err_types = self._err_types
 

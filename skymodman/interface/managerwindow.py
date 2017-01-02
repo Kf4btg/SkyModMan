@@ -118,7 +118,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             "Cancel Operation",
             self,
             objectName="action_cancel_task",
-            icon=QtGui.QIcon.fromTheme("dialog-cancel"),
+            icon=QtGui.QIcon().fromTheme("dialog-cancel"),
             triggered=self.cancel_task)
 
         # Call the setup methods which do not rely on the data backend
@@ -407,7 +407,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # cancel button
         self.sb_progress_cancel_btn = QtWidgets.QToolButton(self)
-        self.sb_progress_cancel_btn.setIcon(QtGui.QIcon.fromTheme('dialog-cancel'))
+        self.sb_progress_cancel_btn.setIcon(QtGui.QIcon().fromTheme('dialog-cancel'))
         self.sb_progress_cancel_btn.setToolTip("Cancel Operation")
         # connect click to cancel_task action
         self.sb_progress_cancel_btn.clicked.connect(

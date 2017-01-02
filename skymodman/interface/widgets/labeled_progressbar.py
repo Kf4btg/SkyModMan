@@ -26,7 +26,7 @@ class LabeledProgressBar(QWidget):
         self.label = QLabel(label_text, self)
         self.label.setAlignment(Qt.AlignRight)
 
-        self.setStyleSheet("QLabel {font-size: %dpt}" % label_font_size)
+        self.setStyleSheet(f"QLabel {{font-size: {label_font_size}pt}}")
 
         layout = QHBoxLayout()
         layout.setContentsMargins(0,0,0,0)

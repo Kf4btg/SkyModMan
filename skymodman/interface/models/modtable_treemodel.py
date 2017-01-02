@@ -133,6 +133,17 @@ class ModTable_TreeModel(QAbstractItemModel):
             QtGui.QPalette().color(QtGui.QPalette.Disabled,
                                    QtGui.QPalette.Text))
 
+        # pre-init icons for error column
+        self.icon_error = QtGui.QIcon().fromTheme('dialog-error')
+        self.icon_warning = QtGui.QIcon().fromTheme('dialog-warning')
+
+        self.ttip_modnotfound = "Mod data not found."
+        self.ttip_modnotlisted = "This mod was found in the mods " \
+                             "directory but has not previously " \
+                             "been seen my this profile. Be sure " \
+                             "that it is either set up correctly " \
+                             "or disabled before running any tools."
+
         # italic font for unmanaged mods
         self.unmanaged_font = QtGui.QFont()
         self.unmanaged_font.setItalic(True)
@@ -256,21 +267,17 @@ class ModTable_TreeModel(QAbstractItemModel):
 
             if err_type & ModError.DIR_NOT_FOUND:
                 # noinspection PyArgumentList,PyTypeChecker
-                return (QtGui.QIcon.fromTheme('dialog-error')
+                return (self.icon_error
                             if role == Qt_DecorationRole
-                        else "Mod data not found."
+                        else self.ttip_modnotfound
                             if role == Qt_ToolTipRole
                         else None)
 
             if err_type & ModError.MOD_NOT_LISTED:
                 # noinspection PyArgumentList,PyTypeChecker
-                return (QtGui.QIcon.fromTheme('dialog-warning')
+                return (self.icon_warning
                             if role == Qt_DecorationRole
-                        else "This mod was found in the mods "
-                             "directory but has not previously "
-                             "been seen my this profile. Be sure "
-                             "that it is either set up correctly "
-                             "or disabled before running any tools."
+                        else self.ttip_modnotlisted
                             if role == Qt_ToolTipRole
                         else None)
 
@@ -679,7 +686,7 @@ class ModTable_TreeModel(QAbstractItemModel):
         self._drag_end = rows[-1]
 
         mimedata = QMimeData()
-        mimedata.setText("{0._drag_start} {0._drag_end}".format(self))
+        mimedata.setText(f"{self._drag_start} {self._drag_end}")
         return mimedata
 
     def canDropMimeData(self, data, action, row, column, parent):
