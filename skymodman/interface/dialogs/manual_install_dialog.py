@@ -1,8 +1,7 @@
-# from PyQt5.QtCore import Qt
+from PyQt5 import QtWidgets
 from PyQt5.QtCore import QModelIndex#, Qt, pyqtSlot
 from PyQt5.QtGui import QKeySequence, QPalette
 from PyQt5.QtWidgets import QDialog, QMenu, QInputDialog
-from PyQt5 import QtWidgets
 
 from skymodman.interface.designer.uic.archive_structure_ui import Ui_mod_structure_dialog
 from skymodman.interface.widgets.overlay_layout import Overlay, OverlayCenter
@@ -118,7 +117,8 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
                                      "undo", scale_factor=0.85,
                                      offset=(0, 0.1)),
                                  # icon=QIcon.fromTheme("edit-undo"),
-                                 triggered=self.undo)
+                                 # triggered=self.undo
+                                 )
 
         redoaction = undostack.createRedoAction(self, "Redo")
         redoaction.pyqtConfigure(shortcut=QKeySequence.Redo,
@@ -126,7 +126,8 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
                                      "redo", scale_factor=0.85,
                                      offset=(0, 0.1)),
                                  # icon=QIcon.fromTheme("edit-redo"),
-                                 triggered=self.redo)
+                                 # triggered=self.redo
+                                 )
 
         # undoview = QtWidgets.QUndoView(undostack)
         # undoview.show()
@@ -352,16 +353,20 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         clicked_index = self.mod_structure_view.indexAt(position)
 
         topidx = self.fsroot # current root node
+        non_root = clicked_index.isValid()
 
-        if clicked_index.isValid():
+        if non_root:
             self.rclicked_inode = clicked_index.internalId()
         else:
             self.rclicked_inode = topidx.internalId()
 
-        user_set_root, clicked_isdir, non_root = (topidx.isValid(),
-                                    self.modfsmodel._isdir(self.rclicked_inode),
-                                    clicked_index.isValid()
-                                    )
+        user_set_root = topidx.isValid()
+        clicked_isdir = self.modfsmodel._isdir(self.rclicked_inode)
+
+        # user_set_root, clicked_isdir, non_root = (topidx.isValid(),
+        #                             self.modfsmodel._isdir(self.rclicked_inode),
+        #                             clicked_index.isValid()
+        #                             )
 
         # adjust visible options #
         # ---------------------- #
@@ -398,10 +403,10 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
         # so, in what myriad ways might this fail?
         self.modfsmodel.delete(self.rclicked_inode)
 
-    def undo(self):
-        self.undostack.undo()
-    def redo(self):
-        self.undostack.redo()
+    # def undo(self):
+    #     self.undostack.undo()
+    # def redo(self):
+    #     self.undostack.redo()
 
     # @pyqtSlot(int)
     # def change_view(self, widget_index):
