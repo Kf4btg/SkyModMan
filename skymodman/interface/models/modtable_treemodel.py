@@ -7,9 +7,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeD
 from skymodman.constants import (Column as COL, ModError)
 from skymodman.log import withlogger
 
-
-# <editor-fold desc="ModuleConstants">
-
+# region moduleConstants
 # VISIBLE_COLS  = [COL.ORDER, COL.ENABLED, COL.NAME, COL.MODID,
 #                  COL.VERSION, COL.ERRORS]
 # DBLCLICK_COLS = {COL.MODID, COL.VERSION}
@@ -73,9 +71,7 @@ col2Header={
 # base set of flags for table cells
 _base_flags = Qt_ItemIsEnabled | Qt_ItemIsSelectable | \
                  Qt_ItemIsDragEnabled | Qt_ItemIsDropEnabled
-# </editor-fold>
-
-
+# endregion
 
 @withlogger
 class ModTable_TreeModel(QAbstractItemModel):
@@ -800,8 +796,6 @@ class ModTable_TreeModel(QAbstractItemModel):
         self.insert_entries(len(self.mods), [entry])
 
         self.newEntryAdded.emit()
-
-
 
     #
     #

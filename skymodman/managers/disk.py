@@ -3,6 +3,8 @@ import json.decoder
 import os
 import itertools
 
+from typing import List #, Dict, Tuple, Any
+
 from pathlib import Path
 from collections import namedtuple
 
@@ -26,6 +28,10 @@ _defaults = {
     # "error": lambda v: ModError.NONE
 }
 
+# just an object to hold info about the faux-mods we generate for the
+# vanilla data/unamanged data user installed manually into Skyrim/Data
+VModInfo = namedtuple("VModInfo", "name is_present files missing_files")
+
 @withlogger
 class IOManager(Submanager):
     """Contains methods dealing with the reading and writing
@@ -48,7 +54,7 @@ class IOManager(Submanager):
         }
 
         # temporary storage for info about unmanaged mods
-        self._vanilla_mod_info = []
+        self._vanilla_mod_info : List[VModInfo] = []
 
 
     ##=============================================
@@ -62,16 +68,17 @@ class IOManager(Submanager):
         populate the mod collection
 
         :param str|Path json_source: path to modinfo.json file
-        :param collections.abc.MutableSequence container: where to put the loaded ModEntries
+        :param collections.abc.MutableSequence container: where to put
+            the loaded ModEntries
         """
 
         self.LOGGER << "<==Method call"
 
-        if not isinstance(json_source, Path):
-            json_source = Path(json_source)
+        # if not isinstance(json_source, Path):
+        #     json_source = Path(json_source)
 
         success = True
-        with json_source.open('r') as f:
+        with open(json_source) as f:
             # read from json file and convert mappings
             # to ModEntry objects
             try:
@@ -123,7 +130,7 @@ class IOManager(Submanager):
                               self._vanilla_mod_info)
 
         # skyrim should be first item
-        for m in present_mods:
+        for m in present_mods: # type: VModInfo
 
             # don't bother creating entries for mods already in coll;
             # 'skyrim' should always be 1st item, and should always not
@@ -320,9 +327,6 @@ class IOManager(Submanager):
 
         return mfiles
 
-
-
-
     def load_unmanaged_files(self):
         """
         Yield the files for the unamanged 'Vanilla' mods and any other
@@ -347,7 +351,7 @@ class IOManager(Submanager):
                 self.mainmanager.Folders['skyrim'].path)
 
         for m in filter(lambda vmi: vmi.is_present,
-                              self._vanilla_mod_info):
+                              self._vanilla_mod_info): # type: VModInfo
             if m.files or m.missing_files:
                 yield (m.name, m.files, m.missing_files)
 
@@ -364,11 +368,11 @@ class IOManager(Submanager):
 
         :param json_source:
         """
-        if not isinstance(json_source, Path):
-            json_source = Path(json_source)
+        # if not isinstance(json_source, Path):
+        #     json_source = Path(json_source)
         # success = False
 
-        with json_source.open('r') as f:
+        with open(json_source) as f:
             try:
                 # due to the way we saved the hidden files, this
                 # loads a nested dict structure. The top-level keys
@@ -405,7 +409,8 @@ class IOManager(Submanager):
                             else:
                                 # it must be a dictionary representing
                                 # a sub-directory; recurse!
-                                extract_paths(value, _join(parent_path, key))
+                                extract_paths(value,
+                                              _join(parent_path, key))
 
                     # iter over top-level items
                     for mod, contents in hidden_files.items(): # type: str, dict
@@ -431,15 +436,15 @@ class IOManager(Submanager):
         :param mod_container: an in-order sequence of ModEntry objects
         """
 
-        if not isinstance(json_target, Path):
-            json_target = Path(json_target)
+        # if not isinstance(json_target, Path):
+        #     json_target = Path(json_target)
 
         # create list of mods as dicts (actually Ordered dicts)
         ## note -- ignore 'Skyrim' fakemod (always first in list)
         modinfo=[me._asdict()
                  for me in mod_container if me.directory != 'Skyrim']
 
-        with json_target.open('w') as f:
+        with open(json_target, 'w') as f:
             # NTS: maybe remove the indent when shipping (for space)
             json.dump(modinfo, f, indent=1)
 
@@ -448,10 +453,10 @@ class IOManager(Submanager):
         """Dump the given object to a json file specified by the given
         Path object.
 
-        :param Path json_target:
+        :param str|Path json_target:
         :param pyobject:
         """
-        with json_target.open('w') as f:
+        with open(json_target, 'w') as f:
             if indent:
                 json.dump(pyobject, f, indent=indent)
             else:
@@ -485,19 +490,14 @@ def _to_mod_entry(json_object):
 
 
 #################################################
-## NTS: these shouldn't even be in this module...
 
 
-# just an object to hold info about the faux-mods we generate for the
-# vanilla data/unamanged data user installed manually into Skyrim/Data
-VModInfo = namedtuple("VModInfo", "name is_present files missing_files")
 
-def vanilla_mods(skyrim_dir):
+def vanilla_mods(skyrim_dir) -> List[VModInfo]:
     """
     return pre-constructed ModEntries for the vanilla skyrim files
 
     :param Path skyrim_dir: Path of skyrim installation
-    :rtype: list[tuple[str, dict[str, Any]]]
     """
 
     from skymodman.constants import SkyrimGameInfo as skyinfo
@@ -514,13 +514,17 @@ def vanilla_mods(skyrim_dir):
             break
     else:
         # datadir was not found
-        raise exceptions.FileAccessError("Data", "The Skyrim '{file}' directory was not found within the Skyrim installation folder.")
+        raise exceptions.FileAccessError("Data",
+                                         "The Skyrim '{file}' directory"
+                                         " was not found within the "
+                                         "Skyrim installation folder.")
 
 
     skyrim_mod = VModInfo(
         name="Skyrim",
         is_present=True, # the data directory is there, at least...
-        files=sorted([*skyinfo.masters, *skyinfo.skyrim_archives], key=lambda p:p.lower()),
+        files=sorted([*skyinfo.masters, *skyinfo.skyrim_archives],
+                     key=lambda p:p.lower()),
         missing_files=[]
     )
 
@@ -552,7 +556,8 @@ def vanilla_mods(skyrim_dir):
     for n in skyinfo.all_dlc[:3]:
         dlc_mods[n] = VModInfo(
             name=n,
-            files=sorted([n+".esm", n+".bsa"], key=lambda p:p.lower()),
+            files=sorted([n+".esm", n+".bsa"],
+                         key=lambda p:p.lower()),
             is_present=False, # set to True if dlc is installed
             missing_files=[] # if the dlc is Partially present,
                              # record missing files
@@ -562,7 +567,8 @@ def vanilla_mods(skyrim_dir):
     for n in skyinfo.all_dlc[3:]:
         dlc_mods[n] = VModInfo(
             name=n,
-            files=sorted([n + ".esp", n + ".bsa"], key=lambda p:p.lower()),
+            files=sorted([n + ".esp", n + ".bsa"],
+                         key=lambda p:p.lower()),
             is_present=False,
             missing_files=[]
         )

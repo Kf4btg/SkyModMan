@@ -10,7 +10,7 @@ _icons = {
 
     'none': QMessageBox.NoIcon,
     'noicon': QMessageBox.NoIcon
-}
+} # type: dict [str, int]
 
 _buttons = {
     'ok'      : QMessageBox.Ok,
@@ -30,41 +30,60 @@ _buttons = {
     'ignore'  : QMessageBox.Ignore,
 
     'none'    : QMessageBox.NoButton,
-    'nobutton': QMessageBox.NoButton,
-}
+    'nobutton': QMessageBox.NoButton
+} # type: dict [str, int]
 
-_yes_response = [QMessageBox.Ok, QMessageBox.Open, QMessageBox.Save, QMessageBox.Apply, QMessageBox.Yes, QMessageBox.RestoreDefaults, QMessageBox.Retry]
+_yes_response = [QMessageBox.Ok, QMessageBox.Open, QMessageBox.Save,
+                 QMessageBox.Apply, QMessageBox.Yes,
+                 QMessageBox.RestoreDefaults, QMessageBox.Retry]
 
-_no_response = [QMessageBox.No, QMessageBox.Cancel, QMessageBox.Close, QMessageBox.Abort, QMessageBox.Discard, QMessageBox.Reset]
+_no_response = [QMessageBox.No, QMessageBox.Cancel,
+                QMessageBox.Close, QMessageBox.Abort,
+                QMessageBox.Discard, QMessageBox.Reset]
 
-
-def _mdialog(icon, title, text, info_text, buttons, default_button, parent, min_width, detailed_text):
+def _mdialog(icon, title, text, info_text, buttons, default_button,
+             parent, min_width, detailed_text):
     """
     Internal function. Construct the message dialog
+
     :return: the dialog box
     """
 
-    # defaults
-    micon = QMessageBox.NoIcon
-    dbutton = QMessageBox.NoButton
-    mbuttons = QMessageBox.NoButton
 
-    with suppress(KeyError):
+    try:
+        # attempt to use requested icon
         micon = _icons[icon]
+    except KeyError:
+        # default to no icon
+        micon = QMessageBox.NoIcon
 
+    # determine buttons; start with "No Button" value
+    mbuttons = QMessageBox.NoButton
     if isinstance(buttons, str):
         # handle just one value passed for 'buttons'
         with suppress(KeyError):
             mbuttons = _buttons[buttons]
     elif buttons is not None:
+        # assume it's a sequence of buttons
         for b in buttons:
             with suppress(KeyError):
                 mbuttons |= _buttons[b]
 
-    with suppress(KeyError):
+    # if we're still at "No Button", default to single OK button
+    if not mbuttons: mbuttons = QMessageBox.OK
+
+    try:
+        # attempt to use requested button
         dbutton = _buttons[default_button]
 
-    if not mbuttons: mbuttons = QMessageBox.OK
+        # if the requested button is not one of the available
+        # buttons, set default to "no button"
+        if dbutton and not mbuttons & dbutton:
+            dbutton = QMessageBox.NoButton
+
+    except KeyError:
+        # default to no default
+        dbutton = QMessageBox.NoButton
 
     mbox = QMessageBox(micon, title, text, mbuttons, parent)
     mbox.setDefaultButton(dbutton)
@@ -86,7 +105,16 @@ def _mdialog(icon, title, text, info_text, buttons, default_button, parent, min_
 
     return mbox
 
-def message(icon='question', title='', text="What's that you say?", info_text=None, buttons=('yes', 'no'), default_button = 'none', parent=None, min_width=500, *, detailed_text=None):
+def message(icon='question',
+            title='',
+            text="What's that you say?",
+            info_text=None,
+            buttons=('yes', 'no'),
+            default_button = 'none',
+            parent=None,
+            min_width=500,
+            *,
+            detailed_text=None):
     """
     Helper for constructing and gettting replies from QMessageBoxes.
     Most arguments take strings (buttons an iterable of strings). Rather
@@ -115,7 +143,8 @@ def message(icon='question', title='', text="What's that you say?", info_text=No
     :return: True or False
     """
 
-    mbox = _mdialog(icon, title, text, info_text, buttons, default_button, parent, min_width, detailed_text)
+    mbox = _mdialog(icon, title, text, info_text, buttons,
+                    default_button, parent, min_width, detailed_text)
 
     response =  mbox.exec_()
 
@@ -125,7 +154,18 @@ def message(icon='question', title='', text="What's that you say?", info_text=No
         return False
     return response
 
-def checkbox_message(icon='question', title='', text="What's that you say?", info_text=None, buttons=('yes', 'no'), default_button = 'none', parent=None, min_width=500, checkbox_text="", checkbox_checked=False, *, detailed_text=None):
+def checkbox_message(icon='question',
+                     title='',
+                     text="What's that you say?",
+                     info_text=None,
+                     buttons=('yes', 'no'),
+                     default_button = 'none',
+                     parent=None,
+                     min_width=500,
+                     checkbox_text="",
+                     checkbox_checked=False,
+                     *,
+                     detailed_text=None):
     """
     Identical to message() except that this function adds a checkbox
      to the dialog box with a customizable message. Also, the return
@@ -154,7 +194,8 @@ def checkbox_message(icon='question', title='', text="What's that you say?", inf
     :return: tuple(bool, bool): (User response, checkbox state)
     """
 
-    mbox = _mdialog(icon, title, text, info_text, buttons, default_button, parent, min_width, detailed_text)
+    mbox = _mdialog(icon, title, text, info_text, buttons,
+                    default_button, parent, min_width, detailed_text)
 
     cbox=QCheckBox()
     if checkbox_text:

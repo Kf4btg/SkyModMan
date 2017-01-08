@@ -2,7 +2,7 @@ from pathlib import Path, PurePath
 from functools import lru_cache
 from itertools import chain
 
-from typing import Set, Dict
+from typing import Set, Dict, List
 
 from skymodman.utils import tree as _tree
 
@@ -80,7 +80,7 @@ class ModManager:
         self._enabledmods = None
 
         # cached list of mods in mod directory
-        self._managed_mods = []
+        self._managed_mods : List[str] = []
 
         # track when we're switching profiles
         self.in_profile_switch=False
@@ -701,7 +701,8 @@ class ModManager:
         """
 
         self.LOGGER << "Refreshing mods list"
-        # this actually reads the disk
+        # this actually reads the disk;
+        # get list of names of all folders in mod repo
         self._managed_mods = list(iter(modfolder))
 
     @property

@@ -275,21 +275,21 @@ class InstallManager(Submanager):
             [f for f in chain(self.archive_files, self.archive_dirs)
              if f.startswith(folder)])
 
-    async def mod_structure_tree(self):
-        """
-        Build a Tree structure where the names of the branches and
-        leaves represent the directory and file names, respectively,
-        of the items within the archive.
-        :return:
-        """
-        modtree = Tree()
-        self.LOGGER << "building tree"
-        for arc_entry in (await self.archive_contents(dirs=False)):
-            ap = PurePath(arc_entry)
-
-            modtree.insert(ap.parent.parts, ap.name)
-
-        return modtree
+    # async def mod_structure_tree(self):
+    #     """
+    #     Build a Tree structure where the names of the branches and
+    #     leaves represent the directory and file names, respectively,
+    #     of the items within the archive.
+    #     :return:
+    #     """
+    #     modtree = Tree()
+    #     self.LOGGER << "building tree"
+    #     for arc_entry in (await self.archive_contents(dirs=False)):
+    #         ap = PurePath(arc_entry)
+    #
+    #         modtree.insert(ap.parent.parts, ap.name)
+    #
+    #     return modtree
 
     async def mkarchivefs(self):
         """
@@ -368,11 +368,11 @@ class InstallManager(Submanager):
         m = _nexus_archive_name_format.match(archive_name)
 
         if m:
-            name = m.group('name')
+            name = m['name']
 
             # TODO: if we can get the modid, we should be able to look up the mod info on the nexus...though that would of course require writing an async web-request module...
-            modid = m.group('modid')
-            ver = m.group('version')
+            modid = m['modid']
+            ver = m['version']
 
             if name:
                 # ==> eventually, this should pull the name from the nexus
@@ -390,6 +390,7 @@ class InstallManager(Submanager):
             print("  name:", name)
             print("  modid:", modid)
             print("  version:", ver)
+            return name
 
         return ""
 

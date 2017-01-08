@@ -75,7 +75,7 @@ class FileExistsDialog(QDialog, Ui_FileExistsDialog):
 
 
         ## Change 'OK' text ##
-        self.okbutton = self.btnbox.button(QDialogButtonBox.Ok) # type: QPushButton
+        self.okbutton: QPushButton = self.btnbox.button(QDialogButtonBox.Ok)
         self.okbutton.setText("Rename")
         self.okbutton.setEnabled(False)
 
