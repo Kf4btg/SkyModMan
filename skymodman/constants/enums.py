@@ -1,4 +1,4 @@
-from enum import Enum, IntEnum
+from enum import Enum, IntEnum, Flag, IntFlag, auto
 
 __all__=["Tab", "Column", "qModels", "qFilters", "ProfileLoadPolicy", "OverwriteMode", "EnvVars", "ModError"]
 
@@ -6,14 +6,14 @@ __all__=["Tab", "Column", "qModels", "qFilters", "ProfileLoadPolicy", "Overwrite
 ## Metaclasses
 ##=============================================
 
-class Iternum(type):
-    """
-    Using this as a metaclass, one can iterate over the public class-level fields
-    of a non-instantiated subclass (ie the type object itself). See INI below for
-    an example
-    """
-    def __iter__(cls):
-        yield from (v for k,v in cls.__dict__.items() if not k.startswith('_'))
+# class Iternum(type):
+#     """
+#     Using this as a metaclass, one can iterate over the public class-level fields
+#     of a non-instantiated subclass (ie the type object itself). See INI below for
+#     an example
+#     """
+#     def __iter__(cls):
+#         yield from (v for k,v in cls.__dict__.items() if not k.startswith('_'))
 
 ##=============================================
 ## IntEnums
@@ -26,9 +26,13 @@ class Tab(IntEnum):
     MODTABLE, FILETREE, INSTALLER = range(3)
 
 class Column(IntEnum):
+    """These values are going to be compared with
+    the column() property of QModelIndexes...Indices...
+    Indixes--whatever--which is an int."""
     ENABLED, ORDER, NAME, DIRECTORY, MODID, VERSION, ERRORS = range(7)
 
 class FileTreeColumn(IntEnum):
+    # same here
     NAME, PATH, CONFLICTS = range(3)
 
 ##=============================================
@@ -36,54 +40,20 @@ class FileTreeColumn(IntEnum):
 ##=============================================
 
 class qModels(Enum):
-    mod_table, profile_list, file_viewer = range(3)
+    mod_table = auto()
+    profile_list = auto()
+    file_viewer = auto()
+    # mod_table, profile_list, file_viewer = range(3)
     mod_list = mod_table
 
 class qFilters(Enum):
-    mod_list, file_viewer, mod_table = range(3)
+    mod_table = auto()
+    mod_list = auto()
+    file_viewer = auto()
+    # mod_list, file_viewer, mod_table = range(3)
 
 class ProfileLoadPolicy(Enum):
     none, last, default = range(3)
-
-class OverwriteMode(Enum):
-    """
-    Used for name-conflicts when rearranging files in the
-    pseudo-file-system view of the manual install dialog.
-
-    Binary ops & and | have been implemented for this type,
-    as well as the __bool__ function so that PROMPT (with int
-    value 0) will indicate False while the other values are True
-
-    PROMPT essentially means allow the error to be raised.
-    It can then be caught and handled by the caller.
-    """
-    PROMPT = 0
-    IGNORE = 1
-    REPLACE = 2
-    MERGE = 4
-
-    MERGE_IGNORE_EXISTING_FILES = MERGE|IGNORE
-    MERGE_REPLACE_EXISTING_FILES = MERGE|REPLACE
-
-    def __and__(self, other):
-        try:
-            return OverwriteMode(self.value & other.value)
-        except ValueError:
-            return OverwriteMode.PROMPT
-        except AttributeError:
-            return NotImplemented
-
-    def __or__(self, other):
-        try:
-            return OverwriteMode(self.value | other.value)
-        except ValueError:
-            return OverwriteMode.PROMPT
-        except AttributeError:
-            return NotImplemented
-
-    def __bool__(self):
-        return self.value != 0
-
 
 ##=============================================
 ## Str-enums
@@ -97,16 +67,34 @@ class EnvVars(str, Enum):
     SKYDIR = "SMM_SKYRIMDIR"
 
 ##=============================================
-## "Fake" enums
+## Flags
 ##=============================================
 
-class ModError:
+class ModError(IntFlag):
     """
-    Didn't bother subclassing this one from enum...its meant to be
-    used as a bitmask, and this is just easier that something like what
-    I did with OverwriteMode.
+    Flags for types of errors encountered during mod-loading.
+
+    Note: IntFlag (rather than regular flag) because its values are
+    going to be passed around via Qt's signal/slot mechanism, and it's
+    just easier to use primitive types there.
     """
     NONE = 0
-    DIR_NOT_FOUND = 1
-    MOD_NOT_LISTED = 2
-    MISSING_FILES = 4
+    DIR_NOT_FOUND = auto()
+    MOD_NOT_LISTED = auto()
+    MISSING_FILES = auto()
+
+class OverwriteMode(Flag):
+    """
+    Used for name-conflicts when rearranging files in the
+    pseudo-file-system view of the manual install dialog.
+
+    PROMPT essentially means allow the error to be raised.
+    It can then be caught and handled by the caller.
+    """
+    PROMPT = 0
+    IGNORE = auto()
+    REPLACE = auto()
+    MERGE = auto()
+
+    MERGE_IGNORE_EXISTING_FILES = MERGE|IGNORE
+    MERGE_REPLACE_EXISTING_FILES = MERGE|REPLACE

@@ -2,14 +2,14 @@ from PyQt5 import QtWidgets
 from PyQt5.QtCore import Qt, pyqtSlot as Slot
 
 from skymodman import Manager
-from skymodman.constants.enums import FileTreeColumn
+# from skymodman.constants.enums import FileTreeColumn
 from skymodman.interface.widgets.fixed_width_header import FixedWidthHeader
 # from skymodman.log import withlogger
 
 # @withlogger
 
-COL_NAME, COL_PATH, COL_CONFLICTS = (
-    FileTreeColumn.NAME, FileTreeColumn.PATH, FileTreeColumn.CONFLICTS)
+# COL_NAME, COL_PATH, COL_CONFLICTS = (
+#     FileTreeColumn.NAME, FileTreeColumn.PATH, FileTreeColumn.CONFLICTS)
 
 class FileTabTreeView(QtWidgets.QTreeView):
 
