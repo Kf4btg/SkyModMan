@@ -166,6 +166,11 @@ class FilesystemDesyncError(Error):
 class ArchiverError(Error):
     """Indicates an error during archive extraction."""
 
+class ExternalProcessError(Error):
+    """An externally-invoked process exited with a non-zero return code"""
+    def __init__(self, code):
+        self.returncode=code
+
 #------------------------------
 class FomodError(Error):
     pass

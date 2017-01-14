@@ -226,9 +226,10 @@ class InstallerUI(QObject):
 
         # TODO: show notification when extraction is finished
 
-        num_to_extract = (await self.installer.get_archive_file_count()
-                          ) if not start_dir \
-            else self.installer.count_folder_contents(start_dir)
+        if not start_dir:
+            num_to_extract = await self.installer.get_archive_file_count()
+        else:
+            num_to_extract = await self.installer.count_folder_contents(start_dir)
 
         dlg = QProgressDialog("Extracting Files...", "Cancel",
                               0, num_to_extract)

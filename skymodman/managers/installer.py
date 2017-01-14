@@ -2,8 +2,7 @@ import asyncio
 import os
 import re
 from collections import deque
-from itertools import chain
-from pathlib import PurePath, Path
+from pathlib import Path #, PurePath
 
 from skymodman.managers.base import Submanager
 from skymodman.installer.fomod import Fomod
@@ -11,7 +10,7 @@ from skymodman.installer.infoxml import InfoXML
 
 from skymodman.types.archivefs import archivefs as arcfs
 from skymodman.log import withlogger
-from skymodman.utils.tree import Tree
+# from skymodman.utils.tree import Tree
 from skymodman.utils.archive import ArchiveHandler
 from skymodman.utils import fsutils
 
@@ -100,7 +99,7 @@ class InstallManager(Submanager):
 
         :return: str|None
         """
-        for e in (await self.archive_contents(files=False)):
+        async for e in self.archive_contents(files=False):
             # drop the last char because it is always '/' for directories
             if os.path.basename(e.rstrip('/')).lower() == "fomod":
                 return e
@@ -183,19 +182,24 @@ class InstallManager(Submanager):
         Guaranteed to return the actual extraction path for an image
         path specified in a fomod config file even in spite of
         name-case-conflicts, so long as the file exists. If it does
-        not exist, None is returned.
+        not exist, ``None`` is returned.
         """
         try:
             return self.normalized_imgpaths[image_path.lower()]
         except KeyError:
             return None
 
-    @property
-    def num_fomod_files_to_install(self):
+    async def num_fomod_files_to_install(self):
+        """
+        From the list of folders and individual files scheduled to
+        be installed from the fomod, calculate the TOTAL number of
+        files and directories that need to be extracted from the
+        archive.
+        """
         n = 0
         for f in self.fomod.files_to_install:
             if f.type == "folder":
-                n += self.count_folder_contents(f.source)
+                n += await self.count_folder_contents(f.source)
             else:
                 n += 1
 
@@ -205,8 +209,8 @@ class InstallManager(Submanager):
     ## Archive Handling
     ##=============================================
 
+    # srcdestpairs=None,
     async def extract(self, destination, entries=None, callback=None):
-                      # srcdestpairs=None,
         """
         Extract all or select items from the installer's associated
         mod archive to the `destination`. If `entries`
@@ -224,13 +228,23 @@ class InstallManager(Submanager):
         # installation directory) where the source should be extracted.
 
         # TODO: ignore "._"-prefixed mac-cruft files
+        loop = asyncio.get_event_loop()
+        c=0
+        # noinspection PyTypeChecker
+        async for extracted in self.archiver.extract(
+                archive=self.archive,
+                destination=destination,
+                specific_entries=entries,
+                # callback=callback
+        ):
+            c+=1
+            if callback:
+                loop.call_soon_threadsafe(callback, extracted, c)
+        self.LOGGER << f"{c} files extracted"
 
-        await self.archiver.extract(archive=self.archive,
-                                    destination=destination,
-                                    specific_entries=entries,
-                                    callback=callback)
         # srcdestpairs = srcdestpairs,
 
+    # noinspection PyTypeChecker
     async def archive_contents(self, *, dirs=True, files=True):
         """
         Return list of all files within the archive
@@ -242,14 +256,25 @@ class InstallManager(Submanager):
             self.archive_dirs, self.archive_files = \
                 await self.archiver.list_archive(self.archive)
 
-        if dirs and not files:
-            return self.archive_dirs
-        if files and not dirs:
-            return self.archive_files
+        if not dirs and not files:
+            # if both are false, that's dumb. set both true.
+            dirs = files = True
+
+        if dirs:
+            for f in self.archive_dirs:
+                yield f
+        if files:
+            for f in self.archive_files:
+                yield f
+
+        # if dirs and not files:
+        #     return self.archive_dirs
+        # if files and not dirs:
+            # return self.archive_files
 
         # otherwise return concat of both (even if `dirs` and `files`
         # are both false...because that's dumb)
-        return self.archive_dirs + self.archive_files
+        # return self.archive_dirs + self.archive_files
 
     async def get_archive_file_count(self, *, include_dirs=True):
         """
@@ -259,9 +284,16 @@ class InstallManager(Submanager):
         """
 
         self.LOGGER << "counting files"
-        return len(await self.archive_contents(dirs=include_dirs))
+        if self.archive_files is None:
+            # we've not attempted to list the archive before
+            return len([f async for f in self.archive_contents(dirs=include_dirs)])
+        else:
+            if include_dirs:
+                return len(self.archive_dirs) + len(self.archive_files)
+            return len(self.archive_files)
+        # return len(await self.archive_contents(dirs=include_dirs))
 
-    def count_folder_contents(self, folder):
+    async def count_folder_contents(self, folder):
         """
         Given a path to a folder within the archive, return the
         number of files and directories contained within that folder
@@ -269,11 +301,16 @@ class InstallManager(Submanager):
         """
         self.LOGGER << f"Counting contents of archive folder {folder!r}"
 
-        folder += '/'
+        folder = folder.rstrip('/') + '/'
 
-        return len(
-            [f for f in chain(self.archive_files, self.archive_dirs)
-             if f.startswith(folder)])
+        c = 0
+        async for f in self.archive_contents():
+            if f.startswith(folder): c+=1
+
+        return c
+        # return len(
+        #     [f async for f in self.archive_contents()
+        #      if f.startswith(folder)])
 
     # async def mod_structure_tree(self):
     #     """
@@ -299,14 +336,14 @@ class InstallManager(Submanager):
         :return: the created archivefs instance
         """
         # create an empty archivefs--just has a root.
-        modfs = arcfs.ArchiveFS()
+        modfs : arcfs.ArchiveFS = arcfs.ArchiveFS()
 
         # add path of each file in the archive; since intermediate
         # directories are created automatically, there's no need to do
         # mkdir--although this method DOES mean that, if the archive contains
         # any empty directories, they will not be present in the fs. Not sure
         # yet if this is going to be an issue.
-        for arc_entry in (await self.archive_contents(dirs=False)):
+        async for arc_entry in self.archive_contents(dirs=False):
             # add root anchor to all entries
             modfs.touch("/"+arc_entry)
 
@@ -356,7 +393,7 @@ class InstallManager(Submanager):
 
         print(f"names from esp/bsa ({len(_names)}):")
         for n in _names:
-            print(" ", n)
+            print(f" {n}")
 
         # c) see if we can figure it out from the archive name;
         # try to ignore the version numbers
@@ -435,8 +472,8 @@ class InstallManager(Submanager):
             await self.extract(destination=self.install_dir,
                                # filter archive contents based on
                                # containing directory
-                               entries=[e for e in
-                                        await self.archive_contents(dirs=False)
+                               entries=[e async for e in
+                                        self.archive_contents(dirs=False)
                                         if e.startswith(start_dir)],
                                callback=track_progress)
 
@@ -666,7 +703,7 @@ __alphabeta = r'alpha|beta'
 __verfull = f"{__ver}|{__alphabeta}"
 
 # composite
-__vcomp = r"\b({v}[_-])*{v}$".format(v=__verfull)
+__vcomp = rf"\b({__verfull}[_-])*{__verfull}$"
 
 # possible extra crap on end of name
 _extra_stuff = re.compile(__vcomp, re.I)

@@ -206,12 +206,8 @@ class FinalPage(QWizardPage, Ui_FinalPage):
         # Set the box to display the html list
         self.install_summary.setHtml("".join(self._html))
 
-        # set progress bar to empty, calculate maximum
+        # set progress bar to empty
         self.install_progress.reset()
-        self.install_progress.setMaximum(
-            self.man.num_fomod_files_to_install)
-
-        # print("max:",self.install_progress.maximum())
 
         self.progress_label.setText("")
 
@@ -242,6 +238,14 @@ class FinalPage(QWizardPage, Ui_FinalPage):
         it will also request that the manager remove any files
         installed so far.
         """
+        # calculate maximum for progress bar
+        # (the method to do that is a coroutine, so we have to call it
+        # from another coroutine, i.e. here)
+        self.install_progress.setMaximum(
+            await self.man.num_fomod_files_to_install())
+
+        # print("max:",self.install_progress.maximum())
+
         try:
             await self.man.install_fomod_files(
                 callback=self.setprogress)

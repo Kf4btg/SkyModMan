@@ -1,10 +1,10 @@
 import asyncio
 import os
 import re
-from itertools import count
+# from itertools import count
 from pathlib import Path
 
-from skymodman.exceptions import ArchiverError
+from skymodman.exceptions import ArchiverError, ExternalProcessError
 from skymodman.types import diqt
 from skymodman.log import withlogger
 
@@ -128,12 +128,28 @@ class ArchiveHandler:
         if not return_code: # == 0
             # self.LOGGER << "Return code was 0; parsing results"
             # decode bytes results to str and parse into a list
-            files = self._parse_7z_filelisting(
-                bytes(files_buffer).decode())
 
-            dirs = self._parse_7z_filelisting(
+            if files_buffer:
+                files = list(
+                    bytes(files_buffer).decode().splitlines())
+            else:
+                files=[]
+                # self._parse_7z_filelisting(
+                # bytes(files_buffer).decode()))
+
+            # files = self._parse_7z_filelisting(
+            #     bytes(files_buffer).decode())
+
+            # add / to end of directories to differentiate them
+            if dirs_buffer:
+                dirs = [d + "/" for d in
+                        bytes(dirs_buffer).decode().splitlines()]
+            else:
+                dirs=[]
+
+            # dirs = self._parse_7z_filelisting(
                 # add / to end of directories to differentiate them
-                bytes(dirs_buffer).decode(), '/')
+                # bytes(dirs_buffer).decode(), '/')
         else:
             self.LOGGER << "non-zero return code"
             files = dirs = []
@@ -142,33 +158,35 @@ class ArchiveHandler:
         return return_code, dirs, files
 
 
-    def _parse_7z_filelisting(self, output, suffix=''):
-        """
-        Split the lines returned from the ``7z l`` command into a list
-        of filenames. If suffix is a non-empty string, it will be
-        appended to the end of each file name.
+    # def _parse_7z_filelisting(self, output):
+    #     """
+    #     Split the lines returned from the ``7z l`` command into a list
+    #     of filenames. If suffix is a non-empty string, it will be
+    #     appended to the end of each file name.
+    #
+    #     :param output:
+    #     """
+    #     # self.LOGGER << "parsing results"
+    #     # if not output:
+    #     #     return []
+    #     # lines = output.splitlines()
+    #     try:
+    #         yield from output.splitlines()
+    #     except AttributeError:
+    #         # output was empty
+    #         pass
 
-        :param output:
-        :param suffix:
-        :return:
-        """
-        # self.LOGGER << "parsing results"
-        if not output:
-            return []
-        lines = output.splitlines()
 
-        return [l+suffix for l in lines]
+        # return [l+suffix for l in lines]
 
     async def extract(self, archive, destination,
-                      specific_entries=None,
-                      callback=None):
+                      # specific_entries=None, callback=None):
+                      specific_entries=None):
         """
 
         :param archive:
         :param str destination:
         :param specific_entries:
-        :param callback:
-        :return:
         """
 
         dpath = Path(destination)
@@ -179,24 +197,29 @@ class ArchiveHandler:
         if not dpath.exists():
             dpath.mkdir(parents=True, exist_ok=True)
 
-        retcode = await self._extract_files(archive=archive,
+        # retcode = \
+        # c = count(start=1)
+        async for f in self._extract_files(archive=archive,
                                             dest=str(dpath),
                                             entries=specific_entries,
-                                            callback=callback)
+                                            # callback=callback
+                                           ):
+            yield f
 
-        if retcode:
-            raise ArchiverError(
-                f"7z-extraction process returned a non-zero exit code: {retcode}")
+        # if retcode:
+        #     raise ArchiverError(
+        #         f"7z-extraction process returned a non-zero exit code: {retcode}")
 
 
-    async def _extract_files(self, archive, dest, entries, callback):
+    # async def _extract_files(self, archive, dest, entries, callback):
+    async def _extract_files(self, archive, dest, entries):
         """
         Creates and executes the 7zip command that will extract the
         specified entries from the archive.
         """
         # self.LOGGER << "begin _extract_files"
-        if not callback:
-            def callback(*args): pass
+        # if not callback:
+        #     def callback(*args): pass
 
         if entries:
             includes = type(self).INCLUDE_FILTER(entries)
@@ -217,8 +240,8 @@ class ArchiveHandler:
         #       *includes, archive)
 
         proc = await create
-        c = count(start=1)
-        loop = asyncio.get_event_loop()
+        # c = count(start=1)
+        # loop = asyncio.get_event_loop()
         while True:
             # simulate long processes
             # await asyncio.sleep(1)
@@ -229,8 +252,14 @@ class ArchiveHandler:
 
             # 7z logs filepaths on lines starting w/ '- '
             if line.startswith(b'- '):
-                loop.call_soon_threadsafe(callback, line[2:].decode(), next(c))
+                yield line[2:].decode()
+                # loop.call_soon_threadsafe(callback, line[2:].decode(), next(c))
 
         await proc.wait()
 
-        return proc.returncode
+        if proc.returncode: # non-zero
+            raise ExternalProcessError(proc.returncode)
+            # raise ArchiverError(
+            #     f"7z-extraction process returned a non-zero exit code: {proc.returncode}")
+
+        # return proc.returncode
