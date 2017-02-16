@@ -19,7 +19,7 @@ from skymodman.constants.keystrings import UI as KeyStr_UI
                                             # UI as KeyStr_UI)
 
 from skymodman.interface import models, app_settings, profile_handler #, ui_utils
-# from skymodman.interface.dialogs import message
+from skymodman.interface.dialogs import message
 from skymodman.interface.widgets import alerts_button
 from skymodman.interface.install_helpers import InstallerUI
 from skymodman.log import withlogger #, icons
@@ -1213,11 +1213,21 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         Remove the selected mod from the virtual installation directory
         """
-        # todo: implement removing the mod
-        row = self.mod_table.currentIndex().row()
-        if row > -1:
-            # mod = self.models[M.mod_table][row]
-            self.LOGGER << "Here's where we'd uninstall this mod."
+
+        if self.mod_table.has_selection:
+            # TODO: show confirmation box
+            if message('warning', 'Please Confirm',
+                    'Uninstall the selected mod(s)?',
+                    "This cannot be undone."):
+
+                # TODO: maybe a more..."elegant" solution would be to call the removal operation directly on the Collector/Repo-Manager and have that emit a signal which the table would receive and remove the corresponding row(s)
+                self.mod_table.uninstall_selection()
+
+
+        # row = self.mod_table.currentIndex().row()
+        # if row > -1:
+        #     # mod = self.models[M.mod_table][row]
+        #     self.LOGGER << "Here's where we'd uninstall this mod."
 
 
     def open_dir_in_fm(self):

@@ -7,72 +7,6 @@ from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeD
 from skymodman.constants import (Column as COL, ModError)
 from skymodman.log import withlogger
 
-# region moduleConstants
-# VISIBLE_COLS  = [COL.ORDER, COL.ENABLED, COL.NAME, COL.MODID,
-#                  COL.VERSION, COL.ERRORS]
-# DBLCLICK_COLS = {COL.MODID, COL.VERSION}
-
-# Locally binding some names to improve resolution speed in some of
-# the constantly-called methods like data() (in profiling, the speedup
-# was small, but noticeable, especially for large operations)
-COL_ENABLED = COL.ENABLED.value
-COL_NAME    = COL.NAME.value
-COL_ERRORS  = COL.ERRORS.value
-COL_ORDER   = COL.ORDER.value
-COL_VERSION = COL.VERSION.value
-COL_MODID   = COL.MODID.value
-
-Qt_DisplayRole    = Qt.DisplayRole
-Qt_CheckStateRole = Qt.CheckStateRole
-Qt_EditRole       = Qt.EditRole
-Qt_ToolTipRole    = Qt.ToolTipRole
-Qt_DecorationRole = Qt.DecorationRole
-Qt_ForegroundRole = Qt.ForegroundRole
-Qt_FontRole       = Qt.FontRole
-
-Qt_Checked   = Qt.Checked
-Qt_Unchecked = Qt.Unchecked
-
-Qt_ItemIsSelectable    = Qt.ItemIsSelectable
-Qt_ItemIsEnabled       = Qt.ItemIsEnabled
-Qt_ItemIsEditable      = Qt.ItemIsEditable
-Qt_ItemIsUserCheckable = Qt.ItemIsUserCheckable
-Qt_ItemIsDragEnabled   = Qt.ItemIsDragEnabled
-Qt_ItemIsDropEnabled   = Qt.ItemIsDropEnabled
-
-col2field = {
-    COL_ORDER:     "ordinal",
-    COL_ENABLED:   "enabled",
-    COL_NAME:      "name",
-    COL.DIRECTORY: "directory",
-    COL_MODID:     "modid",
-    COL_VERSION:   "version",
-}
-
-col_to_attr = {
-    COL_ORDER:     lambda m: m.ordinal,
-    COL_ENABLED:   lambda m: m.enabled,
-    COL_NAME:      lambda m: m.name,
-    COL.DIRECTORY: lambda m: m.directory,
-    COL_MODID:     lambda m: m.modid,
-    COL_VERSION:   lambda m: m.version,
-}
-
-col2Header={
-    COL.ORDER:     "#",
-    COL.ENABLED:   " ",
-    COL.NAME:      "Name",
-    COL.DIRECTORY: "Folder",
-    COL.MODID:     "Mod ID",
-    COL.VERSION:   "Version",
-    COL.ERRORS:    "Errors",
-}
-
-# base set of flags for table cells
-_base_flags = Qt_ItemIsEnabled | Qt_ItemIsSelectable | \
-                 Qt_ItemIsDragEnabled | Qt_ItemIsDropEnabled
-# endregion
-
 @withlogger
 class ModTable_TreeModel(QAbstractItemModel):
 
@@ -697,7 +631,10 @@ class ModTable_TreeModel(QAbstractItemModel):
     def dropMimeData(self, data, action, row, column, parent):
         """
 
-        :param QMimeData data: contains a string that is 2 ints separated by whitespace, e.g.:  '4 8' This string corresponds to the first and last row in the block of rows being dragged
+        :param QMimeData data: contains a string that is 2 ints
+            separated by whitespace, e.g.:  '4 8' This string
+            corresponds to the first and last row in the block of
+            rows being dragged
         :param Qt.DropAction action:
         :param int row:
         :param int column:
@@ -746,21 +683,27 @@ class ModTable_TreeModel(QAbstractItemModel):
     # this is not an override of removeRows() because that screws up
     # our drag-and-drop implementation...even though we don't call
     # super() during the dropMimeData method...
-    def remove_rows(self, row, count, parent=QModelIndex()):
+    def remove_rows(self, start_row, count, parent=QModelIndex()):
         """
         Remove mod[s] (row[s]) from the model.
 
-        :param int row:
+        :param int start_row:
         :param int count:
         :param QModelIndex parent:
         :return:
         """
 
-        end = row+count-1
+        # Step 1: emit beginMoveRows
+        # Step 2: delete items from the mod collection
+        #         (via the "Collector" manager)
+        # Step 3: emit endRemoveRows
+        # Step 4: return True if all went well
 
-        self.beginRemoveRows(parent, row, end)
+        end = start_row + count - 1
 
-        self.Manager.Collector.delete_items(row, count)
+        self.beginRemoveRows(parent, start_row, end)
+
+        self.Manager.Collector.delete_items(start_row, count)
 
         self.endRemoveRows()
 
@@ -797,6 +740,40 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         self.newEntryAdded.emit()
 
+    def uninstall(self, rows, remove_from_disk=True):
+        """
+        Given a collection of row numbers, remove the mods
+        currently in those rows both from the model's collection
+        and (if `remove_from_disk` is True) from the disk itself.
+        This is NOT an undoable operation.
+
+        :param list[int] rows: should be a sorted sequence of row numbers
+        """
+
+        # track which mods we're removing
+        to_remove = [self.mods[r] for r in rows]
+
+        for m in to_remove:
+            # row numbers will be changing as we remove items,
+            # so we'll use the dynamic ordinal property on the mod
+            # entry object to determine the row
+
+            # TODO: think of a better way. This is totes inefficient.
+
+            # first, attempt to delete from disk
+            if self.Manager.remove_mod_from_disk(m.key):
+                self.LOGGER << f"Removed {m.key!r} from disk"
+
+                # then remove from collection and table view
+                self.remove_rows(m.ordinal(), 1)
+            else:
+                self.LOGGER.error(f"Unable to uninstall {m.key!r}")
+
+
+        # re-analyze the types of errors present in table
+        self.check_mod_errors()
+
+
     #
     #
     # def insertRows(self, row, count, parent = QModelIndex()):
@@ -819,3 +796,68 @@ class ModTable_TreeModel(QAbstractItemModel):
     #
     #     self.endInsertRows()
 
+# region moduleConstants
+# VISIBLE_COLS  = [COL.ORDER, COL.ENABLED, COL.NAME, COL.MODID,
+#                  COL.VERSION, COL.ERRORS]
+# DBLCLICK_COLS = {COL.MODID, COL.VERSION}
+
+# Locally binding some names to improve resolution speed in some of
+# the constantly-called methods like data() (in profiling, the speedup
+# was small, but noticeable, especially for large operations)
+COL_ENABLED = COL.ENABLED.value
+COL_NAME    = COL.NAME.value
+COL_ERRORS  = COL.ERRORS.value
+COL_ORDER   = COL.ORDER.value
+COL_VERSION = COL.VERSION.value
+COL_MODID   = COL.MODID.value
+
+Qt_DisplayRole    = Qt.DisplayRole
+Qt_CheckStateRole = Qt.CheckStateRole
+Qt_EditRole       = Qt.EditRole
+Qt_ToolTipRole    = Qt.ToolTipRole
+Qt_DecorationRole = Qt.DecorationRole
+Qt_ForegroundRole = Qt.ForegroundRole
+Qt_FontRole       = Qt.FontRole
+
+Qt_Checked   = Qt.Checked
+Qt_Unchecked = Qt.Unchecked
+
+Qt_ItemIsSelectable    = Qt.ItemIsSelectable
+Qt_ItemIsEnabled       = Qt.ItemIsEnabled
+Qt_ItemIsEditable      = Qt.ItemIsEditable
+Qt_ItemIsUserCheckable = Qt.ItemIsUserCheckable
+Qt_ItemIsDragEnabled   = Qt.ItemIsDragEnabled
+Qt_ItemIsDropEnabled   = Qt.ItemIsDropEnabled
+
+col2field = {
+    COL.ORDER:     "ordinal",
+    COL.ENABLED:   "enabled",
+    COL.NAME:      "name",
+    COL.DIRECTORY: "directory",
+    COL.MODID:     "modid",
+    COL.VERSION:   "version",
+}
+
+col_to_attr = {
+    COL.ORDER:     lambda m: m.ordinal,
+    COL.ENABLED:   lambda m: m.enabled,
+    COL.NAME:      lambda m: m.name,
+    COL.DIRECTORY: lambda m: m.directory,
+    COL.MODID:     lambda m: m.modid,
+    COL.VERSION:   lambda m: m.version,
+}
+
+col2Header={
+    COL.ORDER:     "#",
+    COL.ENABLED:   " ",
+    COL.NAME:      "Name",
+    COL.DIRECTORY: "Folder",
+    COL.MODID:     "Mod ID",
+    COL.VERSION:   "Version",
+    COL.ERRORS:    "Errors",
+}
+
+# base set of flags for table cells
+_base_flags = Qt_ItemIsEnabled | Qt_ItemIsSelectable | \
+                 Qt_ItemIsDragEnabled | Qt_ItemIsDropEnabled
+# endregion

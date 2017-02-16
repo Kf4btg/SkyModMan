@@ -58,8 +58,10 @@ class ModEntry:
         find out the current ordering of this mod entry"""
         try:
             return ModEntry.collection.index(self.key)
-        except AttributeError:
-            # if no collection is yet associated, always return -1
+        except (AttributeError, ValueError):
+            # if no collection is yet associated, always return -1;
+            # also return -1 if the entry is not actually IN the
+            # collection.
             return -1
 
     @property

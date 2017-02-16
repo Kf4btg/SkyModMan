@@ -355,6 +355,28 @@ class ModTable_TreeView(QtWidgets.QTreeView):
             self._model.index(0),
             qISM.NoUpdate)
 
+    def uninstall_selection(self):
+        """
+        Instruct the model to remove the selected mods from its
+        collection and from disk.
+        """
+
+
+        rows = self._selected_row_numbers()
+
+        self.LOGGER << f"uninstalling {len(rows)} mod(s)"
+
+        # drop the undo stack
+        self.undo_stack.clear()
+
+        self._model.uninstall(rows, True)
+
+        # and save the changes.
+        self._model.save()
+
+
+
+
     def toggle_selection_checkstate(self):
         """
         Toggle the enabled-state of the currently selected mod(s)
@@ -451,7 +473,6 @@ class ModTable_TreeView(QtWidgets.QTreeView):
 
         # and finish the model reset
         m.endResetModel()
-
 
     def save_changes(self):
         """

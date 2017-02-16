@@ -2,6 +2,7 @@ import json
 import json.decoder
 import os
 import itertools
+import shutil
 
 from typing import List #, Dict, Tuple, Any
 
@@ -190,6 +191,10 @@ class IOManager(Submanager):
 
         return True
 
+    ##=============================================
+    ## Creating mod entries
+    ##=============================================
+
     def create_mods_from_directories(self, directories):
         """Given the names of some directories within the Mod-install
         Appfolder, create ModEntry objects representing each directory.
@@ -241,6 +246,35 @@ class IOManager(Submanager):
         """
 
         return next(self.create_mods_from_directories([directory]))
+
+
+    ##=============================================
+    ## Removing data
+    ##=============================================
+
+    def remove_from_disk(self, directory):
+        """
+        Remove the named mod directory from the mod repo
+
+        :param directory:
+        :return:
+        """
+
+        mods_dir = self.mainmanager.Folders['mods'].path
+
+        doomed = mods_dir / directory
+
+        # if it exists
+        if doomed.exists():
+            try:
+                shutil.rmtree(doomed)
+                return True
+            except Exception as e:
+                self.LOGGER.error(f"Could not remove {doomed}")
+                self.LOGGER.exception(e)
+
+        return False
+
 
     ##=============================================
     ## Loading file lists

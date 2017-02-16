@@ -1078,6 +1078,34 @@ class ModManager:
         return installer
 
     ##=============================================
+    ## Uninstallation
+    ##=============================================
+
+    def remove_mod_from_disk(self, directory):
+        """
+        Given the directory name of an installed mod, attempt to remove
+        it from the disk. Fails if the given dir name is not of a
+        *managed* mod.
+
+        :param directory:
+        :return:
+        """
+
+        if directory in self.managed_mod_folders:
+            if self._ioman.remove_from_disk(directory):
+                # success
+
+                # TODO: if we're removing several mods at once, we'll probably want to queue this operation up until ALL of the mods have been removed.
+                self.refresh_modlist(self._folders['mods'])
+                return True
+            return False
+
+        # TODO: throw exception?
+        self.LOGGER.error(f"Mod to be removed is not a managed mod: {directory}")
+        return False
+
+
+    ##=============================================
     ## Installation Helpers
     ##---------------------------------------------
     ## These are used to query dependencies for the
