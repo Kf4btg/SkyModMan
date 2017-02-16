@@ -500,9 +500,9 @@ class ModTable_TreeModel(QAbstractItemModel):
         The first three parameters (`first`, `last`, and `split`) are
         used by the move() operation in the modcollection. The
         remaining arguments are required by the
-        QAbstractItemModel.beginMoveRows() method. There's likely a lot
-        of overlap, but because just _precisely_ what that overlap is
-        depends on a LOT of factors, so it's best to precalculate
+        ``QAbstractItemModel.beginMoveRows()`` method. There's likely a
+        lot of overlap, but because just _precisely_ what that overlap
+        is depends on a LOT of factors, so it's best to precalculate
         everything beforehand and pass them all individually.
 
         :param int first: first row of entire affected block
@@ -607,7 +607,9 @@ class ModTable_TreeModel(QAbstractItemModel):
         """
 
         :param list[QModelIndex] indexes:
-        :return: A string that is 2 ints separated by whitespace, e.g.:  '4 8' This string corresponds to the first and last row in the block of rows being dragged.
+        :return: A string that is 2 ints separated by whitespace,
+            e.g. '4 8'. This string corresponds to the first and last
+            row in the block of rows being dragged.
         """
         rows = sorted(set(i.row() for i in indexes))
 

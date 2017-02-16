@@ -53,7 +53,7 @@ class ModCollectionManager(Submanager):
         on the current order
 
         :param int start: Ordinal of first mod to deleted
-        :param int count: How many entries (including the one at `start`
+        :param int count: How many entries (including the one at `start`)
             should be deleted.
         """
 
