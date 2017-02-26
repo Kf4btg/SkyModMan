@@ -7,6 +7,74 @@ from PyQt5.QtCore import Qt, pyqtSignal, QAbstractItemModel, QModelIndex, QMimeD
 from skymodman.constants import (Column as COL, ModError)
 from skymodman.log import withlogger
 
+
+# region moduleConstants
+# VISIBLE_COLS  = [COL.ORDER, COL.ENABLED, COL.NAME, COL.MODID,
+#                  COL.VERSION, COL.ERRORS]
+# DBLCLICK_COLS = {COL.MODID, COL.VERSION}
+
+# Locally binding some names to improve resolution speed in some of
+# the constantly-called methods like data() (in profiling, the speedup
+# was small, but noticeable, especially for large operations)
+COL_ENABLED = COL.ENABLED.value
+COL_NAME    = COL.NAME.value
+COL_ERRORS  = COL.ERRORS.value
+COL_ORDER   = COL.ORDER.value
+COL_VERSION = COL.VERSION.value
+COL_MODID   = COL.MODID.value
+
+Qt_DisplayRole    = Qt.DisplayRole
+Qt_CheckStateRole = Qt.CheckStateRole
+Qt_EditRole       = Qt.EditRole
+Qt_ToolTipRole    = Qt.ToolTipRole
+Qt_DecorationRole = Qt.DecorationRole
+Qt_ForegroundRole = Qt.ForegroundRole
+Qt_FontRole       = Qt.FontRole
+
+Qt_Checked   = Qt.Checked
+Qt_Unchecked = Qt.Unchecked
+
+Qt_ItemIsSelectable    = Qt.ItemIsSelectable
+Qt_ItemIsEnabled       = Qt.ItemIsEnabled
+Qt_ItemIsEditable      = Qt.ItemIsEditable
+Qt_ItemIsUserCheckable = Qt.ItemIsUserCheckable
+Qt_ItemIsDragEnabled   = Qt.ItemIsDragEnabled
+Qt_ItemIsDropEnabled   = Qt.ItemIsDropEnabled
+
+col2field = {
+    COL.ORDER:     "ordinal",
+    COL.ENABLED:   "enabled",
+    COL.NAME:      "name",
+    COL.DIRECTORY: "directory",
+    COL.MODID:     "modid",
+    COL.VERSION:   "version",
+}
+
+col_to_attr = {
+    COL.ORDER:     lambda m: m.ordinal,
+    COL.ENABLED:   lambda m: m.enabled,
+    COL.NAME:      lambda m: m.name,
+    COL.DIRECTORY: lambda m: m.directory,
+    COL.MODID:     lambda m: m.modid,
+    COL.VERSION:   lambda m: m.version,
+}
+
+col2Header={
+    COL.ORDER:     "#",
+    COL.ENABLED:   " ",
+    COL.NAME:      "Name",
+    COL.DIRECTORY: "Folder",
+    COL.MODID:     "Mod ID",
+    COL.VERSION:   "Version",
+    COL.ERRORS:    "Errors",
+}
+
+# base set of flags for table cells
+_base_flags = Qt_ItemIsEnabled | Qt_ItemIsSelectable | \
+                 Qt_ItemIsDragEnabled | Qt_ItemIsDropEnabled
+# endregion
+
+
 @withlogger
 class ModTable_TreeModel(QAbstractItemModel):
 
@@ -797,69 +865,3 @@ class ModTable_TreeModel(QAbstractItemModel):
     #     me+=right
     #
     #     self.endInsertRows()
-
-# region moduleConstants
-# VISIBLE_COLS  = [COL.ORDER, COL.ENABLED, COL.NAME, COL.MODID,
-#                  COL.VERSION, COL.ERRORS]
-# DBLCLICK_COLS = {COL.MODID, COL.VERSION}
-
-# Locally binding some names to improve resolution speed in some of
-# the constantly-called methods like data() (in profiling, the speedup
-# was small, but noticeable, especially for large operations)
-COL_ENABLED = COL.ENABLED.value
-COL_NAME    = COL.NAME.value
-COL_ERRORS  = COL.ERRORS.value
-COL_ORDER   = COL.ORDER.value
-COL_VERSION = COL.VERSION.value
-COL_MODID   = COL.MODID.value
-
-Qt_DisplayRole    = Qt.DisplayRole
-Qt_CheckStateRole = Qt.CheckStateRole
-Qt_EditRole       = Qt.EditRole
-Qt_ToolTipRole    = Qt.ToolTipRole
-Qt_DecorationRole = Qt.DecorationRole
-Qt_ForegroundRole = Qt.ForegroundRole
-Qt_FontRole       = Qt.FontRole
-
-Qt_Checked   = Qt.Checked
-Qt_Unchecked = Qt.Unchecked
-
-Qt_ItemIsSelectable    = Qt.ItemIsSelectable
-Qt_ItemIsEnabled       = Qt.ItemIsEnabled
-Qt_ItemIsEditable      = Qt.ItemIsEditable
-Qt_ItemIsUserCheckable = Qt.ItemIsUserCheckable
-Qt_ItemIsDragEnabled   = Qt.ItemIsDragEnabled
-Qt_ItemIsDropEnabled   = Qt.ItemIsDropEnabled
-
-col2field = {
-    COL.ORDER:     "ordinal",
-    COL.ENABLED:   "enabled",
-    COL.NAME:      "name",
-    COL.DIRECTORY: "directory",
-    COL.MODID:     "modid",
-    COL.VERSION:   "version",
-}
-
-col_to_attr = {
-    COL.ORDER:     lambda m: m.ordinal,
-    COL.ENABLED:   lambda m: m.enabled,
-    COL.NAME:      lambda m: m.name,
-    COL.DIRECTORY: lambda m: m.directory,
-    COL.MODID:     lambda m: m.modid,
-    COL.VERSION:   lambda m: m.version,
-}
-
-col2Header={
-    COL.ORDER:     "#",
-    COL.ENABLED:   " ",
-    COL.NAME:      "Name",
-    COL.DIRECTORY: "Folder",
-    COL.MODID:     "Mod ID",
-    COL.VERSION:   "Version",
-    COL.ERRORS:    "Errors",
-}
-
-# base set of flags for table cells
-_base_flags = Qt_ItemIsEnabled | Qt_ItemIsSelectable | \
-                 Qt_ItemIsDragEnabled | Qt_ItemIsDropEnabled
-# endregion
