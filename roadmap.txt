@@ -1,0 +1,102 @@
+WIP Features
+    - uninstallation
+
+TODO Features (Priority)
+    - Plugin view/manager
+    - Archive view/manager
+    - Implement overlay fs
+        - I.e. the (original) entire point of this project
+    - BSA "backdating"
+        - should just need a created/modified-date change
+    - Categories
+        - some standard ones included
+        - ability to add custom
+        - allow grouping, sorting, filtering by categories
+    - External Tool execution
+        - provide transparent execution of various win32 tools via wine
+            - let user set various wine environment variables for each tool
+                - e.g. WINEPREFIX, WINEDLLOVERRIDES, etc
+        - maybe provide simple helpers for creating useful prefixes
+        - LOOT can probably be run natively
+    - INI editing/viewing/managing
+        - for individual mods as well as main game
+
+TODO Enhancements
+    Mod table:
+        - "Date installed" column
+        - flag mods that overwrite/are-overwritten
+        - also flag mods w/ hidden files
+    Profiles
+        - backup/restoration of lists/orders
+    Installation
+        - track install-archive location to allow easy reinstalling
+
+Longterm Features (Wishlist/Ideas/May Never Happen)
+    - Nexus integration
+        - version checking
+        - description retrievals
+        - store (securely) username/password
+            - also for steam
+
+    - QSS theming
+
+    - Full M.O. emulation
+        - manage MO mods and profiles in such a way that MO would think it had done all the work
+        - allow for working on top of an existing MO setup
+            - use the configured directories, profiles, binaries of that installation
+        - hopefully no legal issues w/ this...
+
+    - Set screenshots/cover images for mods
+    - "Notes" section for each mod
+    - Group alternates of the same mod together as selectable options
+        - e.g. "4K", "2K", "STEP version", "TESVEdit Cleaned", "Original (backup)", etc.
+        - probably something that would always need to be done manually by user
+    - allow grouping several mods into one table entry w/o actually merging them into one mod
+        - e.g. for a mod and its patches (compat, etc) that will always be activated/deactivated together
+        - allow user to set which "secondary" mods will be go de/active w/ the main entry
+            - if they just want to turn off a patch for a while w/o uninstalling or disassociating it
+
+    - Viewer for mod files
+        - e.g. preview textures, test sounds, etc.
+
+    - Poor man's DDSOpt
+        - behind the scenes: bash+imagemagick scripts to resize huge images to a configurable size
+        - I don't think PIL can handle dds...can it?
+
+    - Separate app aspects into separate modules
+        - e.g the FOMOD installer, the VFS, etc
+        - maybe can be used independently
+
+    - "Record"/"Export" mod setups
+        - basically, given a list of archives (which need to actually exist on the disk), automatically unpack, install, and setup all aspects of the mods to match a provided "snapshot" of how everything is meant to be look at the end of the install process
+            - includes install order (priority), plugin load order, hidden files, renames, merging, groups, etc.
+        Use cases:
+            - will allow quickly returning to a mod setup even if all the unpacked mods have been deleted
+            - more importantly, these might be able to be shared as something akin to "mod packs"
+            - as long as you've downloaded all the proper archives, you can quickly match the setup of whoever provided the snapshot
+        Issues:
+            - will require MUCH more granular recordkeeping
+                - e.g., keep track of which folder in a FOMOD setup each file came from
+                    - similarly for BAIN/manual mod installations
+                    - or, if we just keep track of the options they select, may be able to "simulate" the FOMOD installer process
+                        - automatically choose the options without having to bring up the window or load any images
+                - if we keep diffs of INIs, other config files, won't have to record the full contents of each one
+                    - though we'll clearly need the full contents of the original throught the "Recording" process
+                - thus the possible "Record" name:
+                    - instead of doing this all the time, require the user to explicitly enable detailed "recording" of how they install everything BEFORE they start setup
+                        - maybe an option on profile creation
+                    - so we're not keeping insane amounts of logs for people that have no interest in this
+                        >> though if we did...might allow for a sort of rollback feature
+            - mod archives have horribly inconsistent naming standards
+                - as in, there are no naming standards...
+            - will likely have to provide dummies/placeholders/reminders for where external tools should be run
+                - e.g. bashed patch, skyproc patchers...
+                - though some of these tools may have cli versions that can be automated
+                    - does FNIS have some sort of cli mode? 
+                    - ...or can it be...persuaded to?
+            - Skyproc...
+                - give some advice, but they'll be on their own getting a working Java 8 install in wine...
+
+
+        
+            
