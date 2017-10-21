@@ -13,17 +13,12 @@ from PyQt5.QtWidgets import QMessageBox
 from skymodman import constants, Manager
 from skymodman.constants import qModels as M, Tab as TAB
 from skymodman.constants.keystrings import UI as KeyStr_UI
-# (
-    # Dirs as KeyStr_Dirs,
-                                            # INI as KeyStr_INI,
-                                            # UI as KeyStr_UI)
 
-from skymodman.interface import models, app_settings, profile_handler #, ui_utils
+from skymodman.interface import models, app_settings, profile_handler
 from skymodman.interface.dialogs import message
 from skymodman.interface.widgets import alerts_button
 from skymodman.interface.install_helpers import InstallerUI
 from skymodman.log import withlogger #, icons
-# from skymodman.utils.fsutils import check_path #, join_path
 
 from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow
 
@@ -41,21 +36,16 @@ from skymodman.interface.designer.uic.manager_window_ui import Ui_MainWindow
 
 @withlogger
 class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
-    # region signals
 
-    # noinspection PyArgumentList
+    ## signals
+
     modListModified     = QtCore.pyqtSignal()
-    # noinspection PyArgumentList
     modListSaved        = QtCore.pyqtSignal()
 
-    # noinspection PyArgumentList
     moveMods            = QtCore.pyqtSignal(int)
-    # noinspection PyArgumentList
     moveModsToTop       = QtCore.pyqtSignal()
-    # noinspection PyArgumentList
     moveModsToBottom    = QtCore.pyqtSignal()
 
-    # endregion
 
     def __init__(self, **kwargs):
         """
@@ -261,7 +251,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # when an install manager has been prepared and a dialog is
         # about to shown, stop the activity indicator in the statusbar
         self.install_helper.installerReady.connect(
-            self.hide_statusbar_progress)
+            self._sb_progress.hide)
 
 
         # load the initial profile (or not, depending on profile load policy)
@@ -388,11 +378,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.movement_toolbar = movement_toolbar
 
-        ## This is for testing the progress indicator::
-        # show_busybar_action = QAction("busy",self)
-        # show_busybar_action.triggered.connect(self.show_statusbar_progress)
-        # self.file_toolBar.addAction(show_busybar_action)
-
     def _setupui_statusbar(self):
         """
         Add a progress bar to the status bar. Will be used for showing
@@ -400,29 +385,11 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         self.LOGGER << "_setup_statusbar"
 
-        # putting the bar and label together into a container
-        # widget caused the 'busy' animation not to play...
-        # I never did figure out why, but adding them separately
-        # bypasses the issue.
-        self.sb_progress_label = QtWidgets.QLabel("Working:", self)
-        self.sb_progress_bar = QtWidgets.QProgressBar(self)
-        self.sb_progress_bar.setMaximumWidth(100)
-
-        # cancel button
-        self.sb_progress_cancel_btn = QtWidgets.QToolButton(self)
-        self.sb_progress_cancel_btn.setIcon(QtGui.QIcon().fromTheme('dialog-cancel'))
-        self.sb_progress_cancel_btn.setToolTip("Cancel Operation")
-        # connect click to cancel_task action
-        self.sb_progress_cancel_btn.clicked.connect(
-            self.action_cancel_task.trigger)
-
-        # button first, then label, then bar
-        self.status_bar.addPermanentWidget(self.sb_progress_cancel_btn)
-        self.status_bar.addPermanentWidget(self.sb_progress_label)
-        self.status_bar.addPermanentWidget(self.sb_progress_bar)
-        self.sb_progress_cancel_btn.setVisible(False)
-        self.sb_progress_label.setVisible(False)
-        self.sb_progress_bar.setVisible(False)
+        # use helper-wrapper widget
+        self._sb_progress=_ProgressBar(self,
+                                       self.status_bar,
+                                       self.action_cancel_task.trigger)
+        self._sb_progress.hide()
 
     def _setupui_table(self):
         """
@@ -522,9 +489,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         ################################################
 
-        # self.action_choose_mod_folder.setIcon(icons.get(
-        # 'folder', color_disabled=QPalette().color(QPalette.Midlight)))
-
         ## clear missing-from-disk mods
         # add to movement toolbar
         # self.movement_toolbar.addSeparator()
@@ -545,9 +509,9 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         # use a dialog-button-box for save/cancel;
         # have to specify by standard button type
-        btn_apply : QtWidgets.QPushButton = self.save_cancel_btnbox.button(
+        btn_apply = self.save_cancel_btnbox.button(
             QtWidgets.QDialogButtonBox.Apply)
-        btn_reset : QtWidgets.QPushButton = self.save_cancel_btnbox.button(
+        btn_reset = self.save_cancel_btnbox.button(
             QtWidgets.QDialogButtonBox.Reset)
 
         # connect the apply button to the 'save-changes' action
@@ -558,7 +522,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # on the status of the save-changes action
         self.action_save_changes.changed.connect(
             lambda: self.save_cancel_btnbox.setEnabled(
-                self.action_save_changes.isEnabled()))
+                self.action_save_changes.isEnabled()
+            ))
 
         # connect reset button to the revert action
         btn_reset.clicked.connect(
@@ -672,11 +637,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                                  icon=QtGui.QIcon().fromTheme("edit-undo")
                                  # , triggered=self.on_undo
                                  )
-
-        # it seems it calls undoStack.undo() automatically...no need
-        # to connect to something that calls it manually...unless you
-        # want every undo/redo action to do that action twice...like
-        # it was.
 
         # create and configure redo action
         self.action_redo = self.undoManager.createRedoAction(self, "Redo")
@@ -848,56 +808,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         else:
             self.status_bar.clearMessage()
 
-    def show_statusbar_progress(self, text="Working:",
-                                minimum=0, maximum=0,
-                                show_bar_text=False):
-        """
-        Set up and display the small progress bar on the bottom right
-        of the window (in the status bar). If `minimum` == `maximum`
-        == 0, the bar will be in indeterminate ('busy') mode: this is
-        useful for indicating to the user that *something* is going on
-        in the background during activities that may take a moment or
-        two to complete, so the user need not worry that their last
-        command had no effect.
-
-        :param text: Text that will be shown to the left of the
-            progress bar
-        :param minimum: Minumum value for the bar
-        :param maximum: Maximum value for the bar
-        :param show_bar_text: Whether to show the bar's text
-            (% done by default)
-        """
-        self.sb_progress_label.setText(text)
-        self.sb_progress_bar.reset()
-        self.sb_progress_bar.setRange(minimum, maximum)
-        self.sb_progress_bar.setTextVisible(show_bar_text)
-
-        self.sb_progress_cancel_btn.setVisible(True)
-        self.sb_progress_label.setVisible(True)
-        self.sb_progress_bar.setVisible(True)
-
-    def update_statusbar_progress(self, value, labeltext=None):
-        """
-        Set the status-progress-bar's value to `value`. If provided,
-        also change the label to `labeltext`; otherwise leave the
-        label as is. This method can be used as a callback.
-
-        :param value:
-        :param labeltext:
-        :return:
-        """
-        self.sb_progress_bar.setValue(value)
-        if labeltext is not None:
-            self.sb_progress_label.setText(labeltext)
-
-    def hide_statusbar_progress(self):
-        """
-        Make the statusbar-progress go away.
-        """
-        self.sb_progress_cancel_btn.setVisible(False)
-        self.sb_progress_bar.setVisible(False)
-        self.sb_progress_label.setVisible(False)
-
     @pyqtSlot()
     def cancel_task(self):
         """Cancels the active task."""
@@ -905,7 +815,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.task.cancel()
         # hide the activity indicator if it's visible
-        self.hide_statusbar_progress()
+        # self.hide_statusbar_progress()
+        self._sb_progress.hide()
 
     # endregion
 
@@ -1104,44 +1015,6 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         del PreferencesDialog
 
-        # now have the Manager check to see if all the directories
-        # are valid, and update the alerts indicator if needed
-        ## XXX: this should happen automatically now...hopefully
-        # self.Manager.check_dirs()
-        # self.update_alerts()
-
-    # @pyqtSlot()
-    # def choose_mod_folder(self):
-    #     """
-    #     Show dialog allowing user to choose a mod folder.
-    #
-    #     This updates the default mod folder. If a profile override is
-    #     active, it will be disabled. Use the preferences dialog
-    #     to set up and enable a profile-specific override.
-    #
-    #     """
-    #
-    #     # noinspection PyTypeChecker, PyArgumentList
-    #     moddir = QtWidgets.QFileDialog.getExistingDirectory(
-    #         self,
-    #         "Choose Directory Containing Installed Mods",
-    #         self.Manager.Folders['mods'].spath
-    #     )
-    #
-    #     # update config with new path
-    #     if check_path(moddir):
-    #         mfolder = self.Manager.Folders[KeyStr_Dirs.MODS]
-    #
-    #         mfolder.set_path(moddir)
-    #
-    #         if mfolder.is_overriden:
-    #             mfolder.remove_override()
-    #             self.Manager.profile.disable_override(KeyStr_Dirs.MODS)
-    #
-    #         # reverify and reload the mods.
-    #         if not self.Manager.validate_mod_installs():
-    #             self.mod_table.model().reload_errors_only()
-
     # noinspection PyTypeChecker,PyArgumentList
     def install_mod_archive(self, manual=False):
         """
@@ -1158,7 +1031,7 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         filepath=QFileDialog.getOpenFileName(
             self, "Select Mod Archive",
-            # start in use most-recently accessed directory
+            # start in most-recently accessed directory
             # (or home dir if none have been recorded)
             app_settings.Get("RecentFiles", "installer") or QDir.homePath(),
             # QDir.currentPath() + "/res",
@@ -1173,20 +1046,14 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             # Add the containing directory to the MRU-list
             app_settings.Set("RecentFiles", "installer", directory)
 
-            # check that the given mod does not already exist
-            # if archive_name.lower() not in self.Manager.managed_mod_folders:
-                # installui = InstallerUI(self.Manager) # helper class
-
-            ##-> we can't check for existence here because the mod name
-            # is not always the same/similar to the archive name
-
-
             if manual:
                 # show busy indicator while archive is examined
-                self.show_statusbar_progress("Loading archive:")
+                # self.show_statusbar_progress("Loading archive:")
+                self._sb_progress.show("Loading archive:")
             else:
                 # show busy indicator while installer loads
-                self.show_statusbar_progress("Preparing installer:")
+                # self.show_statusbar_progress("Preparing installer:")
+                self._sb_progress.show("Preparing installer:")
 
             self.task = asyncio.get_event_loop().create_task(
                 self.install_helper.do_install(filepath,
@@ -1292,3 +1159,78 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             app_settings.write()
             event.accept()
 
+
+## helper classes that encapsulate some of the multi-part components
+class _ProgressBar:
+
+    def __init__(self, parent, p_statusbar, a_cancel):
+        """
+
+        :param parent: The parent Qobject (main window, most likely)
+        :param p_statusbar: The containing QStatusBar Widget
+        :param a_cancel: the action to be invoked when clicking the
+            cancel button
+        """
+        self._label = QtWidgets.QLabel("Working:", parent)
+        self._progress = QtWidgets.QProgressBar(parent)
+        self._progress.setMaximumWidth(100)
+
+        # cancel button
+        self._btn_cancel = QtWidgets.QToolButton(parent)
+        self._btn_cancel.setIcon(
+            QtGui.QIcon().fromTheme('dialog-cancel'))
+        self._btn_cancel.setToolTip("Cancel Operation")
+        # connect click to cancel_task action
+        self._btn_cancel.clicked.connect(a_cancel)
+
+        # button first, then label, then bar
+        p_statusbar.addPermanentWidget(self._btn_cancel)
+        p_statusbar.addPermanentWidget(self._label)
+        p_statusbar.addPermanentWidget(self._progress)
+
+    def setVisible(self, visible):
+        self._btn_cancel.setVisible(visible)
+        self._label.setVisible(visible)
+        self._progress.setVisible(visible)
+
+    def show(self, text="Working:", vmin=0, vmax=0, show_text=False):
+        """
+        Set up and display the progress bar. If `vmin` == `vmax` == 0,
+        the bar will be in indeterminate ('busy') mode: this is
+        useful for indicating to the user that *something* is going on
+        in the background during activities that may take a moment or
+        two to complete, so the user need not worry that their last
+        command had no effect.
+
+        :param text: Text that will be shown to the left of the
+            progress bar
+        :param vmin: Minumum value for the bar
+        :param vmax: Maximum value for the bar
+        :param show_text: Whether to show the bar's text
+            (% done by default)
+        """
+        self._label.setText(text)
+        self._progress.reset()
+        self._progress.setRange(vmin, vmax)
+        self._progress.setTextVisible(show_text)
+
+        self.setVisible(True)
+
+    def update(self, value, label_text=None):
+        """
+        Set the progress-bar's value to `value`. If provided,
+        also change the label to `label_text`; otherwise leave the
+        label as is. This method can be used as a callback.
+
+        :param value:
+        :param label_text:
+        """
+        self._progress.setValue(value)
+        if label_text is not None:
+            self._label.setText(label_text)
+
+    def hide(self):
+        """
+        Make it go away.
+        """
+        self.setVisible(False)
