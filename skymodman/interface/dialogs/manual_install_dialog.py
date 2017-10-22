@@ -47,6 +47,7 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
 
         self.structure = mod_fs
         self.num_to_copy = 0
+        self.root_path = None # set on Accepted() signal
 
         # create undo framework
         (self.undostack
@@ -450,5 +451,11 @@ class ManualInstallDialog(QDialog, Ui_mod_structure_dialog):
     #         self.num_to_copy = self.mod_data.count()
     #
     #     super().done(result)
+
+    def accept(self):
+        self.num_to_copy = self.modfsmodel.rowCount(self.fsroot)
+        self.root_path = str(self.modfsmodel.path4index(self.fsroot))
+
+        super().accept()
 
 

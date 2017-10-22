@@ -652,11 +652,15 @@ class ModTable_TreeView(QtWidgets.QTreeView):
         Called when a new mod is installed and added to the model.
         """
 
+        self.LOGGER << "Saving modlist model after new mod added"
+
         # save the mod collection
         self._model.save()
 
         # drop the undostack
         self._undo_stack.clear()
+
+        # reset the table to the model changes are picked up
 
 
 

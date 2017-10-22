@@ -784,6 +784,8 @@ class ModManagerWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         """Add a newly-installed mod to the mod table. The mod must be
         a managed mod (i.e., it must be in the main Mod-repo"""
 
+        self.LOGGER << f"Installed mod {mod_key}"
+
         # get the mod entry from the manager (which also adds the mod
         # and its files to the appropriate tables) add it to the mod-
         # table model. When the model is done inserting, the table will

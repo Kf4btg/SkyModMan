@@ -1,6 +1,7 @@
 import asyncio
 import os
 import re
+import signal
 # from itertools import count
 from pathlib import Path
 
@@ -234,30 +235,47 @@ class ArchiveHandler:
         create = asyncio.create_subprocess_exec(
             "7z", "x", *_7zopts, f"-o{dest}",
             *includes, archive,
+            limit=2**10, # default limit is 2^16 (65536)...which is a bit large for our needs
+            preexec_fn=os.setpgrp, # will hopefully let us kill the proc and all its kids
             stdout=asyncio.subprocess.PIPE
         )
         # print("7z", "x", *opts, "-o{}".format(dest),
         #       *includes, archive)
 
         proc = await create
+        # pid = proc.pid
         # c = count(start=1)
         # loop = asyncio.get_event_loop()
         while True:
             # simulate long processes
             # await asyncio.sleep(1)
 
-            line = await proc.stdout.readline()
-            # print("{!r}".format(line))
-            if not line: break
+            try:
+                line = await proc.stdout.readline()
+                # print("{!r}".format(line))
+                if not line: break
 
-            # 7z logs filepaths on lines starting w/ '- '
-            if line.startswith(b'- '):
-                yield line[2:].decode()
-                # loop.call_soon_threadsafe(callback, line[2:].decode(), next(c))
+                # 7z logs filepaths on lines starting w/ '- '
+                if line.startswith(b'- '):
+                    yield line[2:].decode().rstrip()
+                    # loop.call_soon_threadsafe(callback, line[2:].decode(), next(c))
+            except asyncio.CancelledError:
+                self.LOGGER << "Task cancelled, killing process"
 
+                # since 7z apparently spawns a child process, we have
+                # to kill the entire process group or the child (which
+                # does all the actual work) will keep running
+                os.killpg(proc.pid, signal.SIGTERM)
+                # await asyncio.sleep(0.01)
+                break
+        # use communicate rather than wait() because we've got
+        # stdout=PIPE which could cause a deadlock (see docs)
+        # await proc.communicate()
         await proc.wait()
 
-        if proc.returncode: # non-zero
+        if proc.returncode < 0: # killed w/ signal (cancelled)
+            raise asyncio.CancelledError
+        elif proc.returncode > 0:
             raise ExternalProcessError(proc.returncode)
             # raise ArchiverError(
             #     f"7z-extraction process returned a non-zero exit code: {proc.returncode}")

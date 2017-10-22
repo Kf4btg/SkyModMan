@@ -799,12 +799,16 @@ class ModTable_TreeModel(QAbstractItemModel):
 
         self.beginInsertRows(parent, row, end)
 
+        self.LOGGER << f"Inserting mod(s) at row {row}"
+
         self.Manager.Collector.insert_items(row, entries, errors)
 
         self.endInsertRows()
 
     def add_mod(self, entry):
         """Add an entirely new Mod to the table"""
+
+        self.LOGGER << "Adding new mod to end"
 
         self.insert_entries(len(self.mods), [entry])
 

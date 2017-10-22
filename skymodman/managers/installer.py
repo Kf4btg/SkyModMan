@@ -30,8 +30,9 @@ class InstallManager(Submanager):
         self.arc_path = Path(mod_archive)
         self.archive_files = None
         self.archive_dirs = None
-        self.fomod = None # holds parsed fomod config
-        self.info = None  # holds parsed info.xml
+        self.fomod : Fomod = None
+        # holds parsed fomod config
+        self.info : InfoXML = None  # holds parsed info.xml
 
         # maintain a mapping of lower-case versions of the image-paths
         # defined in the fomod config to the actual filesystem-location
@@ -73,6 +74,15 @@ class InstallManager(Submanager):
         ## temporary; replace w/ install_destination
         return self.install_destination
 
+    def path_to(self, mod_ident):
+        # given install/folder name of mod, get the path to its installation directory
+        return self.mainmanager.Folders['mods'].path / mod_ident
+
+    @property
+    def _modrepo(self):
+        # returns path to main mod repository
+        return self.mainmanager.Folders['mods'].path
+
     ##=============================================
     ## FOMOD handling
     ##=============================================
@@ -92,19 +102,6 @@ class InstallManager(Submanager):
         """
         return self.info is not None
 
-    async def get_fomod_path(self):
-        """
-        If the associated mod archive contains a directory named 'fomod',
-        return the internal path to that folder. Otherwise, return None.
-
-        :return: str|None
-        """
-        async for e in self.archive_contents(files=False):
-            # drop the last char because it is always '/' for directories
-            if os.path.basename(e.rstrip('/')).lower() == "fomod":
-                return e
-        return None
-
     def prepare_info(self, infoxml_file):
         """If the mod archive included an info.xml file, parse it
         and make it available via the "info" attribute
@@ -119,6 +116,30 @@ class InstallManager(Submanager):
 
             self._install_dirname = self.info.name.lower()
 
+    def get_fomod_image(self, image_path):
+        """
+        Guaranteed to return the actual extraction path for an image
+        path specified in a fomod config file even in spite of
+        name-case-conflicts, so long as the file exists. If it does
+        not exist, ``None`` is returned.
+        """
+        try:
+            return self.normalized_imgpaths[image_path.lower()]
+        except KeyError:
+            return None
+
+    async def get_fomod_path(self):
+        """
+        If the associated mod archive contains a directory named 'fomod',
+        return the internal path to that folder. Otherwise, return None.
+
+        :return: str|None
+        """
+        async for e in self.archive_contents(files=False):
+            # drop the last char because it is always '/' for directories
+            if os.path.basename(e.rstrip('/')).lower() == "fomod":
+                return e
+        return None
 
     async def prepare_fomod(self, xmlfile, extract_dir=None):
         """
@@ -177,18 +198,6 @@ class InstallManager(Submanager):
 
         # pprint(self.files_to_install)
 
-    def get_fomod_image(self, image_path):
-        """
-        Guaranteed to return the actual extraction path for an image
-        path specified in a fomod config file even in spite of
-        name-case-conflicts, so long as the file exists. If it does
-        not exist, ``None`` is returned.
-        """
-        try:
-            return self.normalized_imgpaths[image_path.lower()]
-        except KeyError:
-            return None
-
     async def num_fomod_files_to_install(self):
         """
         From the list of folders and individual files scheduled to
@@ -243,6 +252,25 @@ class InstallManager(Submanager):
         self.LOGGER << f"{c} files extracted"
 
         # srcdestpairs = srcdestpairs,
+
+    #TODO: condense to a single extract() method that can optionally either yield names or just extract as fast as possible
+
+    async def eextract(self, destination, entries=None):
+        """
+        Works like extract, but yields the path of each file as
+        it is extracted.
+
+        :param destination:
+        :param entries:
+        """
+
+        # noinspection PyTypeChecker
+        async for f in self.archiver.extract(
+            archive=self.archive,
+            destination=destination,
+            specific_entries=entries
+        ):
+            yield f
 
     # noinspection PyTypeChecker
     async def archive_contents(self, *, dirs=True, files=True):
@@ -432,105 +460,179 @@ class InstallManager(Submanager):
         return ""
 
 
-    async def install_archive(self, start_dir=None, callback=None):
+    async def _archive_installation(self, dest_dir, entries):
+        """common part of install/extraction process
+
+        clears "files_installed" list before beginning, and appends
+        path of each file to it as they are extracted.
+
+        yields paths of files as extracted
+        """
+        # progress = self.files_installed
+        # progress.clear()
+
+        yield "Starting extraction..."
+
+        async for e in self.eextract(dest_dir, entries):
+            # progress.append(e)
+            yield e
+
+
+    async def install_archive(self, start_dir=None):
         """
         Install the entire contents of the associated archive to its
         default location in the Mods folder
+
+        Yields (total_extracted_so_far, file_just_extracted) tuples
+
 
         :param str start_dir: usually, files will be extracted from the
             root of the archive. If `start_dir` is provided, it must be
             a path (relative to the root of the archive files) to a
             directory that will be considered the 'root' when unpacking
             the archive.
-
-        :param callback: called with args
-            (name_of_file, total_extracted_so_far) during extraction
-            process to indicate progress
         """
 
         self.LOGGER << "installing archive"
 
-        progress = self.files_installed
-        progress.clear()
+        # progress = self.files_installed
+        # progress.clear()
 
-        if callback is None:
-            def _callback(*args): pass
-        else:
-            _callback = callback
+        # if callback is None:
+        #     def _callback(*args): pass
+        # else:
+        #     _callback = callback
 
-        def track_progress(filepath, num_done):
-            progress.append(filepath)
-            _callback(filepath, num_done)
+        # def track_progress(filepath, num_done):
+        #     progress.append(filepath)
+        #     _callback(filepath, num_done)
+        #
+        # asyncio.get_event_loop().call_soon_threadsafe(
+        #     _callback, "Starting extraction...", 0)
 
-        asyncio.get_event_loop().call_soon_threadsafe(
-            _callback, "Starting extraction...", 0)
+        yield "Starting extraction..."
+
+        entries=None
 
         if start_dir:
             # make sure startdir ends with a single "/"
             start_dir = start_dir.rstrip("/")+"/"
 
-            await self.extract(destination=self.install_dir,
-                               # filter archive contents based on
-                               # containing directory
-                               entries=[e async for e in
-                                        self.archive_contents(dirs=False)
-                                        if e.startswith(start_dir)],
-                               callback=track_progress)
+            # get list first
+            entries = [e async for e
+                       in self.archive_contents(dirs=False)
+                       if e.startswith(start_dir)]
 
-            # fix file paths
+        # extract all or subset of archive entries
+        async for extracted in self.eextract(self.install_destination,
+                                             entries):
+            yield extracted
+
+        # fix file paths if needed
+        if start_dir:
             self.remove_basepath(start_dir)
 
+        # else:
+        #     # install all entries in of archive
+        #     async for extracted in self.eextract(
+        #             self.install_destination, None):
+        #         yield extracted
+
+    # async def rewind_install(self, callback=print):
+    # async def rewind_install(self):
+    #     """
+    #     Called when an install is cancelled during file copy/unpacking.
+    #     Any files that have already been moved to the install directory
+    #     will be removed.
+    #
+    #     :param callback: called with (str, int) args
+    #     :return:
+    #     """
+    #
+    #
+    #
+    #     uninstalls=self.files_installed
+    #
+    #     i=0
+    #     # asyncio.get_event_loop().call_soon_threadsafe(
+    #     #     callback, "Removing installed files...", i)
+    #
+    #     # yield i, "Removing installed files..."
+    #
+    #     instdir = self.install_destination
+    #
+    #
+    #
+    #     dirs=deque()
+    #
+    #     while uninstalls:
+    #         # if we remove from the end, that should ensure that when we
+    #         # reach a directory, all of its contents have already been
+    #         # removed, and we can use rmdir() on it (assuming it had
+    #         # no other contents beforehand)
+    #         f=uninstalls.pop()
+    #         f_installed = instdir / f
+    #
+    #         if f_installed.is_dir():
+    #             dirs.append(f_installed) # track dirs for now, remove later
+    #         else:
+    #             f_installed.unlink()
+    #
+    #         # i+=1
+    #         # asyncio.get_event_loop().call_soon_threadsafe(
+    #         #     callback, f, i)
+    #
+    #     for d in dirs:
+    #         try:
+    #             d.rmdir()
+    #         except OSError as e:
+    #             # not empty; there may have been something there
+    #             # before we installed files
+    #             self.LOGGER.error("Could not remove directory")
+    #             self.LOGGER.exception(e)
+    #
+    #     # finally, try to remove the mod install folder
+    #
+    #
+    #     try:
+    #         instdir.rmdir()
+    #     except OSError as e:
+    #         self.LOGGER.error("Could not remove mod directory")
+    #         self.LOGGER.exception(e)
+
+    def abort_install(self):
+        """
+        Remove all files installed so far for the active install-archive
+        """
+        # We can't rely on records from installation; they don't
+        # necessarily line up with what was actually installed,
+        # making the "rewind" approach fail.
+        # Just going to remove everything in the folder
+
+        self.uninstall(self.install_destination.name)
+
+        ## verify that it's gone
+        if self.install_destination.exists():
+            self.LOGGER.error("Mod directory not removed!")
         else:
+            self.LOGGER << "Mod directory removed!"
 
-            await self.extract(destination=self.install_dir,
-                           callback=track_progress)
 
-    async def rewind_install(self, callback=print):
+    def uninstall(self, mod_ident):
         """
-        Called when an install is cancelled during file copy/unpacking.
-        Any files that have already been moved to the install directory
-        will be removed.
+        Remove all the files currently installed for the mod w/ the
+        installation/folder name `mod_ident`. This cannot be undone.
 
-        :param callback: called with (str, int) args
-        :return:
+        :param mod_ident: name of folder in which mod is installed.
+            Must be within main mod repository.
         """
-        uninstalls=self.files_installed
 
-        i=0
-        asyncio.get_event_loop().call_soon_threadsafe(
-            callback, "Removing installed files...", i)
+        if mod_ident:
+            target = self.path_to(mod_ident)
 
-        instdir = self.install_dir
+            if target.exists() and target.is_dir():
+                fsutils.recursive_delete(target)
 
-        while uninstalls:
-            # if we remove from the end, that should ensure that when we
-            # reach a directory, all of its contents have already been
-            # removed, and we can use rmdir() on it (assuming it had
-            # no other contents beforehand)
-            f=uninstalls.pop()
-            f_installed = instdir / f
-
-            if f_installed.is_dir():
-                try:
-                    f_installed.rmdir()
-                except OSError as e:
-                    # not empty; there may have been something there
-                    # before we installed files
-                    self.LOGGER.error("Could not remove directory")
-                    self.LOGGER.exception(e)
-            else:
-                f_installed.unlink()
-
-            i+=1
-            asyncio.get_event_loop().call_soon_threadsafe(
-                callback, f, i)
-
-        # finally, try to remove the mod install folder
-        try:
-            instdir.rmdir()
-        except OSError as e:
-            self.LOGGER.error("Could not remove mod directory")
-            self.LOGGER.exception(e)
 
 
     def remove_basepath(self, basepath):
@@ -560,12 +662,12 @@ class InstallManager(Submanager):
         """
 
         # remove leading '/' from basepath so it doesn't screw stuff up
-        target = self.install_dir / basepath.lstrip('/')
+        target = self.install_destination / basepath.lstrip('/')
 
         try:
             # move all contents to the mod-root
             for f in target.iterdir():
-                f.rename(self.install_dir / f.name)
+                f.rename(self.install_destination / f.name)
         except Exception as e:
             self.LOGGER.exception(e)
             raise
@@ -582,52 +684,74 @@ class InstallManager(Submanager):
     # Fomod Installation
     #---------------------------------
 
-    async def install_fomod_files(self, dest_dir=None, callback=None):
+    # async def install_fomod_files(self, dest_dir=None, callback=None):
+    async def install_fomod_files(self, dest_dir=None):
         """
+        Yields name of files as they are extracted
 
         :param str dest_dir: path to installation directory for this
             mod; if not provided, the files will be installed to the
             main Mod-install directory in a folder with the same name
             as the archive.
-        :param callback: called with args
-            (name_of_file, total_extracted_so_far) during extraction
-            process to indicate progress
         """
 
 
         if dest_dir is None:
             # dest_dir="/tmp/testinstall"
-            dest_dir = self.install_dir
+            dest_dir = self.install_destination
 
-        # get list of files from fomod
+        # get list of files  from fomod
+        # --remember that fomod "files" are basically
+        # {source, dest, priority} tuples
         to_install = self.fomod.files_to_install
-
-        progress = self.files_installed
 
         # sort files by priority, then by name
         to_install.sort(key=lambda f: f.priority)
         to_install.sort(key=lambda f: f.source.lower())
 
+        async for extracted in self._archive_installation(
+                dest_dir,
+                [f.source for f in to_install]):
+            yield extracted
 
-        if callback is None:
-            def _callback(*args): pass
-        else:
-            _callback = callback
 
-        def track_progress(filename, num_done):
-            progress.append(filename)
-            _callback(filename, num_done)
+        # if callback is None:
+        #     # if no provided cb, we'll still track the files as the
+        #     # get installed. Have to leave second param to match
+        #     # signature
+        #     def track_progress(filename, num_done):
+        #         progress.append(filename)
+        # else:
+        #     # _callback = callback
+        #
+        #     # wrap the callback func in another func that also tracks
+        #     # which files have been installed so far
+        #     def track_progress(filename, num_done):
+        #         progress.append(filename)
+        #         callback(filename, num_done)
+        #
+        #     # initial response
+        #     asyncio.get_event_loop().call_soon_threadsafe(
+        #         callback, "Starting extraction...", 0)
 
-        asyncio.get_event_loop().call_soon_threadsafe(
-            _callback, "Starting extraction...", 0)
+        # asyncio.get_event_loop().call_soon_threadsafe(
+        #     _callback, "Starting extraction...", 0)
+
+        # yield "Starting extraction..."
+        # async for fpath in self.eextract(dest_dir,
+        #                              entries=[f.source for f in to_install]):
+        #     # track installed files
+        #     progress.append(fpath)
+        #     # yield total unpacked so far and path of just-extracted
+        #     yield fpath
 
         # FIXME: we need to unpack to a different directory thatn the destination directory (and probably not the temp dir we've been using, either, since that's likely on a RAM disk and we may have many MBs or even GBs of data to unpack). Right now, the folders from the archive are extracted as-is (e.g. we get folder '11-Your-Option' in the mod install dir) when what we really want is the files inside those folders to be placed in the root of the installation dir (or wherever the 'destination' attribute in the fomod config specifies).
 
-        await self.extract(destination=dest_dir,
-                           entries=[f.source for f in to_install],
-                           # srcdestpairs=[(f.source, f.destination)
-                           #               for f in flist],
-                           callback=track_progress)
+        # await self.extract(destination=dest_dir,
+        #                    entries=[f.source for f in to_install],
+        #                    # srcdestpairs=[(f.source, f.destination)
+        #                    #               for f in flist],
+        #                    callback=track_progress)
 
         # after unpack, files must be moved to correct destinations
         # as specified by fomod config
@@ -649,28 +773,28 @@ class InstallManager(Submanager):
                 # are merged with it)
                 dmm(installed, destination,
                     overwite=True, name_mod=str.lower)
-
-    async def rewind_fomod_install(self, callback=print):
-        """
-        Called when an install is cancelled during file copy/unpacking.
-        Any files that have already been moved to the install directory
-        will be removed.
-
-        :param callback: called with (str, int) args
-        :return:
-        """
-        uninstalls=self.files_installed
-        remaining=len(uninstalls)
-
-        # FIXME: this doesn't actually do anything...
-
-        while remaining>0:
-            # fake a slow operation...
-            await asyncio.sleep(0.02)
-            f=uninstalls.pop()
-            remaining -= 1
-            asyncio.get_event_loop().call_soon_threadsafe(
-                callback, f.source, remaining)
+    #
+    # async def rewind_fomod_install(self, callback=print):
+    #     """
+    #     Called when an install is cancelled during file copy/unpacking.
+    #     Any files that have already been moved to the install directory
+    #     will be removed.
+    #
+    #     :param callback: called with (str, int) args
+    #     :return:
+    #     """
+    #     uninstalls=self.files_installed
+    #     remaining=len(uninstalls)
+    #
+    #     # FIXME: this doesn't actually do anything...
+    #
+    #     while remaining>0:
+    #         # fake a slow operation...
+    #         await asyncio.sleep(0.02)
+    #         f=uninstalls.pop()
+    #         remaining -= 1
+    #         asyncio.get_event_loop().call_soon_threadsafe(
+    #             callback, f.source, remaining)
 
 
 ##=============================================

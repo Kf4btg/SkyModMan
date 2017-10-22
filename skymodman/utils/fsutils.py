@@ -246,6 +246,22 @@ def create_dir(path, parents=True):
 
     return True
 
+
+def recursive_delete(target, ignore_errors=False):
+    """
+    Mainly just a proxy for shutil.rmtree
+
+
+    :param target:
+    """
+    # TODO: add support for removing only files, only empty dirs, ...
+
+    if os.path.exists(target):
+        shutil.rmtree(os.fspath(target), ignore_errors=ignore_errors)
+
+
+
+
 ##=================================
 ## Atomic-Write
 ##---------------------------------

@@ -69,10 +69,12 @@ class FomodInstaller(QWizard):
         self.setWizardStyle(QWizard.ClassicStyle)
 
         # buttons buttons buttons
-        self.setOptions(QWizard.NoBackButtonOnStartPage  |
-                        QWizard.NoBackButtonOnLastPage   |
-                        QWizard.NoCancelButtonOnLastPage
-                        )
+        # self.setOptions(QWizard.NoBackButtonOnStartPage  |
+        #                 QWizard.NoBackButtonOnLastPage   |
+        #                 QWizard.NoCancelButtonOnLastPage
+        #                 )
+        self.setOptions(QWizard.NoBackButtonOnStartPage)
+
         self.setWindowTitle(f"Mod Installation: {self.fomod.modname.name}")
 
         # create and add the title/splash/firstwhatever page.
@@ -104,14 +106,27 @@ class FomodInstaller(QWizard):
         # ...there doesn't seem to be any reason to keep this as a
         # an instance attribute
         # self._final_page = FinalPage(self.rootpath,
-        _final_page = FinalPage(self.rootpath,
-                                     self.fomod.modname.name,
-                                     self.fomod.modimage,
-                                     self.installer,
-                                     parent=self)
+        # _final_page = FinalPage(self.rootpath,
+        #                              self.fomod.modname.name,
+        #                              self.fomod.modimage,
+        #                              self.installer,
+        #                              parent=self)
+        #
+        # self.addPage(_final_page)
+        # FomodInstaller.Pages.append(_final_page)
 
-        self.addPage(_final_page)
-        FomodInstaller.Pages.append(_final_page)
+    def accept(self):
+        """Called when the user clicks Finish on the final page"""
+
+        # make sure that the conditional installs are analyzed and
+        # added to the list of files to be installed
+        self.fomod.add_conditional_install_files()
+
+        # after the wizard closes, the installer will access the fomod
+        # object and install the files accordingly
+
+
+        super().accept()
 
 
 class StartPage(QWizardPage):
