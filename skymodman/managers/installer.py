@@ -27,7 +27,7 @@ class InstallManager(Submanager):
         self.archiver = ArchiveHandler()
 
         self.archive = mod_archive
-        self.arc_path = Path(mod_archive)
+        self.archive_path = Path(mod_archive)
         self.archive_files = None
         self.archive_dirs = None
         self.fomod : Fomod = None
@@ -42,25 +42,9 @@ class InstallManager(Submanager):
 
         # name of the directory where we will install the mod
         # (initial value is tentative)
-        self._install_dirname = self.arc_path.stem.lower()
-
-        # we get the `mainmanager` attribute from our Submanager base
-        # self.install_dir = self.mainmanager.Paths.dir_mods / self.arc_path.stem.lower()
-        # self.install_dir = self.mainmanager.Folders['mods'].path / self.arc_path.stem.lower()
-
-        # Used to track progress during installation and allow
-        # for "rewinding" a failed/cancelled partial install
-        self.files_installed = deque()
+        self._install_dirname = self.archive_path.stem.lower()
 
         self.LOGGER << f"Init installer for '{self.archive}'"
-        # self.LOGGER << "Install destination: {}".format(self.install_dir)
-
-    @property
-    def num_files_installed_so_far(self):
-        """There are only rare circumstances in which this property
-        should be accessed. Namely, just immediately after the
-        cancellation of an in-progress installation."""
-        return len(self.files_installed)
 
     @property
     def install_destination(self):
@@ -157,9 +141,6 @@ class InstallManager(Submanager):
             will be extracted. It is best to use a temporary directory
             for this so it can be easily cleaned up after install.
         """
-
-        # make sure this is clear
-        self.files_installed = deque()
 
         # todo: figure out what sort of things can go wrong while reading the fomod config, wrap them in a FomodError (within fomod.py), and catch that here so we can report it without crashing
         self.fomod = Fomod(xmlfile, self.mainmanager.checkFileState)
@@ -272,7 +253,6 @@ class InstallManager(Submanager):
         ):
             yield f
 
-    # noinspection PyTypeChecker
     async def archive_contents(self, *, dirs=True, files=True):
         """
         Return list of all files within the archive
@@ -295,14 +275,6 @@ class InstallManager(Submanager):
             for f in self.archive_files:
                 yield f
 
-        # if dirs and not files:
-        #     return self.archive_dirs
-        # if files and not dirs:
-            # return self.archive_files
-
-        # otherwise return concat of both (even if `dirs` and `files`
-        # are both false...because that's dumb)
-        # return self.archive_dirs + self.archive_files
 
     async def get_archive_file_count(self, *, include_dirs=True):
         """
@@ -319,7 +291,6 @@ class InstallManager(Submanager):
             if include_dirs:
                 return len(self.archive_dirs) + len(self.archive_files)
             return len(self.archive_files)
-        # return len(await self.archive_contents(dirs=include_dirs))
 
     async def count_folder_contents(self, folder):
         """
@@ -329,32 +300,13 @@ class InstallManager(Submanager):
         """
         self.LOGGER << f"Counting contents of archive folder {folder!r}"
 
-        folder = folder.rstrip('/') + '/'
+        folder = folder.strip('/') + '/'
 
         c = 0
         async for f in self.archive_contents():
             if f.startswith(folder): c+=1
 
         return c
-        # return len(
-        #     [f async for f in self.archive_contents()
-        #      if f.startswith(folder)])
-
-    # async def mod_structure_tree(self):
-    #     """
-    #     Build a Tree structure where the names of the branches and
-    #     leaves represent the directory and file names, respectively,
-    #     of the items within the archive.
-    #     :return:
-    #     """
-    #     modtree = Tree()
-    #     self.LOGGER << "building tree"
-    #     for arc_entry in (await self.archive_contents(dirs=False)):
-    #         ap = PurePath(arc_entry)
-    #
-    #         modtree.insert(ap.parent.parts, ap.name)
-    #
-    #     return modtree
 
     async def mkarchivefs(self):
         """
@@ -425,7 +377,7 @@ class InstallManager(Submanager):
 
         # c) see if we can figure it out from the archive name;
         # try to ignore the version numbers
-        archive_name = self.arc_path.stem
+        archive_name = self.archive_path.stem
 
         # archives downloaded from the nexus generally have
         # the mod name, then a hyphen followed by the modid, then
@@ -474,7 +426,6 @@ class InstallManager(Submanager):
         yield "Starting extraction..."
 
         async for e in self.eextract(dest_dir, entries):
-            # progress.append(e)
             yield e
 
 
@@ -495,33 +446,18 @@ class InstallManager(Submanager):
 
         self.LOGGER << "installing archive"
 
-        # progress = self.files_installed
-        # progress.clear()
-
-        # if callback is None:
-        #     def _callback(*args): pass
-        # else:
-        #     _callback = callback
-
-        # def track_progress(filepath, num_done):
-        #     progress.append(filepath)
-        #     _callback(filepath, num_done)
-        #
-        # asyncio.get_event_loop().call_soon_threadsafe(
-        #     _callback, "Starting extraction...", 0)
-
         yield "Starting extraction..."
 
         entries=None
 
         if start_dir:
             # make sure startdir ends with a single "/"
-            start_dir = start_dir.rstrip("/")+"/"
+            start_dir = start_dir.strip("/")+"/"
 
-            # get list first
-            entries = [e async for e
-                       in self.archive_contents(dirs=False)
-                       if e.startswith(start_dir)]
+            # use shell globbing to set our includes value;
+            # this ensures we get the contents of the directory
+            # and not the directory itself
+            entries = [start_dir+"*"]
 
         # extract all or subset of archive entries
         async for extracted in self.eextract(self.install_destination,
@@ -532,73 +468,6 @@ class InstallManager(Submanager):
         if start_dir:
             self.remove_basepath(start_dir)
 
-        # else:
-        #     # install all entries in of archive
-        #     async for extracted in self.eextract(
-        #             self.install_destination, None):
-        #         yield extracted
-
-    # async def rewind_install(self, callback=print):
-    # async def rewind_install(self):
-    #     """
-    #     Called when an install is cancelled during file copy/unpacking.
-    #     Any files that have already been moved to the install directory
-    #     will be removed.
-    #
-    #     :param callback: called with (str, int) args
-    #     :return:
-    #     """
-    #
-    #
-    #
-    #     uninstalls=self.files_installed
-    #
-    #     i=0
-    #     # asyncio.get_event_loop().call_soon_threadsafe(
-    #     #     callback, "Removing installed files...", i)
-    #
-    #     # yield i, "Removing installed files..."
-    #
-    #     instdir = self.install_destination
-    #
-    #
-    #
-    #     dirs=deque()
-    #
-    #     while uninstalls:
-    #         # if we remove from the end, that should ensure that when we
-    #         # reach a directory, all of its contents have already been
-    #         # removed, and we can use rmdir() on it (assuming it had
-    #         # no other contents beforehand)
-    #         f=uninstalls.pop()
-    #         f_installed = instdir / f
-    #
-    #         if f_installed.is_dir():
-    #             dirs.append(f_installed) # track dirs for now, remove later
-    #         else:
-    #             f_installed.unlink()
-    #
-    #         # i+=1
-    #         # asyncio.get_event_loop().call_soon_threadsafe(
-    #         #     callback, f, i)
-    #
-    #     for d in dirs:
-    #         try:
-    #             d.rmdir()
-    #         except OSError as e:
-    #             # not empty; there may have been something there
-    #             # before we installed files
-    #             self.LOGGER.error("Could not remove directory")
-    #             self.LOGGER.exception(e)
-    #
-    #     # finally, try to remove the mod install folder
-    #
-    #
-    #     try:
-    #         instdir.rmdir()
-    #     except OSError as e:
-    #         self.LOGGER.error("Could not remove mod directory")
-    #         self.LOGGER.exception(e)
 
     def abort_install(self):
         """
@@ -632,8 +501,6 @@ class InstallManager(Submanager):
 
             if target.exists() and target.is_dir():
                 fsutils.recursive_delete(target)
-
-
 
     def remove_basepath(self, basepath):
         """For the current install_dir, given a `basepath` relative
@@ -674,6 +541,7 @@ class InstallManager(Submanager):
 
         # folder should be empty; try to remove it
         try:
+            # FIXME: the dir won't necessarily be empty...
             target.rmdir()
         except OSError as e:
             self.LOGGER.error(f"Could not remove directory '{target}'")
@@ -709,49 +577,13 @@ class InstallManager(Submanager):
         to_install.sort(key=lambda f: f.priority)
         to_install.sort(key=lambda f: f.source.lower())
 
-        async for extracted in self._archive_installation(
+        async for extracted in self.eextract(
                 dest_dir,
-                [f.source for f in to_install]):
+                [f.source.lstrip("/") for f in to_install]):
             yield extracted
 
 
-        # if callback is None:
-        #     # if no provided cb, we'll still track the files as the
-        #     # get installed. Have to leave second param to match
-        #     # signature
-        #     def track_progress(filename, num_done):
-        #         progress.append(filename)
-        # else:
-        #     # _callback = callback
-        #
-        #     # wrap the callback func in another func that also tracks
-        #     # which files have been installed so far
-        #     def track_progress(filename, num_done):
-        #         progress.append(filename)
-        #         callback(filename, num_done)
-        #
-        #     # initial response
-        #     asyncio.get_event_loop().call_soon_threadsafe(
-        #         callback, "Starting extraction...", 0)
-
-        # asyncio.get_event_loop().call_soon_threadsafe(
-        #     _callback, "Starting extraction...", 0)
-
-        # yield "Starting extraction..."
-        # async for fpath in self.eextract(dest_dir,
-        #                              entries=[f.source for f in to_install]):
-        #     # track installed files
-        #     progress.append(fpath)
-        #     # yield total unpacked so far and path of just-extracted
-        #     yield fpath
-
         # FIXME: we need to unpack to a different directory thatn the destination directory (and probably not the temp dir we've been using, either, since that's likely on a RAM disk and we may have many MBs or even GBs of data to unpack). Right now, the folders from the archive are extracted as-is (e.g. we get folder '11-Your-Option' in the mod install dir) when what we really want is the files inside those folders to be placed in the root of the installation dir (or wherever the 'destination' attribute in the fomod config specifies).
-
-        # await self.extract(destination=dest_dir,
-        #                    entries=[f.source for f in to_install],
-        #                    # srcdestpairs=[(f.source, f.destination)
-        #                    #               for f in flist],
-        #                    callback=track_progress)
 
         # after unpack, files must be moved to correct destinations
         # as specified by fomod config

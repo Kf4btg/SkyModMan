@@ -10,6 +10,8 @@ from skymodman import Manager
 from skymodman.log import withlogger
 
 
+# TODO: add fields for changing the name/destination of the mod to all the installation tools
+
 @withlogger
 class InstallerUI(QObject):
 
@@ -22,7 +24,11 @@ class InstallerUI(QObject):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.tmpdir = None
-        self.numfiles = 0
+
+        # TODO: figure out -- consistently -- whether this includes/should include directories or not
+        self.numfiles = 0 # will hold number of files to be installed
+
+
         # this should be instantiated from the main window after the
         # manager has been initialized
         self.Manager = Manager()
@@ -34,21 +40,49 @@ class InstallerUI(QObject):
         # here's the progress dialog we can use
         self.pdialog : QProgressDialog = None
 
-    def _create_progress_dialog(self, total_count,
-                                    initial_text="Extracting Files...",
-                                    cancel_text="Cancel",):
+    ## methods for the progress dialog
+    ## FIXME: due to the way 7z buffers its output to pipes, this "lack-of" progress dialog is much less useful than one would hope. During a 20 second extraction, it MIGHT update a total of 2 or 3 times. Not very informative. Would probably be better to show a busy indicator (instead of a progress line) and some text above it that shows the % done the last time we actually got feedback. So we'd maybe jump from 0, to 35%, to 70%, to done.
+
+    # E.g somethign like this, where the bar in the middle is one of
+    # those animated barber-shop-pole busy things.
+    # Just update the progress % whenever we get more info.
+    # Honestly, the cancel button is the real point of the dialog.
+    #   ----------------------------------
+    #   |   Extracting Files...          |
+    #   |                                |
+    #   |   Progress:           35%      |
+    #   |   __________________________   |
+    #   |   | // // // // // // // //|   |
+    #   |   --------------------------   |
+    #   |                                |
+    #   |                    | Cancel |  |
+    #   ----------------------------------
+
+
+    def _create_progress_dialog(self,
+            initial_text="Extracting Files...",
+            cancel_text="Cancel"):
+        ##Create the progress dialog. max-files taken from self.numfiles
+
         self.pdialog = QProgressDialog(initial_text,
                                   cancel_text,
-                                  0, total_count)
+                                  0, self.numfiles)
         self.pdialog.setWindowModality(Qt.WindowModal)
 
         # show after 1 sec, at least for testing
         self.pdialog.setMinimumDuration(0)
+        self.pdialog.show()
 
     def _update_dialog(self, count, text):
+        # call during extraction
         self.pdialog.setValue(count)
         self.pdialog.setLabelText(text)
 
+    ##=============================================
+    ## Installer hooks
+    ## --- these are called from other modules
+    ## to invoke the installer(s).
+    ##=============================================
 
     async def do_install(self, archive, manual=False):
         """
@@ -71,30 +105,28 @@ class InstallerUI(QObject):
 
         try:
             if manual:
-                await self._do_install_manual(archive)
+                #For explicitly-manual installs (not 'fallback-to-manual')
+
+                # await self._do_install_manual(archive)
+                self.LOGGER << "initiating installer for manual install"
+
+                self.installer = await self.Manager.get_installer(
+                    archive)
+                modfs = await self.installer.mkarchivefs()
+
+                # tell everyone we're ready
+                self.installerReady.emit()
+
+                await self._show_manual_install_dialog(modfs)
+
             else:
+                # put this in its own function, for readability
                 await self._do_install_auto_or_guided(archive)
 
         except asyncio.CancelledError:
             self.LOGGER.warning("Installation task cancelled!")
 
             #TODO: cleanup (...clean up what?)
-
-    # separate the manual/auto code into
-    # individual methods just for readability
-
-    async def _do_install_manual(self, archive):
-        """For explicitly-manual installs (not 'fallback-to-manual')"""
-        self.LOGGER << "initiating installer for manual install"
-
-        self.installer = await self.Manager.get_installer(archive)
-        modfs = await self.installer.mkarchivefs()
-
-        # tell everyone we're ready
-        self.installerReady.emit()
-        # ready_callback()
-
-        await self._show_manual_install_dialog(modfs)
 
     async def _do_install_auto_or_guided(self, archive):
         """could be a fomod (guided) install, or a simple extract op.
@@ -112,9 +144,6 @@ class InstallerUI(QObject):
             # derive it elsewhise
             self.installer.derive_mod_name()
 
-            # short circuit for testing
-            # return
-
             # Fomod config was found and prepared
             if self.installer.has_fomod:
                 # tell everyone we're ready
@@ -124,11 +153,9 @@ class InstallerUI(QObject):
             else:
                 self.LOGGER << "No FOMOD config found."
 
-                # count the files, and get the mod structure
-                # count = await installer.get_file_count()
-
                 # retrieve a view of the archive's contents as a
                 # pseudo-filesystem
+                ## TODO: make better use of this!
                 modfs = await self.installer.mkarchivefs()
 
                 ## check the root of the file hierarchy for usable data
@@ -136,7 +163,6 @@ class InstallerUI(QObject):
                     ## if it's there, install the mod automatically
                     self.installerReady.emit()
                     await self._auto_install()
-                    # await self.extraction_progress_dialog()
                 else:
                     ## perform one last check if the previous search
                     # turned up nothing:
@@ -157,10 +183,6 @@ class InstallerUI(QObject):
 
                         self.installerReady.emit()
                         await self._auto_install(str(root_items[0]))
-                        # await self.extraction_progress_dialog(
-                        #     str(root_items[0]))
-
-
                     else:
                         self.LOGGER.warning(
                             "no toplevel items found; "
@@ -169,93 +191,15 @@ class InstallerUI(QObject):
                         self.installerReady.emit()
                         await self._show_manual_install_dialog(modfs)
 
-    def install_successful(self):
-        """Callback that should be invoked when an archive has been
-        successfully installed.
-
-        """
-
-        # emit modAdded w/ just the name of the installation target dir
-        self.modAdded.emit(self.installer.install_destination.name)
-
-
-
-    def _extract_with_progress(self, install_gen):
-        """
-
-        :param install_gen: the async generator/iterable that, when iterated
-            over, will run the extraction process
-        :return:
-        """
-
-        async def do_extraction():
-            try:
-                count = 0
-
-                async for fpath in install_gen:
-                    self.pdialog.setValue(count)
-                    self.pdialog.setLabelText(fpath)
-                    # self._update_dialog(c, fpath)
-                    count += 1
-
-            except asyncio.CancelledError:
-                self.LOGGER.warning("Extraction cancelled")
-                self.pdialog.close()
-
-                raise
-
-
-        def on_finish(task):
-            # nonlocal count
-            self.pdialog.setValue(self.pdialog.maximum())
-
-            if task.cancelled():
-                # clean up partially extracted files
-                self.LOGGER.warning("Removing extracted files")
-                self.installer.abort_install()
-
-            elif task.exception():
-                self.LOGGER.error("Exception raised by install task")
-                self.LOGGER.error(repr(task.exception()))
-                self.LOGGER.exception(task.exception())
-            else:
-                self.LOGGER.info("Installation completed")
-                self.modAdded.emit(
-                    self.installer.install_destination.name)
-
-
-        itask = asyncio.get_event_loop().create_task(
-            do_extraction())
-
-        self.pdialog.canceled.connect(itask.cancel)
-
-        # catch the finished task
-        itask.add_done_callback(on_finish)
-
-
-
-    # async def do_manual_install(self, archive, ready_callback=lambda:None):
-    #     """
-    #     Get a tree representing the internal structure of `archive` and launch a dialog
-    #     allowing the user to determine which of its contents to install.
-    #
-    #     :param archive:
-    #     :param ready_callback: called when the dialog is about to be shown
-    #     :return:
-    #     """
-    #     mod_contents = await Manager.get_mod_archive_structure(archive)
-    #
-    #     ready_callback()
-    #     await self._show_manual_install_dialog(mod_contents)
 
     async def _auto_install(self, start_dir=None):
         self.LOGGER << "Performing auto-install"
         if not start_dir:
-            num_to_extract = await self.installer.get_archive_file_count()
+            self.numfiles = await self.installer.get_archive_file_count()
         else:
-            num_to_extract = await self.installer.count_folder_contents(start_dir)
+            self.numfiles = await self.installer.count_folder_contents(start_dir)
 
-        self._create_progress_dialog(num_to_extract)
+        self._create_progress_dialog()
         self._extract_with_progress(
             self.installer.install_archive(start_dir))
 
@@ -272,10 +216,13 @@ class InstallerUI(QObject):
                 ).run_in_executor(ex, mi_dialog.exec_)
             await f
 
-            if mi_dialog.result() == ManualInstallDialog.Accepted:
-                self._create_progress_dialog(mi_dialog.num_to_copy)
-                self._extract_with_progress(
-                    self.installer.install_archive(mi_dialog.root_path))
+        if mi_dialog.result() == ManualInstallDialog.Accepted:
+
+            self.numfiles = await self.installer.count_folder_contents(mi_dialog.root_path)
+            self._create_progress_dialog()
+
+            self._extract_with_progress(
+                self.installer.install_archive(mi_dialog.root_path))
 
         del ManualInstallDialog
 
@@ -303,30 +250,83 @@ class InstallerUI(QObject):
             ).run_in_executor(ex, wizard.exec_)
             await f
 
-            # so long as they didn't hit cancel, extract the files
-            if wizard.result() == wizard.Accepted:
-                # total num of files to install
-                num_to_extract = await self.installer.num_fomod_files_to_install()
+        # so long as they didn't hit cancel, extract the files
+        if wizard.result() == wizard.Accepted:
+            # total num of files to install
+            self.numfiles = await self.installer.num_fomod_files_to_install()
 
-                # init progress dialog
-                self._create_progress_dialog(num_to_extract)
-                # c=0
-                # async for fpath in self.installer.install_fomod_files():
-                #     self._update_dialog(c, fpath)
-                #     c+=1
-                self._extract_with_progress(
-                    self.installer.install_fomod_files())
+            # init progress dialog
+            self._create_progress_dialog()
+            self._extract_with_progress(
+                self.installer.install_fomod_files())
 
-                # await self.installer.install_fomod_files()
-
-                # self.modAdded.emit(self.installer.install_destination.name)
+            # await self.installer.install_fomod_files()
+            # self.modAdded.emit(self.installer.install_destination.name)
 
         del FomodInstaller
 
+    ##=============================================
+    ## Extraction loop
+    ##=============================================
+
+    def _extract_with_progress(self, install_gen):
+        """
+        Generic method that creates and schedules the task which will
+        do the actual installation
+
+        :param install_gen: async generator/iterable which, when iterated
+            over, will run the extraction process. Should be the
+            actual generator object (already called, along with
+            arguments, but not yet iterated)
+        """
+
+        loop = asyncio.get_event_loop()
+
+        async def do_extraction():
+            try:
+                count = 0
+
+                async for fpath in install_gen:
+                    loop.call_soon_threadsafe(self._update_dialog,
+                                              count, fpath)
+                    count += 1
+
+            except asyncio.CancelledError:
+                self.LOGGER.warning("Extraction cancelled")
+                self.pdialog.close()
+
+                raise
+
+        def on_finish(task):
+            # finishes the dialog, whether something went wrong or not
+            loop.call_soon_threadsafe(self.pdialog.setValue,
+                                      self.pdialog.maximum())
+
+            if task.cancelled():
+                # clean up partially extracted files
+                self.LOGGER.warning("Removing extracted files")
+                self.installer.abort_install()
+
+            elif task.exception():
+                self.LOGGER.error(
+                    "Exception raised by install task")
+                self.LOGGER.error(repr(task.exception()))
+                self.LOGGER.exception(task.exception())
+            else:
+                self.LOGGER.info("Installation completed")
+                self.modAdded.emit(
+                    self.installer.install_destination.name)
+
+        itask = loop.create_task(do_extraction())
+
+        self.pdialog.canceled.connect(itask.cancel)
+
+        # catch the finished task
+        itask.add_done_callback(on_finish)
 
 
 
-    # async def extraction_progress_dialog(self, start_dir=None):
+            # async def extraction_progress_dialog(self, start_dir=None):
     #     """
     #     Have the install manager extract the contents of its archive
     #     to the default installation location. Create a progress dialog

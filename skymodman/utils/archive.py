@@ -2,7 +2,6 @@ import asyncio
 import os
 import re
 import signal
-# from itertools import count
 from pathlib import Path
 
 from skymodman.exceptions import ArchiverError, ExternalProcessError
@@ -18,22 +17,13 @@ _7zopts=("-bd",    # disable progress indic (uses readline, won't really work he
 @withlogger
 class ArchiveHandler:
     """
-    A reimplementation of the archive handler that leans heavily on 7zip
+    Uses a system-installed 7-zip (via subprocess) to handle extraction
+    of archives. Allow partial extraction, and listing and inspection
+    without extraction.
     """
-
-    # FORMATS = ["zip", "rar", "7z"]
-    # PROGRAM = "7z"
-
-    # read the 7z manual to figure out what all these switches mean
-    # TEMPLATES = {
-    #     "extract", "{prog} x -o{dest} {includes} {archive}",
-    #     "list", "{prog} l {archive}",
-    # }
 
     INCLUDE_FILTER = lambda paths: ["-i!"+p.rstrip('/') for p in paths]
 
-    # def __init__(self, *args, **kwargs):
-    #     super().__init__(*args, **kwargs)
     def __init__(self):
         self._7z_supports_rar = self._7z_rar_support()
 
@@ -88,7 +78,8 @@ class ArchiveHandler:
             else:
                 ArchiveHandler._list_archive_cache[archive] = (dirs, files)
 
-        # self.LOGGER << "Cache hits: {0._cache_hits}, misses: {0._cache_misses}".format(ArchiveHandler)
+        # self.LOGGER << "Cache hits: {0._cache_hits},
+        # misses: {0._cache_misses}".format(ArchiveHandler)
         return dirs, files
 
 
@@ -107,12 +98,8 @@ class ArchiveHandler:
 
         proc = await create
 
-        while True:
-            # as each line comes in
-            line = await proc.stdout.readline()
-
-            # empty byte string returned at EOF
-            if not line: break
+        # as each line comes in
+        async for line in proc.stdout:
 
             if line.find(b'D...') > -1: # directory
 
@@ -122,12 +109,11 @@ class ArchiveHandler:
             elif line.find(b'...A') > -1: # file
                 files_buffer.extend(line[53:])
 
-        # self.LOGGER << "waiting for subprocess to finish"
+        # finish communication
         await proc.wait()
 
         return_code = proc.returncode
         if not return_code: # == 0
-            # self.LOGGER << "Return code was 0; parsing results"
             # decode bytes results to str and parse into a list
 
             if files_buffer:
@@ -135,11 +121,6 @@ class ArchiveHandler:
                     bytes(files_buffer).decode().splitlines())
             else:
                 files=[]
-                # self._parse_7z_filelisting(
-                # bytes(files_buffer).decode()))
-
-            # files = self._parse_7z_filelisting(
-            #     bytes(files_buffer).decode())
 
             # add / to end of directories to differentiate them
             if dirs_buffer:
@@ -148,41 +129,13 @@ class ArchiveHandler:
             else:
                 dirs=[]
 
-            # dirs = self._parse_7z_filelisting(
-                # add / to end of directories to differentiate them
-                # bytes(dirs_buffer).decode(), '/')
         else:
             self.LOGGER << "non-zero return code"
             files = dirs = []
 
-        # self.LOGGER << "returning results"
         return return_code, dirs, files
 
-
-    # def _parse_7z_filelisting(self, output):
-    #     """
-    #     Split the lines returned from the ``7z l`` command into a list
-    #     of filenames. If suffix is a non-empty string, it will be
-    #     appended to the end of each file name.
-    #
-    #     :param output:
-    #     """
-    #     # self.LOGGER << "parsing results"
-    #     # if not output:
-    #     #     return []
-    #     # lines = output.splitlines()
-    #     try:
-    #         yield from output.splitlines()
-    #     except AttributeError:
-    #         # output was empty
-    #         pass
-
-
-        # return [l+suffix for l in lines]
-
-    async def extract(self, archive, destination,
-                      # specific_entries=None, callback=None):
-                      specific_entries=None):
+    async def extract(self, archive, destination, specific_entries=None):
         """
 
         :param archive:
@@ -200,84 +153,74 @@ class ArchiveHandler:
 
         # retcode = \
         # c = count(start=1)
-        async for f in self._extract_files(archive=archive,
-                                            dest=str(dpath),
-                                            entries=specific_entries,
-                                            # callback=callback
-                                           ):
-            yield f
-
-        # if retcode:
-        #     raise ArchiverError(
-        #         f"7z-extraction process returned a non-zero exit code: {retcode}")
+        async for f in self._extract_files(
+                archive=archive,
+                dest=str(dpath),
+                entries=specific_entries): yield f
 
 
-    # async def _extract_files(self, archive, dest, entries, callback):
     async def _extract_files(self, archive, dest, entries):
         """
         Creates and executes the 7zip command that will extract the
         specified entries from the archive.
         """
         # self.LOGGER << "begin _extract_files"
-        # if not callback:
-        #     def callback(*args): pass
 
         if entries:
             includes = type(self).INCLUDE_FILTER(entries)
         else:
             includes = [""]
 
-        # opts=("-bd",    # disable progress indic (uses readline, won't really work here...)
+
+        # opts=("-bd",    # disable progress indic (uses readline)
         #       "-bb1",   # output verbosity 1 (show files as extracted)
         #       "-ssc-",  # case-INsensitive mode
         #       "-y",     # assume yes to queries
         #       )
         create = asyncio.create_subprocess_exec(
-            "7z", "x", *_7zopts, f"-o{dest}",
-            *includes, archive,
-            limit=2**10, # default limit is 2^16 (65536)...which is a bit large for our needs
-            preexec_fn=os.setpgrp, # will hopefully let us kill the proc and all its kids
-            stdout=asyncio.subprocess.PIPE
+            "7z", "x", *_7zopts, f"-o{dest}", *includes, archive,
+            preexec_fn=os.setpgrp, # allows cancellation
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL
         )
-        # print("7z", "x", *opts, "-o{}".format(dest),
-        #       *includes, archive)
 
         proc = await create
-        # pid = proc.pid
-        # c = count(start=1)
-        # loop = asyncio.get_event_loop()
-        while True:
-            # simulate long processes
-            # await asyncio.sleep(1)
+        try:
+            async for line in proc.stdout:
 
-            try:
-                line = await proc.stdout.readline()
-                # print("{!r}".format(line))
-                if not line: break
+                # I tried...but it seems to be impossible to get
+                # 7z to produce line-buffered output when connected
+                # to a pipe.  It insists on spitting it out in chunks.
+                # might be able to implement some sort of
+                # parallelization to speed things up, but it's
+                # probably not worth the effort
+
+                # This might be a good point to put a reminder that
+                # the reason we're using the command line version
+                # of 7zip in the first place is because there
+                # are VERY few archive utilities that support
+                # extraction of all the common mod-archive types
+                # in a single package. And there are no python
+                # bindings for 7z (or anything else) that support
+                # everything the cli version does. Also, its free
+                # and fairly ubiquitous, so shouldn't be much
+                # of an obstacle to use of this program
 
                 # 7z logs filepaths on lines starting w/ '- '
                 if line.startswith(b'- '):
                     yield line[2:].decode().rstrip()
-                    # loop.call_soon_threadsafe(callback, line[2:].decode(), next(c))
-            except asyncio.CancelledError:
-                self.LOGGER << "Task cancelled, killing process"
 
-                # since 7z apparently spawns a child process, we have
-                # to kill the entire process group or the child (which
-                # does all the actual work) will keep running
-                os.killpg(proc.pid, signal.SIGTERM)
-                # await asyncio.sleep(0.01)
-                break
-        # use communicate rather than wait() because we've got
-        # stdout=PIPE which could cause a deadlock (see docs)
-        # await proc.communicate()
+        except asyncio.CancelledError:
+            self.LOGGER.warning("Task cancelled, killing process")
+
+            # since 7z apparently spawns a child process, we have
+            # to kill the entire process group or the child (which
+            # does all the actual work) will keep running
+            os.killpg(proc.pid, signal.SIGTERM)
+
         await proc.wait()
 
         if proc.returncode < 0: # killed w/ signal (cancelled)
             raise asyncio.CancelledError
         elif proc.returncode > 0:
             raise ExternalProcessError(proc.returncode)
-            # raise ArchiverError(
-            #     f"7z-extraction process returned a non-zero exit code: {proc.returncode}")
-
-        # return proc.returncode
